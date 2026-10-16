@@ -1,0 +1,36 @@
+name: Tests and package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install build and test tools
+        run: python -m pip install build 'pytest>=8,<10'
+      - name: Build distribution and install wheel
+        run: |
+          python -m build
+          python -m pip install dist/*.whl
+      - name: Test AWS collection and graph generation
+        run: python -m pytest -q
+      - name: Verify packaged viewer and CLI without AWS credentials
+        run: |
+          ta-bot demo --output "$RUNNER_TEMP/ta-bot-demo"
+          ta-bot render "$RUNNER_TEMP/ta-bot-demo/snapshot.json" --output "$RUNNER_TEMP/ta-bot-rendered"

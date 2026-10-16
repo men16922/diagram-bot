@@ -1,0 +1,32 @@
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+reports/
+dist/
+build/
+.coverage
+htmlcov/
+.DS_Store
+.idea/
+.vscode/
+
+# Local authentication and environment settings
+.env
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
+
+# Generated collection exports; only the checked-in synthetic demo is shared.
+snapshot.json
+inventory.csv
+review.md
+topology.svg
+index.html
+!examples/demo/snapshot.json
+!examples/demo/inventory.csv
+!examples/demo/review.md
+!examples/demo/index.html
