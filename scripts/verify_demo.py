@@ -347,6 +347,42 @@ def main():
         expect(page.locator('#changes-summary')).to_contain_text('설정 변경 1')
         expect(page.locator('#changes-rows')).to_contain_text('InstanceType: t3.small → t3.large')
         shot('changes.png')
+
+        # 11. Console shell: profile menu, sign-in dialog, docked assistant reflowing the content, responsive widths.
+        page.locator('#diagram-tab').click()
+        ready()
+        page.locator('#profile-button').click()
+        expect(page.locator('#profile-menu')).to_be_visible()
+        expect(page.locator('#profile-label')).to_have_text('로그인')
+        page.locator('.breadcrumbs').click()
+        expect(page.locator('#profile-menu')).to_be_hidden()
+        page.locator('#profile-button').click()
+        page.locator('#signin-button').click()
+        expect(page.locator('#signin-dialog')).to_be_visible()
+        expect(page.locator('#sso-login')).to_be_visible()
+        page.locator('#close-signin').click()
+        width = lambda selector: page.evaluate(f"document.querySelector('{selector}').getBoundingClientRect().width")
+        content, canvas = width('.content'), width('#editor')
+        page.locator('#chat-button').click()
+        expect(page.locator('#chat-panel')).to_be_visible()
+        expect(page.locator('#chat-button')).to_have_attribute('aria-expanded', 'true')
+        page.wait_for_timeout(400)  # the content margin animates for 0.2 s
+        panel = width('#chat-panel')
+        assert abs((content - width('.content')) - panel) < 2 and width('#editor') < canvas, (content, width('.content'), panel)
+        page.locator('.chat-suggestion').first.click()
+        expect(page.locator('#chat-input')).to_have_value(page.locator('.chat-suggestion').first.inner_text())
+        page.locator('#chat-close').click()
+        expect(page.locator('#chat-panel')).to_be_hidden()
+        page.wait_for_timeout(400)
+        assert abs(width('.content') - content) < 2
+        for viewport in (1280, 980, 640):
+            page.set_viewport_size({'width': viewport, 'height': 900})
+            page.wait_for_timeout(300)
+            overflow = page.evaluate('document.documentElement.scrollWidth - window.innerWidth')
+            assert overflow <= 1, (viewport, overflow)
+            stacked = page.evaluate("getComputedStyle(document.querySelector('.side-nav')).position") == 'static'
+            assert stacked == (viewport <= 980), (viewport, stacked)
+        page.set_viewport_size({'width': 1600, 'height': 1100})
         assert not errors, errors
         assert not external, external
         browser.close()
@@ -364,7 +400,8 @@ def main():
                          'AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review',
                          'GPU training: EFA, Capacity Block, placement group, FSx for Lustre, HyperPod; GenAI RAG: SageMaker endpoint',
                          'multi-account: account frames, shared TGW, combine dialog',
-                         'snapshot import', 'change review between snapshots']}
+                         'snapshot import', 'change review between snapshots',
+                         'console shell: profile menu, sign-in dialog, docked assistant reflow, no overflow at 1280/980/640']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 
