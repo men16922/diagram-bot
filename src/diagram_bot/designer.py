@@ -4,6 +4,7 @@ A design is written in the same API-shaped `raw` structure the collector produce
 graph, layout, review and export pipeline renders it exactly like a collected snapshot. Nothing here
 calls AWS; a design is a proposal, never a description of a real account.
 """
+import hashlib
 import ipaddress
 import re
 
@@ -256,6 +257,31 @@ class Design:
         self.record("add_gpu_node_group", vpc=vpc, cluster=cluster, name=name, instance_type=instance_type, per_az=int(per_az),
                     training=bool(training), minimum=minimum, maximum=maximum)
         return {"node_group": group, "nodes": len(nodes), "azs": sorted({self.sample.az_of(s) for s in subnets}), "efa": bool(training)}
+
+    def add_fsx_lustre(self, vpc, name, deployment="PERSISTENT_2", capacity_tib=4.8, throughput=250):
+        """FSx for Lustre beside the training nodes (their dedicated subnet), else in the first app subnet."""
+        v = self.vpc(vpc)
+        if deployment not in ("PERSISTENT_1", "PERSISTENT_2", "SCRATCH_1", "SCRATCH_2"):
+            raise DesignError("deployment는 PERSISTENT_2(권장), PERSISTENT_1, SCRATCH_2, SCRATCH_1 중 하나입니다.")
+        train = sorted(s["SubnetId"] for s in self.sample.raw["subnets"] if s["SubnetId"].startswith(f"subnet-{v['key']}-train-"))
+        subnet = train[0] if train else self.tier(v, "app" if "app" in v["tiers"] else next(iter(v["tiers"])))[0]
+        key = f"fs-{hashlib.sha256((v['key'] + name).encode()).hexdigest()[:17]}"
+        self.sample.fsx_lustre(key, slug(name), v["id"], subnet, deployment, int(float(capacity_tib) * 1024), int(throughput))
+        self.record("add_fsx_lustre", vpc=vpc, name=name, deployment=deployment, capacity_tib=float(capacity_tib))
+        return {"file_system": slug(name), "subnet": subnet, "az": self.sample.az_of(subnet), "next_to_training": bool(train)}
+
+    def add_sagemaker_endpoint(self, vpc, name, instance_type="ml.g5.xlarge", count=2, tier="app"):
+        """SageMaker real-time endpoint in the VPC: the model's VpcConfig uses the tier's subnets in every AZ."""
+        v = self.vpc(vpc)
+        if not str(instance_type).startswith("ml."):
+            raise DesignError(f"SageMaker 인스턴스 유형은 ml.로 시작합니다 (예: ml.g5.xlarge): {instance_type}")
+        if int(count) < 1:
+            raise DesignError("인스턴스 수는 1 이상입니다 (AZ 장애 대비 2 이상 권장).")
+        subnets = self.tier(v, tier)
+        sg = self.security_group(v, f"{slug(name)}-endpoint", [(443, v["cidr"])])
+        self.sample.sagemaker_endpoint(slug(name), instance_type, int(count), subnets, sg)
+        self.record("add_sagemaker_endpoint", vpc=vpc, name=name, instance_type=instance_type, count=int(count), tier=tier)
+        return {"endpoint": slug(name), "instances": int(count), "azs": len({self.sample.az_of(s) for s in subnets})}
 
     def add_database(self, vpc, name, engine="postgres", multi_az=True, read_replica=False, instance_class="db.r6g.large"):
         v = self.vpc(vpc)

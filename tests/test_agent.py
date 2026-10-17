@@ -274,3 +274,23 @@ def test_gpu_node_groups_follow_the_ai_lenses():
     with pytest.raises(DesignError, match="이미 있는 노드 그룹"):
         d.add_gpu_node_group("ai", "llm", "inference", "g6e.xlarge")
     assert "add_gpu_node_group" in {t.tool_spec["name"] for t in build_tools(Workspace(lambda s: "x"))}
+
+
+def test_ai_designer_steps_place_lustre_and_sagemaker_by_the_lenses():
+    d = Design("학습", "us-east-1")
+    d.add_vpc("ml", "10.50.0.0/16", 2, ["public", "app", "data"])
+    d.add_vpc_endpoints("ml", ["s3"])
+    d.add_eks_cluster("ml", "train")
+    d.add_gpu_node_group("ml", "train", "p5", "p5.48xlarge", per_az=2, training=True)
+    lustre = d.add_fsx_lustre("ml", "checkpoints")
+    assert lustre["next_to_training"] and lustre["subnet"] == "subnet-ml-train-a"
+    endpoint = d.add_sagemaker_endpoint("ml", "reranker", "ml.g5.xlarge", 2)
+    assert endpoint == {"endpoint": "reranker", "instances": 2, "azs": 2}
+    found = {f["rule"] for f in d.review()["findings"]}
+    assert not found & {"REL-FSX-TRAIN-AZ", "OPS-FSX-SCRATCH", "SEC-SAGEMAKER-VPC", "REL-SAGEMAKER-AZ", "OPS-GPU-PLACEMENT", "REL-GPU-SUBNET-IP"}
+    with pytest.raises(DesignError, match="PERSISTENT_2"):
+        d.add_fsx_lustre("ml", "bad", deployment="FAST")
+    with pytest.raises(DesignError, match="ml.로 시작"):
+        d.add_sagemaker_endpoint("ml", "bad", "g5.xlarge")
+    names = {t.tool_spec["name"] for t in build_tools(Workspace(lambda s: "x"))}
+    assert {"add_fsx_lustre", "add_sagemaker_endpoint", "add_gpu_node_group"} <= names

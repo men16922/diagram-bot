@@ -34,8 +34,10 @@ SYSTEM_PROMPT = """당신은 AWS 표준 인프라 아키텍처 설계 도우미�
 - 새 설계는 new_design → add_vpc → (로드 밸런서·서비스·데이터) 순서로 만듭니다. 표준 패턴을 원하면 list_standard_architectures 후 apply_standard_architecture를 씁니다.
 - 기본값은 AWS Well-Architected 모범 사례: AZ 3개(최소 2개), 퍼블릭에는 로드 밸런서·NAT만, 앱·데이터는 프라이빗,
   DB는 Multi-AZ, AZ별 NAT, S3 게이트웨이·SSM 인터페이스 엔드포인트. 사용자가 비용 절감을 원하면 NAT 1개 등으로 조정하고 그 영향을 알려주세요.
-- AI/GPU 워크로드: 추론 노드는 여러 AZ, EFA 학습 노드는 한 AZ(add_gpu_node_group training=true), Bedrock은 bedrock-runtime
-  인터페이스 엔드포인트로 사설 호출. 사설 GPU 플랫폼이 필요하면 표준 ai-platform을 먼저 고려하세요.
+- AI/GPU 워크로드(Well-Architected Generative AI·ML 렌즈): 추론 노드는 여러 AZ, EFA 학습 노드는 한 AZ의 전용 서브넷·배치 그룹
+  (add_gpu_node_group training=true), 학습 데이터·체크포인트는 같은 AZ의 FSx for Lustre(add_fsx_lustre), Bedrock·SageMaker는
+  인터페이스 엔드포인트(bedrock-runtime 등)로 사설 호출, 자체 호스팅 모델은 VPC 안 SageMaker 엔드포인트 2대 이상.
+  표준으로는 ai-platform(EKS GPU), genai-rag(Bedrock RAG), gpu-training(분산 학습)을 먼저 고려하세요.
 - 설계를 마치면 review_design으로 검토하고, 중요한 결과와 개선안을 짧게 정리합니다.
 - 실제 계정은 aws_identity, collect_aws_resources, find_collected_resources, review_collected_resources로 읽기 전용 조회만 합니다.
   리소스를 만들거나 바꾸는 AWS 호출은 하지 않습니다(도구도 없습니다).
@@ -217,6 +219,17 @@ def build_tools(workspace):
                       training=training)
 
     @tool
+    def add_fsx_lustre(vpc: str, name: str, deployment: str = "PERSISTENT_2", capacity_tib: float = 4.8) -> dict:
+        """FSx for Lustre(학습 데이터·체크포인트)를 추가합니다. 학습 노드 그룹이 있으면 그 전용 서브넷(같은 AZ)에 둡니다.
+        deployment는 PERSISTENT_2 권장(SCRATCH는 복제 없음)."""
+        return change("add_fsx_lustre", vpc=vpc, name=name, deployment=deployment, capacity_tib=capacity_tib)
+
+    @tool
+    def add_sagemaker_endpoint(vpc: str, name: str, instance_type: str = "ml.g5.xlarge", count: int = 2, tier: str = "app") -> dict:
+        """VPC 안 SageMaker 실시간 엔드포인트(모델 VpcConfig = 계층의 모든 AZ 서브넷)를 추가합니다. AZ 장애 대비 count 2 이상 권장."""
+        return change("add_sagemaker_endpoint", vpc=vpc, name=name, instance_type=instance_type, count=count, tier=tier)
+
+    @tool
     def add_database(vpc: str, name: str, engine: str = "postgres", multi_az: bool = True, read_replica: bool = False,
                      instance_class: str = "db.r6g.large") -> dict:
         """data 계층에 RDS(mysql, postgres, mariadb 등)를 추가합니다. multi_az는 동기식 대기, read_replica는 별도 AZ 읽기 복제본."""
@@ -280,7 +293,7 @@ def build_tools(workspace):
 
     return [aws_identity, collect_aws_resources, find_collected_resources, review_collected_resources,
             list_standard_architectures, apply_standard_architecture, new_design, add_vpc, add_load_balancer, add_ec2_service,
-            add_ecs_service, add_eks_cluster, add_gpu_node_group, add_database, add_aurora, add_cache, add_kafka, add_opensearch, add_file_system,
+            add_ecs_service, add_eks_cluster, add_gpu_node_group, add_fsx_lustre, add_sagemaker_endpoint, add_database, add_aurora, add_cache, add_kafka, add_opensearch, add_file_system,
             add_lambda, add_vpc_endpoints, connect_vpcs, add_vpn, describe_design, review_design]
 
 
