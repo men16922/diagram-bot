@@ -187,3 +187,24 @@ def test_combine_account_snapshots_into_one_network_view(client):
     xml = client.get(f"/api/snapshots/{combined.json()['id']}/document?view=overview").json()['xml']
     assert 'AWS 계정 · 222222222222' in xml and 'AWS 계정 · 333333333333' in xml
     assert client.post('/api/snapshots/combine', json={'ids': [ids[0], ids[0]]}).status_code == 422
+
+
+def test_identity_reports_the_signed_in_credentials(client, monkeypatch):
+    """The profile menu shows who local credentials are (STS GetCallerIdentity); failures explain themselves."""
+    class Sts:
+        def get_caller_identity(self):
+            return {"Account": "123456789012", "Arn": "arn:aws:iam::123456789012:user/architect", "UserId": "x"}
+
+    class Session:
+        def __init__(self, profile_name=None, **kwargs):
+            self.profile = profile_name
+
+        def client(self, name, **kwargs):
+            if self.profile == "broken":
+                raise RuntimeError("no credentials")
+            return Sts()
+    monkeypatch.setattr("diagram_bot.server.boto3.Session", Session)
+    assert client.get('/api/identity').json() == {"account": "123456789012", "arn": "arn:aws:iam::123456789012:user/architect", "profile": None}
+    assert client.get('/api/identity?profile=dev').json()["profile"] == "dev"
+    failed = client.get('/api/identity?profile=broken')
+    assert failed.status_code == 422 and "no credentials" in failed.json()["detail"]

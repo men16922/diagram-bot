@@ -36,7 +36,7 @@ function setControls() {
   for(const id of ['snapshot-select','references','import-button'])$(id).disabled=state.busy||(state.ready&&state.loading);
   // Team mode roles: viewers read only, editors edit and import, admins also collect from AWS.
   if(state.role==='viewer')for(const id of ['save-button','note-button','reset-button','restore-button','import-button','combine-button'])$(id).disabled=true;
-  $('collection-button').disabled=state.role!=='admin';$('chat-button').disabled=state.role==='viewer';
+  $('collection-button').disabled=state.role!=='admin';$('signin-button').disabled=state.role!=='admin';$('chat-button').disabled=state.role==='viewer';
   const locked=state.busy||(state.ready&&state.loading);
   $('view-overview').disabled=locked;$('view-detail').disabled=locked||!state.vpc;$('view-focus').disabled=locked||!state.selected;
   $('save-state').textContent=state.loading?'불러오는 중':state.busy?'처리 중':state.dirty?'저장하지 않은 편집':state.revision?`저장됨 · v${state.revision}`:'자동 생성 구성도';
@@ -109,7 +109,7 @@ async function loadSnapshot(id) {
 }
 function renderSummary() {
   const {metadata:m,graph}=state.snapshot;
-  $('region-label').textContent=m.region;$('account-summary').textContent=m.design?'DESIGN · 실제 계정 아님':`ACCOUNT ${m.account_id}`;
+  $('region-label').textContent=m.region;$('crumb-account').textContent=m.design?'설계안':m.combined?m.account_id:`계정 ${m.account_id}`;$('account-summary').textContent=m.design?'DESIGN · 실제 계정 아님':`ACCOUNT ${m.account_id}`;
   $('demo-badge').hidden=!m.demo;$('demo-badge').textContent=m.design?'설계안':'샘플 데이터';
   $('scope-description').textContent=m.design?`${m.region} · 채팅으로 만든 표준 아키텍처 설계안 (실제 계정 아님)`:`${m.account_id} · ${m.region} · 수집 설정을 바탕으로 생성한 구성도`;
   $('collected-at').textContent=`수집 ${new Date(m.finished_at).toLocaleString('ko-KR')} · ${m.demo?'합성 샘플':'AWS API 조회'}`;
@@ -140,7 +140,7 @@ async function loadView() {
   try{
     applyDocument(await api(documentUrl()));state.dirty=false;
     const title=state.view==='detail'?vpcNode(state.vpc)?.name:state.view==='focus'?node(state.focus)?.name:'AWS 전체 구성';
-    $('environment-title').textContent=title||'AWS 구성도';
+    $('environment-title').textContent=title||'AWS 구성도';$('crumb-view').textContent={overview:'전체 구성',detail:'상세 구성',focus:'선택 리소스'}[state.view];
     documentActive();if(state.selected&&node(state.selected))showResource(state.selected,false);
     if(state.ready)sendDocument();else{state.loading=false;setControls();}
   }catch(error){state.loading=false;setControls();throw error;}
@@ -285,10 +285,49 @@ bind('view-focus',()=>switchView('focus',{focus:state.selected}));
 bind('save-button',()=>saveDocument());
 bind('export-button',()=>{$('export-dialog').showModal();});
 bind('coverage-button',()=>{$('coverage-dialog').showModal();});
-bind('collection-button',async()=>{$('collection-dialog').showModal();
+// Profile menu (top right): AWS sign-in (SSO or local credentials) and collection with the signed-in identity.
+function closeProfile(){$('profile-menu').hidden=true;$('profile-button').setAttribute('aria-expanded','false');}
+$('profile-button').onclick=event=>{event.stopPropagation();const open=$('profile-menu').hidden;$('profile-menu').hidden=!open;$('profile-button').setAttribute('aria-expanded',String(open));};
+document.addEventListener('click',event=>{if(!$('profile-menu').hidden&&!event.target.closest('.profile'))closeProfile();});
+function identityText(){
+  const id=state.identity;
+  if(!id)return {title:'AWS에 로그인하지 않음',detail:'SSO 또는 로컬 자격 증명으로 로그인하면 계정을 읽기 전용으로 수집할 수 있습니다. 로그인하지 않으면 기본 SDK 인증 체인을 씁니다.',label:'로그인'};
+  if(id.via==='sso')return {title:`${id.role} @ ${id.account}`,detail:`IAM Identity Center(SSO) · ${id.accountName||id.account}`,label:`${id.role} @ ${id.account} (SSO)`};
+  const name=id.arn.split('/').pop()||id.arn;
+  return {title:`${name} @ ${id.account}`,detail:`${id.profile?`프로파일 ${id.profile}`:'기본 SDK 인증 체인'} · ${id.arn}`,label:`${name} @ ${id.account}`};
+}
+function renderProfile(){
+  const text=identityText();$('profile-label').textContent=text.label;$('profile-title').textContent=text.title;$('profile-detail').textContent=text.detail;
+  $('profile-signout').hidden=!state.identity;$('signin-button').textContent=state.identity?'다른 자격 증명으로 로그인':'AWS 로그인 (SSO · 프로파일)';
+  document.querySelector('.profile').classList.toggle('signed-in',!!state.identity);
+  if(!state.team)$('user-avatar').textContent=state.identity?text.title.slice(0,2).toUpperCase():'DB';
+}
+bind('signin-button',async()=>{closeProfile();$('signin-dialog').showModal();
   if(!state.ssoDefaults){state.ssoDefaults=await api('/api/sso/defaults').catch(()=>[]);
     $('sso-start-urls').replaceChildren(...state.ssoDefaults.map(d=>new Option(d.name,d.start_url)));
     if(state.ssoDefaults[0]&&!$('sso-start-url').value){$('sso-start-url').value=state.ssoDefaults[0].start_url;$('sso-region').value=state.ssoDefaults[0].region;}}});
+$('close-signin').onclick=()=>$('signin-dialog').close();
+bind('sso-use',()=>{
+  if(!$('sso-role').value)throw new Error('SSO 역할을 선택하세요. 이 계정에 할당된 역할이 없다면 Identity Center 관리자에게 요청하세요.');
+  const option=$('sso-account').selectedOptions[0];
+  state.identity={via:'sso',account:$('sso-account').value,role:$('sso-role').value,accountName:option?.textContent};
+  $('aws-profile').value='';renderProfile();$('signin-dialog').close();toast(`SSO로 로그인했습니다 · ${state.identity.role} @ ${state.identity.account}`);
+});
+bind('use-profile',async()=>{
+  $('signin-status').textContent='자격 증명을 확인하고 있습니다…';
+  try{const profile=$('aws-profile').value;const who=await api(`/api/identity${profile?`?profile=${encodeURIComponent(profile)}`:''}`);
+    if(state.sso)await api(`/api/sso/login/${state.sso.id}/logout`,{method:'POST'}).catch(()=>{});state.sso=null;ssoView('form');
+    state.identity={via:'profile',profile,account:who.account,arn:who.arn};$('signin-status').textContent='';renderProfile();$('signin-dialog').close();
+    toast(`로그인했습니다 · ${identityText().title}`);
+  }catch(error){$('signin-status').textContent=error.message;}
+});
+bind('profile-signout',async()=>{closeProfile();if(state.sso)await api(`/api/sso/login/${state.sso.id}/logout`,{method:'POST'}).catch(()=>{});
+  state.sso=null;state.identity=null;$('aws-account').value='';ssoView('form');renderProfile();toast('AWS 자격 증명에서 로그아웃했습니다.');});
+bind('collection-button',()=>{closeProfile();
+  const text=identityText(),box=$('collection-identity');box.replaceChildren(el('b',state.identity?text.title:'기본 SDK 인증 체인 (로그인하지 않음)'),el('span',state.identity?text.detail:'이 기기의 환경 변수·기본 프로파일을 씁니다.'));
+  const change=el('button','로그인 변경','text-button');change.type='button';change.onclick=()=>{$('collection-dialog').close();$('signin-button').click();};box.append(el('br'),change);
+  if(state.identity&&!$('aws-account').value)$('aws-account').value=state.identity.account;
+  $('collection-dialog').showModal();});
 // IAM Identity Center sign-in with the device code grant: the server keeps every secret, the page shows the code and link.
 function ssoView(mode){$('sso-form').hidden=mode!=='form';$('sso-device').hidden=mode!=='device';$('sso-select').hidden=mode!=='select';
   $('aws-profile').disabled=mode==='select';$('aws-account').readOnly=mode==='select';}
@@ -320,7 +359,8 @@ bind('sso-login',async()=>{
   ssoView('device');state.ssoTimer=setTimeout(ssoPoll,flow.interval*1000);
 });
 $('sso-account').onchange=()=>ssoRoles().catch(error=>toast(error.message,true));
-bind('sso-logout',async()=>{if(state.sso)await api(`/api/sso/login/${state.sso.id}/logout`,{method:'POST'});state.sso=null;$('aws-account').value='';ssoView('form');});
+bind('sso-logout',async()=>{if(state.sso)await api(`/api/sso/login/${state.sso.id}/logout`,{method:'POST'});state.sso=null;$('aws-account').value='';ssoView('form');
+  if(state.identity?.via==='sso'){state.identity=null;renderProfile();}});
 bind('close-collection',()=>{$('collection-dialog').close();});
 bind('note-button',()=>post({action:'diagramBotNote'}));
 bind('reset-button',()=>replaceDocument('/relayout',{},'자동 배치를 다시 실행했습니다. 이전 편집본은 보관되고 메모는 유지됩니다.'));
@@ -359,9 +399,9 @@ $('import-file').onchange=async()=>{
 $('collection-form').onsubmit=async event=>{
   event.preventDefault();$('start-collection').disabled=true;$('collection-progress').textContent='AWS 인증과 계정을 확인하고 있습니다…';
   try{
-    const sso=state.sso?.status==='authorized'?{sso_login:state.sso.id,sso_role:$('sso-role').value||null}:{};
+    const sso=state.identity?.via==='sso'&&state.sso?.status==='authorized'?{sso_login:state.sso.id,sso_role:state.identity.role}:{};
     if(sso.sso_login&&!sso.sso_role)throw new Error('SSO 역할을 선택하세요. 이 계정에 할당된 역할이 없다면 Identity Center 관리자에게 요청하세요.');
-    let job=await api('/api/collections',{method:'POST',body:JSON.stringify({profile:sso.sso_login?null:($('aws-profile').value||null),region:$('aws-region').value,expected_account:$('aws-account').value,role_arn:$('aws-role').value||null,external_id:$('aws-external-id').value||null,...sso})});
+    let job=await api('/api/collections',{method:'POST',body:JSON.stringify({profile:sso.sso_login?null:(state.identity?.via==='profile'?state.identity.profile||null:null),region:$('aws-region').value,expected_account:$('aws-account').value,role_arn:$('aws-role').value||null,external_id:$('aws-external-id').value||null,...sso})});
     while(['queued','running'].includes(job.status)){$('collection-progress').textContent='AWS 설정을 수집하고 있습니다. 잠시 기다려 주세요.';await new Promise(resolve=>setTimeout(resolve,1500));job=await api(`/api/collections/${job.id}`);}
     if(job.status==='failed')throw new Error(job.error);
     await refreshSnapshots(job.snapshot_id);await loadSnapshot(job.snapshot_id);$('collection-dialog').close();toast(job.status==='partial'?'부분 수집을 완료했습니다. 조회 상태를 확인하세요.':'AWS 수집을 완료했습니다.');
@@ -391,8 +431,10 @@ function chatMessage(role, text, meta) {
   const item=el('div',undefined,`chat-message ${role}`);item.append(role==='assistant'?markdown(text):el('div',text,'chat-text'));
   if(meta)item.append(el('small',meta,'chat-meta'));$('chat-log').append(item);$('chat-log').scrollTop=$('chat-log').scrollHeight;return item;
 }
+function setChat(open){$('chat-panel').hidden=!open;document.body.classList.toggle('chat-open',open);$('chat-button').setAttribute('aria-expanded',String(open));}
 async function openChat() {
-  $('chat-panel').hidden=false;$('chat-input').focus();
+  if(!$('chat-panel').hidden){setChat(false);return;}
+  setChat(true);$('chat-input').focus();
   if(state.chatReady!==undefined)return;
   const info=await api('/api/agent');state.chatReady=info.ready;
   $('chat-model').replaceChildren(...info.models.map(m=>new Option(m.label+(m.key===info.default?' (기본)':''),m.key)));$('chat-model').value=info.default;
@@ -413,16 +455,19 @@ $('chat-form').onsubmit=async event=>{
   finally{state.chatBusy=false;$('chat-send').disabled=false;$('chat-input').focus();}
 };
 $('chat-input').onkeydown=event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('chat-form').requestSubmit();}};
-bind('chat-button',openChat);bind('chat-close',()=>{$('chat-panel').hidden=true;});
+bind('chat-button',openChat);bind('chat-close',()=>setChat(false));
+$('chat-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('chat-form').requestSubmit();}});
 bind('chat-reset',async()=>{await api('/api/agent/reset',{method:'POST'});$('chat-log').replaceChildren();chatMessage('system','새 대화를 시작합니다.');});
 for(const button of document.querySelectorAll('.chat-suggestion'))button.onclick=()=>{$('chat-input').value=button.textContent;$('chat-input').focus();};
 window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefault();event.returnValue='';}});
 async function start() {
   const boot=await api('/api/bootstrap');state.token=boot.token;state.role=boot.user.role;
+  state.team=boot.team;
   if(boot.team){const name=boot.user.name;$('user-avatar').textContent=name.slice(0,2).toUpperCase();$('user-avatar').title=`${name} · ${boot.user.role}`;
     $('user-role').textContent=`${name} · ${{viewer:'보기 전용',editor:'편집',admin:'관리자'}[boot.user.role]}`;$('user-role').hidden=false;$('logout-button').hidden=false;}
   bind('logout-button',async()=>{await api('/api/logout',{method:'POST'});location.href='/login';});
   for(const profile of boot.profiles)$('aws-profile').append(new Option(profile,profile));
+  renderProfile();
   await refreshSnapshots('demo');await loadSnapshot('demo');
   if(!boot.editor_ready){state.loading=false;setControls();$('editor-message').textContent='터미널에서 diagram-bot setup-editor를 실행한 뒤 앱을 다시 시작하세요.';document.querySelector('.loader').hidden=true;return;}
   $('editor').src='/editor/index.html?embed=1&proto=json&configure=1&spin=1&ui=min&libraries=1&noSaveBtn=1&noExitBtn=1&saveAndExit=0&offline=1&local=1&stealth=1&lang=ko';

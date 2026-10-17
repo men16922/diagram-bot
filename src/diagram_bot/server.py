@@ -338,6 +338,17 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
             raise HTTPException(403, "감사 로그는 admin만 볼 수 있습니다.")
         return audit.tail(max(1, min(limit, 1000)))
 
+    @app.get("/api/identity")
+    def identity(request: Request, profile: str | None = None):
+        """Who the local credentials are (STS GetCallerIdentity, read-only): the profile menu shows it after sign-in."""
+        if auth and getattr(request.state, "role", None) != "admin":
+            raise HTTPException(403, "AWS 자격 증명은 admin만 사용할 수 있습니다.")
+        try:
+            caller = boto3.Session(profile_name=profile or None).client("sts").get_caller_identity()
+        except Exception as exc:  # noqa: BLE001 - shown to the user as the reason sign-in failed
+            raise HTTPException(422, f"AWS 자격 증명을 확인하지 못했습니다: {type(exc).__name__}: {exc}") from exc
+        return {"account": caller["Account"], "arn": caller["Arn"], "profile": profile or None}
+
     @app.get("/api/bootstrap")
     def bootstrap(request: Request):
         try:

@@ -121,6 +121,7 @@ def main():
             status = page.evaluate("fetch('/api/snapshots', {method: 'POST', headers: {'Content-Type': 'application/json', "
                                    "'X-Diagram-Bot': 'x'}, body: '{}'}).then(r => r.status)")
             assert status == 403, status
+            page.click("#profile-button")  # sign-out lives in the profile menu (top right)
             page.click("#logout-button")
             expect(page).to_have_url(base + "/login")
             page.fill("#n", "admin1")
@@ -128,6 +129,7 @@ def main():
             page.click("button")
             expect(page.locator("#user-role")).to_contain_text("admin1 · 관리자")
             expect(page.locator("#collection-button")).to_be_enabled()
+            page.click("#profile-button")  # sign-out lives in the profile menu (top right)
             page.click("#logout-button")
             expect(page).to_have_url(base + "/login")
             page.click("a.sso")  # app -> provider -> callback -> app
