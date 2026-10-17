@@ -207,7 +207,9 @@ function renderReview() {
 async function renderChanges() {
   const others=state.snapshots.filter(s=>s.id!==state.snapshotId),select=$('compare-select'),previous=select.value;
   select.replaceChildren(...others.map(s=>new Option(snapshotLabel(s),s.id)));
-  const sameScope=others.find(s=>s.metadata.account_id===state.snapshot.metadata.account_id&&s.metadata.region===state.snapshot.metadata.region&&s.metadata.finished_at<state.snapshot.metadata.finished_at);
+  // Default: the latest earlier snapshot of the same account and region, else any of the same scope, else the latest.
+  const scope=others.filter(s=>s.metadata.account_id===state.snapshot.metadata.account_id&&s.metadata.region===state.snapshot.metadata.region);
+  const sameScope=scope.find(s=>s.metadata.finished_at<state.snapshot.metadata.finished_at)||scope[0];
   select.value=others.some(s=>s.id===previous)?previous:(sameScope||others[0])?.id||'';
   if(!select.value){$('changes-rows').replaceChildren();$('changes-summary').replaceChildren();$('changes-empty').hidden=false;return;}
   const result=await api(`/api/snapshots/${state.snapshotId}/diff/${select.value}`),s=result.summary;
