@@ -287,11 +287,20 @@ def test_truncated_label_ends_at_a_word():
 
 
 @pytest.mark.parametrize("instance_type, shape", [
-    ("p5.48xlarge", "p4_instance"), ("g6e.2xlarge", "g4dn"), ("trn2.48xlarge", "trainium_instance"),
-    ("inf2.xlarge", "inferentia"), ("dl1.24xlarge", "ec2_dl1_instance"), ("m7g.large", "instance2"), ("i4i.large", "instance2")])
+    ("p4d.24xlarge", "p4d_instance"), ("p4de.24xlarge", "ec2_p4de_instance"), ("g4dn.xlarge", "g4dn"), ("trn2.48xlarge", "trainium_instance"),
+    ("inf2.xlarge", "inferentia"), ("dl1.24xlarge", "ec2_dl1_instance"), ("p5.48xlarge", "instance2"), ("g6e.2xlarge", "instance2"),
+    ("m7g.large", "instance2"), ("i4i.large", "instance2")])
 def test_accelerated_instances_use_their_aws_icons(instance_type, shape):
+    """Family-specific icons only where AWS draws that family; the GPU icons print their family name."""
     node = {"kind": "ec2", "attributes": {"InstanceType": instance_type}}
     assert f"shape=mxgraph.aws4.{shape};" in resource_style({"kind": "ec2", "variant": icon_variant(node)})
+
+
+def test_gpu_instances_are_labelled():
+    from diagram_bot.layout import resource_label
+    label = lambda t: resource_label({"kind": "ec2", "name": "node", "attributes": {"InstanceType": t}})
+    assert label("p5.48xlarge") == "node\np5.48xlarge · GPU" and label("g6e.2xlarge").endswith("· GPU")
+    assert label("m7g.large") == "node\nm7g.large" and label("inf2.xlarge") == "node\ninf2.xlarge"
 
 
 @pytest.mark.parametrize("service, icon", [("bedrock-runtime", "bedrock"), ("bedrock-agent-runtime", "bedrock"),

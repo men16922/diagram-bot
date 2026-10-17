@@ -20,7 +20,8 @@ STANDARDS = {
     "environments": "운영·스테이징 VPC 분리",
     "hybrid": "하이브리드 (Transit Gateway + Site-to-Site VPN)",
     "eks-platform": "EKS 플랫폼 (EKS, Aurora, Redis, MSK, Lambda, 엔드포인트)",
-    "data-platform": "데이터 플랫폼 (ECS, OpenSearch, RDS, Redis, EFS, Redshift, 피어링, VPN)",
+    "data-platform": "데이터 플랫폼 (ECS, OpenSearch, RDS, Redis, EFS, Redshift, TGW, 이중화 VPN)",
+    "ai-platform": "AI 플랫폼 (사설 EKS GPU 추론 3 AZ·EFA 학습 단일 AZ, Bedrock 엔드포인트, Aurora pgvector, EFS)",
 }
 
 

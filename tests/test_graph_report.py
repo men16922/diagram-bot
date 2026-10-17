@@ -219,3 +219,23 @@ def test_terminated_instances_are_not_drawn_or_inventoried():
     graph = build_graph(snapshot)
     assert not any(n["resource_id"] == "i-gone0000000000001" for n in graph["nodes"])
     assert any(n["resource_id"] == snapshot["raw"]["instances"][0]["InstanceId"] for n in graph["nodes"])
+
+
+def test_ai_platform_follows_the_ai_lenses():
+    """Private VPC, multi-AZ inference and endpoints, single-AZ EFA training (docs/ARCHITECTURE.md §5.5)."""
+    from diagram_bot.findings import review
+    from diagram_bot.samples import SAMPLES
+    snapshot = SAMPLES["ai-platform"]()
+    raw, graph = snapshot["raw"], build_graph(snapshot)
+    assert not raw["internet_gateways"] and not raw["nat_gateways"]
+    assert {n.get("route_class") for n in graph["nodes"] if n["kind"] == "subnet"} == {"tgw", "isolated"}
+    zones = {s["SubnetId"]: s["AvailabilityZone"] for s in raw["subnets"]}
+    groups = {g["AutoScalingGroupName"]: {zones[s] for s in g["VPCZoneIdentifier"].split(",")} for g in raw["auto_scaling_groups"]}
+    assert len(groups["eks-ai-gpu-inference-3c4d"]) == 3 and len(groups["eks-ai-gpu-train-5e6f"]) == 1
+    services = {e["ServiceName"].split(f".{snapshot['metadata']['region']}.", 1)[1] for e in raw["vpc_endpoints"]}
+    assert {"bedrock-runtime", "bedrock-agent-runtime", "ecr.api", "ecr.dkr", "sts", "logs", "s3"} <= services
+    assert all(len({zones[s] for s in e.get("SubnetIds", [])}) == 3 for e in raw["vpc_endpoints"] if e["VpcEndpointType"] == "Interface")
+    efa = next(g for g in raw["security_groups"] if g["GroupId"] == "sg-train-efa")
+    assert {"IpProtocol": "-1", "UserIdGroupPairs": [{"GroupId": "sg-train-efa"}]} in efa["IpPermissions"]
+    assert all(r.get("IpRanges", [{}])[0].get("CidrIp") != "0.0.0.0/0" for r in efa["IpPermissionsEgress"])
+    assert [(f["rule"], f["severity"]) for f in review(graph, snapshot["coverage"])] == [("REL-ASG-AZ", "low")]

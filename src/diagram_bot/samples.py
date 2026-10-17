@@ -616,5 +616,60 @@ def data_platform():
     return s.snapshot()
 
 
+def ai_platform():
+    s = Sample("ai-platform", "AI 플랫폼 (사설 EKS GPU 추론·학습 · Bedrock · Aurora pgvector)", [
+        "인터넷 경로 없는 사설 VPC: IGW·NAT 없이 Transit Gateway로 사내망·중앙 egress에 연결 (MLSEC03-BP02)",
+        "Bedrock·ECR·EKS·STS·CloudWatch Logs 등은 세 AZ의 인터페이스 엔드포인트, S3는 게이트웨이 엔드포인트로 사설 호출 (GENSEC01-BP02)",
+        "GPU 추론 노드 그룹(g6e)은 세 AZ에 분산하고 내부 ALB가 추론 파드 IP를 대상으로 등록, 자동 확장 (GENREL02-BP01, MLREL05-BP01)",
+        "EFA 학습 노드 그룹(p5)은 의도적으로 한 AZ의 전용 /20 서브넷에, 자기 참조 전체 허용 보안 그룹 (EFA는 AZ를 넘지 못함, HPCREL01-BP02)",
+        "학습과 추론은 노드 그룹·인스턴스 유형을 분리 (MLPERF04-BP01), 학습 노드 그룹은 0까지 축소 (GENSUS01-BP01)",
+        "RAG 벡터 저장소는 VPC 안 격리 서브넷의 Aurora PostgreSQL(pgvector) writer/reader, 노드 보안 그룹만 허용 (GENSEC01-BP03)",
+        "모델 캐시는 세 AZ 마운트 타깃의 EFS (EKS AI/ML Storage)",
+        "도형 밖 권고: 학습 배치는 클러스터 배치 그룹 또는 Capacity Block(둘 중 하나), 체크포인트는 같은 AZ의 S3 연동 FSx for Lustre (GENREL06-BP01)",
+        "도형 밖 권고: Bedrock 모델 호출 로깅(기본 꺼짐)·Guardrails·InvokeModel만 허용하는 엔드포인트 정책, S3는 SSE-KMS와 aws:SourceVpce (수집 범위 밖)",
+        "도형 밖 권고: Karpenter·KEDA·NVIDIA/EFA device plugin은 Kubernetes 객체라 그리지 않음 (Karpenter 노드는 ASG 없는 EC2로 표시)"])
+    vpc = s.vpc("vpc-0a1b2c3d4e5f60009", "10.80.0.0/16", "ai-platform", Environment="production")
+    azs = "abc"
+    app = [s.subnet(f"subnet-ai-app-{az}", vpc, az, f"10.80.{32 * i}.0/19", f"app-{az}", "app") for i, az in enumerate(azs)]
+    # GPU nodes use many IPs (a P5 takes 81 on EKS) and a subnet cannot grow later: a dedicated /20 for training.
+    train = s.subnet("subnet-ai-train-a", vpc, "a", "10.80.96.0/20", "train-a", "app")
+    data = [s.subnet(f"subnet-ai-data-{az}", vpc, az, f"10.80.{200 + i}.0/24", f"data-{az}", "data") for i, az in enumerate(azs)]
+    hub = s.transit_gateway("tgw-ai00000000000009", "corp-tgw")
+    s.tgw_attachment("tgw-attach-ai", hub, vpc, app, "ai-platform-attachment")
+    # No internet gateway or NAT: the default route goes to the Transit Gateway (central egress); data stays local only.
+    s.route_table("rtb-ai-app", vpc, "ai-app", [*app, train])
+    s.route("rtb-ai-app", "0.0.0.0/0", TransitGatewayId=hub)
+    s.route_table("rtb-ai-data", vpc, "ai-data-isolated", data, main=True)
+    s.gateway_endpoint("vpce-ai-s3", vpc, "s3", ["rtb-ai-app", "rtb-ai-data"])
+    for service in ("bedrock-runtime", "bedrock-agent-runtime", "ecr.api", "ecr.dkr", "sts", "eks", "eks-auth", "ec2",
+                    "elasticloadbalancing", "logs", "ssm"):
+        s.interface_endpoint(f"vpce-ai-{service.replace('.', '-')}", vpc, service, app)
+    s.security_group("sg-ai-nodes", vpc, "ai-nodes", [(443, "10.80.0.0/16"), (8080, "sg-ai-alb")])
+    s.security_group("sg-ai-alb", vpc, "ai-inference-alb", [(443, "10.0.0.0/8")])
+    # EFA: every training node shares one group that allows all traffic from itself; no 0.0.0.0/0 egress.
+    s.security_group("sg-train-efa", vpc, "train-efa", [(None, "self"), (443, "10.80.0.0/16")], egress=("self", "10.80.0.0/16"))
+    s.security_group("sg-ai-db", vpc, "ai-vectors", [(5432, "sg-ai-nodes")])
+    eks_tags = lambda group: {"eks:cluster-name": "ai-eks", "eks:nodegroup-name": group}
+    system = [s.instance(f"i-aisys{az}000000009", app[i], f"system-node-{az}", "m7g.large", sg="sg-ai-nodes", **eks_tags("system"))
+              for i, az in enumerate(azs)]
+    infer = [s.instance(f"i-aiinf{az}000000009", app[i], f"gpu-inference-{az}", "g6e.2xlarge", sg="sg-ai-nodes", **eks_tags("gpu-inference"))
+             for i, az in enumerate(azs)]
+    trainers = [s.instance(f"i-aitrn{n}0000000009", train, f"gpu-train-{n}", "p5.48xlarge", sg="sg-train-efa", **eks_tags("gpu-train"))
+                for n in (1, 2)]
+    s.auto_scaling_group("eks-ai-system-1a2b", system, app, minimum=3, maximum=6)
+    s.auto_scaling_group("eks-ai-gpu-inference-3c4d", infer, app, minimum=3, maximum=12)
+    s.auto_scaling_group("eks-ai-gpu-train-5e6f", trainers, [train], minimum=0, maximum=8)
+    s.eks("ai-eks", vpc, app, [("system", "eks-ai-system-1a2b", "m7g.large", {"minSize": 3, "maxSize": 6, "desiredSize": 3}),
+                               ("gpu-inference", "eks-ai-gpu-inference-3c4d", "g6e.2xlarge", {"minSize": 3, "maxSize": 12, "desiredSize": 3}),
+                               ("gpu-train", "eks-ai-gpu-train-5e6f", "p5.48xlarge", {"minSize": 0, "maxSize": 8, "desiredSize": 2})])
+    alb = s.load_balancer("ai-inference-alb", vpc, app, scheme="internal", sg="sg-ai-alb")
+    s.target_group("inference-pods", vpc, "HTTP", 8080, [(s.address(subnet, 40), 8080, s.az_of(subnet)) for subnet in app], [alb],
+                   target_type="ip", health="/healthz")
+    s.aurora("ai-vectors", vpc, data, "a", ["b"])
+    s.efs("fs-0ai0000000000009", "ai-model-cache", vpc, app)
+    return s.snapshot()
+
+
 SAMPLES = {"three-tier": three_tier, "microservices": microservices, "nlb-alb": static_ip_front,
-           "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform, "data-platform": data_platform}
+           "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform, "data-platform": data_platform,
+           "ai-platform": ai_platform}

@@ -119,24 +119,28 @@ def tier_rank(subnet):
     return 3 if subnet.get("route_class") == "isolated" else 2
 
 
-# Accelerated EC2 families with their own AWS Architecture Icons (GPU P/G, Trainium, Inferentia, Gaudi DL).
-ACCELERATED = re.compile(r"^(p|g|trn|inf|dl)\d")
-ACCELERATED_ICON = {"p": "gpu_p", "g": "gpu_g", "trn": "trainium", "inf": "inferentia", "dl": "dl1"}
+# Accelerated EC2 families that have their own AWS Architecture Icon. The GPU icons print their
+# family (P3, P4d, G4dn), so newer GPU families (p5, g6e…) keep the generic icon and a "GPU" label.
+ACCELERATED_ICON = {"p3": "p3", "p3dn": "p3", "p4d": "p4d", "p4de": "p4de", "g4dn": "g4dn", "g4ad": "g4ad", "dl1": "dl1"}
+GPU = re.compile(r"^(p|g)\d")
 ML_ENDPOINTS = re.compile(r"\.(bedrock|sagemaker)[.-]?")
 
 
-def accelerated_family(node):
-    """'p', 'g', 'trn', 'inf' or 'dl' for an accelerated instance, else None."""
-    match = ACCELERATED.match(str(node["attributes"].get("InstanceType", "")))
-    return match.group(1) if match else None
+def instance_family(node):
+    return str(node["attributes"].get("InstanceType", "")).split(".")[0]
+
+
+def accelerated_icon(node):
+    family = instance_family(node)
+    return ACCELERATED_ICON.get(family) or ("trainium" if family.startswith("trn") else "inferentia" if family.startswith("inf") else None)
 
 
 def icon_variant(node):
     """Icon choice within a kind: load balancer type, database and cache engine, file system class,
     accelerated instance family and AI service endpoints."""
     attrs = node["attributes"]
-    if node["kind"] == "ec2" and accelerated_family(node):
-        return ACCELERATED_ICON[accelerated_family(node)]
+    if node["kind"] == "ec2" and accelerated_icon(node):
+        return accelerated_icon(node)
     if node["kind"] == "vpc_endpoint":
         match = ML_ENDPOINTS.search(str(attrs.get("ServiceName", "")) + ".")
         return match.group(1) if match else None
@@ -181,7 +185,8 @@ def resource_label(node):
         target = attrs.get("Target", {})
         return f"{target.get('Id', name)}:{target.get('Port', '')}"
     if kind == "ec2":
-        return lines(name, " · ".join(filter(None, (attrs.get("InstanceType"), "spot" if attrs.get("InstanceLifecycle") == "spot" else None))))
+        return lines(name, " · ".join(filter(None, (attrs.get("InstanceType"), "GPU" if GPU.match(instance_family(node)) else None,
+                                                    "spot" if attrs.get("InstanceLifecycle") == "spot" else None))))
     if kind == "load_balancer" and attrs.get("Type"):
         short = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
         zones = len(attrs.get("AvailabilityZones", []))
@@ -453,9 +458,13 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                                  key=lambda s: (tier_rank(s), s["name"], s["id"])) for az in azs}
         col_width = {az: max((per_row[s["id"]] * SLOT + 40 for s in az_subnets[az]), default=SLOT * 2 + 40) + 32 for az in azs}
         az_width = sum(gutters[:last]) + sum(col_width.values()) + 24 + gutters[last]
-        band_width = max(len(lbs), len(gateways), len(tgs)) * SIDE_SLOT + 2 * max(gutters)
+        band_width = max(len(lbs), len(tgs)) * SIDE_SLOT + 2 * max(gutters)
         bottom_width = len(unplaced) * SLOT + gutters[0] + gutters[last] + 40
         width = max(720, az_width, band_width, bottom_width)
+        # The attachment row wraps instead of widening the VPC: a private VPC with a dozen interface
+        # endpoints would otherwise be three times as wide as its AZ columns.
+        per_band = max(1, int((width - 2 * max(gutters)) // SIDE_SLOT))
+        gateway_rows = [gateways[i:i + per_band] for i in range(0, len(gateways), per_band)]
         vid = cell_id(vpc["id"])
         vpc_label = f"VPC  ·  {vpc['name']}  ·  {vpc['attributes'].get('CidrBlock', '')}"
         group = canvas.add(vid, "region", 20, cursor, width, 0, "vpc", fit_label(vpc_label, width - 60, 1), resource=vpc["id"],
@@ -464,7 +473,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         ox, oy = canvas.abs[vid]
         geometry = {"last": last, "lb_mid": {}, "gutters": []}
         # Attachment row (gateways, endpoints, EKS, Lambda), then load balancers, then target groups.
-        for band in (gateways, lbs, tgs):
+        for band in (*gateway_rows, lbs, tgs):
             if not band:
                 continue
             start = (width - len(band) * SIDE_SLOT) / 2 + 24
@@ -472,7 +481,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                 resource(n["id"], vid, start + i * SIDE_SLOT, y, "right")["column"] = 0
                 if n["kind"] == "load_balancer":
                     geometry["lb_mid"][n["id"]] = oy + y + ICON + 8 + 6 * (i % 4)
-            y += ICON + (40 if band is gateways else 34)
+            y += ICON + (34 if band is lbs or band is tgs else 40)
         geometry["channel"] = oy + y - 6
         geometry["placements"] = {key: oy + y - 6 + 7 * (len(tgs) + i) for i, key in enumerate(placements)}
         y += 7 * (len(tgs) + len(placements)) + 10
