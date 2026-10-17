@@ -20,7 +20,7 @@ def write_report(snapshot, directory):
     (output / "snapshot.json").write_text(payload, encoding="utf-8")
     # JSON is embedded in HTML; escape characters capable of closing a script tag.
     embedded = payload.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
-    template = files("ta_bot").joinpath("viewer.html").read_text(encoding="utf-8")
+    template = files("diagram_bot").joinpath("viewer.html").read_text(encoding="utf-8")
     (output / "index.html").write_text(template.replace("__SNAPSHOT_JSON__", embedded), encoding="utf-8")
     buffer = io.StringIO(newline="")
     fields = ["account", "region", "kind", "resource_id", "name", "reference_only", "source", "attributes"]

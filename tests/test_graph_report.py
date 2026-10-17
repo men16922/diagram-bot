@@ -2,9 +2,9 @@ import csv
 import json
 import re
 
-from ta_bot.demo import demo_snapshot
-from ta_bot.graph import build_graph
-from ta_bot.report import write_report
+from diagram_bot.demo import demo_snapshot
+from diagram_bot.graph import build_graph
+from diagram_bot.report import write_report
 
 
 def test_explicit_relationships_and_multisubnet_lb():

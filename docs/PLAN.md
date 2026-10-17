@@ -127,7 +127,7 @@ ALB처럼 여러 서브넷에 속하는 리소스는 VPC 수준에 하나만 표
 ```mermaid
 flowchart LR
     UI[React 탐색 화면] --> API[로컬 FastAPI]
-    CLI[기존 ta-bot CLI] --> COL[공통 boto3 수집기]
+    CLI[기존 diagram-bot CLI] --> COL[공통 boto3 수집기]
     API --> JOB[수집 작업 실행기]
     JOB --> COL
     AUTH[기존 AWS SSO 및 SDK 인증 체인] --> COL
@@ -157,7 +157,7 @@ flowchart LR
 | 로컬 접근 | 기본 127.0.0.1 바인딩. 허용 origin/host와 앱 세션 검증으로 수집 실행 API 보호 |
 | 작업 실행 | 1개 앱 프로세스와 제한된 수집 worker로 시작. 작업 상태를 DB에 기록하고 재시작 시 중단 상태 복구 |
 | 저장 | SQLite는 source/job/snapshot/view/document 인덱스, JSON은 수집 결과, XML은 기준·편집 문서. 원자적 저장 |
-| 배포 | UI와 draw.io 정적 배포물을 고정 버전·체크섬으로 패키징. 출처·라이선스 고지 포함. `ta-bot serve` 추가, 기존 CLI 유지 |
+| 배포 | UI와 draw.io 정적 배포물을 고정 버전·체크섬으로 패키징. 출처·라이선스 고지 포함. `diagram-bot serve` 추가, 기존 CLI 유지 |
 
 M0에서 draw.io XML 왕복 저장, 그룹 경계, 연결선, AWS 도형, 선택 이벤트, PNG 생성을 검증한다. 공식 호스팅 embed API를 로컬 배포가 동일하게 지원한다고 가정하지 않고 선택한 오픈소스 편집기 버전의 동작을 확인한다. 필요한 연동은 작은 어댑터로 격리한다. 자동 배치는 그룹별 좌표 계산을 기본으로 검증하며 보조 알고리즘은 이 단계에서 결정한다.
 

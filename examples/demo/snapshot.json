@@ -78,7 +78,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "TA Demo Network"
+            "Value": "Diagram Bot Demo Network"
           }
         ]
       }
@@ -414,7 +414,7 @@
         "id": "111122223333/ap-northeast-2/vpc/vpc-demo",
         "resource_id": "vpc-demo",
         "kind": "vpc",
-        "name": "TA Demo Network",
+        "name": "Diagram Bot Demo Network",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {
@@ -423,7 +423,7 @@
           "Tags": [
             {
               "Key": "Name",
-              "Value": "TA Demo Network"
+              "Value": "Diagram Bot Demo Network"
             }
           ]
         },

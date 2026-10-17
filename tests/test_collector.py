@@ -4,7 +4,7 @@ import boto3
 import pytest
 from botocore.stub import Stubber
 
-from ta_bot.collector import collect, query
+from diagram_bot.collector import collect, query
 
 
 def client(service):

@@ -2,7 +2,7 @@
 
 저장소: https://github.com/men16922/diagram-bot
 
-기본 브랜치는 `main`입니다. Python 패키지와 CLI 명령 이름은 `ta-bot`입니다.
+기본 브랜치는 `main`입니다. Python 패키지와 CLI 명령 이름은 `diagram-bot`입니다.
 
 ## 개발 환경 구성
 
@@ -14,7 +14,7 @@ source .venv/bin/activate
 pip install -e '.[test]' build
 pytest -q
 python -m build
-ta-bot demo --output reports/demo
+diagram-bot demo --output reports/demo
 ```
 
 ## 변경 사항 올리기
@@ -31,7 +31,7 @@ gh pr create --base main
 
 ## CI와 추적 범위
 
-- `pyproject.toml`: 설치 가능한 Python 패키지와 `ta-bot` CLI.
+- `pyproject.toml`: 설치 가능한 Python 패키지와 `diagram-bot` CLI.
 - `.github/workflows/ci.yml`: Python 3.11/3.12/3.13에서 패키지 빌드, wheel 설치, pytest, 샘플 보고서 생성·재렌더링.
 - `.github/pull_request_template.md`: 변경 내용과 검증 결과 기록.
 - `.gitignore`: 가상환경, 빌드 결과, `.env`, `.aws`, 키 파일, 수집 산출물 제외.

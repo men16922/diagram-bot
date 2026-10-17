@@ -20,7 +20,7 @@ def demo_snapshot():
             {"service": "elbv2", "operation": "describe_target_groups", "status": "complete", "items": 1, "pages": 1},
             {"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": tg}, "status": "complete", "items": 2, "pages": 1}],
         "raw": {
-            "vpcs": [{"VpcId": "vpc-demo", "CidrBlock": "10.20.0.0/16", "Tags": [{"Key": "Name", "Value": "TA Demo Network"}]}],
+            "vpcs": [{"VpcId": "vpc-demo", "CidrBlock": "10.20.0.0/16", "Tags": [{"Key": "Name", "Value": "Diagram Bot Demo Network"}]}],
             "subnets": [{"SubnetId": "subnet-a", "VpcId": "vpc-demo", "AvailabilityZone": "ap-northeast-2a", "CidrBlock": "10.20.1.0/24"},
                         {"SubnetId": "subnet-c", "VpcId": "vpc-demo", "AvailabilityZone": "ap-northeast-2c", "CidrBlock": "10.20.3.0/24"}],
             "instances": [{"InstanceId": "i-demo-a", "VpcId": "vpc-demo", "SubnetId": "subnet-a", "InstanceType": "t3.small", "State": {"Name": "running"}, "Placement": {"AvailabilityZone": "ap-northeast-2a"}, "Tags": [{"Key": "Name", "Value": "web-a"}], "SecurityGroups": [{"GroupId": "sg-web"}], "NetworkInterfaces": [{"NetworkInterfaceId": "eni-demo-a"}], "BlockDeviceMappings": [{"Ebs": {"VolumeId": "vol-demo-a"}}]},

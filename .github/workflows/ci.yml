@@ -32,5 +32,5 @@ jobs:
         run: python -m pytest -q
       - name: Verify packaged viewer and CLI without AWS credentials
         run: |
-          ta-bot demo --output "$RUNNER_TEMP/ta-bot-demo"
-          ta-bot render "$RUNNER_TEMP/ta-bot-demo/snapshot.json" --output "$RUNNER_TEMP/ta-bot-rendered"
+          diagram-bot demo --output "$RUNNER_TEMP/diagram-bot-demo"
+          diagram-bot render "$RUNNER_TEMP/diagram-bot-demo/snapshot.json" --output "$RUNNER_TEMP/diagram-bot-rendered"

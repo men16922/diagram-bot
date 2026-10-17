@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ta-bot"
+name = "diagram-bot"
 version = "0.1.0"
 description = "AWS configuration inventory and evidence-based topology"
 readme = "README.md"
@@ -14,10 +14,10 @@ dependencies = ["boto3>=1.35,<2"]
 test = ["pytest>=8,<10"]
 
 [project.scripts]
-ta-bot = "ta_bot.cli:main"
+diagram-bot = "diagram_bot.cli:main"
 
 [tool.setuptools.package-data]
-ta_bot = ["viewer.html"]
+diagram_bot = ["viewer.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -2,7 +2,7 @@
 
 기존 AWS IAM Identity Center(SSO) 인증을 boto3에서 재사용하여 한 계정·한 리전의 리소스를 읽고, 명시적인 ID·ARN 관계로 구성도를 생성합니다. LLM이나 외부 구성도 서비스는 사용하지 않습니다.
 
-저장소: [men16922/diagram-bot](https://github.com/men16922/diagram-bot). 개발 및 push 방법은 [GITHUB.md](GITHUB.md)에 있습니다. 현재 Python 패키지와 실행 명령은 `ta-bot`입니다. CI는 AWS 인증 없이 테스트와 패키지 빌드를 수행합니다.
+저장소: [men16922/diagram-bot](https://github.com/men16922/diagram-bot). 개발 및 push 방법은 [GITHUB.md](GITHUB.md)에 있습니다. 현재 Python 패키지와 실행 명령은 `diagram-bot`입니다. CI는 AWS 인증 없이 테스트와 패키지 빌드를 수행합니다.
 
 다음 버전은 draw.io 기반 구성도 편집과 `.drawio`·PNG 다운로드를 목표로 합니다. 화면·구조·AWS 지원 범위와 단계별 완료 기준은 [AWS 구성도 탐색 도구 개발 계획](docs/PLAN.md)에 정리했습니다. 계획에 기재한 신규 기능은 아직 구현하지 않았습니다.
 
@@ -16,11 +16,11 @@ source .venv/bin/activate
 pip install -e '.[test]'
 
 # 인증 없이 기능 확인
-ta-bot demo --output reports/demo
+diagram-bot demo --output reports/demo
 
 # 이미 설정된 SSO 프로파일로 인증 (사용자 로컬 환경에서 실행)
 aws sso login --profile my-sso-profile
-ta-bot collect --profile my-sso-profile --region ap-northeast-2 \
+diagram-bot collect --profile my-sso-profile --region ap-northeast-2 \
   --expected-account 123456789012 --output reports/current
 ```
 
@@ -44,7 +44,7 @@ HTML의 JSON/CSV 다운로드는 **전체 스냅샷**, SVG 다운로드는 **현
 기존 스냅샷을 다시 렌더링하려면:
 
 ```bash
-ta-bot render reports/current/snapshot.json --output reports/rerendered
+diagram-bot render reports/current/snapshot.json --output reports/rerendered
 pytest -q
 ```
 
