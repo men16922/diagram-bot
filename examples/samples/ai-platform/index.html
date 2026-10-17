@@ -1,0 +1,5508 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diagram Bot · AWS 현행 구성도</title>
+<style>
+:root{font-family:Inter,Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#dce7f5;background:#0b1220;font-size:14px}*{box-sizing:border-box}body{margin:0}header{padding:28px 32px 18px;border-bottom:1px solid #29374a;background:#101b2e}h1{font-size:25px;letter-spacing:-.6px;margin:4px 0 10px}.eyebrow{font-size:11px;letter-spacing:2px;color:#6ed9c5}.muted{color:#9cafc7;font-size:12px;line-height:1.6}#notice{margin-top:16px;padding:12px 16px;border:1px solid #8b692e;background:#352b1c;border-radius:8px;color:#f9d78d}button,input,select{font:inherit;color:inherit;background:#152238;border:1px solid #38506a;border-radius:6px;padding:8px 10px}button{cursor:pointer}button:hover{background:#263c55}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #6ed9c5}nav{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 0}main{padding:22px 32px}.toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}.toolbar input[type=search]{min-width:240px}.toolbar label{display:flex;align-items:center;gap:5px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px}.panel{border:1px solid #293e55;background:#101b2c;border-radius:12px;padding:18px;min-width:0}.panel h2{font-size:15px;margin:0 0 12px}#canvas{position:relative;min-height:450px;overflow:auto;padding:12px}#groups{position:relative;z-index:1;min-width:560px;pointer-events:none}.group{border:1px solid #36546c;border-radius:10px;padding:14px;margin:12px 0;background:#10263855}.group-title{font-size:12px;color:#81dccd;overflow-wrap:anywhere;margin-bottom:12px}.subnet{border-style:dashed;background:#18334c55;margin:10px 0}.cards{display:flex;flex-wrap:wrap;gap:14px;align-items:start;padding:5px 0}.resource{pointer-events:auto;width:190px;min-height:80px;text-align:left;position:relative;border-left:3px solid #65c9b6;box-shadow:0 4px 12px #0003;background:#17283c;overflow-wrap:anywhere}.resource .kind{display:block;font-size:10px;color:#90a8c3;letter-spacing:.7px;text-transform:uppercase;margin-bottom:5px}.resource strong{display:block;font-size:13px}.resource small{display:block;color:#a7b6c8;margin-top:5px;font-size:11px}.resource.ref{border-style:dashed;border-left-color:#d0ad6b}.resource.selected{outline:2px solid #80e5d1;background:#234254}.resource[data-kind=load_balancer]{border-left-color:#a29bfe}.resource[data-kind=target_group]{border-left-color:#f4b366}#edges{position:absolute;top:0;left:0;z-index:2;pointer-events:none;overflow:visible}.edge{fill:none;stroke:#708bb3;stroke-width:1.6;opacity:.5}.edge.active{stroke:#7cf0d6;stroke-width:2.5;opacity:1}#detail{position:sticky;top:18px;align-self:start;max-height:85vh;overflow:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1422;padding:12px;border-radius:6px;font-size:11px;line-height:1.65}.relation{padding:10px 0;border-bottom:1px solid #293d51;font-size:12px;overflow-wrap:anywhere}details{margin:18px 0}summary{cursor:pointer;color:#b8cde5}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:10px;border-bottom:1px solid #293e55;vertical-align:top;overflow-wrap:anywhere}th{color:#88b7cf}tbody tr{cursor:pointer}tbody tr:hover{background:#1c3047}.table-wrap{overflow:auto}.badge{padding:3px 7px;border-radius:4px;background:#274232;color:#a3e2bb}.badge.warn{background:#4c3b20;color:#f6d598}.empty{padding:30px;color:#9cafc7}#inventory{margin-top:20px}#stats{margin-left:auto;color:#80d5c4}.legend{font-size:11px;color:#a4b9ce;margin-top:10px;line-height:1.6}.relation-controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;color:#a4b9ce;font-size:12px}.relation-controls label{display:flex;align-items:center;gap:3px}@media(max-width:1000px){.layout{grid-template-columns:1fr}#detail{position:static;max-height:none}header,main{padding:20px}#stats{margin-left:0}}
+</style>
+</head>
+<body>
+<header><div class="eyebrow">DIAGRAM BOT / CONFIGURATION EXPLORER</div><h1>AWS 현행 구성도</h1><div id="scope" class="muted"></div><div id="notice" role="status"></div><nav><button id="json-download">스냅샷 JSON</button><button id="csv-download">리소스 CSV</button><button id="svg-download">구성도 SVG</button></nav></header>
+<main>
+<div class="toolbar"><input id="search" type="search" aria-label="리소스 검색" placeholder="이름 · ID 검색"><select id="kind" aria-label="리소스 종류"><option value="all">모든 리소스 종류</option></select><label><input id="references" type="checkbox">참조 리소스 표시</label><span id="stats"></span></div>
+<div class="relation-controls" id="relation-controls"></div>
+<div class="layout"><section class="panel"><h2>설정 기반 구성 관계</h2><div class="muted">계정 → 리전 → VPC → 서브넷 · 리소스를 선택하면 API 근거와 속성이 표시됩니다.</div><div id="canvas"><svg id="edges" aria-hidden="true"></svg><div id="groups"></div></div><div class="legend">박스 안 배치는 포함 관계입니다. 선은 설정상의 연결이며 실제 트래픽 흐름을 뜻하지 않습니다. 여러 서브넷에 속한 로드밸런서는 VPC 수준에 배치합니다. 점선 카드는 참조만 확인된 리소스입니다.</div></section><aside id="detail" class="panel"><h2>리소스 속성</h2><p class="muted">리소스를 선택하세요.</p></aside></div>
+<details open class="panel"><summary>조회 상태 · 누락 범위</summary><div class="table-wrap"><table><thead><tr><th>API / 조회 범위</th><th>상태</th><th>수량 / 페이지</th><th>오류 · 설명</th></tr></thead><tbody id="coverage"></tbody></table></div><ul id="limitations" class="muted"></ul></details>
+<section id="inventory" class="panel"><h2>리소스 내역 <span class="muted">· 현재 화면 필터 적용</span></h2><div class="table-wrap"><table><thead><tr><th>종류</th><th>이름</th><th>ID / ARN</th><th>근거</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+</main>
+<script id="snapshot" type="application/json">{
+  "schema_version": 1,
+  "metadata": {
+    "account_id": "111122223333",
+    "region": "ap-northeast-2",
+    "partition": "aws",
+    "started_at": "2026-10-17T20:37:19.077972+00:00",
+    "finished_at": "2026-10-17T20:37:19.077972+00:00",
+    "status": "complete",
+    "demo": true,
+    "sample": "ai-platform",
+    "sample_version": 2,
+    "title": "AI 플랫폼 (사설 EKS GPU 추론·학습 · Bedrock · Aurora pgvector)",
+    "practices": [
+      "인터넷 경로 없는 사설 VPC: IGW·NAT 없이 Transit Gateway로 사내망·중앙 egress에 연결 (MLSEC03-BP02)",
+      "Bedrock·ECR·EKS·STS·CloudWatch Logs 등은 세 AZ의 인터페이스 엔드포인트, S3는 게이트웨이 엔드포인트로 사설 호출 (GENSEC01-BP02)",
+      "GPU 추론 노드 그룹(g6e)은 세 AZ에 분산하고 내부 ALB가 추론 파드 IP를 대상으로 등록, 자동 확장 (GENREL02-BP01, MLREL05-BP01)",
+      "EFA 학습 노드 그룹(p5)은 의도적으로 한 AZ의 전용 /20 서브넷에, 자기 참조 전체 허용 보안 그룹 (EFA는 AZ를 넘지 못함, HPCREL01-BP02)",
+      "학습과 추론은 노드 그룹·인스턴스 유형을 분리 (MLPERF04-BP01), 학습 노드 그룹은 0까지 축소 (GENSUS01-BP01)",
+      "RAG 벡터 저장소는 VPC 안 격리 서브넷의 Aurora PostgreSQL(pgvector) writer/reader, 노드 보안 그룹만 허용 (GENSEC01-BP03)",
+      "모델 캐시는 세 AZ 마운트 타깃의 EFS (EKS AI/ML Storage)",
+      "도형 밖 권고: 학습 배치는 클러스터 배치 그룹 또는 Capacity Block(둘 중 하나), 체크포인트는 같은 AZ의 S3 연동 FSx for Lustre (GENREL06-BP01)",
+      "도형 밖 권고: Bedrock 모델 호출 로깅(기본 꺼짐)·Guardrails·InvokeModel만 허용하는 엔드포인트 정책, S3는 SSE-KMS와 aws:SourceVpce (수집 범위 밖)",
+      "도형 밖 권고: Karpenter·KEDA·NVIDIA/EFA device plugin은 Kubernetes 객체라 그리지 않음 (Karpenter 노드는 ASG 없는 EC2로 표시)"
+    ],
+    "scope": [
+      "VPC",
+      "Subnet",
+      "EC2",
+      "ELBv2",
+      "TargetGroup",
+      "RegisteredTarget",
+      "InternetGateway",
+      "NatGateway",
+      "RouteTable",
+      "RDS",
+      "AutoScalingGroup",
+      "VpcEndpoint",
+      "TransitGateway",
+      "EKS",
+      "MSK",
+      "ElastiCache",
+      "Lambda",
+      "OpenSearch",
+      "ECS",
+      "EFS",
+      "Redshift",
+      "VpcPeering",
+      "VPN"
+    ],
+    "limitations": [
+      "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
+    ]
+  },
+  "coverage": [
+    {
+      "service": "ec2",
+      "operation": "describe_vpcs",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_subnets",
+      "status": "complete",
+      "pages": 1,
+      "items": 7
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 8
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_load_balancers",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_internet_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_nat_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_route_tables",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "autoscaling",
+      "operation": "describe_auto_scaling_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 12
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_transit_gateway_vpc_attachments",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "kafka",
+      "operation": "list_clusters_v2",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "lambda",
+      "operation": "list_functions",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "kafka",
+      "operation": "list_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domains",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domain_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_services",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_tasks",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "efs",
+      "operation": "describe_mount_targets",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 4
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_health",
+      "parameters": {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    }
+  ],
+  "raw": {
+    "vpcs": [
+      {
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "CidrBlock": "10.80.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ai-platform"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          }
+        ]
+      }
+    ],
+    "subnets": [
+      {
+        "SubnetId": "subnet-ai-app-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.80.0.0/19",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "app-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-ai-app-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.80.32.0/19",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "app-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-ai-app-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.80.64.0/19",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "app-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-ai-train-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.80.96.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "train-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-ai-data-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.80.200.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-ai-data-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.80.201.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-ai-data-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.80.202.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ]
+      }
+    ],
+    "instances": [
+      {
+        "InstanceId": "i-aisysa000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetId": "subnet-ai-app-a",
+        "InstanceType": "m7g.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.1.11",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "system-node-a"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "ai-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "system"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-ai-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-aisysa000000009"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-aisysa000000009"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-aisysb000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetId": "subnet-ai-app-b",
+        "InstanceType": "m7g.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.2.12",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2b"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "system-node-b"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "ai-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "system"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-ai-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-aisysb000000009"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-aisysb000000009"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-aisysc000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetId": "subnet-ai-app-c",
+        "InstanceType": "m7g.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.3.13",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "system-node-c"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "ai-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "system"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-ai-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-aisysc000000009"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-aisysc000000009"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-aiinfa000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetId": "subnet-ai-app-a",
+        "InstanceType": "g6e.2xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.4.14",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "gpu-inference-a"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "ai-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "gpu-inference"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-ai-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-aiinfa000000009"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-aiinfa000000009"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-aiinfb000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetId": "subnet-ai-app-b",
+        "InstanceType": "g6e.2xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.5.15",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2b"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "gpu-inference-b"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "ai-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "gpu-inference"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-ai-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-aiinfb000000009"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-aiinfb000000009"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-aiinfc000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetId": "subnet-ai-app-c",
+        "InstanceType": "g6e.2xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.6.16",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "gpu-inference-c"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "ai-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "gpu-inference"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-ai-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-aiinfc000000009"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-aiinfc000000009"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-aitrn10000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetId": "subnet-ai-train-a",
+        "InstanceType": "p5.48xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.7.17",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "gpu-train-1"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "ai-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "gpu-train"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-train-efa"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-aitrn10000000009"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-aitrn10000000009"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-aitrn20000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetId": "subnet-ai-train-a",
+        "InstanceType": "p5.48xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.8.18",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "gpu-train-2"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "ai-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "gpu-train"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-train-efa"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-aitrn20000000009"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-aitrn20000000009"
+            }
+          }
+        ]
+      }
+    ],
+    "load_balancers": [
+      {
+        "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "LoadBalancerName": "ai-inference-alb",
+        "Type": "application",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "Scheme": "internal",
+        "AvailabilityZones": [
+          {
+            "ZoneName": "ap-northeast-2a",
+            "SubnetId": "subnet-ai-app-a"
+          },
+          {
+            "ZoneName": "ap-northeast-2b",
+            "SubnetId": "subnet-ai-app-b"
+          },
+          {
+            "ZoneName": "ap-northeast-2c",
+            "SubnetId": "subnet-ai-app-c"
+          }
+        ],
+        "SecurityGroups": [
+          "sg-ai-alb"
+        ]
+      }
+    ],
+    "target_groups": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "TargetGroupName": "inference-pods",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "TargetType": "ip",
+        "Protocol": "HTTP",
+        "Port": 8080,
+        "HealthCheckPath": "/healthz",
+        "LoadBalancerArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001"
+        ]
+      }
+    ],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "10.80.0.40",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2a"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.80.32.40",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.80.64.40",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ],
+    "internet_gateways": [],
+    "nat_gateways": [],
+    "route_tables": [
+      {
+        "RouteTableId": "rtb-ai-app",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.80.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "TransitGatewayId": "tgw-ai00000000000009",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-ai-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-ai-app-0",
+            "SubnetId": "subnet-ai-app-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-ai-app-1",
+            "SubnetId": "subnet-ai-app-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-ai-app-2",
+            "SubnetId": "subnet-ai-app-c"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-ai-app-3",
+            "SubnetId": "subnet-ai-train-a"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ai-app"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-ai-data",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.80.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-ai-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-ai-data-0",
+            "SubnetId": "subnet-ai-data-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-ai-data-1",
+            "SubnetId": "subnet-ai-data-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-ai-data-2",
+            "SubnetId": "subnet-ai-data-c"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-ai-data-main",
+            "Main": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ai-data-isolated"
+          }
+        ]
+      }
+    ],
+    "db_instances": [
+      {
+        "DBInstanceIdentifier": "ai-vectors-1",
+        "DBClusterIdentifier": "ai-vectors",
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2a",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "ai-vectors-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-ai-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-ai-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-ai-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "DBInstanceIdentifier": "ai-vectors-2",
+        "DBClusterIdentifier": "ai-vectors",
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2b",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "ai-vectors-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-ai-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-ai-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-ai-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "auto_scaling_groups": [
+      {
+        "AutoScalingGroupName": "eks-ai-system-1a2b",
+        "MinSize": 3,
+        "MaxSize": 6,
+        "DesiredCapacity": 3,
+        "VPCZoneIdentifier": "subnet-ai-app-a,subnet-ai-app-b,subnet-ai-app-c",
+        "TargetGroupARNs": [],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-aisysa000000009",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-aisysb000000009",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-aisysc000000009",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
+          }
+        ]
+      },
+      {
+        "AutoScalingGroupName": "eks-ai-gpu-inference-3c4d",
+        "MinSize": 3,
+        "MaxSize": 12,
+        "DesiredCapacity": 3,
+        "VPCZoneIdentifier": "subnet-ai-app-a,subnet-ai-app-b,subnet-ai-app-c",
+        "TargetGroupARNs": [],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-aiinfa000000009",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-aiinfb000000009",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-aiinfc000000009",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
+          }
+        ]
+      },
+      {
+        "AutoScalingGroupName": "eks-ai-gpu-train-5e6f",
+        "MinSize": 0,
+        "MaxSize": 8,
+        "DesiredCapacity": 2,
+        "VPCZoneIdentifier": "subnet-ai-train-a",
+        "TargetGroupARNs": [],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-aitrn10000000009",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-aitrn20000000009",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          }
+        ]
+      }
+    ],
+    "vpc_endpoints": [
+      {
+        "VpcEndpointId": "vpce-ai-s3",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Gateway",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.s3",
+        "RouteTableIds": [
+          "rtb-ai-app",
+          "rtb-ai-data"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "s3-gateway-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-bedrock-runtime",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.bedrock-runtime",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "bedrock-runtime-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-bedrock-agent-runtime",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.bedrock-agent-runtime",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "bedrock-agent-runtime-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-ecr-api",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ecr.api-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-ecr-dkr",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ecr.dkr-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-sts",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.sts",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "sts-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-eks",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.eks",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "eks-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-eks-auth",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.eks-auth",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "eks-auth-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-ec2",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ec2",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ec2-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-elasticloadbalancing",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.elasticloadbalancing",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "elasticloadbalancing-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-logs",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.logs",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "logs-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-ai-ssm",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ssm",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ssm-endpoint"
+          }
+        ]
+      }
+    ],
+    "transit_gateways": [
+      {
+        "TransitGatewayId": "tgw-ai00000000000009",
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "corp-tgw"
+          }
+        ]
+      }
+    ],
+    "transit_gateway_attachments": [
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-ai",
+        "TransitGatewayId": "tgw-ai00000000000009",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetIds": [
+          "subnet-ai-app-a",
+          "subnet-ai-app-b",
+          "subnet-ai-app-c"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ai-platform-attachment"
+          }
+        ]
+      }
+    ],
+    "db_clusters": [
+      {
+        "DBClusterIdentifier": "ai-vectors",
+        "Engine": "aurora-postgresql",
+        "MultiAZ": true,
+        "StorageEncrypted": true,
+        "DBClusterMembers": [
+          {
+            "DBInstanceIdentifier": "ai-vectors-1",
+            "IsClusterWriter": true
+          },
+          {
+            "DBInstanceIdentifier": "ai-vectors-2",
+            "IsClusterWriter": false
+          }
+        ]
+      }
+    ],
+    "cache_clusters": [],
+    "replication_groups": [],
+    "cache_subnet_groups": [],
+    "msk_clusters": [],
+    "msk_nodes": [],
+    "lambda_functions": [],
+    "eks_clusters": [
+      {
+        "name": "ai-eks",
+        "version": "1.31",
+        "status": "ACTIVE",
+        "resourcesVpcConfig": {
+          "vpcId": "vpc-0a1b2c3d4e5f60009",
+          "subnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "endpointPublicAccess": false,
+          "endpointPrivateAccess": true
+        },
+        "nodegroups": [
+          {
+            "nodegroupName": "system",
+            "instanceTypes": [
+              "m7g.large"
+            ],
+            "scalingConfig": {
+              "minSize": 3,
+              "maxSize": 6,
+              "desiredSize": 3
+            },
+            "resources": {
+              "autoScalingGroups": [
+                {
+                  "name": "eks-ai-system-1a2b"
+                }
+              ]
+            }
+          },
+          {
+            "nodegroupName": "gpu-inference",
+            "instanceTypes": [
+              "g6e.2xlarge"
+            ],
+            "scalingConfig": {
+              "minSize": 3,
+              "maxSize": 12,
+              "desiredSize": 3
+            },
+            "resources": {
+              "autoScalingGroups": [
+                {
+                  "name": "eks-ai-gpu-inference-3c4d"
+                }
+              ]
+            }
+          },
+          {
+            "nodegroupName": "gpu-train",
+            "instanceTypes": [
+              "p5.48xlarge"
+            ],
+            "scalingConfig": {
+              "minSize": 0,
+              "maxSize": 8,
+              "desiredSize": 2
+            },
+            "resources": {
+              "autoScalingGroups": [
+                {
+                  "name": "eks-ai-gpu-train-5e6f"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "opensearch_domains": [],
+    "opensearch_nodes": [],
+    "ecs_services": [],
+    "ecs_tasks": [],
+    "efs_file_systems": [
+      {
+        "FileSystemId": "fs-0ai0000000000009",
+        "Name": "ai-model-cache",
+        "PerformanceMode": "generalPurpose",
+        "ThroughputMode": "elastic",
+        "Encrypted": true,
+        "LifeCycleState": "available",
+        "NumberOfMountTargets": 3,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ai-model-cache"
+          }
+        ]
+      }
+    ],
+    "efs_mount_targets": [
+      {
+        "MountTargetId": "fsmt-0ai00000000000090",
+        "FileSystemId": "fs-0ai0000000000009",
+        "SubnetId": "subnet-ai-app-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZoneName": "ap-northeast-2a",
+        "LifeCycleState": "available",
+        "IpAddress": "10.80.0.200"
+      },
+      {
+        "MountTargetId": "fsmt-0ai00000000000091",
+        "FileSystemId": "fs-0ai0000000000009",
+        "SubnetId": "subnet-ai-app-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZoneName": "ap-northeast-2b",
+        "LifeCycleState": "available",
+        "IpAddress": "10.80.32.200"
+      },
+      {
+        "MountTargetId": "fsmt-0ai00000000000092",
+        "FileSystemId": "fs-0ai0000000000009",
+        "SubnetId": "subnet-ai-app-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZoneName": "ap-northeast-2c",
+        "LifeCycleState": "available",
+        "IpAddress": "10.80.64.200"
+      }
+    ],
+    "redshift_clusters": [],
+    "redshift_subnet_groups": [],
+    "vpc_peering_connections": [],
+    "vpn_gateways": [],
+    "vpn_connections": [],
+    "customer_gateways": [],
+    "security_groups": [
+      {
+        "GroupId": "sg-ai-nodes",
+        "GroupName": "ai-nodes",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "IpRanges": [
+              {
+                "CidrIp": "10.80.0.0/16"
+              }
+            ]
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-ai-alb"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-ai-alb",
+        "GroupName": "ai-inference-alb",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "IpRanges": [
+              {
+                "CidrIp": "10.0.0.0/8"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-train-efa",
+        "GroupName": "train-efa",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "IpPermissions": [
+          {
+            "IpProtocol": "-1",
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-train-efa"
+              }
+            ]
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "IpRanges": [
+              {
+                "CidrIp": "10.80.0.0/16"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-train-efa"
+              }
+            ]
+          },
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "10.80.0.0/16"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-ai-db",
+        "GroupName": "ai-vectors",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-ai-nodes"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-inference-3c4d",
+        "resource_id": "eks-ai-gpu-inference-3c4d",
+        "kind": "auto_scaling_group",
+        "name": "eks-ai-gpu-inference-3c4d",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "eks-ai-gpu-inference-3c4d",
+          "MinSize": 3,
+          "MaxSize": 12,
+          "DesiredCapacity": 3,
+          "VPCZoneIdentifier": "subnet-ai-app-a,subnet-ai-app-b,subnet-ai-app-c",
+          "TargetGroupARNs": [],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-aiinfa000000009",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-aiinfb000000009",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-aiinfc000000009",
+              "AvailabilityZone": "ap-northeast-2c",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-train-5e6f",
+        "resource_id": "eks-ai-gpu-train-5e6f",
+        "kind": "auto_scaling_group",
+        "name": "eks-ai-gpu-train-5e6f",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "eks-ai-gpu-train-5e6f",
+          "MinSize": 0,
+          "MaxSize": 8,
+          "DesiredCapacity": 2,
+          "VPCZoneIdentifier": "subnet-ai-train-a",
+          "TargetGroupARNs": [],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-aitrn10000000009",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-aitrn20000000009",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-system-1a2b",
+        "resource_id": "eks-ai-system-1a2b",
+        "kind": "auto_scaling_group",
+        "name": "eks-ai-system-1a2b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "eks-ai-system-1a2b",
+          "MinSize": 3,
+          "MaxSize": 6,
+          "DesiredCapacity": 3,
+          "VPCZoneIdentifier": "subnet-ai-app-a,subnet-ai-app-b,subnet-ai-app-c",
+          "TargetGroupARNs": [],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-aisysa000000009",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-aisysb000000009",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-aisysc000000009",
+              "AvailabilityZone": "ap-northeast-2c",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_cluster/ai-vectors",
+        "resource_id": "ai-vectors",
+        "kind": "db_cluster",
+        "name": "ai-vectors",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBClusterIdentifier": "ai-vectors",
+          "Engine": "aurora-postgresql",
+          "MultiAZ": true,
+          "StorageEncrypted": true,
+          "DBClusterMembers": [
+            {
+              "DBInstanceIdentifier": "ai-vectors-1",
+              "IsClusterWriter": true
+            },
+            {
+              "DBInstanceIdentifier": "ai-vectors-2",
+              "IsClusterWriter": false
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeDBClusters"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/ai-vectors-1",
+        "resource_id": "ai-vectors-1",
+        "kind": "db_instance",
+        "name": "ai-vectors-1",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "ai-vectors-1",
+          "DBClusterIdentifier": "ai-vectors",
+          "Engine": "aurora-postgresql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2a",
+          "MultiAZ": false,
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "ai-vectors-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60009",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-ai-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-ai-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-ai-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances",
+        "db_role": "writer"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/ai-vectors-2",
+        "resource_id": "ai-vectors-2",
+        "kind": "db_instance",
+        "name": "ai-vectors-2",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "ai-vectors-2",
+          "DBClusterIdentifier": "ai-vectors",
+          "Engine": "aurora-postgresql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2b",
+          "MultiAZ": false,
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "ai-vectors-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60009",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-ai-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-ai-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-ai-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances",
+        "db_role": "reader"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-aiinfa000000009",
+        "resource_id": "i-aiinfa000000009",
+        "kind": "ec2",
+        "name": "gpu-inference-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-aiinfa000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetId": "subnet-ai-app-a",
+          "InstanceType": "g6e.2xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.4.14",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "gpu-inference-a"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "ai-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "gpu-inference"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-ai-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-aiinfa000000009"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-aiinfa000000009"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-aiinfb000000009",
+        "resource_id": "i-aiinfb000000009",
+        "kind": "ec2",
+        "name": "gpu-inference-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-aiinfb000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetId": "subnet-ai-app-b",
+          "InstanceType": "g6e.2xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.5.15",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "gpu-inference-b"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "ai-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "gpu-inference"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-ai-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-aiinfb000000009"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-aiinfb000000009"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-aiinfc000000009",
+        "resource_id": "i-aiinfc000000009",
+        "kind": "ec2",
+        "name": "gpu-inference-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-aiinfc000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetId": "subnet-ai-app-c",
+          "InstanceType": "g6e.2xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.6.16",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "gpu-inference-c"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "ai-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "gpu-inference"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-ai-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-aiinfc000000009"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-aiinfc000000009"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-aisysa000000009",
+        "resource_id": "i-aisysa000000009",
+        "kind": "ec2",
+        "name": "system-node-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-aisysa000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetId": "subnet-ai-app-a",
+          "InstanceType": "m7g.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.1.11",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "system-node-a"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "ai-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "system"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-ai-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-aisysa000000009"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-aisysa000000009"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-aisysb000000009",
+        "resource_id": "i-aisysb000000009",
+        "kind": "ec2",
+        "name": "system-node-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-aisysb000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetId": "subnet-ai-app-b",
+          "InstanceType": "m7g.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.2.12",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "system-node-b"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "ai-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "system"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-ai-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-aisysb000000009"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-aisysb000000009"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-aisysc000000009",
+        "resource_id": "i-aisysc000000009",
+        "kind": "ec2",
+        "name": "system-node-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-aisysc000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetId": "subnet-ai-app-c",
+          "InstanceType": "m7g.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.3.13",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "system-node-c"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "ai-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "system"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-ai-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-aisysc000000009"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-aisysc000000009"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
+        "resource_id": "i-aitrn10000000009",
+        "kind": "ec2",
+        "name": "gpu-train-1",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-aitrn10000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetId": "subnet-ai-train-a",
+          "InstanceType": "p5.48xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.7.17",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "gpu-train-1"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "ai-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "gpu-train"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-train-efa"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-aitrn10000000009"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-aitrn10000000009"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
+        "resource_id": "i-aitrn20000000009",
+        "kind": "ec2",
+        "name": "gpu-train-2",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-aitrn20000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetId": "subnet-ai-train-a",
+          "InstanceType": "p5.48xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.8.18",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "gpu-train-2"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "ai-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "gpu-train"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-train-efa"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-aitrn20000000009"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-aitrn20000000009"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/efs_file_system/fs-0ai0000000000009",
+        "resource_id": "fs-0ai0000000000009",
+        "kind": "efs_file_system",
+        "name": "ai-model-cache",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "FileSystemId": "fs-0ai0000000000009",
+          "Name": "ai-model-cache",
+          "PerformanceMode": "generalPurpose",
+          "ThroughputMode": "elastic",
+          "Encrypted": true,
+          "LifeCycleState": "available",
+          "NumberOfMountTargets": 3,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ai-model-cache"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeFileSystems"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000090",
+        "resource_id": "fsmt-0ai00000000000090",
+        "kind": "efs_mount_target",
+        "name": "ai-model-cache",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "MountTargetId": "fsmt-0ai00000000000090",
+          "FileSystemId": "fs-0ai0000000000009",
+          "SubnetId": "subnet-ai-app-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZoneName": "ap-northeast-2a",
+          "LifeCycleState": "available",
+          "IpAddress": "10.80.0.200",
+          "DisplayName": "ai-model-cache",
+          "OneZone": false,
+          "ThroughputMode": "elastic",
+          "PerformanceMode": "generalPurpose",
+          "Encrypted": true
+        },
+        "reference_only": false,
+        "source": "DescribeMountTargets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000091",
+        "resource_id": "fsmt-0ai00000000000091",
+        "kind": "efs_mount_target",
+        "name": "ai-model-cache",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "MountTargetId": "fsmt-0ai00000000000091",
+          "FileSystemId": "fs-0ai0000000000009",
+          "SubnetId": "subnet-ai-app-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZoneName": "ap-northeast-2b",
+          "LifeCycleState": "available",
+          "IpAddress": "10.80.32.200",
+          "DisplayName": "ai-model-cache",
+          "OneZone": false,
+          "ThroughputMode": "elastic",
+          "PerformanceMode": "generalPurpose",
+          "Encrypted": true
+        },
+        "reference_only": false,
+        "source": "DescribeMountTargets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000092",
+        "resource_id": "fsmt-0ai00000000000092",
+        "kind": "efs_mount_target",
+        "name": "ai-model-cache",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "MountTargetId": "fsmt-0ai00000000000092",
+          "FileSystemId": "fs-0ai0000000000009",
+          "SubnetId": "subnet-ai-app-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZoneName": "ap-northeast-2c",
+          "LifeCycleState": "available",
+          "IpAddress": "10.80.64.200",
+          "DisplayName": "ai-model-cache",
+          "OneZone": false,
+          "ThroughputMode": "elastic",
+          "PerformanceMode": "generalPurpose",
+          "Encrypted": true
+        },
+        "reference_only": false,
+        "source": "DescribeMountTargets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/eks_cluster/ai-eks",
+        "resource_id": "ai-eks",
+        "kind": "eks_cluster",
+        "name": "ai-eks",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "name": "ai-eks",
+          "version": "1.31",
+          "status": "ACTIVE",
+          "resourcesVpcConfig": {
+            "vpcId": "vpc-0a1b2c3d4e5f60009",
+            "subnetIds": [
+              "subnet-ai-app-a",
+              "subnet-ai-app-b",
+              "subnet-ai-app-c"
+            ],
+            "endpointPublicAccess": false,
+            "endpointPrivateAccess": true
+          },
+          "nodegroups": [
+            {
+              "nodegroupName": "system",
+              "instanceTypes": [
+                "m7g.large"
+              ],
+              "scalingConfig": {
+                "minSize": 3,
+                "maxSize": 6,
+                "desiredSize": 3
+              },
+              "resources": {
+                "autoScalingGroups": [
+                  {
+                    "name": "eks-ai-system-1a2b"
+                  }
+                ]
+              }
+            },
+            {
+              "nodegroupName": "gpu-inference",
+              "instanceTypes": [
+                "g6e.2xlarge"
+              ],
+              "scalingConfig": {
+                "minSize": 3,
+                "maxSize": 12,
+                "desiredSize": 3
+              },
+              "resources": {
+                "autoScalingGroups": [
+                  {
+                    "name": "eks-ai-gpu-inference-3c4d"
+                  }
+                ]
+              }
+            },
+            {
+              "nodegroupName": "gpu-train",
+              "instanceTypes": [
+                "p5.48xlarge"
+              ],
+              "scalingConfig": {
+                "minSize": 0,
+                "maxSize": 8,
+                "desiredSize": 2
+              },
+              "resources": {
+                "autoScalingGroups": [
+                  {
+                    "name": "eks-ai-gpu-train-5e6f"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeCluster"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "kind": "load_balancer",
+        "name": "ai-inference-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+          "LoadBalancerName": "ai-inference-alb",
+          "Type": "application",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "Scheme": "internal",
+          "AvailabilityZones": [
+            {
+              "ZoneName": "ap-northeast-2a",
+              "SubnetId": "subnet-ai-app-a"
+            },
+            {
+              "ZoneName": "ap-northeast-2b",
+              "SubnetId": "subnet-ai-app-b"
+            },
+            {
+              "ZoneName": "ap-northeast-2c",
+              "SubnetId": "subnet-ai-app-c"
+            }
+          ],
+          "SecurityGroups": [
+            "sg-ai-alb"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeLoadBalancers"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-aiinfa000000009",
+        "resource_id": "eni-aiinfa000000009",
+        "kind": "network_interface",
+        "name": "eni-aiinfa000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-aiinfb000000009",
+        "resource_id": "eni-aiinfb000000009",
+        "kind": "network_interface",
+        "name": "eni-aiinfb000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-aiinfc000000009",
+        "resource_id": "eni-aiinfc000000009",
+        "kind": "network_interface",
+        "name": "eni-aiinfc000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-aisysa000000009",
+        "resource_id": "eni-aisysa000000009",
+        "kind": "network_interface",
+        "name": "eni-aisysa000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-aisysb000000009",
+        "resource_id": "eni-aisysb000000009",
+        "kind": "network_interface",
+        "name": "eni-aisysb000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-aisysc000000009",
+        "resource_id": "eni-aisysc000000009",
+        "kind": "network_interface",
+        "name": "eni-aisysc000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-aitrn10000000009",
+        "resource_id": "eni-aitrn10000000009",
+        "kind": "network_interface",
+        "name": "eni-aitrn10000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-aitrn20000000009",
+        "resource_id": "eni-aitrn20000000009",
+        "kind": "network_interface",
+        "name": "eni-aitrn20000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.0.40:8080:ap-northeast-2a",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.0.40:8080:ap-northeast-2a",
+        "kind": "registered_target",
+        "name": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.0.40:8080:ap-northeast-2a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "Target": {
+            "Id": "10.80.0.40",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          },
+          "TargetType": "ip"
+        },
+        "reference_only": false,
+        "source": "DescribeTargetHealth"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.32.40:8080:ap-northeast-2b",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.32.40:8080:ap-northeast-2b",
+        "kind": "registered_target",
+        "name": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.32.40:8080:ap-northeast-2b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "Target": {
+            "Id": "10.80.32.40",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          },
+          "TargetType": "ip"
+        },
+        "reference_only": false,
+        "source": "DescribeTargetHealth"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.64.40:8080:ap-northeast-2c",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.64.40:8080:ap-northeast-2c",
+        "kind": "registered_target",
+        "name": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.64.40:8080:ap-northeast-2c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "Target": {
+            "Id": "10.80.64.40",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          },
+          "TargetType": "ip"
+        },
+        "reference_only": false,
+        "source": "DescribeTargetHealth"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "resource_id": "rtb-ai-app",
+        "kind": "route_table",
+        "name": "ai-app",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-ai-app",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.80.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "TransitGatewayId": "tgw-ai00000000000009",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-ai-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-ai-app-0",
+              "SubnetId": "subnet-ai-app-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-ai-app-1",
+              "SubnetId": "subnet-ai-app-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-ai-app-2",
+              "SubnetId": "subnet-ai-app-c"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-ai-app-3",
+              "SubnetId": "subnet-ai-train-a"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ai-app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-ai-data",
+        "resource_id": "rtb-ai-data",
+        "kind": "route_table",
+        "name": "ai-data-isolated",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-ai-data",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.80.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-ai-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-ai-data-0",
+              "SubnetId": "subnet-ai-data-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-ai-data-1",
+              "SubnetId": "subnet-ai-data-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-ai-data-2",
+              "SubnetId": "subnet-ai-data-c"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-ai-data-main",
+              "Main": true
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ai-data-isolated"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-ai-alb",
+        "resource_id": "sg-ai-alb",
+        "kind": "security_group",
+        "name": "ai-inference-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-ai-alb",
+          "GroupName": "ai-inference-alb",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 443,
+              "ToPort": 443,
+              "IpRanges": [
+                {
+                  "CidrIp": "10.0.0.0/8"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-ai-db",
+        "resource_id": "sg-ai-db",
+        "kind": "security_group",
+        "name": "ai-vectors",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-ai-db",
+          "GroupName": "ai-vectors",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 5432,
+              "ToPort": 5432,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-ai-nodes"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-ai-nodes",
+        "resource_id": "sg-ai-nodes",
+        "kind": "security_group",
+        "name": "ai-nodes",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-ai-nodes",
+          "GroupName": "ai-nodes",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 443,
+              "ToPort": 443,
+              "IpRanges": [
+                {
+                  "CidrIp": "10.80.0.0/16"
+                }
+              ]
+            },
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 8080,
+              "ToPort": 8080,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-ai-alb"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-train-efa",
+        "resource_id": "sg-train-efa",
+        "kind": "security_group",
+        "name": "train-efa",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-train-efa",
+          "GroupName": "train-efa",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "IpPermissions": [
+            {
+              "IpProtocol": "-1",
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-train-efa"
+                }
+              ]
+            },
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 443,
+              "ToPort": 443,
+              "IpRanges": [
+                {
+                  "CidrIp": "10.80.0.0/16"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-train-efa"
+                }
+              ]
+            },
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "10.80.0.0/16"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "resource_id": "subnet-ai-app-a",
+        "kind": "subnet",
+        "name": "app-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ai-app-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.80.0.0/19",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "app-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "tgw",
+        "route_table": "rtb-ai-app"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "resource_id": "subnet-ai-app-b",
+        "kind": "subnet",
+        "name": "app-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ai-app-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.80.32.0/19",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "app-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "tgw",
+        "route_table": "rtb-ai-app"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "resource_id": "subnet-ai-app-c",
+        "kind": "subnet",
+        "name": "app-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ai-app-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.80.64.0/19",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "app-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "tgw",
+        "route_table": "rtb-ai-app"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ai-data-a",
+        "resource_id": "subnet-ai-data-a",
+        "kind": "subnet",
+        "name": "data-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ai-data-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.80.200.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-ai-data"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ai-data-b",
+        "resource_id": "subnet-ai-data-b",
+        "kind": "subnet",
+        "name": "data-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ai-data-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.80.201.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-ai-data"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ai-data-c",
+        "resource_id": "subnet-ai-data-c",
+        "kind": "subnet",
+        "name": "data-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ai-data-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.80.202.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-ai-data"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ai-train-a",
+        "resource_id": "subnet-ai-train-a",
+        "kind": "subnet",
+        "name": "train-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ai-train-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.80.96.0/20",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "train-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "tgw",
+        "route_table": "rtb-ai-app"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "kind": "target_group",
+        "name": "inference-pods",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+          "TargetGroupName": "inference-pods",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "TargetType": "ip",
+          "Protocol": "HTTP",
+          "Port": 8080,
+          "HealthCheckPath": "/healthz",
+          "LoadBalancerArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-ai",
+        "resource_id": "tgw-attach-ai",
+        "kind": "tgw_attachment",
+        "name": "ai-platform-attachment",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-ai",
+          "TransitGatewayId": "tgw-ai00000000000009",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ai-platform-attachment"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayVpcAttachments"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/transit_gateway/tgw-ai00000000000009",
+        "resource_id": "tgw-ai00000000000009",
+        "kind": "transit_gateway",
+        "name": "corp-tgw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayId": "tgw-ai00000000000009",
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "corp-tgw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-aiinfa000000009",
+        "resource_id": "vol-aiinfa000000009",
+        "kind": "volume",
+        "name": "vol-aiinfa000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-aiinfb000000009",
+        "resource_id": "vol-aiinfb000000009",
+        "kind": "volume",
+        "name": "vol-aiinfb000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-aiinfc000000009",
+        "resource_id": "vol-aiinfc000000009",
+        "kind": "volume",
+        "name": "vol-aiinfc000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-aisysa000000009",
+        "resource_id": "vol-aisysa000000009",
+        "kind": "volume",
+        "name": "vol-aisysa000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-aisysb000000009",
+        "resource_id": "vol-aisysb000000009",
+        "kind": "volume",
+        "name": "vol-aisysb000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-aisysc000000009",
+        "resource_id": "vol-aisysc000000009",
+        "kind": "volume",
+        "name": "vol-aisysc000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-aitrn10000000009",
+        "resource_id": "vol-aitrn10000000009",
+        "kind": "volume",
+        "name": "vol-aitrn10000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-aitrn20000000009",
+        "resource_id": "vol-aitrn20000000009",
+        "kind": "volume",
+        "name": "vol-aitrn20000000009",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "resource_id": "vpc-0a1b2c3d4e5f60009",
+        "kind": "vpc",
+        "name": "ai-platform",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "CidrBlock": "10.80.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ai-platform"
+            },
+            {
+              "Key": "Environment",
+              "Value": "production"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-agent-runtime",
+        "resource_id": "vpce-ai-bedrock-agent-runtime",
+        "kind": "vpc_endpoint",
+        "name": "bedrock-agent-runtime-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-bedrock-agent-runtime",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.bedrock-agent-runtime",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "bedrock-agent-runtime-endpoint"
+            }
+          ],
+          "ServiceShortName": "bedrock-agent-runtime"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-runtime",
+        "resource_id": "vpce-ai-bedrock-runtime",
+        "kind": "vpc_endpoint",
+        "name": "bedrock-runtime-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-bedrock-runtime",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.bedrock-runtime",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "bedrock-runtime-endpoint"
+            }
+          ],
+          "ServiceShortName": "bedrock-runtime"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ec2",
+        "resource_id": "vpce-ai-ec2",
+        "kind": "vpc_endpoint",
+        "name": "ec2-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-ec2",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ec2",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ec2-endpoint"
+            }
+          ],
+          "ServiceShortName": "ec2"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-api",
+        "resource_id": "vpce-ai-ecr-api",
+        "kind": "vpc_endpoint",
+        "name": "ecr.api-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-ecr-api",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ecr.api-endpoint"
+            }
+          ],
+          "ServiceShortName": "ecr.api"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-dkr",
+        "resource_id": "vpce-ai-ecr-dkr",
+        "kind": "vpc_endpoint",
+        "name": "ecr.dkr-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-ecr-dkr",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ecr.dkr-endpoint"
+            }
+          ],
+          "ServiceShortName": "ecr.dkr"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks",
+        "resource_id": "vpce-ai-eks",
+        "kind": "vpc_endpoint",
+        "name": "eks-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-eks",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.eks",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "eks-endpoint"
+            }
+          ],
+          "ServiceShortName": "eks"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks-auth",
+        "resource_id": "vpce-ai-eks-auth",
+        "kind": "vpc_endpoint",
+        "name": "eks-auth-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-eks-auth",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.eks-auth",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "eks-auth-endpoint"
+            }
+          ],
+          "ServiceShortName": "eks-auth"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-elasticloadbalancing",
+        "resource_id": "vpce-ai-elasticloadbalancing",
+        "kind": "vpc_endpoint",
+        "name": "elasticloadbalancing-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-elasticloadbalancing",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.elasticloadbalancing",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "elasticloadbalancing-endpoint"
+            }
+          ],
+          "ServiceShortName": "elasticloadbalancing"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-logs",
+        "resource_id": "vpce-ai-logs",
+        "kind": "vpc_endpoint",
+        "name": "logs-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-logs",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.logs",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "logs-endpoint"
+            }
+          ],
+          "ServiceShortName": "logs"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-s3",
+        "resource_id": "vpce-ai-s3",
+        "kind": "vpc_endpoint",
+        "name": "s3-gateway-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-s3",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Gateway",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.s3",
+          "RouteTableIds": [
+            "rtb-ai-app",
+            "rtb-ai-data"
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "s3-gateway-endpoint"
+            }
+          ],
+          "ServiceShortName": "s3"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ssm",
+        "resource_id": "vpce-ai-ssm",
+        "kind": "vpc_endpoint",
+        "name": "ssm-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-ssm",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ssm",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ssm-endpoint"
+            }
+          ],
+          "ServiceShortName": "ssm"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-sts",
+        "resource_id": "vpce-ai-sts",
+        "kind": "vpc_endpoint",
+        "name": "sts-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-ai-sts",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.sts",
+          "SubnetIds": [
+            "subnet-ai-app-a",
+            "subnet-ai-app-b",
+            "subnet-ai-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "sts-endpoint"
+            }
+          ],
+          "ServiceShortName": "sts"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      }
+    ],
+    "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-inference-3c4d",
+        "target": "111122223333/ap-northeast-2/ec2/i-aiinfa000000009",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-6531522120ec20b22a5f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-inference-3c4d",
+        "target": "111122223333/ap-northeast-2/ec2/i-aiinfb000000009",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-db17703b402c28f6e5f9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-inference-3c4d",
+        "target": "111122223333/ap-northeast-2/ec2/i-aiinfc000000009",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-cb40fa49d4e7239e02fc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-inference-3c4d",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7fe32a644811141508f6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-train-5e6f",
+        "target": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-172ba876d451be0072c0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-train-5e6f",
+        "target": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-b8715d4b2df2484ec466"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-train-5e6f",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-52cbc73b5ac4e7e23a37"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-system-1a2b",
+        "target": "111122223333/ap-northeast-2/ec2/i-aisysa000000009",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-06d84e01da8167739820"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-system-1a2b",
+        "target": "111122223333/ap-northeast-2/ec2/i-aisysb000000009",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-5f2d5a4c71c895a4f04d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-system-1a2b",
+        "target": "111122223333/ap-northeast-2/ec2/i-aisysc000000009",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-fc793c557af739d3f5e6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-system-1a2b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-eaade70dfbc503084c6a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_cluster/ai-vectors",
+        "target": "111122223333/ap-northeast-2/db_instance/ai-vectors-1",
+        "relation": "cluster_member",
+        "evidence": "DescribeDBClusters.DBClusterMembers[]",
+        "qualifiers": {},
+        "details": {
+          "writer": true
+        },
+        "inferred": false,
+        "id": "rel-3288f13782cf5874553a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_cluster/ai-vectors",
+        "target": "111122223333/ap-northeast-2/db_instance/ai-vectors-2",
+        "relation": "cluster_member",
+        "evidence": "DescribeDBClusters.DBClusterMembers[]",
+        "qualifiers": {},
+        "details": {
+          "writer": false
+        },
+        "inferred": false,
+        "id": "rel-47205f5427dc9ee6eddd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/ai-vectors-1",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-data-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-52f9770e6a4d7d4b9a38"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/ai-vectors-1",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-179ace568e069a45e1e8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/ai-vectors-2",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-data-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-f004e5137668d7770e27"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/ai-vectors-2",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-80717be1250f64036b29"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfa000000009",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-aiinfa000000009",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f47ba5b56d8702feb593"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfa000000009",
+        "target": "111122223333/ap-northeast-2/volume/vol-aiinfa000000009",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0a5118a8d26a906f3181"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfa000000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c387235a7a189671f8c5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfa000000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-baf8173b49b3825ea99a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfa000000009",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ai-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8e263604bd9de40728c9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfb000000009",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-aiinfb000000009",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9aa253b8e9029785506c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfb000000009",
+        "target": "111122223333/ap-northeast-2/volume/vol-aiinfb000000009",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5b19b6406806a6d1b154"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfb000000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-04d486b2194abeafc1eb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfb000000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-772b4087f580b52d0b97"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfb000000009",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ai-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ddc731d1e11b04088384"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfc000000009",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-aiinfc000000009",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-151ee5aece174dae3bdf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfc000000009",
+        "target": "111122223333/ap-northeast-2/volume/vol-aiinfc000000009",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-259f24206b7a8036815f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfc000000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6b5deae57ea4dd66afb0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfc000000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4c36c523a3eee9844319"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aiinfc000000009",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ai-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8be2c1fd95621d8d2123"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysa000000009",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-aisysa000000009",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0e0d784120a0a627f5db"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysa000000009",
+        "target": "111122223333/ap-northeast-2/volume/vol-aisysa000000009",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0e220b02faaf67ad922f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysa000000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fb7db7eb6112d9a89a81"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysa000000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1619d5560d23ba3476e2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysa000000009",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ai-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-33eb0d814df068bfc08a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysb000000009",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-aisysb000000009",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fa5318a916ff78b19b04"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysb000000009",
+        "target": "111122223333/ap-northeast-2/volume/vol-aisysb000000009",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-39afe0117dc6e3acfece"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysb000000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c37c6b5f6dbe3e7876ce"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysb000000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-da29801edd69311d0088"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysb000000009",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ai-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-afb4f29417f3b675a6f2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysc000000009",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-aisysc000000009",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b3e67c9d061b4181dc8b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysc000000009",
+        "target": "111122223333/ap-northeast-2/volume/vol-aisysc000000009",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b13c4ef5bc3c32232663"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysc000000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-29b3f213ec9f4803487d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysc000000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-160d400a6e28831457ed"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aisysc000000009",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ai-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c88a31c1f4545e8ca133"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-aitrn10000000009",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3941d2b9ecd26dd2ecc4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
+        "target": "111122223333/ap-northeast-2/volume/vol-aitrn10000000009",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-00b220a61faaa086db7d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-train-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f3553f7c7edff6f1a228"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2414c81b6bf0c6dd8e2e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
+        "target": "111122223333/ap-northeast-2/security_group/sg-train-efa",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-13fe406cd93bc94f8565"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-aitrn20000000009",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e5ad412d12d7201a399b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
+        "target": "111122223333/ap-northeast-2/volume/vol-aitrn20000000009",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-bedcc43ca5d6600ea295"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-train-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-180996bbb681299cd356"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0f4d4b31c0399b819afd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
+        "target": "111122223333/ap-northeast-2/security_group/sg-train-efa",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0f484f7f43f907e7219c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000090",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeMountTargets.SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-ec529a9e5abf58698ba0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000090",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeMountTargets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ae03f589432f8fb46264"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000090",
+        "target": "111122223333/ap-northeast-2/efs_file_system/fs-0ai0000000000009",
+        "relation": "mount_target_of",
+        "evidence": "DescribeMountTargets.FileSystemId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-639539e31f230f079c73"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000091",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeMountTargets.SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-07b901ec3d9f3fa19235"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000091",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeMountTargets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b0f1beaadb662fdd92bb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000091",
+        "target": "111122223333/ap-northeast-2/efs_file_system/fs-0ai0000000000009",
+        "relation": "mount_target_of",
+        "evidence": "DescribeMountTargets.FileSystemId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a25c1334d9ed3fc667d5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000092",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeMountTargets.SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-7ac81d074a7c89ce8a96"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000092",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeMountTargets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fb03814dec312fa987a9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/efs_mount_target/fsmt-0ai00000000000092",
+        "target": "111122223333/ap-northeast-2/efs_file_system/fs-0ai0000000000009",
+        "relation": "mount_target_of",
+        "evidence": "DescribeMountTargets.FileSystemId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9adc17de3f05e9516a3f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/ai-eks",
+        "target": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-inference-3c4d",
+        "relation": "eks_nodegroup",
+        "evidence": "DescribeNodegroup.resources.autoScalingGroups[]",
+        "qualifiers": {},
+        "details": {
+          "nodegroup": "gpu-inference",
+          "instanceTypes": [
+            "g6e.2xlarge"
+          ],
+          "scaling": {
+            "minSize": 3,
+            "maxSize": 12,
+            "desiredSize": 3
+          }
+        },
+        "inferred": false,
+        "id": "rel-09d6fd516894f1554ea2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/ai-eks",
+        "target": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-gpu-train-5e6f",
+        "relation": "eks_nodegroup",
+        "evidence": "DescribeNodegroup.resources.autoScalingGroups[]",
+        "qualifiers": {},
+        "details": {
+          "nodegroup": "gpu-train",
+          "instanceTypes": [
+            "p5.48xlarge"
+          ],
+          "scaling": {
+            "minSize": 0,
+            "maxSize": 8,
+            "desiredSize": 2
+          }
+        },
+        "inferred": false,
+        "id": "rel-cf441b818b2efbe241d0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/ai-eks",
+        "target": "111122223333/ap-northeast-2/auto_scaling_group/eks-ai-system-1a2b",
+        "relation": "eks_nodegroup",
+        "evidence": "DescribeNodegroup.resources.autoScalingGroups[]",
+        "qualifiers": {},
+        "details": {
+          "nodegroup": "system",
+          "instanceTypes": [
+            "m7g.large"
+          ],
+          "scaling": {
+            "minSize": 3,
+            "maxSize": 6,
+            "desiredSize": 3
+          }
+        },
+        "inferred": false,
+        "id": "rel-62d5c6823d9cca08547f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/ai-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "eks_subnet",
+        "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-942f416ff189a3b743a4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/ai-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "eks_subnet",
+        "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f737b7f4cba21e76f9e9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/ai-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "eks_subnet",
+        "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f8c4e2a89619db8c33b1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/ai-eks",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeCluster.resourcesVpcConfig.vpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9cdafb8b84db89e718cd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-23830dc615520782ec37"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-02a9c775cf9f9051dd18"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-64bea4bd743a7b3c133f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeLoadBalancers.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2aebf2bc0a09e5d89068"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ai-alb",
+        "relation": "uses_security_group",
+        "evidence": "DescribeLoadBalancers.SecurityGroups[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4d915bdaa5435f574d1e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.0.40:8080:ap-northeast-2a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-189630b9c8b78fa0fade"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.0.40:8080:ap-northeast-2a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-74eca24833d6e45e9f62"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.32.40:8080:ap-northeast-2b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-fba2f56fb60d508b276a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.32.40:8080:ap-northeast-2b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e209df877f2d07c1fb94"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.64.40:8080:ap-northeast-2c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-f025e5187aa959382124"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.64.40:8080:ap-northeast-2c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-efe51a5504aa346d2967"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-abe5994627cd1dfe5744"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e603dd523e0b54c9dd63"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-914158e793334b582db8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-train-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cade4d610d074c23ac54"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-369b7c7eeea78895f7d8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-ai00000000000009",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-42c5323cade0755060c0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-c9afd58bdd24330894ce"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-data",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-data-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0ceaf557549e53c32674"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-data",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-data-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e6f2dc7fbc77f72b1490"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-data",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-data-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-614d6df873ff0349f3fb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-data",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cfd17e5245d87ba9f8c0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-ai-data",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-7da9b3d4499abbadfadb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e6ae33e2bf32b96e55f4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a58ba95c310be44d6352"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-244d05dd4845f725fc49"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ai-data-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-63def5055410fc8811e4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ai-data-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cc78dc2b3249b98d0c05"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ai-data-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2e9da2d690bc2be445d3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ai-train-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0575eabfa781de77d59e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
+        "relation": "associated_load_balancer",
+        "evidence": "DescribeTargetGroups.LoadBalancerArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-dba256c244f7093bd3b9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2abd3850b473939389bb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.0.40:8080:ap-northeast-2a",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.80.0.40",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-c5dd18dedba34e04fea9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.32.40:8080:ap-northeast-2b",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.80.32.40",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-f3c783c69baaa499d4a6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.64.40:8080:ap-northeast-2c",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.80.64.40",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-f8f6206e8286cfacb0e9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-ai",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-ai00000000000009",
+        "relation": "attached_transit_gateway",
+        "evidence": "DescribeTransitGatewayVpcAttachments.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-78c46f31d2c753999286"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-ai",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c1b35514ea4c4f0ab8d2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-ai",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b66b8f6264171e04bbe7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-ai",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4dcdd53371677d9c816b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-ai",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeTransitGatewayVpcAttachments.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-df3f678209480ec118e0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-agent-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-abf0d15f3608b479667d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-agent-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ffef99950638fcb8d2cf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-agent-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5d9c3a96ce760907476a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-agent-runtime",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6223302be887a5c8c374"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cc99bd81cb9e01d1b6c3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-50dd6a64309743082cc6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2e935b9895b1ed926f57"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-bedrock-runtime",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-17859815091161b80934"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ec2",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b71e3151a1d11efd0ae2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ec2",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3dc4dca9cd9c09b6b529"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ec2",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-aa2fdd4e210c3c271fa3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ec2",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c84af39a26e2e1214ba4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e8927e55d783f3738a23"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b1372ae90032e45e2270"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-51aae1a5e0ccfec0f6d2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-api",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-350ce9f7c45b0fc69b54"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-88cdaa5bfc911d25fccd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c0ef532445c99b379d58"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4d52001fb14c6f9a0f82"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-29780c3fae362b009309"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7ed26962a7c99c97dc89"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fa5bd5caa3803d20ee54"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-77edbf7e3a1951df863d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b41643e2593aeafb3f60"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks-auth",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-62324965a4d8330f7698"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks-auth",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-63352941f29e8ad0908d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks-auth",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5235d75028cdd103278e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-eks-auth",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7aba6122129a46c77019"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-elasticloadbalancing",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-77a1203b9626a3f35fc4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-elasticloadbalancing",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-382baaa2952d1c3476c8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-elasticloadbalancing",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c1686af449861a6d0837"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-elasticloadbalancing",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ca972bf05575606a5edb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6e0637330f2b3b93b131"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c547058ede7af1a5d98f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0fdb45ad30594d87fe64"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-logs",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5e7bd2276560a5d4ed02"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-ai-app",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b1bfdcc35dcc3ed5bf30"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-ai-data",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8f968696199596fe0095"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-s3",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ea6eb659973a41765fc6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ssm",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-63f721072a4d00f8e7b9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ssm",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a5fa697f9f785c883346"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ssm",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-79497a9a1f9362a4e47d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-ssm",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-320113aaee1903d5a1f1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5baa5f335f93805c2851"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6475444dfc0941ead51f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9e696a42d0c3d7635ced"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-ai-sts",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-829b63e0021d5b6038de"
+      }
+    ]
+  }
+}</script>
+<script>
+'use strict';
+const snapshot=JSON.parse(document.getElementById('snapshot').textContent);
+const {nodes,edges}=snapshot.graph, meta=snapshot.metadata;
+const $=id=>document.getElementById(id), byId=new Map(nodes.map(n=>[n.id,n]));
+const names={vpc:'VPC',subnet:'서브넷',ec2:'EC2',load_balancer:'ELBv2',target_group:'대상 그룹',registered_target:'등록 대상',security_group:'보안 그룹',network_interface:'ENI',volume:'EBS'};
+const relations={in_vpc:'VPC 포함',in_subnet:'서브넷 배치',associated_load_balancer:'LB ↔ 대상 그룹',registered_target:'대상 등록',uses_security_group:'보안 그룹 연결',attached_interface:'ENI 연결',attached_volume:'EBS 연결'};
+const statusNames={complete:'조회 완료',partial:'부분 조회',unavailable:'조회 불가',not_discovered:'미발견 범위 있음'};
+let selected=null, visible=[], enabled=new Set(['associated_load_balancer','registered_target']);
+function el(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
+$('scope').textContent=`계정 ${meta.account_id} / ${meta.region} · 수집 ${meta.started_at} ~ ${meta.finished_at}`;
+$('notice').textContent=(meta.demo?'샘플 데이터 · 실제 AWS 계정을 조회한 결과가 아닙니다. ':'')+(meta.status==='complete'?'지정한 API 범위 조회 완료. ':'일부 범위가 조회되지 않았습니다. 리소스가 없다는 의미가 아닙니다. ')+'실제 통신 여부는 이 구성도로 판단할 수 없습니다.';
+for(const kind of [...new Set(nodes.map(n=>n.kind))].sort()){$('kind').append(new Option(names[kind]||kind,kind));}
+for(const [key,label] of Object.entries(relations).filter(([key])=>key!=='in_vpc')){const wrap=el('label');const input=el('input');input.type='checkbox';input.checked=enabled.has(key);input.addEventListener('change',()=>{input.checked?enabled.add(key):enabled.delete(key);drawEdges();});wrap.append(input,document.createTextNode(label));$('relation-controls').append(wrap);}
+for(const c of snapshot.coverage){const row=el('tr');const api=el('td',`${c.service} / ${c.operation}`);api.append(el('div',JSON.stringify(c.parameters||{}),'muted'));const state=el('td');state.append(el('span',statusNames[c.status]||c.status,'badge'+(c.status==='complete'?'':' warn')));row.append(api,state,el('td',`${c.items??'—'} / ${c.pages??'—'}`),el('td',c.error_code||c.reason||'—'));$('coverage').append(row);}
+for(const note of meta.limitations||[])$('limitations').append(el('li',note));
+function targets(id,relation){return edges.filter(e=>e.source===id&&e.relation===relation).map(e=>e.target);}
+function select(id){selected=id;const node=byId.get(id);$('detail').replaceChildren(el('h2',node.name),el('p',`${names[node.kind]} · ${node.reference_only?'참조만 확인됨 / 상세 미조회':'API 응답에서 조회됨'}`,'muted'));
+const attr=el('pre',JSON.stringify(node.attributes,null,2));$('detail').append(el('div',node.resource_id,'muted'),attr,el('h2','확인된 관계와 근거'));
+for(const edge of edges.filter(e=>e.source===id||e.target===id)){const other=byId.get(edge.source===id?edge.target:edge.source);const part=el('div',`${relations[edge.relation]} · ${other.name}`,'relation');part.append(el('div',edge.evidence,'muted'));if(Object.keys(edge.details).length)part.append(el('pre',JSON.stringify(edge.details,null,2)));$('detail').append(part);}
+document.querySelectorAll('.resource').forEach(e=>e.classList.toggle('selected',e.dataset.id===id));drawEdges();}
+function card(n){const b=el('button',undefined,'resource'+(n.reference_only?' ref':''));b.dataset.id=n.id;b.dataset.kind=n.kind;b.classList.toggle('selected',n.id===selected);b.append(el('span',names[n.kind]||n.kind,'kind'),el('strong',n.name),el('small',n.reference_only?'참조만 확인됨':n.attributes.CidrBlock||n.attributes.InstanceType||n.attributes.Type||'API에서 조회'));b.addEventListener('click',()=>select(n.id));return b;}
+function group(title,subnet=false){const box=el('div',undefined,'group'+(subnet?' subnet':''));box.append(el('div',title,'group-title'));const cards=el('div',undefined,'cards');box.append(cards);return {box,cards};}
+function render(){const search=$('search').value.toLowerCase(),kind=$('kind').value;visible=nodes.filter(n=>(!n.reference_only||$('references').checked)&&(kind==='all'||n.kind===kind)&&`${n.name} ${n.resource_id}`.toLowerCase().includes(search));$('groups').replaceChildren();$('rows').replaceChildren();const root=group(`ACCOUNT ${meta.account_id} / REGION ${meta.region}`);$('groups').append(root.box);const vpcs=new Map(),subnets=new Map();
+function ensureVpc(id){if(!vpcs.has(id)){const n=byId.get(id),g=group(n?`VPC · ${n.name}${n.reference_only?' · 참조만 확인됨':''}`:'VPC 미확인 / VPC 외 참조');root.box.append(g.box);vpcs.set(id,g);}return vpcs.get(id);}
+function ensureSubnet(id){if(!subnets.has(id)){const n=byId.get(id),parent=targets(id,'in_vpc')[0],g=group(`SUBNET · ${n?.name||id} · ${n?.attributes.AvailabilityZone||'AZ 미확인'}`,true);ensureVpc(parent).box.append(g.box);subnets.set(id,g);}return subnets.get(id);}
+const order={vpc:0,subnet:1,load_balancer:2,target_group:3,ec2:4};for(const n of [...visible].sort((a,b)=>(order[a.kind]??5)-(order[b.kind]??5))){let place;if(n.kind==='vpc')place=ensureVpc(n.id);else if(n.kind==='subnet')place=ensureSubnet(n.id);else{const subnet=targets(n.id,'in_subnet'),vpc=targets(n.id,'in_vpc')[0];place=n.kind==='ec2'&&subnet.length===1?ensureSubnet(subnet[0]):ensureVpc(vpc);}place.cards.append(card(n));const row=el('tr');row.tabIndex=0;row.append(el('td',names[n.kind]),el('td',n.name),el('td',n.resource_id),el('td',n.reference_only?'참조만 확인됨':n.source));row.addEventListener('click',()=>select(n.id));row.addEventListener('keydown',e=>{if(e.key==='Enter')select(n.id);});$('rows').append(row);}
+if(!visible.length)root.box.append(el('p','현재 필터에 해당하는 수집 리소스가 없습니다. 조회 상태도 함께 확인하세요.','empty'));
+$('stats').textContent=`표시 ${visible.length} / 전체 ${nodes.length} · 참조 ${nodes.filter(n=>n.reference_only).length}`;requestAnimationFrame(drawEdges);}
+function drawEdges(){const svg=$('edges'),canvas=$('canvas'),base=canvas.getBoundingClientRect();svg.replaceChildren();svg.setAttribute('width',canvas.scrollWidth);svg.setAttribute('height',canvas.scrollHeight);const cards=new Map([...document.querySelectorAll('.resource')].map(n=>[n.dataset.id,n]));for(const edge of edges){if(!enabled.has(edge.relation)||!cards.has(edge.source)||!cards.has(edge.target))continue;const a=cards.get(edge.source).getBoundingClientRect(),b=cards.get(edge.target).getBoundingClientRect();const x1=a.right-base.left+canvas.scrollLeft,y1=a.top+a.height/2-base.top+canvas.scrollTop,x2=b.right-base.left+canvas.scrollLeft,y2=b.top+b.height/2-base.top+canvas.scrollTop,bend=Math.max(x1,x2)+26;const path=document.createElementNS('http://www.w3.org/2000/svg','path');if(Math.abs(y1-y2)<12){const start=a.left<b.left?a.right:a.left,end=a.left<b.left?b.left:b.right;path.setAttribute('d',`M ${start-base.left+canvas.scrollLeft} ${y1} L ${end-base.left+canvas.scrollLeft} ${y2}`);}else{path.setAttribute('d',`M ${x1} ${y1} C ${bend} ${y1}, ${bend} ${y2}, ${x2} ${y2}`);}path.setAttribute('class','edge'+(edge.source===selected||edge.target===selected?' active':''));svg.append(path);}}
+function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type}));const link=el('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+$('json-download').onclick=()=>download('snapshot.json',JSON.stringify(snapshot,null,2),'application/json');
+function csvCell(value){let s=typeof value==='object'?JSON.stringify(value):String(value??'');if(/^[\s]*[=+\-@]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}
+$('csv-download').onclick=()=>{const fields=['account','region','kind','resource_id','name','reference_only','source','attributes'];const rows=[fields.concat(['collection_started_at','collection_finished_at','collection_status']),...nodes.map(n=>fields.map(f=>n[f]).concat([meta.started_at,meta.finished_at,meta.status]))];download('inventory.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');};
+$('svg-download').onclick=()=>{const canvas=$('canvas'),w=canvas.scrollWidth,h=canvas.scrollHeight+90;const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('width',w);svg.setAttribute('height',h);svg.setAttribute('viewBox',`0 0 ${w} ${h}`);const fo=document.createElementNS(svg.namespaceURI,'foreignObject');fo.setAttribute('width','100%');fo.setAttribute('height','100%');const box=document.createElementNS('http://www.w3.org/1999/xhtml','div');box.setAttribute('style',`background:#0b1220;color:#dce7f5;padding:16px;font-family:sans-serif;min-height:${h}px`);const style=el('style',document.querySelector('style').textContent);box.append(style,el('div',`${meta.demo?'샘플 · ':''}${meta.account_id} / ${meta.region} · ${statusNames[meta.status]} · ${meta.finished_at}`),el('p','설정 관계 · 실제 트래픽 미확인 · 조회 상태와 범위는 snapshot.json 참조','muted'));const clone=canvas.cloneNode(true);clone.style.overflow='visible';clone.style.width=`${w-32}px`;box.append(clone);fo.append(box);svg.append(fo);download('topology.svg',new XMLSerializer().serializeToString(svg),'image/svg+xml');};
+for(const id of ['search','kind','references'])$(id).addEventListener(id==='search'?'input':'change',render);
+new ResizeObserver(drawEdges).observe($('canvas'));render();
+</script>
+</body></html>

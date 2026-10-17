@@ -22,11 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T08:12:08.812057+00:00",
-    "finished_at": "2026-10-17T08:12:08.812057+00:00",
+    "started_at": "2026-10-17T20:37:18.960271+00:00",
+    "finished_at": "2026-10-17T20:37:18.960271+00:00",
     "status": "complete",
     "demo": true,
     "sample": "data-platform",
+    "sample_version": 2,
     "title": "데이터 플랫폼 (ECS · OpenSearch · RDS · ElastiCache · EFS · Redshift · DocumentDB)",
     "practices": [
       "ECS Fargate 서비스는 세 AZ 프라이빗 서브넷에 태스크를 분산하고 ALB가 태스크 IP를 대상으로 등록",
@@ -34,8 +35,9 @@
       "RDS PostgreSQL Multi-AZ(동기식 대기) + 세 번째 AZ의 읽기 전용 복제본",
       "ElastiCache Redis 클러스터 모드: 샤드마다 primary와 replica를 서로 다른 AZ에, 자동 장애 조치",
       "EFS(리전 클래스)는 AZ마다 마운트 타깃을 두어 AZ 장애에도 같은 AZ 경로로 접근",
-      "분석 VPC는 Redshift Multi-AZ와 DocumentDB writer/reader, 데이터 플랫폼 VPC와 피어링",
-      "사내 데이터 센터는 가상 프라이빗 게이트웨이의 Site-to-Site VPN(터널 2개)으로 연결"
+      "분석 VPC는 Redshift Multi-AZ(서브넷 3개, AZ당 2노드)와 DocumentDB writer/reader",
+      "두 VPC와 사내 데이터 센터를 Transit Gateway 하나로 연결 (피어링은 비전이적이라 다른 VPC의 VPN을 쓸 수 없음)",
+      "사내 데이터 센터는 고객 게이트웨이 2개(장비·ISP 분리)의 Site-to-Site VPN, 각각 터널 2개 (REL02-BP02)"
     ],
     "scope": [
       "VPC",
@@ -64,7 +66,7 @@
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -81,7 +83,7 @@
       "operation": "describe_subnets",
       "status": "complete",
       "pages": 1,
-      "items": 11
+      "items": 12
     },
     {
       "service": "ec2",
@@ -151,7 +153,7 @@
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
-      "items": 0
+      "items": 2
     },
     {
       "service": "rds",
@@ -249,21 +251,21 @@
       "operation": "describe_vpc_peering_connections",
       "status": "complete",
       "pages": 1,
-      "items": 1
+      "items": 0
     },
     {
       "service": "ec2",
       "operation": "describe_vpn_gateways",
       "status": "complete",
       "pages": 1,
-      "items": 1
+      "items": 0
     },
     {
       "service": "ec2",
       "operation": "describe_vpn_connections",
       "status": "complete",
       "pages": 1,
-      "items": 1
+      "items": 2
     },
     {
       "service": "ec2",
@@ -501,6 +503,23 @@
             "Value": "data"
           }
         ]
+      },
+      {
+        "SubnetId": "subnet-an-data-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60008",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.71.12.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "warehouse-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ]
       }
     ],
     "instances": [],
@@ -697,7 +716,12 @@
           },
           {
             "DestinationCidrBlock": "10.71.0.0/16",
-            "VpcPeeringConnectionId": "pcx-dp-analytics0007",
+            "TransitGatewayId": "tgw-dp0000000000007",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "192.168.0.0/16",
+            "TransitGatewayId": "tgw-dp0000000000007",
             "State": "active"
           }
         ],
@@ -735,7 +759,12 @@
           },
           {
             "DestinationCidrBlock": "10.71.0.0/16",
-            "VpcPeeringConnectionId": "pcx-dp-analytics0007",
+            "TransitGatewayId": "tgw-dp0000000000007",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "192.168.0.0/16",
+            "TransitGatewayId": "tgw-dp0000000000007",
             "State": "active"
           }
         ],
@@ -773,7 +802,12 @@
           },
           {
             "DestinationCidrBlock": "10.71.0.0/16",
-            "VpcPeeringConnectionId": "pcx-dp-analytics0007",
+            "TransitGatewayId": "tgw-dp0000000000007",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "192.168.0.0/16",
+            "TransitGatewayId": "tgw-dp0000000000007",
             "State": "active"
           }
         ],
@@ -824,12 +858,12 @@
           },
           {
             "DestinationCidrBlock": "10.70.0.0/16",
-            "VpcPeeringConnectionId": "pcx-dp-analytics0007",
+            "TransitGatewayId": "tgw-dp0000000000007",
             "State": "active"
           },
           {
             "DestinationCidrBlock": "192.168.0.0/16",
-            "GatewayId": "vgw-analytics0008",
+            "TransitGatewayId": "tgw-dp0000000000007",
             "State": "active"
           }
         ],
@@ -945,6 +979,12 @@
               "SubnetAvailabilityZone": {
                 "Name": "ap-northeast-2b"
               }
+            },
+            {
+              "SubnetIdentifier": "subnet-an-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
             }
           ]
         }
@@ -972,6 +1012,12 @@
               "SubnetIdentifier": "subnet-an-data-b",
               "SubnetAvailabilityZone": {
                 "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-an-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
               }
             }
           ]
@@ -1018,8 +1064,54 @@
         ]
       }
     ],
-    "transit_gateways": [],
-    "transit_gateway_attachments": [],
+    "transit_gateways": [
+      {
+        "TransitGatewayId": "tgw-dp0000000000007",
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-tgw"
+          }
+        ]
+      }
+    ],
+    "transit_gateway_attachments": [
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-dp",
+        "TransitGatewayId": "tgw-dp0000000000007",
+        "VpcId": "vpc-0a1b2c3d4e5f60007",
+        "SubnetIds": [
+          "subnet-dp-app-a",
+          "subnet-dp-app-b",
+          "subnet-dp-app-c"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-platform-attachment"
+          }
+        ]
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-an",
+        "TransitGatewayId": "tgw-dp0000000000007",
+        "VpcId": "vpc-0a1b2c3d4e5f60008",
+        "SubnetIds": [
+          "subnet-an-data-a",
+          "subnet-an-data-b",
+          "subnet-an-data-c"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "analytics-attachment"
+          }
+        ]
+      }
+    ],
     "db_clusters": [
       {
         "DBClusterIdentifier": "profiles-docdb",
@@ -1506,7 +1598,7 @@
       {
         "ClusterIdentifier": "warehouse",
         "NodeType": "ra3.4xlarge",
-        "NumberOfNodes": 2,
+        "NumberOfNodes": 4,
         "ClusterStatus": "available",
         "VpcId": "vpc-0a1b2c3d4e5f60008",
         "ClusterSubnetGroupName": "warehouse-subnets",
@@ -1519,6 +1611,12 @@
           },
           {
             "NodeRole": "COMPUTE-1"
+          },
+          {
+            "NodeRole": "COMPUTE-2"
+          },
+          {
+            "NodeRole": "COMPUTE-3"
           }
         ],
         "MultiAZ": "Enabled",
@@ -1530,6 +1628,12 @@
             },
             {
               "NodeRole": "COMPUTE-1"
+            },
+            {
+              "NodeRole": "COMPUTE-2"
+            },
+            {
+              "NodeRole": "COMPUTE-3"
             }
           ]
         }
@@ -1551,63 +1655,45 @@
             "SubnetAvailabilityZone": {
               "Name": "ap-northeast-2b"
             }
+          },
+          {
+            "SubnetIdentifier": "subnet-an-data-c",
+            "SubnetAvailabilityZone": {
+              "Name": "ap-northeast-2c"
+            }
           }
         ]
       }
     ],
-    "vpc_peering_connections": [
-      {
-        "VpcPeeringConnectionId": "pcx-dp-analytics0007",
-        "Status": {
-          "Code": "active"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "data-platform-to-analytics"
-          }
-        ],
-        "RequesterVpcInfo": {
-          "VpcId": "vpc-0a1b2c3d4e5f60007",
-          "OwnerId": "111122223333",
-          "Region": "ap-northeast-2",
-          "CidrBlock": "10.70.0.0/16"
-        },
-        "AccepterVpcInfo": {
-          "VpcId": "vpc-0a1b2c3d4e5f60008",
-          "OwnerId": "111122223333",
-          "Region": "ap-northeast-2",
-          "CidrBlock": "10.71.0.0/16"
-        }
-      }
-    ],
-    "vpn_gateways": [
-      {
-        "VpnGatewayId": "vgw-analytics0008",
-        "State": "available",
-        "Type": "ipsec.1",
-        "AmazonSideAsn": 64512,
-        "VpcAttachments": [
-          {
-            "VpcId": "vpc-0a1b2c3d4e5f60008",
-            "State": "attached"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "analytics-vgw"
-          }
-        ]
-      }
-    ],
+    "vpc_peering_connections": [],
+    "vpn_gateways": [],
     "vpn_connections": [
       {
-        "VpnConnectionId": "vpn-an-corp",
-        "CustomerGatewayId": "cgw-corp-dc",
+        "VpnConnectionId": "vpn-dp-corp-1",
+        "CustomerGatewayId": "cgw-corp-dc-1",
         "State": "available",
         "Type": "ipsec.1",
-        "VpnGatewayId": "vgw-analytics0008",
+        "TransitGatewayId": "tgw-dp0000000000007",
+        "Options": {
+          "StaticRoutesOnly": false
+        },
+        "VgwTelemetry": [
+          {
+            "OutsideIpAddress": "52.78.0.10",
+            "Status": "UP"
+          },
+          {
+            "OutsideIpAddress": "52.78.0.11",
+            "Status": "UP"
+          }
+        ]
+      },
+      {
+        "VpnConnectionId": "vpn-dp-corp-2",
+        "CustomerGatewayId": "cgw-corp-dc-2",
+        "State": "available",
+        "Type": "ipsec.1",
+        "TransitGatewayId": "tgw-dp0000000000007",
         "Options": {
           "StaticRoutesOnly": false
         },
@@ -1625,7 +1711,7 @@
     ],
     "customer_gateways": [
       {
-        "CustomerGatewayId": "cgw-corp-dc",
+        "CustomerGatewayId": "cgw-corp-dc-1",
         "IpAddress": "203.0.113.20",
         "BgpAsn": "65010",
         "State": "available",
@@ -1633,7 +1719,20 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "corp-dc-cgw"
+            "Value": "corp-dc-cgw-1"
+          }
+        ]
+      },
+      {
+        "CustomerGatewayId": "cgw-corp-dc-2",
+        "IpAddress": "198.51.100.20",
+        "BgpAsn": "65010",
+        "State": "available",
+        "Type": "ipsec.1",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "corp-dc-cgw-2"
           }
         ]
       }
@@ -1771,14 +1870,14 @@
         "source": "DescribeReplicationGroups"
       },
       {
-        "id": "111122223333/ap-northeast-2/customer_gateway/cgw-corp-dc",
-        "resource_id": "cgw-corp-dc",
+        "id": "111122223333/ap-northeast-2/customer_gateway/cgw-corp-dc-1",
+        "resource_id": "cgw-corp-dc-1",
         "kind": "customer_gateway",
-        "name": "corp-dc-cgw",
+        "name": "corp-dc-cgw-1",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {
-          "CustomerGatewayId": "cgw-corp-dc",
+          "CustomerGatewayId": "cgw-corp-dc-1",
           "IpAddress": "203.0.113.20",
           "BgpAsn": "65010",
           "State": "available",
@@ -1786,7 +1885,33 @@
           "Tags": [
             {
               "Key": "Name",
-              "Value": "corp-dc-cgw"
+              "Value": "corp-dc-cgw-1"
+            }
+          ],
+          "VpnTunnels": [
+            "2/2"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeCustomerGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/customer_gateway/cgw-corp-dc-2",
+        "resource_id": "cgw-corp-dc-2",
+        "kind": "customer_gateway",
+        "name": "corp-dc-cgw-2",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "CustomerGatewayId": "cgw-corp-dc-2",
+          "IpAddress": "198.51.100.20",
+          "BgpAsn": "65010",
+          "State": "available",
+          "Type": "ipsec.1",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "corp-dc-cgw-2"
             }
           ],
           "VpnTunnels": [
@@ -1947,6 +2072,12 @@
                 "SubnetAvailabilityZone": {
                   "Name": "ap-northeast-2b"
                 }
+              },
+              {
+                "SubnetIdentifier": "subnet-an-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
               }
             ]
           }
@@ -1985,6 +2116,12 @@
                 "SubnetIdentifier": "subnet-an-data-b",
                 "SubnetAvailabilityZone": {
                   "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-an-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
                 }
               }
             ]
@@ -2581,7 +2718,7 @@
         "attributes": {
           "ClusterIdentifier": "warehouse",
           "NodeType": "ra3.4xlarge",
-          "NumberOfNodes": 2,
+          "NumberOfNodes": 4,
           "ClusterStatus": "available",
           "VpcId": "vpc-0a1b2c3d4e5f60008",
           "ClusterSubnetGroupName": "warehouse-subnets",
@@ -2594,6 +2731,12 @@
             },
             {
               "NodeRole": "COMPUTE-1"
+            },
+            {
+              "NodeRole": "COMPUTE-2"
+            },
+            {
+              "NodeRole": "COMPUTE-3"
             }
           ],
           "MultiAZ": "Enabled",
@@ -2605,11 +2748,17 @@
               },
               {
                 "NodeRole": "COMPUTE-1"
+              },
+              {
+                "NodeRole": "COMPUTE-2"
+              },
+              {
+                "NodeRole": "COMPUTE-3"
               }
             ]
           },
           "Role": "primary",
-          "NodesHere": 2
+          "NodesHere": 4
         },
         "reference_only": false,
         "source": "DescribeClusters"
@@ -2624,7 +2773,7 @@
         "attributes": {
           "ClusterIdentifier": "warehouse",
           "NodeType": "ra3.4xlarge",
-          "NumberOfNodes": 2,
+          "NumberOfNodes": 4,
           "ClusterStatus": "available",
           "VpcId": "vpc-0a1b2c3d4e5f60008",
           "ClusterSubnetGroupName": "warehouse-subnets",
@@ -2637,6 +2786,12 @@
             },
             {
               "NodeRole": "COMPUTE-1"
+            },
+            {
+              "NodeRole": "COMPUTE-2"
+            },
+            {
+              "NodeRole": "COMPUTE-3"
             }
           ],
           "MultiAZ": "Enabled",
@@ -2648,11 +2803,17 @@
               },
               {
                 "NodeRole": "COMPUTE-1"
+              },
+              {
+                "NodeRole": "COMPUTE-2"
+              },
+              {
+                "NodeRole": "COMPUTE-3"
               }
             ]
           },
           "Role": "secondary",
-          "NodesHere": 2,
+          "NodesHere": 4,
           "DisplayName": "warehouse"
         },
         "reference_only": false,
@@ -2676,12 +2837,12 @@
             },
             {
               "DestinationCidrBlock": "10.70.0.0/16",
-              "VpcPeeringConnectionId": "pcx-dp-analytics0007",
+              "TransitGatewayId": "tgw-dp0000000000007",
               "State": "active"
             },
             {
               "DestinationCidrBlock": "192.168.0.0/16",
-              "GatewayId": "vgw-analytics0008",
+              "TransitGatewayId": "tgw-dp0000000000007",
               "State": "active"
             }
           ],
@@ -2762,7 +2923,12 @@
             },
             {
               "DestinationCidrBlock": "10.71.0.0/16",
-              "VpcPeeringConnectionId": "pcx-dp-analytics0007",
+              "TransitGatewayId": "tgw-dp0000000000007",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "192.168.0.0/16",
+              "TransitGatewayId": "tgw-dp0000000000007",
               "State": "active"
             }
           ],
@@ -2810,7 +2976,12 @@
             },
             {
               "DestinationCidrBlock": "10.71.0.0/16",
-              "VpcPeeringConnectionId": "pcx-dp-analytics0007",
+              "TransitGatewayId": "tgw-dp0000000000007",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "192.168.0.0/16",
+              "TransitGatewayId": "tgw-dp0000000000007",
               "State": "active"
             }
           ],
@@ -2858,7 +3029,12 @@
             },
             {
               "DestinationCidrBlock": "10.71.0.0/16",
-              "VpcPeeringConnectionId": "pcx-dp-analytics0007",
+              "TransitGatewayId": "tgw-dp0000000000007",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "192.168.0.0/16",
+              "TransitGatewayId": "tgw-dp0000000000007",
               "State": "active"
             }
           ],
@@ -3056,6 +3232,35 @@
             {
               "Key": "Name",
               "Value": "warehouse-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-an-main"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-an-data-c",
+        "resource_id": "subnet-an-data-c",
+        "kind": "subnet",
+        "name": "warehouse-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-an-data-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60008",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.71.12.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "warehouse-c"
             },
             {
               "Key": "Tier",
@@ -3352,6 +3557,80 @@
         "source": "DescribeTargetGroups"
       },
       {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "resource_id": "tgw-attach-an",
+        "kind": "tgw_attachment",
+        "name": "analytics-attachment",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-an",
+          "TransitGatewayId": "tgw-dp0000000000007",
+          "VpcId": "vpc-0a1b2c3d4e5f60008",
+          "SubnetIds": [
+            "subnet-an-data-a",
+            "subnet-an-data-b",
+            "subnet-an-data-c"
+          ],
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "analytics-attachment"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayVpcAttachments"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "resource_id": "tgw-attach-dp",
+        "kind": "tgw_attachment",
+        "name": "data-platform-attachment",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-dp",
+          "TransitGatewayId": "tgw-dp0000000000007",
+          "VpcId": "vpc-0a1b2c3d4e5f60007",
+          "SubnetIds": [
+            "subnet-dp-app-a",
+            "subnet-dp-app-b",
+            "subnet-dp-app-c"
+          ],
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-platform-attachment"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayVpcAttachments"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "resource_id": "tgw-dp0000000000007",
+        "kind": "transit_gateway",
+        "name": "data-tgw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayId": "tgw-dp0000000000007",
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-tgw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGateways"
+      },
+      {
         "id": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60007",
         "resource_id": "vpc-0a1b2c3d4e5f60007",
         "kind": "vpc",
@@ -3457,68 +3736,6 @@
         },
         "reference_only": false,
         "source": "DescribeVpcEndpoints"
-      },
-      {
-        "id": "111122223333/ap-northeast-2/vpc_peering/pcx-dp-analytics0007",
-        "resource_id": "pcx-dp-analytics0007",
-        "kind": "vpc_peering",
-        "name": "data-platform-to-analytics",
-        "account": "111122223333",
-        "region": "ap-northeast-2",
-        "attributes": {
-          "VpcPeeringConnectionId": "pcx-dp-analytics0007",
-          "Status": {
-            "Code": "active"
-          },
-          "Tags": [
-            {
-              "Key": "Name",
-              "Value": "data-platform-to-analytics"
-            }
-          ],
-          "RequesterVpcInfo": {
-            "VpcId": "vpc-0a1b2c3d4e5f60007",
-            "OwnerId": "111122223333",
-            "Region": "ap-northeast-2",
-            "CidrBlock": "10.70.0.0/16"
-          },
-          "AccepterVpcInfo": {
-            "VpcId": "vpc-0a1b2c3d4e5f60008",
-            "OwnerId": "111122223333",
-            "Region": "ap-northeast-2",
-            "CidrBlock": "10.71.0.0/16"
-          }
-        },
-        "reference_only": false,
-        "source": "DescribeVpcPeeringConnections"
-      },
-      {
-        "id": "111122223333/ap-northeast-2/vpn_gateway/vgw-analytics0008",
-        "resource_id": "vgw-analytics0008",
-        "kind": "vpn_gateway",
-        "name": "analytics-vgw",
-        "account": "111122223333",
-        "region": "ap-northeast-2",
-        "attributes": {
-          "VpnGatewayId": "vgw-analytics0008",
-          "State": "available",
-          "Type": "ipsec.1",
-          "AmazonSideAsn": 64512,
-          "VpcAttachments": [
-            {
-              "VpcId": "vpc-0a1b2c3d4e5f60008",
-              "State": "attached"
-            }
-          ],
-          "Tags": [
-            {
-              "Key": "Name",
-              "Value": "analytics-vgw"
-            }
-          ]
-        },
-        "reference_only": false,
-        "source": "DescribeVpnGateways"
       }
     ],
     "edges": [
@@ -4385,6 +4602,18 @@
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-an-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-an-data-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-aada5705eb465fb803cc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-an-main",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60008",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
@@ -4395,9 +4624,9 @@
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-an-main",
-        "target": "111122223333/ap-northeast-2/vpc_peering/pcx-dp-analytics0007",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
         "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].VpcPeeringConnectionId",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
         "qualifiers": {
           "destination": "10.70.0.0/16"
         },
@@ -4405,13 +4634,13 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-fe26063a21bc6d0abad4"
+        "id": "rel-11f1e769dbcbfb88a83c"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-an-main",
-        "target": "111122223333/ap-northeast-2/vpn_gateway/vgw-analytics0008",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
         "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
         "qualifiers": {
           "destination": "192.168.0.0/16"
         },
@@ -4419,7 +4648,7 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-311ca0c16e575f0a32a6"
+        "id": "rel-7f6dcf8d5536a6694fbf"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-dp-main",
@@ -4503,6 +4732,34 @@
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-a",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.71.0.0/16"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-74e9214c703a5cd9465c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-a",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "192.168.0.0/16"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-c6186821b841b0522016"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-a",
         "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-dp-s3",
         "relation": "routes_to",
         "evidence": "DescribeRouteTables.Routes[].GatewayId",
@@ -4514,20 +4771,6 @@
         },
         "inferred": false,
         "id": "rel-a674f9e72e4d4d6bade7"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-a",
-        "target": "111122223333/ap-northeast-2/vpc_peering/pcx-dp-analytics0007",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].VpcPeeringConnectionId",
-        "qualifiers": {
-          "destination": "10.71.0.0/16"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-6cf220a7f3960ee1faf4"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-b",
@@ -4565,6 +4808,34 @@
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-b",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "192.168.0.0/16"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-6ec0ad52a5012c8db868"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-b",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.71.0.0/16"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-f96d90382834eedc4b8c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-b",
         "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-dp-s3",
         "relation": "routes_to",
         "evidence": "DescribeRouteTables.Routes[].GatewayId",
@@ -4576,20 +4847,6 @@
         },
         "inferred": false,
         "id": "rel-14da8ef8fc8d42a1fc4b"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-b",
-        "target": "111122223333/ap-northeast-2/vpc_peering/pcx-dp-analytics0007",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].VpcPeeringConnectionId",
-        "qualifiers": {
-          "destination": "10.71.0.0/16"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-8e6f6556f990037877be"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-c",
@@ -4627,6 +4884,34 @@
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-c",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.71.0.0/16"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-b032a31ca22573e81c95"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-c",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "192.168.0.0/16"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-c040caef7df69adb732e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-c",
         "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-dp-s3",
         "relation": "routes_to",
         "evidence": "DescribeRouteTables.Routes[].GatewayId",
@@ -4638,20 +4923,6 @@
         },
         "inferred": false,
         "id": "rel-566b5c95a2e51cc30092"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-dp-private-c",
-        "target": "111122223333/ap-northeast-2/vpc_peering/pcx-dp-analytics0007",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].VpcPeeringConnectionId",
-        "qualifiers": {
-          "destination": "10.71.0.0/16"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-6acc5a0a48a5ec5a41ee"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-dp-public",
@@ -4830,6 +5101,16 @@
         "id": "rel-0255e69eef3f12e1ee7d"
       },
       {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-an-data-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60008",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7cf38a6ddcee74c9e641"
+      },
+      {
         "source": "111122223333/ap-northeast-2/subnet/subnet-dp-app-a",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60007",
         "relation": "in_vpc",
@@ -5006,6 +5287,140 @@
         "id": "rel-d0407753261390279c47"
       },
       {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "attached_transit_gateway",
+        "evidence": "DescribeTransitGatewayVpcAttachments.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8453a228e239d4f7b7b2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-an-data-a",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4f71fe1fc9e4438f0839"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-an-data-b",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fe31c5e7560d55b3338c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-an-data-c",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-53cfb216bbca0f1a6899"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60008",
+        "relation": "in_vpc",
+        "evidence": "DescribeTransitGatewayVpcAttachments.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e9da6a60baca1b471760"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "attached_transit_gateway",
+        "evidence": "DescribeTransitGatewayVpcAttachments.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4aa8357ebffbaf47d54d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-dp-app-a",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-527adbe7fdbcf24cf11c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-dp-app-b",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-db6961aba2c39df2738c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-dp-app-c",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5b2977cd192e4210f338"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60007",
+        "relation": "in_vpc",
+        "evidence": "DescribeTransitGatewayVpcAttachments.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7a7390de060f6c264cd3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "target": "111122223333/ap-northeast-2/customer_gateway/cgw-corp-dc-1",
+        "relation": "vpn_connection",
+        "evidence": "DescribeVpnConnections.TransitGatewayId + CustomerGatewayId",
+        "qualifiers": {
+          "destination": "vpn-dp-corp-1"
+        },
+        "details": {
+          "VpnConnectionId": "vpn-dp-corp-1",
+          "State": "available",
+          "Tunnels": "2/2 UP",
+          "StaticRoutesOnly": false
+        },
+        "inferred": false,
+        "id": "rel-b32714d519a2b41c8ed9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "target": "111122223333/ap-northeast-2/customer_gateway/cgw-corp-dc-2",
+        "relation": "vpn_connection",
+        "evidence": "DescribeVpnConnections.TransitGatewayId + CustomerGatewayId",
+        "qualifiers": {
+          "destination": "vpn-dp-corp-2"
+        },
+        "details": {
+          "VpnConnectionId": "vpn-dp-corp-2",
+          "State": "available",
+          "Tunnels": "2/2 UP",
+          "StaticRoutesOnly": false
+        },
+        "inferred": false,
+        "id": "rel-e07675ee83d5def2d9b3"
+      },
+      {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-dp-ecr",
         "target": "111122223333/ap-northeast-2/subnet/subnet-dp-app-a",
         "relation": "endpoint_subnet",
@@ -5084,53 +5499,6 @@
         "details": {},
         "inferred": false,
         "id": "rel-0eefd266bc335eae1d27"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/vpc_peering/pcx-dp-analytics0007",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60007",
-        "relation": "in_vpc",
-        "evidence": "DescribeVpcPeeringConnections.RequesterVpcInfo/AccepterVpcInfo.VpcId",
-        "qualifiers": {},
-        "details": {},
-        "inferred": false,
-        "id": "rel-5ba1e19ade44a781eaee"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/vpc_peering/pcx-dp-analytics0007",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60008",
-        "relation": "peer_vpc",
-        "evidence": "DescribeVpcPeeringConnections.AccepterVpcInfo.VpcId",
-        "qualifiers": {},
-        "details": {},
-        "inferred": false,
-        "id": "rel-e4970f5d7c96028a12fc"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/vpn_gateway/vgw-analytics0008",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60008",
-        "relation": "in_vpc",
-        "evidence": "DescribeVpnGateways.VpcAttachments[].VpcId",
-        "qualifiers": {},
-        "details": {},
-        "inferred": false,
-        "id": "rel-9faee91a2d0f22a7a248"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/vpn_gateway/vgw-analytics0008",
-        "target": "111122223333/ap-northeast-2/customer_gateway/cgw-corp-dc",
-        "relation": "vpn_connection",
-        "evidence": "DescribeVpnConnections.VpnGatewayId + CustomerGatewayId",
-        "qualifiers": {
-          "destination": "vpn-an-corp"
-        },
-        "details": {
-          "VpnConnectionId": "vpn-an-corp",
-          "State": "available",
-          "Tunnels": "2/2 UP",
-          "StaticRoutesOnly": false
-        },
-        "inferred": false,
-        "id": "rel-6e7cb5a0a9d9795446d9"
       }
     ]
   }

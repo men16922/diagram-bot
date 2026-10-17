@@ -4,11 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T08:12:07.950377+00:00",
-    "finished_at": "2026-10-17T08:12:07.950377+00:00",
+    "started_at": "2026-10-17T20:37:18.399073+00:00",
+    "finished_at": "2026-10-17T20:37:18.399073+00:00",
     "status": "complete",
     "demo": true,
     "sample": "microservices",
+    "sample_version": 2,
     "title": "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4)",
     "practices": [
       "ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)",
@@ -16,7 +17,8 @@
       "서비스마다 전용 포트·헬스 체크 경로",
       "두 AZ 이상에 각 서비스 대상을 분산하고 서비스별 Auto Scaling 그룹",
       "서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ",
-      "이미지 풀·S3 접근은 ECR 인터페이스·S3 게이트웨이 엔드포인트로 사설 경로 사용"
+      "이미지 풀은 ECR API·Docker 인터페이스와 S3 게이트웨이 엔드포인트, 컨테이너 로그는 CloudWatch Logs 엔드포인트로 사설 경로 사용",
+      "도형 밖 권고: 인터넷용 ALB 앞에 AWS WAF·CloudFront (REL02-BP01, 수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -45,7 +47,7 @@
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -125,7 +127,7 @@
       "operation": "describe_vpc_endpoints",
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 4
     },
     {
       "service": "ec2",
@@ -1010,7 +1012,25 @@
         ]
       },
       {
-        "VpcEndpointId": "vpce-commerce-ecr",
+        "VpcEndpointId": "vpce-commerce-ecr-api",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+        "SubnetIds": [
+          "subnet-ms-app-a",
+          "subnet-ms-app-b"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ecr.api-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-commerce-ecr-dkr",
         "VpcId": "vpc-0a1b2c3d4e5f60002",
         "VpcEndpointType": "Interface",
         "State": "available",
@@ -1024,6 +1044,24 @@
           {
             "Key": "Name",
             "Value": "ecr.dkr-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-commerce-logs",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.logs",
+        "SubnetIds": [
+          "subnet-ms-app-a",
+          "subnet-ms-app-b"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "logs-endpoint"
           }
         ]
       }
@@ -2463,14 +2501,43 @@
         "source": "DescribeVpcs"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr",
-        "resource_id": "vpce-commerce-ecr",
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-api",
+        "resource_id": "vpce-commerce-ecr-api",
+        "kind": "vpc_endpoint",
+        "name": "ecr.api-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-commerce-ecr-api",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+          "SubnetIds": [
+            "subnet-ms-app-a",
+            "subnet-ms-app-b"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ecr.api-endpoint"
+            }
+          ],
+          "ServiceShortName": "ecr.api"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-dkr",
+        "resource_id": "vpce-commerce-ecr-dkr",
         "kind": "vpc_endpoint",
         "name": "ecr.dkr-endpoint",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {
-          "VpcEndpointId": "vpce-commerce-ecr",
+          "VpcEndpointId": "vpce-commerce-ecr-dkr",
           "VpcId": "vpc-0a1b2c3d4e5f60002",
           "VpcEndpointType": "Interface",
           "State": "available",
@@ -2487,6 +2554,35 @@
             }
           ],
           "ServiceShortName": "ecr.dkr"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-logs",
+        "resource_id": "vpce-commerce-logs",
+        "kind": "vpc_endpoint",
+        "name": "logs-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-commerce-logs",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.logs",
+          "SubnetIds": [
+            "subnet-ms-app-a",
+            "subnet-ms-app-b"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "logs-endpoint"
+            }
+          ],
+          "ServiceShortName": "logs"
         },
         "reference_only": false,
         "source": "DescribeVpcEndpoints"
@@ -3666,34 +3762,94 @@
         "id": "rel-06ca148d05e50b31f823"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr",
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-api",
         "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-a",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-29fd9bda080405fb09d7"
+        "id": "rel-76ddd921b513d34e060c"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr",
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-api",
         "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-b",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-de7d933ab81b239c2480"
+        "id": "rel-d30dd470abefa1dea6e9"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr",
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-api",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-5e022299c8fce9c44538"
+        "id": "rel-fe535ea8b46762225e1b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c5851c4033b0c714f036"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-dce58a5cef7c21ec7726"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5cb5ed9d3ea5f6d6c228"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cdb302a99b4252b35fd6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-96bf413040a0e7ce7cd4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-logs",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3ad3ee00c1d16921c6e9"
       },
       {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-s3",

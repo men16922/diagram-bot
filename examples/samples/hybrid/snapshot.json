@@ -4,18 +4,20 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T08:12:08.483373+00:00",
-    "finished_at": "2026-10-17T08:12:08.483373+00:00",
+    "started_at": "2026-10-17T20:37:18.732552+00:00",
+    "finished_at": "2026-10-17T20:37:18.732552+00:00",
     "status": "complete",
     "demo": true,
     "sample": "hybrid",
+    "sample_version": 2,
     "title": "하이브리드 대상 (온프레미스 IP 포함)",
     "practices": [
       "점진 이전 중 온프레미스 서버를 IP 대상으로 함께 등록 (AvailabilityZone=all)",
       "VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시",
       "클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크",
       "내부 ALB로 사내망 전용 노출",
-      "온프레미스 대역(192.168.0.0/16)은 Transit Gateway에 붙은 Site-to-Site VPN(터널 2개, BGP)으로 연결 (Direct Connect는 수집 범위 밖)"
+      "온프레미스 대역(192.168.0.0/16)은 Transit Gateway의 Site-to-Site VPN 2개로 연결: 고객 게이트웨이(장비·ISP) 2개, 각각 터널 2개, BGP (REL02-BP02)",
+      "도형 밖 권고: 운영 주 연결은 Direct Connect(다중 위치), VPN은 백업. 하이브리드 DNS는 Route 53 Resolver 엔드포인트 (수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -44,7 +46,7 @@
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -243,7 +245,7 @@
       "operation": "describe_vpn_connections",
       "status": "complete",
       "pages": 1,
-      "items": 1
+      "items": 2
     },
     {
       "service": "ec2",
@@ -631,6 +633,26 @@
             "Status": "UP"
           }
         ]
+      },
+      {
+        "VpnConnectionId": "vpn-hybrid-seoul-2",
+        "CustomerGatewayId": "cgw-seoul-dc-2",
+        "State": "available",
+        "Type": "ipsec.1",
+        "TransitGatewayId": "tgw-hybrid00000005",
+        "Options": {
+          "StaticRoutesOnly": false
+        },
+        "VgwTelemetry": [
+          {
+            "OutsideIpAddress": "52.78.0.10",
+            "Status": "UP"
+          },
+          {
+            "OutsideIpAddress": "52.78.0.11",
+            "Status": "UP"
+          }
+        ]
       }
     ],
     "customer_gateways": [
@@ -644,6 +666,19 @@
           {
             "Key": "Name",
             "Value": "seoul-dc-cgw"
+          }
+        ]
+      },
+      {
+        "CustomerGatewayId": "cgw-seoul-dc-2",
+        "IpAddress": "198.51.100.10",
+        "BgpAsn": "65010",
+        "State": "available",
+        "Type": "ipsec.1",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "seoul-dc-cgw-2"
           }
         ]
       }
@@ -702,6 +737,32 @@
             {
               "Key": "Name",
               "Value": "seoul-dc-cgw"
+            }
+          ],
+          "VpnTunnels": [
+            "2/2"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeCustomerGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/customer_gateway/cgw-seoul-dc-2",
+        "resource_id": "cgw-seoul-dc-2",
+        "kind": "customer_gateway",
+        "name": "seoul-dc-cgw-2",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "CustomerGatewayId": "cgw-seoul-dc-2",
+          "IpAddress": "198.51.100.10",
+          "BgpAsn": "65010",
+          "State": "available",
+          "Type": "ipsec.1",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "seoul-dc-cgw-2"
             }
           ],
           "VpnTunnels": [
@@ -1599,6 +1660,23 @@
         },
         "inferred": false,
         "id": "rel-7732ee4833dcc4325e77"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/transit_gateway/tgw-hybrid00000005",
+        "target": "111122223333/ap-northeast-2/customer_gateway/cgw-seoul-dc-2",
+        "relation": "vpn_connection",
+        "evidence": "DescribeVpnConnections.TransitGatewayId + CustomerGatewayId",
+        "qualifiers": {
+          "destination": "vpn-hybrid-seoul-2"
+        },
+        "details": {
+          "VpnConnectionId": "vpn-hybrid-seoul-2",
+          "State": "available",
+          "Tunnels": "2/2 UP",
+          "StaticRoutesOnly": false
+        },
+        "inferred": false,
+        "id": "rel-736bc2e50c4fe7807bdb"
       }
     ]
   }

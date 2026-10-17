@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T08:12:07.950377+00:00 ~ 2026-10-17T08:12:07.950377+00:00
+- 수집 구간: 2026-10-17T20:37:18.399073+00:00 ~ 2026-10-17T20:37:18.399073+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -18,7 +18,7 @@
 - ec2 / describe_route_tables: complete, 4개, 오류 없음; 범위 {}
 - rds / describe_db_instances: complete, 1개, 오류 없음; 범위 {}
 - autoscaling / describe_auto_scaling_groups: complete, 2개, 오류 없음; 범위 {}
-- ec2 / describe_vpc_endpoints: complete, 2개, 오류 없음; 범위 {}
+- ec2 / describe_vpc_endpoints: complete, 4개, 오류 없음; 범위 {}
 - ec2 / describe_transit_gateway_vpc_attachments: complete, 0개, 오류 없음; 범위 {}
 - rds / describe_db_clusters: complete, 0개, 오류 없음; 범위 {}
 - elasticache / describe_cache_clusters: complete, 0개, 오류 없음; 범위 {}
@@ -51,7 +51,7 @@
 ## 해석 범위
 
 - AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.
-- 보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.
+- 리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).
 - 설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다.
 
 ## 검토할 항목

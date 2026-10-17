@@ -22,11 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T08:12:08.643854+00:00",
-    "finished_at": "2026-10-17T08:12:08.643854+00:00",
+    "started_at": "2026-10-17T20:37:18.845072+00:00",
+    "finished_at": "2026-10-17T20:37:18.845072+00:00",
     "status": "complete",
     "demo": true,
     "sample": "eks-platform",
+    "sample_version": 2,
     "title": "EKS 플랫폼 (EKS · MSK · ElastiCache · Aurora · Lambda)",
     "practices": [
       "EKS 컨트롤 플레인 엔드포인트는 비공개, 관리형 노드 그룹은 세 AZ 프라이빗 서브넷에 분산",
@@ -34,7 +35,8 @@
       "Aurora PostgreSQL writer/reader를 서로 다른 AZ에, ElastiCache Redis는 primary/replica 자동 장애 조치",
       "MSK 브로커는 AZ마다 하나, 클라이언트-브로커 TLS",
       "데이터 계층(Aurora·Redis·MSK)은 인터넷 경로 없는 격리 서브넷",
-      "ECR·STS 인터페이스·S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로"
+      "ECR API·Docker·STS 인터페이스와 S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로",
+      "도형 밖 권고: 인터넷 ALB에 AWS WAF, MSK 토픽 복제 계수 3 (수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -63,7 +65,7 @@
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -143,7 +145,7 @@
       "operation": "describe_vpc_endpoints",
       "status": "complete",
       "pages": 1,
-      "items": 3
+      "items": 4
     },
     {
       "service": "ec2",
@@ -1173,6 +1175,25 @@
           {
             "Key": "Name",
             "Value": "s3-gateway-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-platform-ecr-api",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+        "SubnetIds": [
+          "subnet-pf-app-a",
+          "subnet-pf-app-b",
+          "subnet-pf-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ecr.api-endpoint"
           }
         ]
       },
@@ -3123,6 +3144,36 @@
         "source": "DescribeVpcEndpoints"
       },
       {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr-api",
+        "resource_id": "vpce-platform-ecr-api",
+        "kind": "vpc_endpoint",
+        "name": "ecr.api-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-platform-ecr-api",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+          "SubnetIds": [
+            "subnet-pf-app-a",
+            "subnet-pf-app-b",
+            "subnet-pf-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ecr.api-endpoint"
+            }
+          ],
+          "ServiceShortName": "ecr.api"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
         "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
         "resource_id": "vpce-platform-s3",
         "kind": "vpc_endpoint",
@@ -4590,6 +4641,46 @@
         "details": {},
         "inferred": false,
         "id": "rel-36d540bda90df12c7670"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2d3795a3156a15773578"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ced5d1bf39aeb3d827f8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-14567875c4de00d0cdf6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr-api",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-559a8fd93288ce29ae6b"
       },
       {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",

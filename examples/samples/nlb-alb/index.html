@@ -22,17 +22,19 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T08:12:08.118742+00:00",
-    "finished_at": "2026-10-17T08:12:08.118742+00:00",
+    "started_at": "2026-10-17T20:37:18.508038+00:00",
+    "finished_at": "2026-10-17T20:37:18.508038+00:00",
     "status": "complete",
     "demo": true,
     "sample": "nlb-alb",
+    "sample_version": 2,
     "title": "고정 IP가 필요한 진입점 (NLB → ALB)",
     "practices": [
       "고정 IP·PrivateLink가 필요한 진입점은 NLB, L7 라우팅은 뒤의 ALB (alb 대상 유형)",
       "TCP 서비스는 NLB 대상 그룹으로 직접 연결",
       "두 AZ에 대상을 분산하고 교차 영역 구성",
-      "관리 접근은 배스천 대신 Session Manager 사용 (인스턴스 퍼블릭 IP 없음)"
+      "관리 접근은 배스천 대신 Session Manager 사용 (인스턴스 퍼블릭 IP 없음)",
+      "도형 밖 권고: NLB 고정 IP는 AZ마다 Elastic IP, ALB에는 AWS WAF, 대안으로 Global Accelerator (수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -61,7 +63,7 @@
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },

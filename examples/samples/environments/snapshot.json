@@ -4,18 +4,21 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T08:12:08.307086+00:00",
-    "finished_at": "2026-10-17T08:12:08.307086+00:00",
+    "started_at": "2026-10-17T20:37:18.621457+00:00",
+    "finished_at": "2026-10-17T20:37:18.621457+00:00",
     "status": "complete",
     "demo": true,
     "sample": "environments",
+    "sample_version": 2,
     "title": "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스)",
     "practices": [
       "환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)",
       "운영은 3 AZ·AZ별 NAT, 스테이징은 비용을 고려한 2 AZ·NAT 1개",
       "공용 서비스 VPC에는 내부 도구만 두고 인터넷 경로 없음",
       "VPC 간 연결은 Transit Gateway 허브로 일원화 (VPC 피어링 그물망 대신)",
-      "Environment 태그로 소유·비용 구분"
+      "Environment 태그로 소유·비용 구분",
+      "스테이징 NAT 1개는 비운영 환경의 비용 절충 (REL10-BP01은 운영 워크로드 기준)",
+      "도형 밖 권고: 환경별 AWS 계정 분리, Network 계정의 TGW를 RAM으로 공유, 운영·스테이징 TGW 라우팅 테이블 분리 (수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -44,7 +47,7 @@
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },

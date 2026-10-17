@@ -4,11 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T08:12:07.783302+00:00",
-    "finished_at": "2026-10-17T08:12:07.783302+00:00",
+    "started_at": "2026-10-17T20:37:18.290426+00:00",
+    "finished_at": "2026-10-17T20:37:18.290426+00:00",
     "status": "complete",
     "demo": true,
     "sample": "three-tier",
+    "sample_version": 2,
     "title": "3계층 웹 애플리케이션 (3 AZ)",
     "practices": [
       "세 AZ에 같은 구성을 배치해 AZ 장애를 견딤 (Reliability)",
@@ -17,7 +18,8 @@
       "AZ마다 NAT 게이트웨이를 두어 프라이빗 서브넷의 외부 통신이 AZ 장애에 묶이지 않음",
       "웹·앱 계층은 Auto Scaling 그룹(ELB 헬스 체크)으로 AZ에 분산",
       "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개), 읽기는 세 번째 AZ의 읽기 전용 복제본",
-      "S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM 인터페이스 엔드포인트(배스천 없음)"
+      "S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM·SSM Messages·EC2 Messages 엔드포인트의 Session Manager(배스천 없음)",
+      "도형 밖 권고: CloudFront(정적 콘텐츠는 S3)·AWS WAF·Route 53 헬스 체크를 진입점 앞에 (REL02-BP01, 수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -46,7 +48,7 @@
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -126,7 +128,7 @@
       "operation": "describe_vpc_endpoints",
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 4
     },
     {
       "service": "ec2",
@@ -1274,6 +1276,44 @@
           {
             "Key": "Name",
             "Value": "ssm-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-prod-ssmmessages",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ssmmessages",
+        "SubnetIds": [
+          "subnet-app-a",
+          "subnet-app-b",
+          "subnet-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ssmmessages-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-prod-ec2messages",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ec2messages",
+        "SubnetIds": [
+          "subnet-app-a",
+          "subnet-app-b",
+          "subnet-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ec2messages-endpoint"
           }
         ]
       }
@@ -3036,6 +3076,36 @@
         "source": "DescribeVpcs"
       },
       {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ec2messages",
+        "resource_id": "vpce-prod-ec2messages",
+        "kind": "vpc_endpoint",
+        "name": "ec2messages-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-prod-ec2messages",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ec2messages",
+          "SubnetIds": [
+            "subnet-app-a",
+            "subnet-app-b",
+            "subnet-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ec2messages-endpoint"
+            }
+          ],
+          "ServiceShortName": "ec2messages"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
         "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-s3",
         "resource_id": "vpce-prod-s3",
         "kind": "vpc_endpoint",
@@ -3090,6 +3160,36 @@
             }
           ],
           "ServiceShortName": "ssm"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ssmmessages",
+        "resource_id": "vpce-prod-ssmmessages",
+        "kind": "vpc_endpoint",
+        "name": "ssmmessages-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-prod-ssmmessages",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ssmmessages",
+          "SubnetIds": [
+            "subnet-app-a",
+            "subnet-app-b",
+            "subnet-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ssmmessages-endpoint"
+            }
+          ],
+          "ServiceShortName": "ssmmessages"
         },
         "reference_only": false,
         "source": "DescribeVpcEndpoints"
@@ -4343,6 +4443,46 @@
         "id": "rel-aacc702059f5a06950d0"
       },
       {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ec2messages",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b689e8b9b17220298657"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ec2messages",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0f7deeb5efa21a647ce2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ec2messages",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-53e5b9997ff36353a23f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ec2messages",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c7a2ffd1f49c2609a21f"
+      },
+      {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-s3",
         "target": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
         "relation": "endpoint_route_table",
@@ -4421,6 +4561,46 @@
         "details": {},
         "inferred": false,
         "id": "rel-415ec144c09bee18268b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ssmmessages",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4d04afb2df36555b64f0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ssmmessages",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-45db9534c2a24708ca45"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ssmmessages",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a1329db1222df1e65212"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-prod-ssmmessages",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-29d4e21aa481b27c6667"
       }
     ]
   }
