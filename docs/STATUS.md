@@ -8,7 +8,8 @@ Last Updated: 2026-10-18
   10 samples incl. `ai-platform`, `genai-rag`, `gpu-training`; AI/ML collection (FSx, SageMaker endpoints, HyperPod, placement groups,
   EFA/Capacity Block), AI/ML review pillar (17 rules), accelerated-instance/Bedrock/FSx icons, AI designer tools (27 tools),
   multi-account combine, 11 samples; AWS console-style UI (sign-in profile, docked AI assistant), overview cards per tier.
-  Live 2026-10-18 (owner's account, us-east-1): 34/34 calls complete incl. the new FSx/SageMaker/placement-group calls (0 resources).
+  Live 2026-10-18 (owner's account, us-east-1): 34/34 calls complete incl. the new FSx/SageMaker/placement-group calls (0 resources);
+  SSO via the new profile menu (owner approved the code): CloudOpsReadOnly preselected, `role @ account (SSO)`, collection 47 resources.
 - 2026-10-17 chat design agent (Strands + Bedrock): chat panel, `diagram-bot chat`, `/api/agent/*` (now 27 tools).
   Benchmark: docs/engineering/DEVOPS_AGENT_BENCHMARK.md; draw.io internals: docs/DRAWIO.md.
 
@@ -18,7 +19,6 @@ Last Updated: 2026-10-18
   collection, parallel collection, scale tests, lint in the gate, CHANGELOG/SECURITY/OPERATIONS docs
   and a CloudFormation read-only role template.
 
-- AWS topology refinement plan (docs/TOPOLOGY_PLAN.md): P1–P5 done; merged to main 2026-10-17 at the user's request.
 - All manual verification is done (live keys, workload stack, cross-account role, SSO, visual review).
   Follow-ups from the visual review are tracked in docs/NEXT_PLAN.md. No [auto] backlog is approved.
 

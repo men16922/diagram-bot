@@ -2,6 +2,30 @@
 
 Moved from docs/PROGRESS_LOG.md on 2026-10-17 (doc budget). Newest first.
 
+## 2026-10-17 — First live AWS verification (goal: 검증 완료시까지 수행)
+
+- Owner's test account, us-east-1, keys from git-ignored `.env`: CLI collection 30/30 complete,
+  counts equal to the AWS CLI; web app collection, views, tabs and exports driven in Chromium.
+- Fixed: Lambda functions without VpcConfig were dropped from the graph, so inventory/CSV
+  (documented as the full collection) lost them; now nodes without a VPC edge, shown on a separate
+  overview card and never in detail views. Regression test added.
+- Fixed: `make check` failed with ProfileNotFound when the developer shell exports `AWS_PROFILE`;
+  the Makefile now unexports profile and key variables for the offline gate.
+- Verified: `make check` (lint + 91 tests + CLI round trip), also with real keys in the environment.
+
+## 2026-10-17 — v0.5.0 team mode and AWS-emulator verification
+
+- Team mode (`auth.py`): PBKDF2 accounts, throttled login, Secure/HttpOnly/Strict session cookie,
+  viewer/editor/admin enforced server-side, HSTS, Host allow-list first, JSON Lines audit log,
+  `user add|remove|list`; non-loopback serve refused without users + TLS + allowed hosts.
+- moto end-to-end test over real boto3 serialization (20+ resource types, AssumeRole via STS).
+  It surfaced two real issues, both fixed: an unexpected exception from one API aborted the whole
+  collection; the shared-segment check rejected a target group's own bus (frame + registration).
+- OIDC SSO (`oidc.py`): discovery, code + PKCE, state cookie, nonce/iss/aud/exp checks, userinfo
+  subject match, group→role mapping; unit tests with a PKCE-checking fake provider; Chromium run
+  through a loopback provider in `scripts/verify_team.py`.
+- Verified: lint + 90 tests; `scripts/verify_team.py` in Chromium over TLS; CI runs both.
+
 ## 2026-10-17 — Enterprise readiness (goal: 엔터프라이즈 상용 제품 수준까지 작업·검증)
 
 - Architecture review (`findings.py`): 27 deterministic reliability/security/operations rules from

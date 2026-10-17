@@ -13,6 +13,9 @@ Last Updated: 2026-10-18
 - Verified: `make check` 178 tests (per-sample overview cards); verify_demo 31 checks (profile menu, sign-in dialog, assistant
   reflow, no overflow at 1280/980/640); verify_team ok; live: sign-in showed the IAM user @ account, and a free-form chat design
   (2-AZ VPC, ALB, ECS Fargate, PostgreSQL Multi-AZ) ran 6 tools and opened the design (review 0 findings).
+- Live SSO through the new profile menu (owner approved device code): roles listed, CloudOpsReadOnly preselected, profile shows
+  `CloudOpsReadOnly @ account (SSO)`, collection dialog shows the identity, us-east-1 collected (47 resources). verify_demo 32 checks
+  now walk the same SSO UI against a stand-in Identity Center.
 
 ## 2026-10-18 — Multi-account view, live check of the AI calls (goal: 잔여 작업 완료시까지)
 
@@ -91,29 +94,5 @@ Last Updated: 2026-10-18
 - In-app IAM Identity Center sign-in (device code) verified live end to end; role-selection race fixed.
 - docs/DRAWIO.md (libraries, layout algorithm, routing, editor bridge, exports). Verified: `make check` 106 tests,
   live chat in Chromium (design, advice, collection) and CLI chat.
-
-## 2026-10-17 — First live AWS verification (goal: 검증 완료시까지 수행)
-
-- Owner's test account, us-east-1, keys from git-ignored `.env`: CLI collection 30/30 complete,
-  counts equal to the AWS CLI; web app collection, views, tabs and exports driven in Chromium.
-- Fixed: Lambda functions without VpcConfig were dropped from the graph, so inventory/CSV
-  (documented as the full collection) lost them; now nodes without a VPC edge, shown on a separate
-  overview card and never in detail views. Regression test added.
-- Fixed: `make check` failed with ProfileNotFound when the developer shell exports `AWS_PROFILE`;
-  the Makefile now unexports profile and key variables for the offline gate.
-- Verified: `make check` (lint + 91 tests + CLI round trip), also with real keys in the environment.
-
-## 2026-10-17 — v0.5.0 team mode and AWS-emulator verification
-
-- Team mode (`auth.py`): PBKDF2 accounts, throttled login, Secure/HttpOnly/Strict session cookie,
-  viewer/editor/admin enforced server-side, HSTS, Host allow-list first, JSON Lines audit log,
-  `user add|remove|list`; non-loopback serve refused without users + TLS + allowed hosts.
-- moto end-to-end test over real boto3 serialization (20+ resource types, AssumeRole via STS).
-  It surfaced two real issues, both fixed: an unexpected exception from one API aborted the whole
-  collection; the shared-segment check rejected a target group's own bus (frame + registration).
-- OIDC SSO (`oidc.py`): discovery, code + PKCE, state cookie, nonce/iss/aud/exp checks, userinfo
-  subject match, group→role mapping; unit tests with a PKCE-checking fake provider; Chromium run
-  through a loopback provider in `scripts/verify_team.py`.
-- Verified: lint + 90 tests; `scripts/verify_team.py` in Chromium over TLS; CI runs both.
 
 Older entries: docs/archive/PROGRESS_LOG-2026-10.md
