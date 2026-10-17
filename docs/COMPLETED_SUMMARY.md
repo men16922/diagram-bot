@@ -51,3 +51,10 @@ Last Updated: 2026-10-17
 - Installer re-run: 0 files created, 16 skipped; existing state preserved byte-for-byte.
 - Checkpoint docs reflect completed initialization, remaining manual acceptance and no approved
   [auto] backlog. Full actor execution/commit and actual AWS access are outside verified evidence.
+
+## AWS best-practice samples and AI/GPU — completed 2026-10-18
+
+- docs/ARCHITECTURE.md: official AWS sources, per-sample verdicts, AI/GPU (Generative AI, ML, HPC lenses).
+- 8 samples (new ai-platform), GPU review rules, accelerated-instance/Bedrock icons, chat `add_gpu_node_group`,
+  sample reseeding by version, wrapped attachment row, scripts/render_samples.py.
+- Evidence: `make check` 143 tests; verify_demo 28 checks; all samples pass `review --fail-on medium`.

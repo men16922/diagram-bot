@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: Visual review follow-ups done (2026-10-18). Owner asked to align all 7 samples with AWS best practice: docs/ARCHITECTURE.md written (sources, verdicts, ranked changes in §4); next is applying the items the owner approves. No [auto] backlog.
+> ▶ NEXT SESSION: Best-practice sample alignment done and verified (2026-10-18): 8 samples incl. ai-platform, GPU review rules and icons, chat GPU node groups; docs/ARCHITECTURE.md is the basis. Branch feat/chat-design-agent not merged to main yet (owner's call). Open: an occasional stale "hidden resource" toast seen only in verify_demo screenshots. No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 

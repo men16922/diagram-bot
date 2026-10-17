@@ -253,6 +253,23 @@ def main():
             expect(detail).to_contain_text('2/2 UP')
             expect(detail).to_contain_text('Site-to-Site VPN')
 
+        # 9b. AI platform: private VPC, GPU inference across AZs, single-AZ EFA training, Bedrock endpoint, GPU review rules.
+        page.locator('#snapshot-select').select_option('sample-ai-platform')
+        ready()
+        page.locator('[data-vpc="vpc-0a1b2c3d4e5f60009"]').click()
+        ready()
+        frame.get_by_text(starts('gpu-train-1')).click()
+        expect(detail).to_contain_text('p5.48xlarge')
+        expect(detail).to_contain_text('subnet-ai-train-a')
+        frame.get_by_text(starts('bedrock-runtime')).click()
+        expect(detail).to_contain_text('com.amazonaws.ap-northeast-2.bedrock-runtime')
+        frame.get_by_text(starts('EKS node group · gpu-inference')).click()
+        expect(detail).to_contain_text('EKS 노드 그룹')
+        page.screenshot(path=str(args.output / 'ai-platform.png'), full_page=True)
+        page.locator('#review-tab').click()
+        expect(page.locator('#review-rows')).to_contain_text('학습 노드 그룹이 한 AZ에만 있음')
+        page.locator('#diagram-tab').click()
+
         options = page.locator('#snapshot-select option').count()
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
         expect(page.locator('#snapshot-select option')).to_have_count(options + 1)
@@ -285,6 +302,7 @@ def main():
                          'infrastructure sample: ASG frame, RDS standby, route-classified subnet',
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
                          'data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
+                         'AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review',
                          'snapshot import', 'change review between snapshots']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))

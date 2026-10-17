@@ -13,6 +13,22 @@
   토큰·자격 증명은 서버 메모리에만 둡니다. 계정·역할 선택 후 그 역할로 수집하고, 채팅 에이전트도 같은 역할로 조회합니다(admin 전용, 감사 로그).
 - `--env-file` (`collect`, `serve`, `chat`): `.env`의 AWS 키·리전을 읽고, 키가 있으면 셸 프로파일보다 우선.
 - 문서: `docs/DRAWIO.md`(draw.io 라이브러리·자동 배치·편집기 연동), `docs/engineering/DEVOPS_AGENT_BENCHMARK.md`.
+- **AWS Best Practice 사례 정렬:** `docs/ARCHITECTURE.md`(사례별 AWS 공식 출처·판정·AI/GPU Well-Architected).
+  샘플 8종 — 신규 `ai-platform`(IGW·NAT 없는 사설 VPC, Bedrock 등 인터페이스 엔드포인트, EKS GPU 추론 3 AZ·EFA 학습 단일 AZ,
+  Aurora pgvector, EFS). 각 사례의 practices에 그릴 수 없는 권고(CloudFront·WAF·Direct Connect·계정 분리 등)를 명시.
+- 검토 규칙: `REL-GPU-TRAIN-AZ`(EFA 학습 노드가 여러 AZ), `REL-GPU-INFER-AZ`(GPU 추론 노드가 한 AZ), `SEC-EFA-SG`(EFA 보안 그룹 자기 참조 규칙 없음).
+  단일 AZ EFA 학습 그룹은 `REL-ASG-AZ` low(의도적 단일 AZ)로 표시.
+- 가속 인스턴스 아이콘(P3·P4d·P4de·G4dn·G4ad·Trainium·Inferentia·DL1), 그 밖의 GPU 계열은 `GPU` 라벨. Bedrock·SageMaker 엔드포인트 아이콘.
+- 채팅 도구 `add_gpu_node_group`(도구 25개), 표준 설계 `ai-platform`.
+- `scripts/render_samples.py`: examples/samples 산출물·PNG·README 재생성.
+
+### Changed
+- 샘플: data-platform은 피어링·VGW 대신 Transit Gateway 허브(두 VPC + VPN)와 Redshift Multi-AZ 서브넷 그룹 3개·AZ당 2노드,
+  hybrid·data-platform은 고객 게이트웨이 2개(VPN 2개), microservices·eks-platform은 `ecr.api`(microservices는 `logs`도),
+  three-tier는 `ssmmessages`·`ec2messages` 엔드포인트 추가.
+- 저장된 샘플은 `SAMPLE_VERSION`이 바뀌면 서버 시작 시 다시 만듭니다(그 샘플의 위치 편집은 자동 배치로 다시 생성, 메모는 유지).
+- VPC 상단의 연결 행(게이트웨이·엔드포인트·EKS)이 AZ 폭을 넘으면 줄을 바꿉니다(VPC가 넓어지지 않음).
+- 상세 보기는 최소 60 % 줌으로 열리고(너비 맞춤), 알림은 화면 위쪽에 표시. 대상 그룹마다 등록 경로 색을 구분.
 
 ### Fixed
 - VPC에 연결되지 않은 Lambda 함수가 리소스 목록·CSV에서 빠지던 문제. 전체 구성에 `VPC 미연결 리전 서비스` 카드로 표시하고 상세 구성에는 그리지 않습니다.

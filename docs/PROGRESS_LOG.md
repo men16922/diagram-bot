@@ -2,6 +2,22 @@
 
 Last Updated: 2026-10-18
 
+## 2026-10-18 — Samples aligned with AWS best practice + AI/GPU (goal: 구현 및 검증 완료시까지 수행)
+
+- Plan docs/plans/2026-10-18-best-practice-samples.md executed with the recommended decisions (TGW hub, sample version,
+  Aurora pgvector, optional items out).
+- Samples: Redshift Multi-AZ subnet group (3 subnets, 4 nodes); data-platform TGW hub instead of peering+VGW; second
+  CGW/VPN in hybrid and data-platform; `ecr.api`/`logs`/SSM endpoints; practices name what cannot be drawn.
+- New `ai-platform` sample/standard: private VPC behind TGW, 11 interface endpoints (Bedrock), EKS system/g6e inference
+  (3 AZ)/p5 EFA training (1 AZ), self-referencing EFA SG, Aurora pgvector, EFS.
+- Review rules REL-GPU-TRAIN-AZ, REL-GPU-INFER-AZ, SEC-EFA-SG; single-AZ training is a low reminder. Icons for exact
+  accelerated families (GPU icons print P3/P4d/G4dn, so p5/g6e keep the instance icon + "GPU"), Bedrock/SageMaker endpoints.
+- Layout: VPC attachment row wraps at the AZ width (ai-platform was 3× wider than its AZs). Server regenerates stored
+  samples on a new `SAMPLE_VERSION` (verified on reports/session-20261018). Chat tool `add_gpu_node_group`.
+- `scripts/render_samples.py` regenerates examples/samples (PNG via the app, README sections; counts match the old README).
+- Verified: `make check` lint + 143 tests + CLI round trip; `verify_demo.py` 28 checks, no page errors/external requests;
+  `review --fail-on medium` exit 0 for all 8 samples; visual review of ai-platform, data-platform, hybrid, microservices.
+
 ## 2026-10-18 — Visual review follow-ups (user request: 잔여 작업 우선순위 수행)
 
 - Detail views opened at 23–31 % at 1440×900 (fit whole diagram); the editor bridge now fits down to 60 % only,

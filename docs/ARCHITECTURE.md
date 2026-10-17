@@ -2,9 +2,9 @@
 
 Last Updated: 2026-10-18
 
-샘플 7종(`src/diagram_bot/samples.py`)은 데모 데이터이자 채팅 에이전트의 표준 설계(`designer.py` `STANDARDS`)다.
+샘플 8종(`src/diagram_bot/samples.py`)은 데모 데이터이자 채팅 에이전트의 표준 설계(`designer.py` `STANDARDS`)다.
 이 문서는 각 사례가 따라야 할 AWS 공식 권고를 출처와 함께 정리하고, 현재 샘플과의 차이와 변경안을 기록한다.
-변경안은 제안이며, 샘플 수정은 소유자 승인 후 진행한다.
+변경안은 2026-10-18 소유자 지시로 반영했다(4절·5.6절의 반영 현황).
 
 ## 1. 범위와 판정 기준
 
@@ -57,8 +57,8 @@ Last Updated: 2026-10-18
 | 계층 | ALB만 퍼블릭, 웹·앱 프라이빗, 데이터 별도 격리 | HIGH | 충족 | 충족 |
 | NAT | AZ마다 | REC | AZ마다 | 충족 |
 | DB | Multi-AZ + 읽기 복제본 | HIGH | MySQL Multi-AZ + 3번째 AZ 복제본 | 충족 |
-| SSM 엔드포인트 | `ssm` · `ssmmessages` · `ec2messages` | REC | `ssm`만 | **S** 두 엔드포인트 추가 |
-| 엣지 | CloudFront(+S3 정적 콘텐츠) · WAF · Route 53 | REC | 없음 | **P** / X |
+| SSM 엔드포인트 | `ssm` · `ssmmessages` · `ec2messages` | REC | 세 엔드포인트 | 충족 (2026-10-18 반영) |
+| 엣지 | CloudFront(+S3 정적 콘텐츠) · WAF · Route 53 | REC | practices 문구 | P (반영) / X |
 
 ### 3.2 microservices — ALB 경로 라우팅 (EC2 ASG + ECS Fargate)
 
@@ -68,8 +68,8 @@ Last Updated: 2026-10-18
 | --- | --- | --- | --- | --- |
 | 서비스별 대상 그룹 | 마이크로서비스마다 대상 그룹 | REC | 4개 | 충족 |
 | Fargate 배치 | 프라이빗 서브넷, 퍼블릭 IP 없음, AZ마다 NAT | REC | 충족 | 충족 |
-| ECR 엔드포인트 | `ecr.api` + `ecr.dkr` + S3 게이트웨이 (NAT 없으면 필수), 로그는 `logs` | MUST(NAT 없을 때)/REC | `ecr.dkr` + S3 | **S** `ecr.api`·`logs` 추가 |
-| AZ | 2 AZ 이상 (참조 다이어그램 3 AZ) | HIGH/OPT | 2 AZ | **S**(선택) 3 AZ |
+| ECR 엔드포인트 | `ecr.api` + `ecr.dkr` + S3 게이트웨이 (NAT 없으면 필수), 로그는 `logs` | MUST(NAT 없을 때)/REC | `ecr.api`·`ecr.dkr`·`logs` + S3 | 충족 (반영) |
+| AZ | 2 AZ 이상 (참조 다이어그램 3 AZ) | HIGH/OPT | 2 AZ | 충족 (3 AZ는 선택, 미반영) |
 | 엣지 | ALB 앞 WAF·CloudFront | REC | 없음 | **P** / X |
 
 ### 3.3 nlb-alb — 고정 IP 진입점 (NLB → ALB)
@@ -107,7 +107,7 @@ Direct Connect Resiliency Recommendations, ALB target groups(IP 대상).
 | 항목 | AWS 권고 | 강도 | 현재 샘플 | 조치 |
 | --- | --- | --- | --- | --- |
 | VPN 종단 | TGW (ECMP 지원, 터널당 1.25 Gbps) | REC | TGW | 충족 |
-| 이중화 | 두 번째 CGW(가능하면 다른 ISP)로 두 번째 VPN, 같은 대역 BGP 광고, 장비 이중화 | HIGH | CGW 1, VPN 1(터널 2) | **S** CGW·VPN 하나 더 |
+| 이중화 | 두 번째 CGW(가능하면 다른 ISP)로 두 번째 VPN, 같은 대역 BGP 광고, 장비 이중화 | HIGH | CGW 2, VPN 2(각 터널 2) | 충족 (반영) |
 | 터널 | CGW에서 두 터널 모두 사용 | MUST(실무) | 터널 2개 UP | 충족 |
 | 주 연결 | 운영은 Direct Connect, VPN은 백업 | REC | VPN만 | **X** / P |
 | IP 대상 | RFC1918/RFC6598만, DX·VPN 경유 온프레미스 허용 | MUST | 192.168.20.0/24 | 충족 |
@@ -124,7 +124,7 @@ Aurora high availability, ElastiCache Multi-AZ, Lambda VPC.
 | 노드 | 세 AZ 프라이빗 서브넷, AZ마다 NAT | REC | 충족 | 충족 |
 | 클러스터 서브넷 | 전용 /28 서브넷 | OPT | 노드 서브넷 공용 | **S**(선택) |
 | LB 서브넷 | ALB는 퍼블릭(`kubernetes.io/role/elb` 태그), 2 AZ 이상, Fargate면 IP 대상 | REC | 3 AZ, IP 대상 | 충족 (태그 **S**) |
-| VPC 엔드포인트 | NAT가 없으면 `ec2`·`ecr.api`·`ecr.dkr`·`s3`·`elasticloadbalancing`·`logs`·`sts`(+`eks-auth`) | MUST(NAT 없을 때) | NAT 있음, `ecr.dkr`·`sts`·`s3` | **S** `ecr.api` 추가 (NAT가 있어 나머지는 선택) |
+| VPC 엔드포인트 | NAT가 없으면 `ec2`·`ecr.api`·`ecr.dkr`·`s3`·`elasticloadbalancing`·`logs`·`sts`(+`eks-auth`) | MUST(NAT 없을 때) | NAT 있음, `ecr.api`·`ecr.dkr`·`sts`·`s3` | 충족 (반영; NAT가 있어 나머지는 선택) |
 | MSK | 3 AZ, 브로커 수는 AZ 배수, RF ≥ 3, minISR ≤ RF−1 | REC | 3 AZ × 1 | 충족 (RF는 P) |
 | Aurora | 다른 AZ에 리플리카 1개 이상 | REC | writer a, reader b | **S**(선택) c에 reader 추가 |
 | ElastiCache | Multi-AZ 자동 장애 조치 | REC | primary b, replica c | 충족 |
@@ -140,13 +140,15 @@ Multi-VPC 백서(VPC peering, VPN).
 | --- | --- | --- | --- | --- |
 | OpenSearch | Multi-AZ with Standby: 3 AZ, 전용 마스터 3, 데이터 노드 3의 배수, 복제본 2 이상 | REC | 충족 | 충족 |
 | RDS | Multi-AZ 인스턴스(대기 1) 또는 Multi-AZ DB 클러스터(읽기 가능 대기 2, 3 AZ) | HIGH | 인스턴스 + 복제본 | 충족 (클러스터는 선택) |
-| Redshift Multi-AZ | RA3, 암호화, AZ당 2노드 이상, 서브넷 그룹 3개 이상 서브넷 | MUST | 서브넷 2개, 노드 2 | **S** 서브넷 3개, 노드 4 |
+| Redshift Multi-AZ | RA3, 암호화, AZ당 2노드 이상, 서브넷 그룹 3개 이상 서브넷 | MUST | 서브넷 3개, 노드 4 | 충족 (반영) |
 | DocumentDB | 다른 AZ에 복제본 | REC | writer a, reader b | 충족 (3 AZ는 선택) |
 | EFS | AZ마다 마운트 타깃 | REC | 3 AZ | 충족 |
-| VPC 간 연결 | 피어링은 비전이적: 피어 VPC의 VPN으로 온프레미스에 갈 수 없음. VPC 10개 미만이면 피어링 가능 | MUST(동작) | 분석 VPC에만 VGW VPN, 데이터 플랫폼 VPC는 피어링으로는 온프레미스 불가 | **S** TGW로 두 VPC + VPN 연결 |
-| VPN | VGW는 시작용, ECMP 필요 시 TGW. CGW 이중화 | REC / HIGH | VGW, CGW 1 | **S** TGW 종단 + CGW 2 |
+| VPC 간 연결 | 피어링은 비전이적: 피어 VPC의 VPN으로 온프레미스에 갈 수 없음. VPC 10개 미만이면 피어링 가능 | MUST(동작) | TGW 허브에 두 VPC와 VPN 연결 | 충족 (반영) |
+| VPN | VGW는 시작용, ECMP 필요 시 TGW. CGW 이중화 | REC / HIGH | TGW 종단, CGW 2 | 충족 (반영) |
 
-## 4. 변경안 (승인 대기)
+## 4. 변경안
+
+**반영 현황 (2026-10-18):** 1–6 완료, 7(OPT)은 범위에서 제외. 구현 기록: [docs/plans/2026-10-18-best-practice-samples.md](plans/2026-10-18-best-practice-samples.md).
 
 샘플 빌더가 이미 지원하는 요소만으로 반영할 수 있는 항목부터 정리한다. 각 항목의 완료 기준은
 `make check` 통과(가독성·경로 테스트 포함)와 `review`에서 새 high 발견이 없는 것.
@@ -257,7 +259,9 @@ S3 연동, 체크포인트), S3 버킷(모델·데이터셋·호출 로그, SSE-
 정책·교차 리전 추론 또는 Provisioned Throughput, HyperPod, Karpenter·KEDA·device plugin(Karpenter 노드는 ASG 없는 EC2로 보임),
 공개 진입 변형의 WAF·CloudFront·API Gateway.
 
-### 5.6 AI/GPU 변경안 (승인 대기)
+### 5.6 AI/GPU 변경안
+
+**반영 현황 (2026-10-18):** A1–A3 완료. A2는 아이콘에 계열 이름이 찍혀 있어(P3·P4d·G4dn) 정확히 같은 계열에만 전용 아이콘을 쓰고, p5·g6e 등은 일반 인스턴스 아이콘 + `GPU` 라벨로 바꿨다. 추가로 VPC 상단 연결 행이 AZ 폭에서 줄바꿈된다(엔드포인트 12개인 ai-platform이 AZ 영역의 세 배로 넓어지던 문제).
 
 | 순위 | 변경 | 비고 |
 | --- | --- | --- |

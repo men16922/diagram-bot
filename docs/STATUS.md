@@ -4,6 +4,9 @@ Last Updated: 2026-10-18
 
 ## Active Plan
 
+- 2026-10-18 samples aligned with AWS best practice (docs/ARCHITECTURE.md, plan docs/plans/2026-10-18-best-practice-samples.md):
+  8 samples incl. `ai-platform`, GPU review rules, accelerated-instance/Bedrock icons, `add_gpu_node_group` (25 tools),
+  sample reseeding by `SAMPLE_VERSION`, wrapped VPC attachment row. All samples review low or clean.
 - 2026-10-17 chat design agent (Strands + Bedrock): chat panel, `diagram-bot chat`, `/api/agent/*`, 24 tools
   (standard designs + read-only boto3 collection). Benchmark: docs/engineering/DEVOPS_AGENT_BENCHMARK.md;
   draw.io internals: docs/DRAWIO.md.
@@ -28,7 +31,7 @@ Last Updated: 2026-10-18
 - Diagrams: AWS Architecture Icons style (Cloud > Region > VPC > AZ > route-classified subnets),
   IGW/NAT, Auto Scaling and ECS service frames, VPN to customer gateways; labels carry each node's HA role
   (primary/standby/read replica, writer/reader, shard primary/replica, OpenSearch data/master/standby per AZ,
-  MSK broker IDs, Redshift primary/secondary). Samples in examples/samples (7 patterns incl. data platform).
+  MSK broker IDs, Redshift primary/secondary). Samples in examples/samples (8 patterns incl. data and AI platform; basis docs/ARCHITECTURE.md).
 - Graph: relation IDs from source/relation/target + port/AZ qualifiers; independent of API
   array order and target health. Same instance on two ports = two relations. Legacy snapshots
   get IDs on read in their stored order, so saved `relationIndex` documents still resolve.
@@ -74,7 +77,7 @@ Last Updated: 2026-10-18
 
 ## Chat Agent Verification (2026-10-17, local macOS, owner's test account)
 
-- Offline: designer steps/errors, 7 standards, tool schemas, scripted-model chat incl. GPT-6 denial → Nova fallback,
+- Offline: designer steps/errors, 7 standards (8 since 2026-10-18), tool schemas, scripted-model chat incl. GPT-6 denial → Nova fallback,
   moto collection tool, chat API + audit, `.env` loader, design layout readability (`make check`, 118 tests).
 - Live Bedrock us-east-1 in Chromium: 3-AZ three-tier design (10 tool calls, 8 snapshots, review high 0), advice turn
   without tools, live collection + SG review via chat (6 high, matches CLI). CLI `chat -m` with an EKS standard.
@@ -96,7 +99,7 @@ Last Updated: 2026-10-18
 ## Verification (2026-10-17, cloud container)
 
 - Gate, team-mode Chromium run, layout tests, 27 browser checks and evidence files: docs/archive/STATUS-verification-2026-10.md.
-  Current gate: `make check` = ruff + 119 pytest cases + CLI round trip.
+  Current gate: `make check` = ruff + 143 pytest cases + CLI round trip; `verify_demo.py` 28 browser checks (2026-10-18).
 
 ## Harness
 

@@ -35,12 +35,15 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 ## Sample Best-Practice Alignment (owner request 2026-10-18)
 
 - [x] docs/ARCHITECTURE.md: AWS sources, per-sample verdicts and a ranked change list.
-- [ ] Apply the change list (docs/ARCHITECTURE.md §4) — awaiting the owner's choice of items. Top: Redshift Multi-AZ
+- [x] Apply the change list (docs/ARCHITECTURE.md §4) — done 2026-10-18 (items 1–6; optional item 7 left out). Top: Redshift Multi-AZ
   subnet group (MUST), data-platform peering+VGW → TGW hub, second CGW/VPN in hybrid, missing `ecr.api`/SSM endpoints.
-- [ ] AI/GPU (docs/ARCHITECTURE.md §5, Generative AI / ML / HPC lenses): A1 new `ai-platform` sample, A2 accelerated
-  instance and Bedrock icons, A3 GPU review rules (training spans AZs, single-AZ inference, EFA SG) — awaiting approval.
+- [x] AI/GPU (docs/ARCHITECTURE.md §5): A1 `ai-platform`, A2 icons, A3 GPU review rules — done 2026-10-18.
 
 ## Candidate Follow-ups (not approved)
+
+- Optional sample items from ARCHITECTURE.md §4 #7 (microservices 3 AZ, EKS /28 cluster subnets, egress VPC).
+- Collection scope for drawn best practices: CloudFront/WAF, Elastic IPs, TGW route tables, Direct Connect, multi-account view.
+- verify_demo screenshots sometimes show a stale "현재 보기에서 숨겨진 리소스입니다" toast; not reproduced in isolation.
 
 - Design → IaC (CloudFormation/CDK) export; brownfield design starting from a collected snapshot; chat streaming.
 

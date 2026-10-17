@@ -41,7 +41,8 @@
     "restore archived edit",
     "infrastructure sample: ASG frame, RDS standby, route-classified subnet",
     "EKS sample: node group frame, Aurora writer, MSK brokers",
-    "data platform: ECS service frame, OpenSearch standby AZ, read replica, VPN customer gateway",
+    "data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways",
+    "AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review",
     "snapshot import",
     "change review between snapshots"
   ]
