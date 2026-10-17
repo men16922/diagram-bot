@@ -70,7 +70,7 @@ def main():
         with page.expect_download() as event:
             page.locator('#download-drawio').click()
         event.value.save_as(args.output / 'topology.drawio')
-        xml = (args.output / 'topology.drawio').read_text()
+        xml = (args.output / 'topology.drawio').read_text(encoding="utf-8")
         root = ET.fromstring(xml)
         assert root.find('diagram/mxGraphModel') is not None
         assert '시연 검토 완료' in xml
@@ -94,7 +94,7 @@ def main():
         with page.expect_download() as event:
             page.locator('#download-json').click()
         event.value.save_as(args.output / 'snapshot.json')
-        snapshot = json.loads((args.output / 'snapshot.json').read_text())
+        snapshot = json.loads((args.output / 'snapshot.json').read_text(encoding="utf-8"))
         assert snapshot['metadata']['demo'] is True
         assert '시연 검토 완료' not in json.dumps(snapshot, ensure_ascii=False)
         with page.expect_download() as event:
@@ -114,7 +114,7 @@ def main():
               'checks': ['native selection', 'coverage', 'inventory search/type', 'VPC switch', 'references',
                          'native note edit', 'save/reload', 'drawio XML download', 'PNG 2x white', 'PNG 1x transparent',
                          'JSON/CSV exports', 'snapshot import']}
-    (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
+    (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 
 

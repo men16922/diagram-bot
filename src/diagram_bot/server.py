@@ -119,7 +119,7 @@ def create_app(directory=None, editor_directory=None):
         path = snapshots / f"{identifier}.json"
         if not path.is_file():
             raise HTTPException(404, "스냅샷을 찾을 수 없습니다.")
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
 
     def doc_path(identifier, vpc, references):
         key = hashlib.sha256(f"{identifier}|{vpc}|{references}".encode()).hexdigest()
@@ -127,7 +127,7 @@ def create_app(directory=None, editor_directory=None):
 
     @app.get("/", response_class=HTMLResponse)
     def home():
-        return static.joinpath("app.html").read_text()
+        return static.joinpath("app.html").read_text(encoding="utf-8")
 
     @app.get("/api/bootstrap")
     def bootstrap():
@@ -141,7 +141,7 @@ def create_app(directory=None, editor_directory=None):
     def list_snapshots():
         result = []
         for path in snapshots.glob("*.json"):
-            snapshot = json.loads(path.read_text())
+            snapshot = json.loads(path.read_text(encoding="utf-8"))
             result.append({"id": path.stem, "metadata": snapshot["metadata"], "resource_count": len(snapshot["graph"]["nodes"])})
         return sorted(result, key=lambda row: row["metadata"]["finished_at"], reverse=True)
 
@@ -160,7 +160,7 @@ def create_app(directory=None, editor_directory=None):
     def read_document(identifier: str, vpc: str | None = None, references: bool = False, reset: bool = False):
         snapshot = get_snapshot(identifier)
         path = doc_path(identifier, vpc, references)
-        saved = json.loads(path.read_text()) if path.exists() else None
+        saved = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
         if saved and not reset:
             return saved
         try:
@@ -180,7 +180,7 @@ def create_app(directory=None, editor_directory=None):
             raise HTTPException(422, "유효한 압축 해제 draw.io XML이 아닙니다.") from exc
         path = doc_path(identifier, vpc, references)
         with mutex:
-            saved = json.loads(path.read_text()) if path.exists() else {"revision": 0}
+            saved = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"revision": 0}
             if saved["revision"] != document.revision:
                 raise HTTPException(409, "다른 창에서 편집본을 저장했습니다. 새로고침 후 다시 편집하세요.")
             if saved.get("xml") == document.xml:
