@@ -2,6 +2,16 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — Common services (user request: EKS·MSK·RDS·ElastiCache·NAT 등)
+
+- Collector: rds DescribeDBClusters, ElastiCache cache clusters/replication groups/subnet groups,
+  kafka ListClustersV2, lambda ListFunctions, eks ListClusters/DescribeCluster/ListNodegroups/
+  DescribeNodegroup (per-cluster coverage rows); policy example updated.
+- Graph/layout: Aurora writer/reader, Redis primary/replica, MSK brokers per client subnet, EKS
+  control plane + node-group frames, VPC Lambda; attachment row split from the load balancer row.
+- New sample eks-platform (EKS, ALB→pod IPs, Aurora, Redis, MSK, Lambda, endpoints).
+- Verified: 48 tests incl. every eks-platform view, browser acceptance incl. EKS sample.
+
 ## 2026-10-17 — Recommended next steps (user request: 추천안대로 수행)
 
 - Merged the infrastructure work to main (fast-forward 5938d03..77749d9); CI passed on main.

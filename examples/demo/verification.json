@@ -40,6 +40,7 @@
     "relayout keeps note + archives edit",
     "restore archived edit",
     "infrastructure sample: ASG frame, RDS standby, route-classified subnet",
+    "EKS sample: node group frame, Aurora writer, MSK brokers",
     "snapshot import"
   ]
 }

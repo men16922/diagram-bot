@@ -17,8 +17,9 @@ SLOT, SIDE_SLOT = 150, 290
 LANE_TOP = 36  # space above an icon row for up to LANES entering routes
 ROW = LANE_TOP + ICON + 8 + MAX_LINES * LINE + 8
 SUBNET_HEADER, AZ_HEADER, VPC_HEADER = 46, 32, 38
-# The VPC's entry row: its edges to the internet, AWS services and other networks.
-EDGE_KINDS = {"internet_gateway": 0, "vpc_endpoint": 1, "tgw_attachment": 2}
+# The VPC's attachment row: edges to the internet, AWS services and other networks, and managed
+# services whose network interfaces span several subnets (EKS control plane, VPC Lambda).
+EDGE_KINDS = {"internet_gateway": 0, "vpc_endpoint": 1, "tgw_attachment": 2, "eks_cluster": 3, "lambda_function": 4}
 KIND_ORDER = {"transit_gateway": -1, "load_balancer": 0, "target_group": 1, "ec2": 2, "registered_target": 3,
               "security_group": 4, "network_interface": 5, "volume": 6}
 
@@ -34,7 +35,8 @@ def text_width(text, size=12):
 
 def fit_label(text, width, lines=MAX_LINES, size=12):
     """Truncate so the label fits `lines` wrapped lines; full text stays in the inspector."""
-    budget = width * lines * 0.85
+    # Wrapped labels lose width at word breaks; a single truncated line does not.
+    budget = width * lines * (0.95 if lines == 1 else 0.85)
     if text_width(text, size) <= budget:
         return text
     out = ""
@@ -46,7 +48,11 @@ def fit_label(text, width, lines=MAX_LINES, size=12):
 
 
 def label_lines(text, width, size=12):
-    return sum(max(1, -(-int(text_width(part, size) / 0.85) // width)) for part in text.split("\n"))
+    """Estimated wrapped lines, using the same single-line allowance as fit_label."""
+    def lines(part):
+        measured = text_width(part, size)
+        return 1 if measured <= width * 0.95 else -(-int(measured / 0.85) // width)
+    return sum(lines(part) for part in text.split("\n"))
 
 
 class Canvas:
@@ -94,6 +100,18 @@ def tier_rank(subnet):
     return 3 if subnet.get("route_class") == "isolated" else 2
 
 
+def icon_variant(node):
+    """Icon choice within a kind: load balancer type, Aurora engines, cache engine."""
+    attrs = node["attributes"]
+    if node["kind"] == "load_balancer":
+        return attrs.get("Type")
+    if node["kind"] == "db_instance" and str(attrs.get("Engine", "")).startswith("aurora"):
+        return "aurora"
+    if node["kind"] == "cache_node":
+        return str(attrs.get("Engine", "redis"))
+    return None
+
+
 def arrange(kids, size, asg_of, nodes):
     """Slots inside a subnet: members of one Auto Scaling group share rows, each group starting a new row,
     so a group's frame across AZ columns never encloses another group's instance."""
@@ -105,6 +123,10 @@ def arrange(kids, size, asg_of, nodes):
         slots += [(kid, row + i // size, i % size) for i, kid in enumerate(groups[key])]
         row += -(-len(groups[key]) // size)
     return slots, row
+
+
+ENGINES = {"aurora-postgresql": "Aurora PostgreSQL", "aurora-mysql": "Aurora MySQL", "postgres": "PostgreSQL", "mysql": "MySQL",
+           "mariadb": "MariaDB", "redis": "Redis", "valkey": "Valkey", "memcached": "Memcached"}
 
 
 def resource_label(node):
@@ -127,9 +149,19 @@ def resource_label(node):
         return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\nTransit Gateway"
     if node["kind"] == "nat_gateway":
         return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\nNAT gateway"
+    if node["kind"] == "eks_cluster":
+        return f"{fit_label(node['name'], SIDE_LABEL, 1)}\nEKS {attrs.get('version', '')} control plane".replace("  ", " ")
+    if node["kind"] == "lambda_function":
+        return f"{fit_label(node['name'], SIDE_LABEL, 1)}\nLambda · 서브넷 {len((attrs.get('VpcConfig') or {}).get('SubnetIds', []))}개"
+    if node["kind"] == "msk_broker":
+        return f"{fit_label(attrs.get('ClusterName') or node['name'], BOTTOM_LABEL, 1)}\nMSK 브로커 {attrs.get('Brokers', '')}개"
+    if node["kind"] == "cache_node":
+        engine = ENGINES.get(attrs.get("Engine"), attrs.get("Engine", ""))
+        return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\n{engine}\n{attrs.get('CurrentRole') or attrs.get('CacheNodeType', '')}"
     if node["kind"] in ("db_instance", "db_standby"):
-        role = "standby" if node["kind"] == "db_standby" else ("primary" if attrs.get("MultiAZ") else attrs.get("DBInstanceClass", ""))
-        return f"{fit_label(attrs.get('DBInstanceIdentifier', node['name']).replace(' (standby)', ''), BOTTOM_LABEL, 1)}\n{attrs.get('Engine', '')}\n{role}"
+        role = node.get("db_role") or ("standby" if node["kind"] == "db_standby" else ("primary" if attrs.get("MultiAZ") else attrs.get("DBInstanceClass", "")))
+        engine = ENGINES.get(attrs.get("Engine"), attrs.get("Engine", ""))
+        return f"{fit_label(attrs.get('DBInstanceIdentifier', node['name']).replace(' (standby)', ''), BOTTOM_LABEL, 1)}\n{engine}\n{role}"
     if node["kind"] == "target_group" and attrs.get("Protocol"):
         return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{attrs['Protocol']}:{attrs.get('Port', '')} · {attrs.get('TargetType', '')}"
     return node["name"]
@@ -232,7 +264,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         label = "\n".join(fit_label(part, width, MAX_LINES if i == 0 else 1) for i, part in enumerate(label.split("\n")))
         shape = canvas.add(cell_id(key), parent, x, y, ICON, ICON, "resource", label, resource=key, kind=n["kind"],
                            reference=n["reference_only"], label_side=side, emphasis=key == focus, tooltip=n["name"],
-                           outside_vpc=outside_vpc(n), lb_type=n["attributes"].get("Type"))
+                           outside_vpc=outside_vpc(n), variant=icon_variant(n))
         placed[key] = shape
         return shape
 
@@ -306,7 +338,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                                  key=lambda s: (tier_rank(s), s["name"], s["id"])) for az in azs}
         col_width = {az: max((per_row[s["id"]] * SLOT + 40 for s in az_subnets[az]), default=SLOT * 2 + 40) + 32 for az in azs}
         az_width = sum(gutters[:last]) + sum(col_width.values()) + 24 + gutters[last]
-        band_width = max(len(lbs) + len(gateways), len(tgs)) * SIDE_SLOT + 2 * max(gutters)
+        band_width = max(len(lbs), len(gateways), len(tgs)) * SIDE_SLOT + 2 * max(gutters)
         bottom_width = len(unplaced) * SLOT + gutters[0] + gutters[last] + 40
         width = max(720, az_width, band_width, bottom_width)
         vid = cell_id(vpc["id"])
@@ -316,8 +348,8 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         y = VPC_HEADER + LANE_TOP + 6
         ox, oy = canvas.abs[vid]
         geometry = {"last": last, "lb_mid": {}, "gutters": []}
-        # Internet gateways lead the entry row, before the load balancers they front.
-        for band in (gateways + lbs, tgs):
+        # Attachment row (gateways, endpoints, EKS, Lambda), then load balancers, then target groups.
+        for band in (gateways, lbs, tgs):
             if not band:
                 continue
             start = (width - len(band) * SIDE_SLOT) / 2 + 24
@@ -325,7 +357,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                 resource(n["id"], vid, start + i * SIDE_SLOT, y, "right")["column"] = 0
                 if n["kind"] == "load_balancer":
                     geometry["lb_mid"][n["id"]] = oy + y + ICON + 8 + 6 * (i % 4)
-            y += ICON + 34
+            y += ICON + (40 if band is gateways else 34)
         geometry["channel"] = oy + y - 6
         geometry["placements"] = {key: oy + y - 6 + 7 * (len(tgs) + i) for i, key in enumerate(placements)}
         y += 7 * (len(tgs) + len(placements)) + 10
@@ -388,8 +420,12 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                          and top_y < canvas.abs[shape["id"]][1] + ICON and canvas.abs[shape["id"]][1] < bottom]
             if strangers:
                 continue  # a frame would claim other resources; keep per-instance edges instead
+            # An EKS managed node group is backed by this Auto Scaling group (DescribeNodegroup.resources).
+            owner = next((e for e in graph["edges"] if e["relation"] == "eks_nodegroup" and e["target"] == asg_id), None)
+            title = (f"EKS node group · {owner['details'].get('nodegroup')} ({nodes[owner['source']]['name']})" if owner
+                     else f"Auto Scaling group · {nodes[asg_id]['name']}")
             frame = canvas.add(cell_id(asg_id), vid, left - ox, top_y - oy, right - left, bottom - top_y, "asg",
-                               f"Auto Scaling group · {nodes[asg_id]['name']}", resource=asg_id, emphasis=asg_id == focus)
+                               title, resource=asg_id, emphasis=asg_id == focus)
             frames_at[asg_id] = (frame["id"], min(column[m] for m in inside))
         for e in drawn_edges:
             # DescribeAutoScalingGroups.TargetGroupARNs: source is the group, target the target group.

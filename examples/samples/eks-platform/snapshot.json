@@ -1,0 +1,4440 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "account_id": "111122223333",
+    "region": "ap-northeast-2",
+    "partition": "aws",
+    "started_at": "2026-10-17T07:25:42.138567+00:00",
+    "finished_at": "2026-10-17T07:25:42.138567+00:00",
+    "status": "complete",
+    "demo": true,
+    "sample": "eks-platform",
+    "title": "EKS 플랫폼 (EKS · MSK · ElastiCache · Aurora · Lambda)",
+    "practices": [
+      "EKS 컨트롤 플레인 엔드포인트는 비공개, 관리형 노드 그룹은 세 AZ 프라이빗 서브넷에 분산",
+      "인그레스는 AWS Load Balancer Controller의 ALB → IP 대상(파드)",
+      "Aurora PostgreSQL writer/reader를 서로 다른 AZ에, ElastiCache Redis는 primary/replica 자동 장애 조치",
+      "MSK 브로커는 AZ마다 하나, 클라이언트-브로커 TLS",
+      "데이터 계층(Aurora·Redis·MSK)은 인터넷 경로 없는 격리 서브넷",
+      "ECR·STS 인터페이스·S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로"
+    ],
+    "scope": [
+      "VPC",
+      "Subnet",
+      "EC2",
+      "ELBv2",
+      "TargetGroup",
+      "RegisteredTarget",
+      "InternetGateway",
+      "NatGateway",
+      "RouteTable",
+      "RDS",
+      "AutoScalingGroup",
+      "VpcEndpoint",
+      "TransitGateway",
+      "EKS",
+      "MSK",
+      "ElastiCache",
+      "Lambda"
+    ],
+    "limitations": [
+      "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
+      "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
+    ]
+  },
+  "coverage": [
+    {
+      "service": "ec2",
+      "operation": "describe_vpcs",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_subnets",
+      "status": "complete",
+      "pages": 1,
+      "items": 9
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 6
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_load_balancers",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_internet_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_nat_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_route_tables",
+      "status": "complete",
+      "pages": 1,
+      "items": 5
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "autoscaling",
+      "operation": "describe_auto_scaling_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_transit_gateway_vpc_attachments",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "kafka",
+      "operation": "list_clusters_v2",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "lambda",
+      "operation": "list_functions",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_health",
+      "parameters": {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    }
+  ],
+  "raw": {
+    "vpcs": [
+      {
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "CidrBlock": "10.60.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          }
+        ]
+      }
+    ],
+    "subnets": [
+      {
+        "SubnetId": "subnet-pf-pub-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.60.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-pf-pub-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.60.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-pf-pub-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.60.2.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-pf-app-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.60.16.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "eks-nodes-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-pf-app-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.60.32.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "eks-nodes-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-pf-app-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.60.48.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "eks-nodes-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-pf-data-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.60.100.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-pf-data-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.60.101.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-pf-data-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.60.102.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ]
+      }
+    ],
+    "instances": [
+      {
+        "InstanceId": "i-eksgena00000006",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-app-a",
+        "InstanceType": "m6i.xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.1.11",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "general-node-a"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "platform-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "general"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-eks-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-eksgena00000006"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-eksgena00000006"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-eksgenb00000006",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-app-b",
+        "InstanceType": "m6i.xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.2.12",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2b"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "general-node-b"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "platform-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "general"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-eks-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-eksgenb00000006"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-eksgenb00000006"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-eksgenc00000006",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-app-c",
+        "InstanceType": "m6i.xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.3.13",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "general-node-c"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "platform-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "general"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-eks-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-eksgenc00000006"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-eksgenc00000006"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-eksbata00000006",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-app-a",
+        "InstanceType": "c6i.2xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.4.14",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "batch-node-a"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "platform-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "batch"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-eks-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-eksbata00000006"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-eksbata00000006"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-eksbatb00000006",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-app-b",
+        "InstanceType": "c6i.2xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.5.15",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2b"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "batch-node-b"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "platform-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "batch"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-eks-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-eksbatb00000006"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-eksbatb00000006"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-eksbatc00000006",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-app-c",
+        "InstanceType": "c6i.2xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.6.16",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "batch-node-c"
+          },
+          {
+            "Key": "eks:cluster-name",
+            "Value": "platform-eks"
+          },
+          {
+            "Key": "eks:nodegroup-name",
+            "Value": "batch"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-eks-nodes"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-eksbatc00000006"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-eksbatc00000006"
+            }
+          }
+        ]
+      }
+    ],
+    "load_balancers": [
+      {
+        "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "LoadBalancerName": "k8s-platform-ingress",
+        "Type": "application",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "Scheme": "internet-facing",
+        "AvailabilityZones": [
+          {
+            "ZoneName": "ap-northeast-2a",
+            "SubnetId": "subnet-pf-pub-a"
+          },
+          {
+            "ZoneName": "ap-northeast-2b",
+            "SubnetId": "subnet-pf-pub-b"
+          },
+          {
+            "ZoneName": "ap-northeast-2c",
+            "SubnetId": "subnet-pf-pub-c"
+          }
+        ],
+        "SecurityGroups": [
+          "sg-ingress"
+        ]
+      }
+    ],
+    "target_groups": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "TargetGroupName": "k8s-web-pods",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "TargetType": "ip",
+        "Protocol": "HTTP",
+        "Port": 8080,
+        "HealthCheckPath": "/health",
+        "LoadBalancerArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001"
+        ]
+      }
+    ],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "10.60.17.21",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2a"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.60.33.42",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.60.49.13",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ],
+    "internet_gateways": [
+      {
+        "InternetGatewayId": "igw-platform",
+        "Attachments": [
+          {
+            "VpcId": "vpc-0a1b2c3d4e5f60006",
+            "State": "available"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-igw"
+          }
+        ]
+      }
+    ],
+    "nat_gateways": [
+      {
+        "NatGatewayId": "nat-platform-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-pub-a",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-nat-a"
+          }
+        ]
+      },
+      {
+        "NatGatewayId": "nat-platform-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-pub-b",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-nat-b"
+          }
+        ]
+      },
+      {
+        "NatGatewayId": "nat-platform-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "SubnetId": "subnet-pf-pub-c",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-nat-c"
+          }
+        ]
+      }
+    ],
+    "route_tables": [
+      {
+        "RouteTableId": "rtb-platform-public",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.60.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "GatewayId": "igw-platform",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-public-0",
+            "SubnetId": "subnet-pf-pub-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-public-1",
+            "SubnetId": "subnet-pf-pub-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-public-2",
+            "SubnetId": "subnet-pf-pub-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-public"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-platform-private-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.60.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-platform-a",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-platform-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-private-a-0",
+            "SubnetId": "subnet-pf-app-a"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-private-a"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-platform-private-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.60.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-platform-b",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-platform-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-private-b-0",
+            "SubnetId": "subnet-pf-app-b"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-private-b"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-platform-private-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.60.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-platform-c",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-platform-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-private-c-0",
+            "SubnetId": "subnet-pf-app-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-private-c"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-platform-main",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.60.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-main-main",
+            "Main": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "platform-isolated"
+          }
+        ]
+      }
+    ],
+    "db_instances": [
+      {
+        "DBInstanceIdentifier": "platform-aurora-1",
+        "DBClusterIdentifier": "platform-aurora",
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2a",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "platform-aurora-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-pf-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-pf-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-pf-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "DBInstanceIdentifier": "platform-aurora-2",
+        "DBClusterIdentifier": "platform-aurora",
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2b",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "platform-aurora-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-pf-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-pf-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-pf-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "auto_scaling_groups": [
+      {
+        "AutoScalingGroupName": "eks-general-6a1b",
+        "MinSize": 3,
+        "MaxSize": 12,
+        "DesiredCapacity": 3,
+        "VPCZoneIdentifier": "subnet-pf-app-a,subnet-pf-app-b,subnet-pf-app-c",
+        "TargetGroupARNs": [],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-eksgena00000006",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-eksgenb00000006",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-eksgenc00000006",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
+          }
+        ]
+      },
+      {
+        "AutoScalingGroupName": "eks-batch-7c2d",
+        "MinSize": 0,
+        "MaxSize": 30,
+        "DesiredCapacity": 3,
+        "VPCZoneIdentifier": "subnet-pf-app-a,subnet-pf-app-b,subnet-pf-app-c",
+        "TargetGroupARNs": [],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-eksbata00000006",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-eksbatb00000006",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-eksbatc00000006",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
+          }
+        ]
+      }
+    ],
+    "vpc_endpoints": [
+      {
+        "VpcEndpointId": "vpce-platform-s3",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "VpcEndpointType": "Gateway",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.s3",
+        "RouteTableIds": [
+          "rtb-platform-private-a",
+          "rtb-platform-private-b",
+          "rtb-platform-private-c"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "s3-gateway-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-platform-ecr",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
+        "SubnetIds": [
+          "subnet-pf-app-a",
+          "subnet-pf-app-b",
+          "subnet-pf-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ecr.dkr-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-platform-sts",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.sts",
+        "SubnetIds": [
+          "subnet-pf-app-a",
+          "subnet-pf-app-b",
+          "subnet-pf-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "sts-endpoint"
+          }
+        ]
+      }
+    ],
+    "transit_gateways": [],
+    "transit_gateway_attachments": [],
+    "db_clusters": [
+      {
+        "DBClusterIdentifier": "platform-aurora",
+        "Engine": "aurora-postgresql",
+        "MultiAZ": true,
+        "StorageEncrypted": true,
+        "DBClusterMembers": [
+          {
+            "DBInstanceIdentifier": "platform-aurora-1",
+            "IsClusterWriter": true
+          },
+          {
+            "DBInstanceIdentifier": "platform-aurora-2",
+            "IsClusterWriter": false
+          }
+        ]
+      }
+    ],
+    "cache_clusters": [
+      {
+        "CacheClusterId": "platform-redis-001",
+        "ReplicationGroupId": "platform-redis",
+        "Engine": "redis",
+        "CacheNodeType": "cache.r7g.large",
+        "PreferredAvailabilityZone": "ap-northeast-2b",
+        "CacheSubnetGroupName": "platform-redis-subnets"
+      },
+      {
+        "CacheClusterId": "platform-redis-002",
+        "ReplicationGroupId": "platform-redis",
+        "Engine": "redis",
+        "CacheNodeType": "cache.r7g.large",
+        "PreferredAvailabilityZone": "ap-northeast-2c",
+        "CacheSubnetGroupName": "platform-redis-subnets"
+      }
+    ],
+    "replication_groups": [
+      {
+        "ReplicationGroupId": "platform-redis",
+        "MultiAZ": "enabled",
+        "AutomaticFailover": "enabled",
+        "AtRestEncryptionEnabled": true,
+        "TransitEncryptionEnabled": true,
+        "NodeGroups": [
+          {
+            "NodeGroupId": "0001",
+            "NodeGroupMembers": [
+              {
+                "CacheClusterId": "platform-redis-001",
+                "CurrentRole": "primary"
+              },
+              {
+                "CacheClusterId": "platform-redis-002",
+                "CurrentRole": "replica"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "cache_subnet_groups": [
+      {
+        "CacheSubnetGroupName": "platform-redis-subnets",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "Subnets": [
+          {
+            "SubnetIdentifier": "subnet-pf-data-a",
+            "SubnetAvailabilityZone": {
+              "Name": "ap-northeast-2a"
+            }
+          },
+          {
+            "SubnetIdentifier": "subnet-pf-data-b",
+            "SubnetAvailabilityZone": {
+              "Name": "ap-northeast-2b"
+            }
+          },
+          {
+            "SubnetIdentifier": "subnet-pf-data-c",
+            "SubnetAvailabilityZone": {
+              "Name": "ap-northeast-2c"
+            }
+          }
+        ]
+      }
+    ],
+    "msk_clusters": [
+      {
+        "ClusterName": "platform-events",
+        "ClusterArn": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "ClusterType": "PROVISIONED",
+        "State": "ACTIVE",
+        "Provisioned": {
+          "NumberOfBrokerNodes": 3,
+          "CurrentBrokerSoftwareInfo": {
+            "KafkaVersion": "3.7.x"
+          },
+          "BrokerNodeGroupInfo": {
+            "InstanceType": "kafka.m7g.large",
+            "ClientSubnets": [
+              "subnet-pf-data-a",
+              "subnet-pf-data-b",
+              "subnet-pf-data-c"
+            ]
+          },
+          "EncryptionInfo": {
+            "EncryptionInTransit": {
+              "ClientBroker": "TLS"
+            }
+          }
+        }
+      }
+    ],
+    "lambda_functions": [
+      {
+        "FunctionName": "order-events-consumer",
+        "Runtime": "python3.12",
+        "VpcConfig": {
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetIds": [
+            "subnet-pf-app-a",
+            "subnet-pf-app-b",
+            "subnet-pf-app-c"
+          ],
+          "SecurityGroupIds": [
+            "sg-order-events-consumer"
+          ]
+        }
+      }
+    ],
+    "eks_clusters": [
+      {
+        "name": "platform-eks",
+        "version": "1.31",
+        "status": "ACTIVE",
+        "resourcesVpcConfig": {
+          "vpcId": "vpc-0a1b2c3d4e5f60006",
+          "subnetIds": [
+            "subnet-pf-app-a",
+            "subnet-pf-app-b",
+            "subnet-pf-app-c"
+          ],
+          "endpointPublicAccess": false,
+          "endpointPrivateAccess": true
+        },
+        "nodegroups": [
+          {
+            "nodegroupName": "general",
+            "instanceTypes": [
+              "m6i.xlarge"
+            ],
+            "scalingConfig": {
+              "minSize": 3,
+              "maxSize": 12,
+              "desiredSize": 3
+            },
+            "resources": {
+              "autoScalingGroups": [
+                {
+                  "name": "eks-general-6a1b"
+                }
+              ]
+            }
+          },
+          {
+            "nodegroupName": "batch",
+            "instanceTypes": [
+              "c6i.2xlarge"
+            ],
+            "scalingConfig": {
+              "minSize": 0,
+              "maxSize": 30,
+              "desiredSize": 3
+            },
+            "resources": {
+              "autoScalingGroups": [
+                {
+                  "name": "eks-batch-7c2d"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/eks-batch-7c2d",
+        "resource_id": "eks-batch-7c2d",
+        "kind": "auto_scaling_group",
+        "name": "eks-batch-7c2d",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "eks-batch-7c2d",
+          "MinSize": 0,
+          "MaxSize": 30,
+          "DesiredCapacity": 3,
+          "VPCZoneIdentifier": "subnet-pf-app-a,subnet-pf-app-b,subnet-pf-app-c",
+          "TargetGroupARNs": [],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-eksbata00000006",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-eksbatb00000006",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-eksbatc00000006",
+              "AvailabilityZone": "ap-northeast-2c",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/eks-general-6a1b",
+        "resource_id": "eks-general-6a1b",
+        "kind": "auto_scaling_group",
+        "name": "eks-general-6a1b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "eks-general-6a1b",
+          "MinSize": 3,
+          "MaxSize": 12,
+          "DesiredCapacity": 3,
+          "VPCZoneIdentifier": "subnet-pf-app-a,subnet-pf-app-b,subnet-pf-app-c",
+          "TargetGroupARNs": [],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-eksgena00000006",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-eksgenb00000006",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-eksgenc00000006",
+              "AvailabilityZone": "ap-northeast-2c",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/cache_node/platform-redis-001",
+        "resource_id": "platform-redis-001",
+        "kind": "cache_node",
+        "name": "platform-redis-001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "CacheClusterId": "platform-redis-001",
+          "ReplicationGroupId": "platform-redis",
+          "Engine": "redis",
+          "CacheNodeType": "cache.r7g.large",
+          "PreferredAvailabilityZone": "ap-northeast-2b",
+          "CacheSubnetGroupName": "platform-redis-subnets",
+          "CurrentRole": "primary"
+        },
+        "reference_only": false,
+        "source": "DescribeCacheClusters"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/cache_node/platform-redis-002",
+        "resource_id": "platform-redis-002",
+        "kind": "cache_node",
+        "name": "platform-redis-002",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "CacheClusterId": "platform-redis-002",
+          "ReplicationGroupId": "platform-redis",
+          "Engine": "redis",
+          "CacheNodeType": "cache.r7g.large",
+          "PreferredAvailabilityZone": "ap-northeast-2c",
+          "CacheSubnetGroupName": "platform-redis-subnets",
+          "CurrentRole": "replica"
+        },
+        "reference_only": false,
+        "source": "DescribeCacheClusters"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/cache_replication_group/platform-redis",
+        "resource_id": "platform-redis",
+        "kind": "cache_replication_group",
+        "name": "platform-redis",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "ReplicationGroupId": "platform-redis",
+          "MultiAZ": "enabled",
+          "AutomaticFailover": "enabled",
+          "AtRestEncryptionEnabled": true,
+          "TransitEncryptionEnabled": true,
+          "NodeGroups": [
+            {
+              "NodeGroupId": "0001",
+              "NodeGroupMembers": [
+                {
+                  "CacheClusterId": "platform-redis-001",
+                  "CurrentRole": "primary"
+                },
+                {
+                  "CacheClusterId": "platform-redis-002",
+                  "CurrentRole": "replica"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeReplicationGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_cluster/platform-aurora",
+        "resource_id": "platform-aurora",
+        "kind": "db_cluster",
+        "name": "platform-aurora",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBClusterIdentifier": "platform-aurora",
+          "Engine": "aurora-postgresql",
+          "MultiAZ": true,
+          "StorageEncrypted": true,
+          "DBClusterMembers": [
+            {
+              "DBInstanceIdentifier": "platform-aurora-1",
+              "IsClusterWriter": true
+            },
+            {
+              "DBInstanceIdentifier": "platform-aurora-2",
+              "IsClusterWriter": false
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeDBClusters"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/platform-aurora-1",
+        "resource_id": "platform-aurora-1",
+        "kind": "db_instance",
+        "name": "platform-aurora-1",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "platform-aurora-1",
+          "DBClusterIdentifier": "platform-aurora",
+          "Engine": "aurora-postgresql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2a",
+          "MultiAZ": false,
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "platform-aurora-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60006",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-pf-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-pf-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-pf-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances",
+        "db_role": "writer"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/platform-aurora-2",
+        "resource_id": "platform-aurora-2",
+        "kind": "db_instance",
+        "name": "platform-aurora-2",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "platform-aurora-2",
+          "DBClusterIdentifier": "platform-aurora",
+          "Engine": "aurora-postgresql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2b",
+          "MultiAZ": false,
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "platform-aurora-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60006",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-pf-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-pf-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-pf-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances",
+        "db_role": "reader"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-eksbata00000006",
+        "resource_id": "i-eksbata00000006",
+        "kind": "ec2",
+        "name": "batch-node-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-eksbata00000006",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-app-a",
+          "InstanceType": "c6i.2xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.4.14",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "batch-node-a"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "platform-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "batch"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-eks-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-eksbata00000006"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-eksbata00000006"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-eksbatb00000006",
+        "resource_id": "i-eksbatb00000006",
+        "kind": "ec2",
+        "name": "batch-node-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-eksbatb00000006",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-app-b",
+          "InstanceType": "c6i.2xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.5.15",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "batch-node-b"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "platform-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "batch"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-eks-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-eksbatb00000006"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-eksbatb00000006"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-eksbatc00000006",
+        "resource_id": "i-eksbatc00000006",
+        "kind": "ec2",
+        "name": "batch-node-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-eksbatc00000006",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-app-c",
+          "InstanceType": "c6i.2xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.6.16",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "batch-node-c"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "platform-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "batch"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-eks-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-eksbatc00000006"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-eksbatc00000006"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-eksgena00000006",
+        "resource_id": "i-eksgena00000006",
+        "kind": "ec2",
+        "name": "general-node-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-eksgena00000006",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-app-a",
+          "InstanceType": "m6i.xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.1.11",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "general-node-a"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "platform-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "general"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-eks-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-eksgena00000006"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-eksgena00000006"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-eksgenb00000006",
+        "resource_id": "i-eksgenb00000006",
+        "kind": "ec2",
+        "name": "general-node-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-eksgenb00000006",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-app-b",
+          "InstanceType": "m6i.xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.2.12",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "general-node-b"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "platform-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "general"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-eks-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-eksgenb00000006"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-eksgenb00000006"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-eksgenc00000006",
+        "resource_id": "i-eksgenc00000006",
+        "kind": "ec2",
+        "name": "general-node-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-eksgenc00000006",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-app-c",
+          "InstanceType": "m6i.xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.3.13",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "general-node-c"
+            },
+            {
+              "Key": "eks:cluster-name",
+              "Value": "platform-eks"
+            },
+            {
+              "Key": "eks:nodegroup-name",
+              "Value": "general"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-eks-nodes"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-eksgenc00000006"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-eksgenc00000006"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
+        "resource_id": "platform-eks",
+        "kind": "eks_cluster",
+        "name": "platform-eks",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "name": "platform-eks",
+          "version": "1.31",
+          "status": "ACTIVE",
+          "resourcesVpcConfig": {
+            "vpcId": "vpc-0a1b2c3d4e5f60006",
+            "subnetIds": [
+              "subnet-pf-app-a",
+              "subnet-pf-app-b",
+              "subnet-pf-app-c"
+            ],
+            "endpointPublicAccess": false,
+            "endpointPrivateAccess": true
+          },
+          "nodegroups": [
+            {
+              "nodegroupName": "general",
+              "instanceTypes": [
+                "m6i.xlarge"
+              ],
+              "scalingConfig": {
+                "minSize": 3,
+                "maxSize": 12,
+                "desiredSize": 3
+              },
+              "resources": {
+                "autoScalingGroups": [
+                  {
+                    "name": "eks-general-6a1b"
+                  }
+                ]
+              }
+            },
+            {
+              "nodegroupName": "batch",
+              "instanceTypes": [
+                "c6i.2xlarge"
+              ],
+              "scalingConfig": {
+                "minSize": 0,
+                "maxSize": 30,
+                "desiredSize": 3
+              },
+              "resources": {
+                "autoScalingGroups": [
+                  {
+                    "name": "eks-batch-7c2d"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeCluster"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/internet_gateway/igw-platform",
+        "resource_id": "igw-platform",
+        "kind": "internet_gateway",
+        "name": "platform-igw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InternetGatewayId": "igw-platform",
+          "Attachments": [
+            {
+              "VpcId": "vpc-0a1b2c3d4e5f60006",
+              "State": "available"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-igw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInternetGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/lambda_function/order-events-consumer",
+        "resource_id": "order-events-consumer",
+        "kind": "lambda_function",
+        "name": "order-events-consumer",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "FunctionName": "order-events-consumer",
+          "Runtime": "python3.12",
+          "VpcConfig": {
+            "VpcId": "vpc-0a1b2c3d4e5f60006",
+            "SubnetIds": [
+              "subnet-pf-app-a",
+              "subnet-pf-app-b",
+              "subnet-pf-app-c"
+            ],
+            "SecurityGroupIds": [
+              "sg-order-events-consumer"
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "ListFunctions"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "kind": "load_balancer",
+        "name": "k8s-platform-ingress",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+          "LoadBalancerName": "k8s-platform-ingress",
+          "Type": "application",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Scheme": "internet-facing",
+          "AvailabilityZones": [
+            {
+              "ZoneName": "ap-northeast-2a",
+              "SubnetId": "subnet-pf-pub-a"
+            },
+            {
+              "ZoneName": "ap-northeast-2b",
+              "SubnetId": "subnet-pf-pub-b"
+            },
+            {
+              "ZoneName": "ap-northeast-2c",
+              "SubnetId": "subnet-pf-pub-c"
+            }
+          ],
+          "SecurityGroups": [
+            "sg-ingress"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeLoadBalancers"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-a",
+        "resource_id": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-a",
+        "kind": "msk_broker",
+        "name": "platform-events",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "ClusterName": "platform-events",
+          "Brokers": 1,
+          "InstanceType": "kafka.m7g.large",
+          "KafkaVersion": "3.7.x"
+        },
+        "reference_only": false,
+        "source": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-b",
+        "resource_id": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-b",
+        "kind": "msk_broker",
+        "name": "platform-events",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "ClusterName": "platform-events",
+          "Brokers": 1,
+          "InstanceType": "kafka.m7g.large",
+          "KafkaVersion": "3.7.x"
+        },
+        "reference_only": false,
+        "source": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-c",
+        "resource_id": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-c",
+        "kind": "msk_broker",
+        "name": "platform-events",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "ClusterName": "platform-events",
+          "Brokers": 1,
+          "InstanceType": "kafka.m7g.large",
+          "KafkaVersion": "3.7.x"
+        },
+        "reference_only": false,
+        "source": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/msk_cluster/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "resource_id": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "kind": "msk_cluster",
+        "name": "platform-events",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "ClusterName": "platform-events",
+          "ClusterArn": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+          "ClusterType": "PROVISIONED",
+          "State": "ACTIVE",
+          "Provisioned": {
+            "NumberOfBrokerNodes": 3,
+            "CurrentBrokerSoftwareInfo": {
+              "KafkaVersion": "3.7.x"
+            },
+            "BrokerNodeGroupInfo": {
+              "InstanceType": "kafka.m7g.large",
+              "ClientSubnets": [
+                "subnet-pf-data-a",
+                "subnet-pf-data-b",
+                "subnet-pf-data-c"
+              ]
+            },
+            "EncryptionInfo": {
+              "EncryptionInTransit": {
+                "ClientBroker": "TLS"
+              }
+            }
+          }
+        },
+        "reference_only": false,
+        "source": "ListClustersV2"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-platform-a",
+        "resource_id": "nat-platform-a",
+        "kind": "nat_gateway",
+        "name": "platform-nat-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-platform-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-pub-a",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-nat-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-platform-b",
+        "resource_id": "nat-platform-b",
+        "kind": "nat_gateway",
+        "name": "platform-nat-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-platform-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-pub-b",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-nat-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-platform-c",
+        "resource_id": "nat-platform-c",
+        "kind": "nat_gateway",
+        "name": "platform-nat-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-platform-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "SubnetId": "subnet-pf-pub-c",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-nat-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-eksbata00000006",
+        "resource_id": "eni-eksbata00000006",
+        "kind": "network_interface",
+        "name": "eni-eksbata00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-eksbatb00000006",
+        "resource_id": "eni-eksbatb00000006",
+        "kind": "network_interface",
+        "name": "eni-eksbatb00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-eksbatc00000006",
+        "resource_id": "eni-eksbatc00000006",
+        "kind": "network_interface",
+        "name": "eni-eksbatc00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-eksgena00000006",
+        "resource_id": "eni-eksgena00000006",
+        "kind": "network_interface",
+        "name": "eni-eksgena00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-eksgenb00000006",
+        "resource_id": "eni-eksgenb00000006",
+        "kind": "network_interface",
+        "name": "eni-eksgenb00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-eksgenc00000006",
+        "resource_id": "eni-eksgenc00000006",
+        "kind": "network_interface",
+        "name": "eni-eksgenc00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.17.21:8080:ap-northeast-2a",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.17.21:8080:ap-northeast-2a",
+        "kind": "registered_target",
+        "name": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.17.21:8080:ap-northeast-2a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "Target": {
+            "Id": "10.60.17.21",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          },
+          "TargetType": "ip"
+        },
+        "reference_only": false,
+        "source": "DescribeTargetHealth"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.33.42:8080:ap-northeast-2b",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.33.42:8080:ap-northeast-2b",
+        "kind": "registered_target",
+        "name": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.33.42:8080:ap-northeast-2b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "Target": {
+            "Id": "10.60.33.42",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          },
+          "TargetType": "ip"
+        },
+        "reference_only": false,
+        "source": "DescribeTargetHealth"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.49.13:8080:ap-northeast-2c",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.49.13:8080:ap-northeast-2c",
+        "kind": "registered_target",
+        "name": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.49.13:8080:ap-northeast-2c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "Target": {
+            "Id": "10.60.49.13",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          },
+          "TargetType": "ip"
+        },
+        "reference_only": false,
+        "source": "DescribeTargetHealth"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-platform-main",
+        "resource_id": "rtb-platform-main",
+        "kind": "route_table",
+        "name": "platform-isolated",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-platform-main",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.60.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-main-main",
+              "Main": true
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-isolated"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-platform-private-a",
+        "resource_id": "rtb-platform-private-a",
+        "kind": "route_table",
+        "name": "platform-private-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-platform-private-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.60.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-platform-a",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-platform-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-private-a-0",
+              "SubnetId": "subnet-pf-app-a"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-private-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-platform-private-b",
+        "resource_id": "rtb-platform-private-b",
+        "kind": "route_table",
+        "name": "platform-private-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-platform-private-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.60.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-platform-b",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-platform-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-private-b-0",
+              "SubnetId": "subnet-pf-app-b"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-private-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-platform-private-c",
+        "resource_id": "rtb-platform-private-c",
+        "kind": "route_table",
+        "name": "platform-private-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-platform-private-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.60.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-platform-c",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-platform-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-private-c-0",
+              "SubnetId": "subnet-pf-app-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-private-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-platform-public",
+        "resource_id": "rtb-platform-public",
+        "kind": "route_table",
+        "name": "platform-public",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-platform-public",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.60.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "GatewayId": "igw-platform",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-public-0",
+              "SubnetId": "subnet-pf-pub-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-public-1",
+              "SubnetId": "subnet-pf-pub-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-public-2",
+              "SubnetId": "subnet-pf-pub-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform-public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-eks-nodes",
+        "resource_id": "sg-eks-nodes",
+        "kind": "security_group",
+        "name": "sg-eks-nodes",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-ingress",
+        "resource_id": "sg-ingress",
+        "kind": "security_group",
+        "name": "sg-ingress",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "resource_id": "subnet-pf-app-a",
+        "kind": "subnet",
+        "name": "eks-nodes-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-app-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.60.16.0/20",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "eks-nodes-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-platform-private-a"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "resource_id": "subnet-pf-app-b",
+        "kind": "subnet",
+        "name": "eks-nodes-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-app-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.60.32.0/20",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "eks-nodes-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-platform-private-b"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "resource_id": "subnet-pf-app-c",
+        "kind": "subnet",
+        "name": "eks-nodes-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-app-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.60.48.0/20",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "eks-nodes-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-platform-private-c"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-data-a",
+        "resource_id": "subnet-pf-data-a",
+        "kind": "subnet",
+        "name": "data-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-data-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.60.100.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-platform-main"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-data-b",
+        "resource_id": "subnet-pf-data-b",
+        "kind": "subnet",
+        "name": "data-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-data-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.60.101.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-platform-main"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-data-c",
+        "resource_id": "subnet-pf-data-c",
+        "kind": "subnet",
+        "name": "data-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-data-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.60.102.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-platform-main"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-a",
+        "resource_id": "subnet-pf-pub-a",
+        "kind": "subnet",
+        "name": "public-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-pub-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.60.0.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-platform-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-b",
+        "resource_id": "subnet-pf-pub-b",
+        "kind": "subnet",
+        "name": "public-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-pub-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.60.1.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-platform-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-c",
+        "resource_id": "subnet-pf-pub-c",
+        "kind": "subnet",
+        "name": "public-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-pub-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.60.2.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-platform-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "kind": "target_group",
+        "name": "k8s-web-pods",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+          "TargetGroupName": "k8s-web-pods",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "TargetType": "ip",
+          "Protocol": "HTTP",
+          "Port": 8080,
+          "HealthCheckPath": "/health",
+          "LoadBalancerArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-eksbata00000006",
+        "resource_id": "vol-eksbata00000006",
+        "kind": "volume",
+        "name": "vol-eksbata00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-eksbatb00000006",
+        "resource_id": "vol-eksbatb00000006",
+        "kind": "volume",
+        "name": "vol-eksbatb00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-eksbatc00000006",
+        "resource_id": "vol-eksbatc00000006",
+        "kind": "volume",
+        "name": "vol-eksbatc00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-eksgena00000006",
+        "resource_id": "vol-eksgena00000006",
+        "kind": "volume",
+        "name": "vol-eksgena00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-eksgenb00000006",
+        "resource_id": "vol-eksgenb00000006",
+        "kind": "volume",
+        "name": "vol-eksgenb00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-eksgenc00000006",
+        "resource_id": "vol-eksgenc00000006",
+        "kind": "volume",
+        "name": "vol-eksgenc00000006",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "resource_id": "vpc-0a1b2c3d4e5f60006",
+        "kind": "vpc",
+        "name": "platform",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "CidrBlock": "10.60.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "platform"
+            },
+            {
+              "Key": "Environment",
+              "Value": "production"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr",
+        "resource_id": "vpce-platform-ecr",
+        "kind": "vpc_endpoint",
+        "name": "ecr.dkr-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-platform-ecr",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
+          "SubnetIds": [
+            "subnet-pf-app-a",
+            "subnet-pf-app-b",
+            "subnet-pf-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ecr.dkr-endpoint"
+            }
+          ],
+          "ServiceShortName": "ecr.dkr"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
+        "resource_id": "vpce-platform-s3",
+        "kind": "vpc_endpoint",
+        "name": "s3-gateway-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-platform-s3",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "VpcEndpointType": "Gateway",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.s3",
+          "RouteTableIds": [
+            "rtb-platform-private-a",
+            "rtb-platform-private-b",
+            "rtb-platform-private-c"
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "s3-gateway-endpoint"
+            }
+          ],
+          "ServiceShortName": "s3"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-sts",
+        "resource_id": "vpce-platform-sts",
+        "kind": "vpc_endpoint",
+        "name": "sts-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-platform-sts",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.sts",
+          "SubnetIds": [
+            "subnet-pf-app-a",
+            "subnet-pf-app-b",
+            "subnet-pf-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "sts-endpoint"
+            }
+          ],
+          "ServiceShortName": "sts"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      }
+    ],
+    "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-batch-7c2d",
+        "target": "111122223333/ap-northeast-2/ec2/i-eksbata00000006",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-53bb4f7c6d34dd86e6b5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-batch-7c2d",
+        "target": "111122223333/ap-northeast-2/ec2/i-eksbatb00000006",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-dd407514a25522b43212"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-batch-7c2d",
+        "target": "111122223333/ap-northeast-2/ec2/i-eksbatc00000006",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-35d10ea26cfce61aba0d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-batch-7c2d",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d7bef5e691977578ee01"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-general-6a1b",
+        "target": "111122223333/ap-northeast-2/ec2/i-eksgena00000006",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-9b2556f96be15b774422"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-general-6a1b",
+        "target": "111122223333/ap-northeast-2/ec2/i-eksgenb00000006",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-ad661431372981cdc250"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-general-6a1b",
+        "target": "111122223333/ap-northeast-2/ec2/i-eksgenc00000006",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-4e82c9256e7cf5f491f7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/eks-general-6a1b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c5e166c41807fe33ba0e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/platform-redis-001",
+        "target": "111122223333/ap-northeast-2/cache_replication_group/platform-redis",
+        "relation": "cache_member_of",
+        "evidence": "DescribeCacheClusters.ReplicationGroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fe6bf9deb5e9294ce875"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/platform-redis-001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeCacheClusters.PreferredAvailabilityZone + DescribeCacheSubnetGroups.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-5c94c12cefd71f33446d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/platform-redis-001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeCacheClusters.CacheSubnetGroupName → DescribeCacheSubnetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-424921df5e5377dc55e6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/platform-redis-002",
+        "target": "111122223333/ap-northeast-2/cache_replication_group/platform-redis",
+        "relation": "cache_member_of",
+        "evidence": "DescribeCacheClusters.ReplicationGroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f22bb58fb727c9d61e81"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/platform-redis-002",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeCacheClusters.PreferredAvailabilityZone + DescribeCacheSubnetGroups.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-d4319853579f33ca78ab"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/platform-redis-002",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeCacheClusters.CacheSubnetGroupName → DescribeCacheSubnetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2eecee0fcfe5da04fdb9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_cluster/platform-aurora",
+        "target": "111122223333/ap-northeast-2/db_instance/platform-aurora-1",
+        "relation": "cluster_member",
+        "evidence": "DescribeDBClusters.DBClusterMembers[]",
+        "qualifiers": {},
+        "details": {
+          "writer": true
+        },
+        "inferred": false,
+        "id": "rel-3d5c87361ad84b4e61f6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_cluster/platform-aurora",
+        "target": "111122223333/ap-northeast-2/db_instance/platform-aurora-2",
+        "relation": "cluster_member",
+        "evidence": "DescribeDBClusters.DBClusterMembers[]",
+        "qualifiers": {},
+        "details": {
+          "writer": false
+        },
+        "inferred": false,
+        "id": "rel-a70638ed22b0ca5493fb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/platform-aurora-1",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-551abe716be28661878c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/platform-aurora-1",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-268db01db92ff361654c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/platform-aurora-2",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-7df98b58d752318990a8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/platform-aurora-2",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cd34ed7143bc41e19056"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbata00000006",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-eksbata00000006",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d2dad700d37e13d4de12"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbata00000006",
+        "target": "111122223333/ap-northeast-2/volume/vol-eksbata00000006",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-26cdc5b9c7ff973afc51"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbata00000006",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-473d851fd1e76bd2cf58"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbata00000006",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e9804bbba72f2767cc11"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbata00000006",
+        "target": "111122223333/ap-northeast-2/security_group/sg-eks-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-15e4766a767601877fcb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatb00000006",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-eksbatb00000006",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7112c53fb7d3632b2d51"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatb00000006",
+        "target": "111122223333/ap-northeast-2/volume/vol-eksbatb00000006",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b4fc8f1b59aeeadba596"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatb00000006",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-aed0f776f1b4d7872a5b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatb00000006",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b1f14d7f178b26423702"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatb00000006",
+        "target": "111122223333/ap-northeast-2/security_group/sg-eks-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-203d95879f7ac5382879"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatc00000006",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-eksbatc00000006",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c6ede5dba9267a72073e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatc00000006",
+        "target": "111122223333/ap-northeast-2/volume/vol-eksbatc00000006",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2adcfcb21d0afc58379c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatc00000006",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9d249e9f74ee140eaf51"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatc00000006",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e6754bffa90b112545a3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksbatc00000006",
+        "target": "111122223333/ap-northeast-2/security_group/sg-eks-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8ab22cfc50814f180ed6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgena00000006",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-eksgena00000006",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-313a8610e84b75425aaf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgena00000006",
+        "target": "111122223333/ap-northeast-2/volume/vol-eksgena00000006",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0d5c3c24c38dea863205"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgena00000006",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9837621d32e2741cc9b4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgena00000006",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a85178002442fbce0b7a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgena00000006",
+        "target": "111122223333/ap-northeast-2/security_group/sg-eks-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b4d166c8292b45f20e75"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenb00000006",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-eksgenb00000006",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c4f30ec619ecaa0e18c2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenb00000006",
+        "target": "111122223333/ap-northeast-2/volume/vol-eksgenb00000006",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-33d5080d7f45dd3340f8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenb00000006",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-85134e65340b90945ee1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenb00000006",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ea35a9cf8a098b12dbbf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenb00000006",
+        "target": "111122223333/ap-northeast-2/security_group/sg-eks-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-caf7a0e956b9028f9ed0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenc00000006",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-eksgenc00000006",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4b7e125a35decf7617ca"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenc00000006",
+        "target": "111122223333/ap-northeast-2/volume/vol-eksgenc00000006",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-635427ea815f0ea77303"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenc00000006",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6048fb1ed4e17c1d73ad"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenc00000006",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-dd4d0d7842280b32cc1d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-eksgenc00000006",
+        "target": "111122223333/ap-northeast-2/security_group/sg-eks-nodes",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fc3df181bd276f8e20c1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
+        "target": "111122223333/ap-northeast-2/auto_scaling_group/eks-batch-7c2d",
+        "relation": "eks_nodegroup",
+        "evidence": "DescribeNodegroup.resources.autoScalingGroups[]",
+        "qualifiers": {},
+        "details": {
+          "nodegroup": "batch",
+          "instanceTypes": [
+            "c6i.2xlarge"
+          ],
+          "scaling": {
+            "minSize": 0,
+            "maxSize": 30,
+            "desiredSize": 3
+          }
+        },
+        "inferred": false,
+        "id": "rel-f8e1ae1311faadb46aa8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
+        "target": "111122223333/ap-northeast-2/auto_scaling_group/eks-general-6a1b",
+        "relation": "eks_nodegroup",
+        "evidence": "DescribeNodegroup.resources.autoScalingGroups[]",
+        "qualifiers": {},
+        "details": {
+          "nodegroup": "general",
+          "instanceTypes": [
+            "m6i.xlarge"
+          ],
+          "scaling": {
+            "minSize": 3,
+            "maxSize": 12,
+            "desiredSize": 3
+          }
+        },
+        "inferred": false,
+        "id": "rel-b9fbf22ada76880422b2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "eks_subnet",
+        "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-63881d0ccecb5b0f27d4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "eks_subnet",
+        "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2804ce7a2492047ae546"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "eks_subnet",
+        "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-de836884c95ff991ef4b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeCluster.resourcesVpcConfig.vpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e3a6e763f63b80e9a4a8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/internet_gateway/igw-platform",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeInternetGateways.Attachments[].VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8d2d5de12417ae1b3a14"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/lambda_function/order-events-consumer",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "ListFunctions.VpcConfig.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ec8cdd847c42df13d474"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/lambda_function/order-events-consumer",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "lambda_subnet",
+        "evidence": "ListFunctions.VpcConfig.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4df4438a7f6844645867"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/lambda_function/order-events-consumer",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "lambda_subnet",
+        "evidence": "ListFunctions.VpcConfig.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8883c170ee22394ff37a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/lambda_function/order-events-consumer",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "lambda_subnet",
+        "evidence": "ListFunctions.VpcConfig.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-efd532ba7ec5ca7fb213"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-23f308308206771612c6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-0be8cb4546c0b4cc0057"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-d80e339ce84f03765ef5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeLoadBalancers.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1dbf6e4ca5d9955f50ed"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ingress",
+        "relation": "uses_security_group",
+        "evidence": "DescribeLoadBalancers.SecurityGroups[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-283b9489c295d98528b1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-a",
+        "target": "111122223333/ap-northeast-2/msk_cluster/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "relation": "broker_of",
+        "evidence": "ListClustersV2.ClusterArn",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ac8b465948420bd6f9a3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-a",
+        "relation": "in_subnet",
+        "evidence": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-610f298e2498a8364eee"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "ClientSubnets[] → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2e6b84a5f4a652a5a4c8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-b",
+        "target": "111122223333/ap-northeast-2/msk_cluster/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "relation": "broker_of",
+        "evidence": "ListClustersV2.ClusterArn",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2a0c158c3b6905cc49ef"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-b",
+        "relation": "in_subnet",
+        "evidence": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c2144e533b0e76bf9fca"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "ClientSubnets[] → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ffcee311de00878d5bca"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-c",
+        "target": "111122223333/ap-northeast-2/msk_cluster/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "relation": "broker_of",
+        "evidence": "ListClustersV2.ClusterArn",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c00e7091bb4770d808ce"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-c",
+        "relation": "in_subnet",
+        "evidence": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-891650228efc6ca4b3bd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "ClientSubnets[] → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0bb04c9a764cfa008a90"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/msk_cluster/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "ClientSubnets[] → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ff18c4917d46099d76de"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-platform-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2bb321ea1ca9c91dc5b7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-platform-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f70a112640cc3ebce6fa"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-platform-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-65ebace8fdf3cbbeec18"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-platform-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d9df3a43160f916b57b7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-platform-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8ea4b7dcf817738e4a15"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-platform-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2101263104ceddd705c0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-ff213b4b4b7ad9470108"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-ade055b939a36e72be22"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-147764e399abf470cf0d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-main",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2122ebbeb1e38cf82616"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-28730053fdb461c1a31a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4c75a6564698b865f1b2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-a",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-platform-a",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-480511d77bc2d851bd09"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-a",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-6c508767d1dcc235a221"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-12306b76f011d72c2479"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a7f1b02c123922552b16"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-b",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-platform-b",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-bd3ab367a8f93724e4a0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-b",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-68d7362a897505bf8197"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-06ce4768f2dc289199e3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-397bc7bcfeb4edfa5324"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-c",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-platform-c",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-b735e2f885b344c8d548"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-c",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-528d5d3bc9ec025c09c5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b69c4720e7f914814d75"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-431e3b9585b37b11a510"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b3185013348125d221e0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-public",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-504c150142b2f3503d73"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-public",
+        "target": "111122223333/ap-northeast-2/internet_gateway/igw-platform",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-33ab06a3aa9510056d09"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7b638474b946c93d8714"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9fba9b841c48ee4ab050"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-add4a9d58c4cf2ca074a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-data-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9ce97ed5d81e820d18eb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-data-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-92bbee69f4fa2b1a7383"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-data-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-58ec3b01e635786139e8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-351c35ab18076e4ffc01"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8f50e4a58286034310c5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5b44e08abe5750458e03"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/k8s-platform-ingress/0000000000000001",
+        "relation": "associated_load_balancer",
+        "evidence": "DescribeTargetGroups.LoadBalancerArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f10f4c8267ba542da91d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1fda739abed32a6392bc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.17.21:8080:ap-northeast-2a",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.60.17.21",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-15fb10a4bd5eb160fdfd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.33.42:8080:ap-northeast-2b",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.60.33.42",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-4ed7b574d542158ee0cf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001",
+        "target": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.49.13:8080:ap-northeast-2c",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.60.49.13",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-3463677be2ba7b557cac"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-47d8a277074824edfc4a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-86bc113046b8215292b6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d0159e563a1cdce870e1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-ecr",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-36d540bda90df12c7670"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-platform-private-a",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f96fd043de05a5d34212"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-platform-private-b",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a9f03de9d371f0a94964"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-platform-private-c",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d2ff1e914e39789f4e48"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-s3",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9d87e2498eab8fb01dc4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-488df653dbfcd0eb6b9a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9219dcd2d0ff12469e6e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2072f70aa6a0909ba29c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-platform-sts",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-858cbaf793f50050f7ed"
+      }
+    ]
+  }
+}

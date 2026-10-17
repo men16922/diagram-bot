@@ -14,7 +14,9 @@ class Sample:
         self.key, self.title, self.practices = key, title, practices
         self.raw = {"vpcs": [], "subnets": [], "instances": [], "load_balancers": [], "target_groups": [], "target_health": [],
                     "internet_gateways": [], "nat_gateways": [], "route_tables": [], "db_instances": [], "auto_scaling_groups": [],
-                    "vpc_endpoints": [], "transit_gateways": [], "transit_gateway_attachments": []}
+                    "vpc_endpoints": [], "transit_gateways": [], "transit_gateway_attachments": [],
+                    "db_clusters": [], "cache_clusters": [], "replication_groups": [], "cache_subnet_groups": [],
+                    "msk_clusters": [], "lambda_functions": [], "eks_clusters": []}
         self.counter = 0
 
     def tags(self, name, **extra):
@@ -130,6 +132,51 @@ class Sample:
         self.raw["transit_gateway_attachments"].append({"TransitGatewayAttachmentId": key, "TransitGatewayId": gateway, "VpcId": vpc,
                                                         "SubnetIds": list(subnets), "State": "available", "Tags": self.tags(name)})
 
+    def aurora(self, cluster, vpc, subnets, writer, readers, engine="aurora-postgresql", size="db.r6g.large"):
+        group = {"DBSubnetGroupName": f"{cluster}-subnets", "VpcId": vpc,
+                 "Subnets": [{"SubnetIdentifier": subnet, "SubnetAvailabilityZone": {"Name": self.az_of(subnet)}} for subnet in subnets]}
+        members = []
+        for index, az in enumerate([writer, *readers]):
+            identifier = f"{cluster}-{index + 1}"
+            self.raw["db_instances"].append({"DBInstanceIdentifier": identifier, "DBClusterIdentifier": cluster, "Engine": engine,
+                                             "DBInstanceClass": size, "AvailabilityZone": f"{REGION}{az}", "MultiAZ": False,
+                                             "PubliclyAccessible": False, "StorageEncrypted": True, "DBSubnetGroup": group})
+            members.append({"DBInstanceIdentifier": identifier, "IsClusterWriter": index == 0})
+        self.raw["db_clusters"].append({"DBClusterIdentifier": cluster, "Engine": engine, "MultiAZ": bool(readers),
+                                        "StorageEncrypted": True, "DBClusterMembers": members})
+
+    def redis(self, group, vpc, subnets, primary, replicas, size="cache.r7g.large"):
+        self.raw["cache_subnet_groups"].append({"CacheSubnetGroupName": f"{group}-subnets", "VpcId": vpc,
+                                                "Subnets": [{"SubnetIdentifier": s, "SubnetAvailabilityZone": {"Name": self.az_of(s)}} for s in subnets]})
+        members = []
+        for index, az in enumerate([primary, *replicas]):
+            node = f"{group}-00{index + 1}"
+            self.raw["cache_clusters"].append({"CacheClusterId": node, "ReplicationGroupId": group, "Engine": "redis", "CacheNodeType": size,
+                                               "PreferredAvailabilityZone": f"{REGION}{az}", "CacheSubnetGroupName": f"{group}-subnets"})
+            members.append({"CacheClusterId": node, "CurrentRole": "primary" if index == 0 else "replica"})
+        self.raw["replication_groups"].append({"ReplicationGroupId": group, "MultiAZ": "enabled", "AutomaticFailover": "enabled",
+                                               "AtRestEncryptionEnabled": True, "TransitEncryptionEnabled": True,
+                                               "NodeGroups": [{"NodeGroupId": "0001", "NodeGroupMembers": members}]})
+
+    def kafka(self, name, subnets, brokers, size="kafka.m7g.large"):
+        self.raw["msk_clusters"].append({
+            "ClusterName": name, "ClusterArn": f"arn:aws:kafka:{REGION}:{ACCOUNT}:cluster/{name}/1", "ClusterType": "PROVISIONED",
+            "State": "ACTIVE", "Provisioned": {"NumberOfBrokerNodes": brokers, "CurrentBrokerSoftwareInfo": {"KafkaVersion": "3.7.x"},
+                                               "BrokerNodeGroupInfo": {"InstanceType": size, "ClientSubnets": list(subnets)},
+                                               "EncryptionInfo": {"EncryptionInTransit": {"ClientBroker": "TLS"}}}})
+
+    def function(self, name, vpc, subnets, runtime="python3.12"):
+        self.raw["lambda_functions"].append({"FunctionName": name, "Runtime": runtime,
+                                             "VpcConfig": {"VpcId": vpc, "SubnetIds": list(subnets), "SecurityGroupIds": [f"sg-{name}"]}})
+
+    def eks(self, name, vpc, subnets, nodegroups, version="1.31"):
+        self.raw["eks_clusters"].append({"name": name, "version": version, "status": "ACTIVE",
+                                         "resourcesVpcConfig": {"vpcId": vpc, "subnetIds": list(subnets), "endpointPublicAccess": False,
+                                                                "endpointPrivateAccess": True},
+                                         "nodegroups": [{"nodegroupName": group, "instanceTypes": [size], "scalingConfig": scaling,
+                                                         "resources": {"autoScalingGroups": [{"name": asg}]}}
+                                                        for group, asg, size, scaling in nodegroups]})
+
     def network(self, vpc, prefix, azs, public, private, nat_per_az=True):
         """Internet gateway, NAT in public subnets, and one route table per tier (private per AZ)."""
         igw = self.internet_gateway(f"igw-{prefix}", vpc, f"{prefix}-igw")
@@ -153,14 +200,21 @@ class Sample:
                                                     ("ec2", "describe_nat_gateways", "nat_gateways"),
                                                     ("ec2", "describe_route_tables", "route_tables"),
                                                     ("rds", "describe_db_instances", "db_instances"),
-                                                    ("autoscaling", "describe_auto_scaling_groups", "auto_scaling_groups"))]
+                                                    ("autoscaling", "describe_auto_scaling_groups", "auto_scaling_groups"),
+                                                    ("ec2", "describe_vpc_endpoints", "vpc_endpoints"),
+                                                    ("ec2", "describe_transit_gateway_vpc_attachments", "transit_gateway_attachments"),
+                                                    ("rds", "describe_db_clusters", "db_clusters"),
+                                                    ("elasticache", "describe_cache_clusters", "cache_clusters"),
+                                                    ("kafka", "list_clusters_v2", "msk_clusters"),
+                                                    ("lambda", "list_functions", "lambda_functions"),
+                                                    ("eks", "list_clusters", "eks_clusters"))]
         coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
                       "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in self.raw["target_health"]]
         return {"schema_version": 1, "metadata": {
             "account_id": ACCOUNT, "region": REGION, "partition": "aws", "started_at": timestamp, "finished_at": timestamp,
             "status": "complete", "demo": True, "sample": self.key, "title": self.title, "practices": self.practices,
             "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway", "NatGateway",
-                      "RouteTable", "RDS", "AutoScalingGroup"],
+                      "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGateway", "EKS", "MSK", "ElastiCache", "Lambda"],
             "limitations": ["AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
                             "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
                             "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."]},
@@ -309,5 +363,41 @@ def hybrid():
     return s.snapshot()
 
 
+def eks_platform():
+    s = Sample("eks-platform", "EKS 플랫폼 (EKS · MSK · ElastiCache · Aurora · Lambda)", [
+        "EKS 컨트롤 플레인 엔드포인트는 비공개, 관리형 노드 그룹은 세 AZ 프라이빗 서브넷에 분산",
+        "인그레스는 AWS Load Balancer Controller의 ALB → IP 대상(파드)",
+        "Aurora PostgreSQL writer/reader를 서로 다른 AZ에, ElastiCache Redis는 primary/replica 자동 장애 조치",
+        "MSK 브로커는 AZ마다 하나, 클라이언트-브로커 TLS",
+        "데이터 계층(Aurora·Redis·MSK)은 인터넷 경로 없는 격리 서브넷",
+        "ECR·STS 인터페이스·S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로"])
+    vpc = s.vpc("vpc-0a1b2c3d4e5f60006", "10.60.0.0/16", "platform", Environment="production")
+    azs = "abc"
+    public = [s.subnet(f"subnet-pf-pub-{az}", vpc, az, f"10.60.{i}.0/24", f"public-{az}", "public") for i, az in enumerate(azs)]
+    nodes = [s.subnet(f"subnet-pf-app-{az}", vpc, az, f"10.60.{16 * (i + 1)}.0/20", f"eks-nodes-{az}", "app") for i, az in enumerate(azs)]
+    data = [s.subnet(f"subnet-pf-data-{az}", vpc, az, f"10.60.{100 + i}.0/24", f"data-{az}", "data") for i, az in enumerate(azs)]
+    general = [s.instance(f"i-eksgen{az}00000006", nodes[i], f"general-node-{az}", "m6i.xlarge", sg="sg-eks-nodes",
+                          **{"eks:cluster-name": "platform-eks", "eks:nodegroup-name": "general"}) for i, az in enumerate(azs)]
+    batch = [s.instance(f"i-eksbat{az}00000006", nodes[i], f"batch-node-{az}", "c6i.2xlarge", sg="sg-eks-nodes",
+                        **{"eks:cluster-name": "platform-eks", "eks:nodegroup-name": "batch"}) for i, az in enumerate(azs)]
+    s.network(vpc, "platform", azs, public, [nodes])
+    s.auto_scaling_group("eks-general-6a1b", general, nodes, minimum=3, maximum=12)
+    s.auto_scaling_group("eks-batch-7c2d", batch, nodes, minimum=0, maximum=30)
+    s.eks("platform-eks", vpc, nodes, [("general", "eks-general-6a1b", "m6i.xlarge", {"minSize": 3, "maxSize": 12, "desiredSize": 3}),
+                                       ("batch", "eks-batch-7c2d", "c6i.2xlarge", {"minSize": 0, "maxSize": 30, "desiredSize": 3})])
+    alb = s.load_balancer("k8s-platform-ingress", vpc, public, sg="sg-ingress")
+    s.target_group("k8s-web-pods", vpc, "HTTP", 8080,
+                   [("10.60.17.21", 8080, f"{REGION}a"), ("10.60.33.42", 8080, f"{REGION}b"), ("10.60.49.13", 8080, f"{REGION}c")],
+                   [alb], target_type="ip")
+    s.aurora("platform-aurora", vpc, data, "a", ["b"])
+    s.redis("platform-redis", vpc, data, "b", ["c"])
+    s.kafka("platform-events", data, 3)
+    s.function("order-events-consumer", vpc, nodes)
+    s.gateway_endpoint("vpce-platform-s3", vpc, "s3", [f"rtb-platform-private-{az}" for az in azs])
+    s.interface_endpoint("vpce-platform-ecr", vpc, "ecr.dkr", nodes)
+    s.interface_endpoint("vpce-platform-sts", vpc, "sts", nodes)
+    return s.snapshot()
+
+
 SAMPLES = {"three-tier": three_tier, "microservices": microservices, "nlb-alb": static_ip_front,
-           "environments": environments, "hybrid": hybrid}
+           "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform}

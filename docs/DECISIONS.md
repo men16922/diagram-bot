@@ -21,6 +21,11 @@ Last Updated: 2026-10-17
   Scaling group is drawn as one edge instead of per-instance registrations.
 - VPC endpoints and Transit Gateway attachments sit in the VPC entry row with the internet
   gateway; Transit Gateways are regional and drawn outside VPCs, linked from their attachment.
+- Managed services: EKS control plane and VPC Lambda sit in the attachment row (multi-subnet
+  ENIs); EKS managed node groups are drawn as their Auto Scaling group frames; MSK draws one broker
+  icon per client subnet (brokers spread evenly by AWS); ElastiCache and RDS/Aurora nodes are placed
+  only when exactly one subnet-group subnet matches their AZ. Cluster/replication-group objects
+  are not drawn; they appear through their members in the inspector.
 - Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
 - Automatic layout only on first generation or explicit relayout; superseded edits are archived
   and user-added notes carried over.

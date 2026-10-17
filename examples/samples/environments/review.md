@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T05:23:38.411698+00:00 ~ 2026-10-17T05:23:38.411698+00:00
+- 수집 구간: 2026-10-17T07:25:41.819733+00:00 ~ 2026-10-17T07:25:41.819733+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -18,6 +18,13 @@
 - ec2 / describe_route_tables: complete, 10개, 오류 없음; 범위 {}
 - rds / describe_db_instances: complete, 0개, 오류 없음; 범위 {}
 - autoscaling / describe_auto_scaling_groups: complete, 2개, 오류 없음; 범위 {}
+- ec2 / describe_vpc_endpoints: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_transit_gateway_vpc_attachments: complete, 3개, 오류 없음; 범위 {}
+- rds / describe_db_clusters: complete, 0개, 오류 없음; 범위 {}
+- elasticache / describe_cache_clusters: complete, 0개, 오류 없음; 범위 {}
+- kafka / list_clusters_v2: complete, 0개, 오류 없음; 범위 {}
+- lambda / list_functions: complete, 0개, 오류 없음; 범위 {}
+- eks / list_clusters: complete, 0개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001"}
 - elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002"}
 

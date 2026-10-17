@@ -25,14 +25,22 @@ OPERATIONS = [
     ("ec2", "describe_vpc_endpoints", "VpcEndpoints", "vpc_endpoints"),
     ("ec2", "describe_transit_gateways", "TransitGateways", "transit_gateways"),
     ("ec2", "describe_transit_gateway_vpc_attachments", "TransitGatewayVpcAttachments", "transit_gateway_attachments"),
+    # Commonly used VPC-attached services.
+    ("rds", "describe_db_clusters", "DBClusters", "db_clusters"),
+    ("elasticache", "describe_cache_clusters", "CacheClusters", "cache_clusters"),
+    ("elasticache", "describe_replication_groups", "ReplicationGroups", "replication_groups"),
+    ("elasticache", "describe_cache_subnet_groups", "CacheSubnetGroups", "cache_subnet_groups"),
+    ("kafka", "list_clusters_v2", "ClusterInfoList", "msk_clusters"),
+    ("lambda", "list_functions", "Functions", "lambda_functions"),
+    ("eks", "list_clusters", "clusters", "eks_cluster_names"),
 ]
 
 
 def permission(service, operation):
     """IAM action needed for a read operation, shown next to denied or partial coverage."""
-    prefix = {"ec2": "ec2", "elbv2": "elasticloadbalancing", "rds": "rds", "autoscaling": "autoscaling"}[service]
+    prefix = {"elbv2": "elasticloadbalancing"}.get(service, service)
     action = "".join(part.title() for part in operation.split("_"))
-    return prefix + ":" + {"DescribeDbInstances": "DescribeDBInstances"}.get(action, action)
+    return prefix + ":" + {"DescribeDbInstances": "DescribeDBInstances", "DescribeDbClusters": "DescribeDBClusters"}.get(action, action)
 
 
 def query(client, operation, key, params=None):
@@ -47,7 +55,9 @@ def query(client, operation, key, params=None):
         else:
             pages = [getattr(client, operation)(**params)]
         for page in pages:
-            rows.extend(page.get(key, []))
+            value = page.get(key, [])
+            # Describe calls for one named resource return an object, list calls an array.
+            rows.extend(value if isinstance(value, list) else [value])
             coverage["pages"] += 1
     except (ClientError, BotoCoreError) as exc:
         coverage["status"] = "partial" if coverage["pages"] else "unavailable"
@@ -84,6 +94,23 @@ def collect(region, profile=None, expected_account=None, session=None):
         result.update(service="elbv2", permission=permission("elbv2", "describe_target_health"))
         coverage.append(result)
         raw["target_health"].append({"TargetGroupArn": arn, "Descriptions": rows})
+    raw["eks_clusters"] = []
+    for name in raw.pop("eks_cluster_names"):
+        details = []
+        for operation, key, params in (("describe_cluster", "cluster", {"name": name}),
+                                       ("list_nodegroups", "nodegroups", {"clusterName": name})):
+            rows, result = query(clients["eks"], operation, key, params)
+            result.update(service="eks", permission=permission("eks", operation))
+            coverage.append(result)
+            details.append(rows)
+        if details[0]:
+            cluster = {**details[0][0], "nodegroups": []}
+            for group in details[1]:
+                rows, result = query(clients["eks"], "describe_nodegroup", "nodegroup", {"clusterName": name, "nodegroupName": group})
+                result.update(service="eks", permission=permission("eks", "describe_nodegroup"))
+                coverage.append(result)
+                cluster["nodegroups"] += rows
+            raw["eks_clusters"].append(cluster)
     if any(c["status"] != "complete" for c in coverage if c["operation"] == "describe_target_groups"):
         coverage.append({"service": "elbv2", "operation": "describe_target_health",
                          "parameters": {}, "status": "not_discovered",
@@ -94,7 +121,8 @@ def collect(region, profile=None, expected_account=None, session=None):
         "started_at": started, "finished_at": now(), "demo": False,
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
         "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway",
-                  "NatGateway", "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment"],
+                  "NatGateway", "RouteTable", "RDS", "Aurora", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment",
+                  "EKS", "MSK", "ElastiCache", "Lambda"],
         "limitations": ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
                         "여러 API의 순차 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
                         "보안 그룹·ENI·EBS는 EC2/ELB 응답의 참조만 표시합니다. 별도 상세 조회는 하지 않습니다.",

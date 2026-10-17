@@ -29,6 +29,11 @@ RESOURCE_ICONS = {
     "db_instance": ("rds_instance", "#C925D1"),
     "db_standby": ("rds_instance_alt", "#C925D1"),
     "vpc_endpoint": ("endpoints", "#8C4FFF"),
+    "lambda_function": ("lambda_function", "#ED7100"),
+    "aurora": ("aurora_instance", "#C925D1"),
+    "redis": ("elasticache_for_redis", "#C925D1"),
+    "valkey": ("elasticache_for_valkey", "#C925D1"),
+    "memcached": ("elasticache_for_memcached", "#C925D1"),
     "tgw_attachment": ("transit_gateway_attachment", "#8C4FFF"),
 }
 # Square resource-icon tiles for things without a resource-level icon.
@@ -37,6 +42,8 @@ ICONS = {
     "target_group": ("elastic_load_balancing", "#6D5DB3"),
     "security_group": ("group_security_group", "#DD344C"),
     "transit_gateway": ("transit_gateway", "#8C4FFF"),
+    "eks_cluster": ("eks", "#ED7100"),
+    "msk_broker": ("managed_streaming_for_kafka", "#8C4FFF"),
 }
 COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
 # Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.
@@ -77,7 +84,7 @@ def validate_document(xml):
 
 
 def resource_style(shape):
-    icon = RESOURCE_ICONS.get(shape.get("lb_type") if shape.get("kind") == "load_balancer" else shape.get("kind"))
+    icon = RESOURCE_ICONS.get(shape.get("variant") or shape.get("kind"))
     shape_name, color = ICONS.get(shape.get("kind"), ("", "#687B90"))
     style = COMMON + "whiteSpace=wrap;"
     if shape.get("label_side") == "right":

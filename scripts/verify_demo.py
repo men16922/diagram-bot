@@ -198,6 +198,17 @@ def main():
         frame.get_by_text(starts('public-a')).click()
         expect(detail).to_contain_text('퍼블릭 · 0.0.0.0/0 → IGW')
         page.screenshot(path=str(args.output / 'infrastructure.png'), full_page=True)
+        page.locator('#snapshot-select').select_option('sample-eks-platform')
+        ready()
+        page.locator('[data-vpc="vpc-0a1b2c3d4e5f60006"]').click()
+        ready()
+        frame.get_by_text(starts('EKS node group · general')).click()
+        expect(detail).to_contain_text('EKS 노드 그룹')
+        frame.get_by_text(starts('platform-aurora-1')).click()
+        expect(detail).to_contain_text('writer')
+        frame.get_by_text(starts('platform-events')).first.click()
+        expect(detail).to_contain_text('MSK 클러스터')
+        page.screenshot(path=str(args.output / 'eks-platform.png'), full_page=True)
 
         options = page.locator('#snapshot-select option').count()
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
@@ -215,7 +226,8 @@ def main():
                          'SG/ENI/EBS references', 'native keyboard move', 'native note edit', 'save/reload',
                          'drawio XML download with moved geometry', 'PNG 2x white', 'PNG 1x transparent', 'PNG 3x',
                          'JSON/CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
-                         'infrastructure sample: ASG frame, RDS standby, route-classified subnet', 'snapshot import']}
+                         'infrastructure sample: ASG frame, RDS standby, route-classified subnet',
+                         'EKS sample: node group frame, Aurora writer, MSK brokers', 'snapshot import']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 

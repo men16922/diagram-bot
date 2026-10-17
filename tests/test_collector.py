@@ -54,7 +54,7 @@ def test_elbv2_marker_pagination():
 
 class Session:
     def __init__(self):
-        self.clients = {name: client(name) for name in ("sts", "ec2", "elbv2", "rds", "autoscaling")}
+        self.clients = {name: client(name) for name in ("sts", "ec2", "elbv2", "rds", "autoscaling", "elasticache", "kafka", "lambda", "eks")}
 
     def client(self, name, **kwargs):
         return self.clients[name]
@@ -91,6 +91,17 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         stubs["ec2"].add_response("describe_vpc_endpoints", {"VpcEndpoints": []}, {})
         stubs["ec2"].add_response("describe_transit_gateways", {"TransitGateways": []}, {})
         stubs["ec2"].add_response("describe_transit_gateway_vpc_attachments", {"TransitGatewayVpcAttachments": []}, {})
+        stubs["rds"].add_response("describe_db_clusters", {"DBClusters": []}, {})
+        stubs["elasticache"].add_response("describe_cache_clusters", {"CacheClusters": []}, {})
+        stubs["elasticache"].add_response("describe_replication_groups", {"ReplicationGroups": []}, {})
+        stubs["elasticache"].add_response("describe_cache_subnet_groups", {"CacheSubnetGroups": []}, {})
+        stubs["kafka"].add_response("list_clusters_v2", {"ClusterInfoList": []}, {})
+        stubs["lambda"].add_response("list_functions", {"Functions": []}, {})
+        stubs["eks"].add_response("list_clusters", {"clusters": ["platform"]}, {})
+        stubs["eks"].add_response("describe_cluster", {"cluster": {"name": "platform", "resourcesVpcConfig": {"vpcId": "vpc-a", "subnetIds": ["subnet-a"]}}}, {"name": "platform"})
+        stubs["eks"].add_response("list_nodegroups", {"nodegroups": ["general"]}, {"clusterName": "platform"})
+        stubs["eks"].add_response("describe_nodegroup", {"nodegroup": {"nodegroupName": "general", "resources": {"autoScalingGroups": [{"name": "eks-general"}]}}},
+                                  {"clusterName": "platform", "nodegroupName": "general"})
         result = collect("ap-northeast-2", expected_account="111122223333", session=session)
         assert result["metadata"]["status"] == "partial"
         assert result["raw"]["instances"] == [{"InstanceId": "i-a"}, {"InstanceId": "i-b"}]
@@ -99,6 +110,9 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         assert result["raw"]["internet_gateways"] == [{"InternetGatewayId": "igw-a"}]
         rds = next(c for c in result["coverage"] if c["operation"] == "describe_db_instances")
         assert rds["status"] == "unavailable" and rds["permission"] == "rds:DescribeDBInstances"
+        eks = result["raw"]["eks_clusters"][0]
+        assert eks["resourcesVpcConfig"]["vpcId"] == "vpc-a" and eks["nodegroups"][0]["nodegroupName"] == "general"
+        assert "eks_cluster_names" not in result["raw"]
         for stub in stubs.values():
             stub.assert_no_pending_responses()
 

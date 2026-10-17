@@ -42,7 +42,8 @@ def build_graph(snapshot):
             tags = {t["Key"]: t.get("Value", "") for t in attrs.get("Tags", [])}
             nodes[key] = {"id": key, "resource_id": resource_id, "kind": kind,
                           "name": tags.get("Name") or attrs.get("LoadBalancerName") or attrs.get("TargetGroupName")
-                          or attrs.get("DBInstanceIdentifier") or attrs.get("AutoScalingGroupName") or resource_id,
+                          or attrs.get("DBInstanceIdentifier") or attrs.get("AutoScalingGroupName") or attrs.get("FunctionName")
+                          or attrs.get("CacheClusterId") or attrs.get("ClusterName") or resource_id,
                           "account": account, "region": region, "attributes": attrs,
                           "reference_only": reference, "source": source}
         return key
@@ -106,6 +107,7 @@ def build_graph(snapshot):
                  {"port": target.get("Port"), "availability_zone": target.get("AvailabilityZone")})
     endpoints_and_transit(raw, node, link)
     infrastructure(raw, prefix, nodes, node, link)
+    services(raw, prefix, nodes, node, link)
     classify_subnets(raw, prefix, nodes, link)
     return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
             "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
@@ -178,7 +180,8 @@ def infrastructure(raw, prefix, nodes, node, link):
 def endpoints_and_transit(raw, node, link):
     """VPC endpoints (gateway via route tables, interface via subnets) and Transit Gateway VPC attachments."""
     for endpoint in raw.get("vpc_endpoints", []):
-        attrs = {**endpoint, "ServiceShortName": endpoint.get("ServiceName", "").rsplit(".", 1)[-1]}
+        # com.amazonaws.<region>.<service>, e.g. ecr.dkr or s3.
+        attrs = {**endpoint, "ServiceShortName": ".".join(endpoint.get("ServiceName", "").split(".")[3:])}
         key = node("vpc_endpoint", endpoint["VpcEndpointId"], attrs, "DescribeVpcEndpoints")
         link(key, "vpc", endpoint.get("VpcId"), "in_vpc", "DescribeVpcEndpoints.VpcId")
         for subnet in endpoint.get("SubnetIds", []):
@@ -194,6 +197,70 @@ def endpoints_and_transit(raw, node, link):
              "DescribeTransitGatewayVpcAttachments.TransitGatewayId")
         for subnet in attachment.get("SubnetIds", []):
             link(key, "subnet", subnet, "attachment_subnet", "DescribeTransitGatewayVpcAttachments.SubnetIds[]")
+
+
+def services(raw, prefix, nodes, node, link):
+    """EKS, MSK, ElastiCache, Aurora roles and VPC-attached Lambda, joined only on API fields."""
+    subnet_vpc = {s["SubnetId"]: s.get("VpcId") for s in raw.get("subnets", [])}
+    for cluster in raw.get("db_clusters", []):
+        key = node("db_cluster", cluster["DBClusterIdentifier"], cluster, "DescribeDBClusters")
+        for member in cluster.get("DBClusterMembers", []):
+            instance = prefix + "db_instance/" + member["DBInstanceIdentifier"]
+            if instance in nodes:
+                nodes[instance]["db_role"] = "writer" if member.get("IsClusterWriter") else "reader"
+            link(key, "db_instance", member["DBInstanceIdentifier"], "cluster_member", "DescribeDBClusters.DBClusterMembers[]",
+                 {"writer": member.get("IsClusterWriter")})
+    groups = {g["CacheSubnetGroupName"]: g for g in raw.get("cache_subnet_groups", [])}
+    roles = {m.get("CacheClusterId"): m.get("CurrentRole") for g in raw.get("replication_groups", [])
+             for ng in g.get("NodeGroups", []) for m in ng.get("NodeGroupMembers", [])}
+    for group in raw.get("replication_groups", []):
+        node("cache_replication_group", group["ReplicationGroupId"], group, "DescribeReplicationGroups")
+    for cache in raw.get("cache_clusters", []):
+        key = node("cache_node", cache["CacheClusterId"], {**cache, "CurrentRole": roles.get(cache["CacheClusterId"])},
+                   "DescribeCacheClusters")
+        subnet_group = groups.get(cache.get("CacheSubnetGroupName"), {})
+        link(key, "vpc", subnet_group.get("VpcId"), "in_vpc", "DescribeCacheClusters.CacheSubnetGroupName → DescribeCacheSubnetGroups.VpcId")
+        zone = cache.get("PreferredAvailabilityZone")
+        matches = [s["SubnetIdentifier"] for s in subnet_group.get("Subnets", []) if (s.get("SubnetAvailabilityZone") or {}).get("Name") == zone]
+        link(key, "subnet", matches[0] if len(matches) == 1 else None, "in_subnet",
+             "DescribeCacheClusters.PreferredAvailabilityZone + DescribeCacheSubnetGroups.Subnets[]", {"availability_zone": zone})
+        link(key, "cache_replication_group", cache.get("ReplicationGroupId"), "cache_member_of", "DescribeCacheClusters.ReplicationGroupId")
+    for cluster in raw.get("msk_clusters", []):
+        provisioned = cluster.get("Provisioned") or {}
+        brokers = provisioned.get("BrokerNodeGroupInfo") or {}
+        subnets = brokers.get("ClientSubnets", [])
+        key = node("msk_cluster", cluster["ClusterArn"], cluster, "ListClustersV2")
+        for subnet in subnets:
+            # MSK spreads brokers evenly across the client subnets (one per AZ).
+            per_subnet = provisioned.get("NumberOfBrokerNodes", 0) // max(1, len(subnets))
+            broker = node("msk_broker", cluster["ClusterArn"] + "#" + subnet,
+                          {"ClusterName": cluster.get("ClusterName"), "Brokers": per_subnet, "InstanceType": brokers.get("InstanceType"),
+                           "KafkaVersion": (provisioned.get("CurrentBrokerSoftwareInfo") or {}).get("KafkaVersion")},
+                          "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
+            link(broker, "vpc", subnet_vpc.get(subnet), "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
+            link(broker, "subnet", subnet, "in_subnet", "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
+            link(broker, "msk_cluster", cluster["ClusterArn"], "broker_of", "ListClustersV2.ClusterArn")
+        if subnets and subnet_vpc.get(subnets[0]):
+            link(key, "vpc", subnet_vpc[subnets[0]], "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
+    for function in raw.get("lambda_functions", []):
+        config = function.get("VpcConfig") or {}
+        if not config.get("VpcId"):
+            continue  # not attached to a VPC: outside the network diagram
+        key = node("lambda_function", function["FunctionName"], function, "ListFunctions")
+        link(key, "vpc", config["VpcId"], "in_vpc", "ListFunctions.VpcConfig.VpcId")
+        for subnet in config.get("SubnetIds", []):
+            link(key, "subnet", subnet, "lambda_subnet", "ListFunctions.VpcConfig.SubnetIds[]")
+    for cluster in raw.get("eks_clusters", []):
+        config = cluster.get("resourcesVpcConfig") or {}
+        key = node("eks_cluster", cluster["name"], cluster, "DescribeCluster")
+        link(key, "vpc", config.get("vpcId"), "in_vpc", "DescribeCluster.resourcesVpcConfig.vpcId")
+        for subnet in config.get("subnetIds", []):
+            link(key, "subnet", subnet, "eks_subnet", "DescribeCluster.resourcesVpcConfig.subnetIds[]")
+        for group in cluster.get("nodegroups", []):
+            for asg in (group.get("resources") or {}).get("autoScalingGroups", []):
+                link(key, "auto_scaling_group", asg.get("name"), "eks_nodegroup", "DescribeNodegroup.resources.autoScalingGroups[]",
+                     {"nodegroup": group.get("nodegroupName"), "instanceTypes": group.get("instanceTypes"),
+                      "scaling": group.get("scalingConfig")})
 
 
 def classify_subnets(raw, prefix, nodes, link):

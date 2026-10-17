@@ -17,7 +17,17 @@
         "autoscaling:DescribeAutoScalingGroups",
         "ec2:DescribeVpcEndpoints",
         "ec2:DescribeTransitGateways",
-        "ec2:DescribeTransitGatewayVpcAttachments"
+        "ec2:DescribeTransitGatewayVpcAttachments",
+        "rds:DescribeDBClusters",
+        "elasticache:DescribeCacheClusters",
+        "elasticache:DescribeReplicationGroups",
+        "elasticache:DescribeCacheSubnetGroups",
+        "kafka:ListClustersV2",
+        "lambda:ListFunctions",
+        "eks:ListClusters",
+        "eks:DescribeCluster",
+        "eks:ListNodegroups",
+        "eks:DescribeNodegroup"
       ],
       "Resource": "*"
     }

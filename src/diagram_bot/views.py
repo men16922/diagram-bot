@@ -9,9 +9,10 @@ AUXILIARY_KINDS = {"security_group", "network_interface", "volume"}
 # Regional resources reached from a VPC, drawn with the VPC's detail view.
 REGIONAL = {"attached_transit_gateway"}
 # Resources drawn inside the subnet that the API places them in.
-SUBNET_KINDS = {"ec2", "nat_gateway", "db_instance", "db_standby"}
+SUBNET_KINDS = {"ec2", "nat_gateway", "db_instance", "db_standby", "cache_node", "msk_broker"}
 # Known to the graph and the inspector but not drawn as shapes (routing is shown on subnets).
-UNDRAWN_KINDS = {"route_table"}
+# Logical groupings shown through their members (DB cluster, cache replication group, MSK cluster).
+UNDRAWN_KINDS = {"route_table", "db_cluster", "cache_replication_group", "msk_cluster"}
 
 
 def containment(graph):

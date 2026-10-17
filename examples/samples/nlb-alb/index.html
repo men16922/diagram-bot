@@ -22,8 +22,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T05:23:38.223140+00:00",
-    "finished_at": "2026-10-17T05:23:38.223140+00:00",
+    "started_at": "2026-10-17T07:25:41.662930+00:00",
+    "finished_at": "2026-10-17T07:25:41.662930+00:00",
     "status": "complete",
     "demo": true,
     "sample": "nlb-alb",
@@ -45,7 +45,13 @@
       "NatGateway",
       "RouteTable",
       "RDS",
-      "AutoScalingGroup"
+      "AutoScalingGroup",
+      "VpcEndpoint",
+      "TransitGateway",
+      "EKS",
+      "MSK",
+      "ElastiCache",
+      "Lambda"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
@@ -123,6 +129,55 @@
       "status": "complete",
       "pages": 1,
       "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_transit_gateway_vpc_attachments",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "kafka",
+      "operation": "list_clusters_v2",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "lambda",
+      "operation": "list_functions",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
     },
     {
       "service": "elbv2",
@@ -768,7 +823,14 @@
       }
     ],
     "transit_gateways": [],
-    "transit_gateway_attachments": []
+    "transit_gateway_attachments": [],
+    "db_clusters": [],
+    "cache_clusters": [],
+    "replication_groups": [],
+    "cache_subnet_groups": [],
+    "msk_clusters": [],
+    "lambda_functions": [],
+    "eks_clusters": []
   },
   "graph": {
     "nodes": [
