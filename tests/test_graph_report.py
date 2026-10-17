@@ -21,7 +21,9 @@ def test_explicit_relationships_and_multisubnet_lb():
     placements = [e for e in graph["edges"] if e["source"] == lb["id"] and e["relation"] == "in_subnet"]
     assert sorted(e["qualifiers"]["availability_zone"] for e in placements) == ["ap-northeast-2a", "ap-northeast-2c"]
     assert all(e["source"] in nodes and e["target"] in nodes and not e["inferred"] for e in graph["edges"])
-    assert all(n["reference_only"] for n in nodes.values() if n["kind"] in ("security_group", "volume", "network_interface"))
+    assert all(n["reference_only"] for n in nodes.values() if n["kind"] in ("volume", "network_interface"))
+    # Security groups are collected for their rules (review) but still drawn only as references.
+    assert {n["source"] for n in nodes.values() if n["kind"] == "security_group"} == {"DescribeSecurityGroups"}
     assert not any(e["relation"] in ("communicates_with", "allows_traffic") for e in graph["edges"])
     assert build_graph(demo_snapshot())["edges"] == graph["edges"]
     assert len({e["id"] for e in graph["edges"]}) == len(graph["edges"])

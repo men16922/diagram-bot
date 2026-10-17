@@ -32,7 +32,8 @@ def demo_snapshot():
          "PrivateIpAddress": "10.20.11.25", "State": {"Name": "stopped"}, "Placement": {"AvailabilityZone": "ap-northeast-2a"},
          "Tags": tags("주문 정산 야간 배치 처리 서버 (월말 대사 작업 전용 인스턴스)", Environment="production")},
         {"InstanceId": "i-staging", "VpcId": "vpc-staging", "SubnetId": "subnet-staging", "InstanceType": "t3.micro",
-         "State": {"Name": "running"}, "Tags": tags("staging-api", Environment="staging")},
+         "State": {"Name": "running"}, "Tags": tags("staging-api", Environment="staging"),
+         "PublicIpAddress": "203.0.113.45", "MetadataOptions": {"HttpTokens": "optional"}},
     ]
     load_balancers = [
         {"LoadBalancerArn": ALB, "LoadBalancerName": "demo-alb", "Type": "application", "VpcId": "vpc-demo",
@@ -59,6 +60,13 @@ def demo_snapshot():
             # Same IP as i-demo-batch; it must not be merged into that instance.
             {"Target": {"Id": "10.20.11.25", "Port": 9000, "AvailabilityZone": "ap-northeast-2a"}, "TargetHealth": {"State": "healthy"}}]},
     ]
+    # Review input: the web tier also allows SSH from anywhere, a typical finding.
+    security_groups = [
+        {"GroupId": "sg-alb", "GroupName": "demo-alb-sg", "VpcId": "vpc-demo", "IpPermissions": [
+            {"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]},
+        {"GroupId": "sg-web", "GroupName": "demo-web-sg", "VpcId": "vpc-demo", "IpPermissions": [
+            {"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "UserIdGroupPairs": [{"GroupId": "sg-alb"}]},
+            {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "temporary"}]}]}]
     vpcs = [{"VpcId": "vpc-demo", "CidrBlock": "10.20.0.0/16", "Tags": tags("주문 서비스 운영 네트워크")},
             {"VpcId": "vpc-staging", "CidrBlock": "10.30.0.0/16", "Tags": tags("Staging Network")},
             {"VpcId": "vpc-empty", "CidrBlock": "10.40.0.0/16", "Tags": tags("빈 검증 환경")}]
@@ -68,7 +76,8 @@ def demo_snapshot():
         {"service": "ec2", "operation": "describe_instances", "status": "partial", "items": len(instances), "pages": 1,
          "error_code": "UnauthorizedOperation", "permission": "ec2:DescribeInstances"},
         {"service": "elbv2", "operation": "describe_load_balancers", "status": "complete", "items": len(load_balancers), "pages": 1},
-        {"service": "elbv2", "operation": "describe_target_groups", "status": "complete", "items": len(target_groups), "pages": 1}]
+        {"service": "elbv2", "operation": "describe_target_groups", "status": "complete", "items": len(target_groups), "pages": 1},
+        {"service": "ec2", "operation": "describe_security_groups", "status": "complete", "items": len(security_groups), "pages": 1}]
     coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
                   "status": "complete", "items": len(h["Descriptions"]), "pages": 1} for h in target_health]
     return {"schema_version": 1, "metadata": {
@@ -76,11 +85,11 @@ def demo_snapshot():
         "started_at": timestamp, "finished_at": timestamp, "status": "partial", "demo": True,
         "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget"],
         "limitations": ["실제 AWS 조회가 아닌 샘플 데이터입니다.",
-                        "보안 그룹·ENI·EBS는 참조만 표시합니다.",
+                        "ENI·EBS는 참조만 표시하고 보안 그룹 규칙은 검토 결과에만 사용합니다.",
                         "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."]},
         "coverage": coverage,
         "raw": {"vpcs": vpcs,
                 "subnets": [{"SubnetId": s, "VpcId": v, "AvailabilityZone": az, "CidrBlock": cidr, "Tags": tags(name)}
                             for s, v, az, cidr, name in subnets],
                 "instances": instances, "load_balancers": load_balancers,
-                "target_groups": target_groups, "target_health": target_health}}
+                "target_groups": target_groups, "target_health": target_health, "security_groups": security_groups}}

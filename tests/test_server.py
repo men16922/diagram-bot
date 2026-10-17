@@ -138,3 +138,10 @@ def test_background_collection_result_and_failure(client, monkeypatch, fail):
     else:
         assert job['status'] == 'partial'
         assert client.get('/api/snapshots/' + job['snapshot_id']).status_code == 200
+
+
+def test_findings_endpoint(client):
+    result = client.get('/api/snapshots/demo/findings').json()
+    assert result['summary']['high'] == 1
+    assert result['findings'][0]['rule'] == 'SEC-SG-OPEN' and result['findings'][0]['resource'].endswith('/security_group/sg-web')
+    assert client.get('/api/snapshots/sample-three-tier/findings').json()['findings'] == []

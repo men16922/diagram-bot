@@ -111,6 +111,7 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         stubs["ec2"].add_client_error("describe_vpn_gateways", "UnauthorizedOperation", expected_params={})
         stubs["ec2"].add_response("describe_vpn_connections", {"VpnConnections": []}, {})
         stubs["ec2"].add_response("describe_customer_gateways", {"CustomerGateways": []}, {})
+        stubs["ec2"].add_response("describe_security_groups", {"SecurityGroups": [{"GroupId": "sg-a", "GroupName": "web"}]}, {})
         stubs["eks"].add_response("describe_cluster", {"cluster": {"name": "platform", "resourcesVpcConfig": {"vpcId": "vpc-a", "subnetIds": ["subnet-a"]}}}, {"name": "platform"})
         stubs["eks"].add_response("list_nodegroups", {"nodegroups": ["general"]}, {"clusterName": "platform"})
         stubs["eks"].add_response("describe_nodegroup", {"nodegroup": {"nodegroupName": "general", "resources": {"autoScalingGroups": [{"name": "eks-general"}]}}},

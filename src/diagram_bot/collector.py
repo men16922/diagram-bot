@@ -43,6 +43,8 @@ OPERATIONS = [
     ("ec2", "describe_vpn_gateways", "VpnGateways", "vpn_gateways"),
     ("ec2", "describe_vpn_connections", "VpnConnections", "vpn_connections"),
     ("ec2", "describe_customer_gateways", "CustomerGateways", "customer_gateways"),
+    # Security group rules feed the architecture review (internet-exposed admin and data ports).
+    ("ec2", "describe_security_groups", "SecurityGroups", "security_groups"),
 ]
 # IAM service prefixes that differ from the boto3 client name.
 IAM_PREFIX = {"elbv2": "elasticloadbalancing", "opensearch": "es", "efs": "elasticfilesystem"}
@@ -152,9 +154,9 @@ def collect(region, profile=None, expected_account=None, session=None):
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
         "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway",
                   "NatGateway", "RouteTable", "RDS", "Aurora", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment",
-                  "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN"],
+                  "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN", "SecurityGroupRules"],
         "limitations": ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
                         "여러 API의 순차 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
-                        "보안 그룹·ENI·EBS는 EC2/ELB 응답의 참조만 표시합니다. 별도 상세 조회는 하지 않습니다.",
-                        "리스너 규칙·보안 그룹 규칙·Direct Connect·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
+                        "ENI·EBS는 EC2 응답의 참조만 표시합니다. 보안 그룹 규칙은 검토 결과와 속성 패널에만 쓰며 구성도에 선으로 그리지 않습니다.",
+                        "리스너 규칙·NACL·Direct Connect·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
         "coverage": coverage, "raw": raw}

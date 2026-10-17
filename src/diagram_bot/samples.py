@@ -22,7 +22,8 @@ class Sample:
                     "msk_clusters": [], "msk_nodes": [], "lambda_functions": [], "eks_clusters": [],
                     "opensearch_domains": [], "opensearch_nodes": [], "ecs_services": [], "ecs_tasks": [],
                     "efs_file_systems": [], "efs_mount_targets": [], "redshift_clusters": [], "redshift_subnet_groups": [],
-                    "vpc_peering_connections": [], "vpn_gateways": [], "vpn_connections": [], "customer_gateways": []}
+                    "vpc_peering_connections": [], "vpn_gateways": [], "vpn_connections": [], "customer_gateways": [],
+                    "security_groups": []}
         self.counter = 0
 
     def tags(self, name, **extra):
@@ -74,6 +75,14 @@ class Sample:
     def address(self, subnet, offset):
         cidr = next(s["CidrBlock"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
         return str(ipaddress.ip_network(cidr)[offset])
+
+    def security_group(self, key, vpc, name, ingress):
+        """Ingress as (port, source): a CIDR, or another group's ID for tier-to-tier rules."""
+        rules = [{"IpProtocol": "tcp", "FromPort": port, "ToPort": port,
+                  **({"UserIdGroupPairs": [{"GroupId": source}]} if source.startswith("sg-") else {"IpRanges": [{"CidrIp": source}]})}
+                 for port, source in ingress]
+        self.raw["security_groups"].append({"GroupId": key, "GroupName": name, "VpcId": vpc, "IpPermissions": rules,
+                                            "IpPermissionsEgress": [{"IpProtocol": "-1", "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]})
 
     def az_of(self, subnet):
         return next(s["AvailabilityZone"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
@@ -331,7 +340,8 @@ class Sample:
                                                     ("redshift", "describe_clusters", "redshift_clusters"),
                                                     ("ec2", "describe_vpc_peering_connections", "vpc_peering_connections"),
                                                     ("ec2", "describe_vpn_gateways", "vpn_gateways"),
-                                                    ("ec2", "describe_vpn_connections", "vpn_connections"))]
+                                                    ("ec2", "describe_vpn_connections", "vpn_connections"),
+                                                    ("ec2", "describe_security_groups", "security_groups"))]
         coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
                       "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in self.raw["target_health"]]
         return {"schema_version": 1, "metadata": {
@@ -372,6 +382,12 @@ def three_tier():
     s.auto_scaling_group("prod-web-asg", webs, web, [web_tg], 3, 9)
     s.auto_scaling_group("prod-app-asg", apps, app, [app_tg], 3, 12)
     s.database("prod-orders-db", vpc, data, "a", "mysql", "db.r6g.large", standby="b", replica="c")
+    # Each tier admits only the tier in front of it; only the public ALB is open to the internet.
+    s.security_group("sg-public-alb", vpc, "prod-public-alb", [(443, "0.0.0.0/0")])
+    s.security_group("sg-web", vpc, "prod-web", [(443, "sg-public-alb")])
+    s.security_group("sg-internal-alb", vpc, "prod-internal-alb", [(8080, "sg-web")])
+    s.security_group("sg-app", vpc, "prod-app", [(8080, "sg-internal-alb")])
+    s.security_group("sg-prod-db", vpc, "prod-db", [(3306, "sg-app")])
     s.gateway_endpoint("vpce-prod-s3", vpc, "s3", [f"rtb-prod-private-{az}" for az in "abc"])
     s.interface_endpoint("vpce-prod-ssm", vpc, "ssm", app)
     return s.snapshot()

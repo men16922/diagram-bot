@@ -296,7 +296,9 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
         label = (f"VPC · {fit_label(vpc['name'], 290, 1)}\n{vpc['attributes'].get('CidrBlock', '')} · {vpc['resource_id']}\n"
                  + "\n".join(rows) + f"\nAZ {', '.join(azs) if azs else '미확인'}")
         cards.append((label, vpc["id"], len(inside) == 0))
-    outside = [n for n in nodes.values() if n["kind"] != "vpc" and n["id"] not in vpc_of]
+    # Collected security groups are rule sets, not placed resources; referenced ones still count.
+    outside = [n for n in nodes.values() if n["kind"] != "vpc" and n["id"] not in vpc_of
+               and not (n["kind"] == "security_group" and not n["reference_only"])]
     if outside:
         refs = sum(n["reference_only"] for n in outside)
         cards.append((f"VPC 외 · 배치 미확인\n리소스 {len(outside)}개 (참조만 확인 {refs}개)\n보안 그룹·ENI·EBS·IP 대상 등\n상세 보기에서 관계 확인", None, False))

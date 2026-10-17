@@ -4,8 +4,9 @@ import json
 from importlib.resources import files
 from pathlib import Path
 
-from .graph import build_graph
 from .drawio import generate_document
+from .findings import markdown, review
+from .graph import build_graph
 
 
 def csv_safe(value):
@@ -43,7 +44,8 @@ def write_report(snapshot, directory):
                       f"{row.get('items', '—')}개, 오류 {row.get('error_code', '없음')}; "
                       + (f"필요 권한 {row['permission']}; " if row["status"] != "complete" and row.get("permission") else "") +
                       f"범위 {json.dumps(row.get('parameters', {}), ensure_ascii=False)}")
-    checks += ["", "## 해석 범위", ""] + [f"- {s}" for s in snapshot["metadata"].get("limitations", [])]
+    checks += [""] + markdown(review(snapshot["graph"], snapshot["coverage"]))
+    checks += ["## 해석 범위", ""] + [f"- {s}" for s in snapshot["metadata"].get("limitations", [])]
     checks += ["", "## 검토할 항목", "", "- 조회 불가·부분 조회 범위의 권한 및 재수집 필요 여부",
                "- 참조만 확인된 리소스와 미확인 배치 정보", "- VPC·서브넷·가용 영역 배치가 설계 의도와 일치하는지",
                "- 대상 그룹의 등록 대상과 조회 시점의 TargetHealth 상태",

@@ -50,7 +50,7 @@ def main():
         # 1. Overview: summary cards, counts and partial coverage are visible; a VPC card leads to detail.
         expect(page.locator('#view-overview')).to_have_class('view-button active')
         expect(page.locator('#partial-chip')).to_be_visible()
-        expect(page.locator('#view-scope')).to_contain_text('수집 18개')
+        expect(page.locator('#view-scope')).to_contain_text('수집 20개')
         frame.get_by_text(starts('VPC · 주문 서비스 운영 네트워크')).click()
         expect(detail).to_contain_text('vpc-demo')
         page.screenshot(path=str(args.output / 'overview.png'), full_page=True)
@@ -106,7 +106,7 @@ def main():
         ready()
         page.locator('#references').check()
         ready()
-        expect(frame.get_by_text(named('sg-web'))).to_be_visible()
+        expect(frame.get_by_text(named('demo-web-sg'))).to_be_visible()
         page.locator('#references').uncheck()
         ready()
 
@@ -187,6 +187,17 @@ def main():
         ready()
         restored = page.evaluate("fetch('/api/snapshots/demo/document?view=detail&vpc=vpc-demo&references=false').then(r => r.json())")
         assert geometry(restored['xml'], '/ec2/i-demo-c') == moved
+
+        # 7b. Architecture review: severity summary, evidence, and a finding opens its resource.
+        page.locator('#review-tab').click()
+        expect(page.locator('#review-summary')).to_contain_text('높음 1')
+        expect(page.locator('#review-rows')).to_contain_text('DescribeSecurityGroups.IpPermissions')
+        page.locator('#review-rows .finding').first.click()
+        expect(detail).to_contain_text('demo-web-sg')
+        page.locator('#severity-filter').select_option('low')
+        expect(page.locator('#review-rows')).to_contain_text('ec2:DescribeInstances')
+        page.screenshot(path=str(args.output / 'review.png'), full_page=True)
+        page.locator('#diagram-tab').click()
 
         # 8. Infrastructure sample: Auto Scaling frame, RDS and route-classified subnets.
         page.locator('#snapshot-select').select_option('sample-three-tier')

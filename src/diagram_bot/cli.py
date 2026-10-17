@@ -7,6 +7,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from .collector import collect
 from .demo import demo_snapshot
+from .findings import SEVERITIES, markdown, review, summary
+from .graph import build_graph
 from .samples import SAMPLES
 from .report import write_report
 
@@ -25,6 +27,10 @@ def main():
     demo = commands.add_parser("demo", help="인증 없이 샘플 보고서 생성")
     demo.add_argument("--output", default="reports/demo")
     demo.add_argument("--sample", choices=sorted(SAMPLES), help="AWS best practice 참고 구성 샘플")
+    check = commands.add_parser("review", help="snapshot.json 아키텍처 검토 (CI 게이트용 종료 코드)")
+    check.add_argument("snapshot")
+    check.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    check.add_argument("--fail-on", choices=SEVERITIES, help="이 심각도 이상 결과가 있으면 종료 코드 3")
     setup = commands.add_parser("setup-editor", help="고정 버전 draw.io 편집기 설치 (최초 한 번)")
     setup.add_argument("--archive", help="오프라인 설치용 공식 draw.war 경로")
     serve = commands.add_parser("serve", help="draw.io 기반 로컬 시연 앱 실행")
@@ -42,6 +48,15 @@ def main():
             print(f"Diagram Bot: http://127.0.0.1:{args.port}", flush=True)
             uvicorn.run(create_app(args.data_dir), host="127.0.0.1", port=args.port)
             return 0
+        if args.command == "review":
+            snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
+            findings = review(build_graph(snapshot), snapshot.get("coverage", []))
+            if args.format == "json":
+                print(json.dumps({"summary": summary(findings), "findings": findings}, ensure_ascii=False, indent=2))
+            else:
+                print("\n".join(markdown(findings)))
+            threshold = SEVERITIES.index(args.fail_on) if args.fail_on else -1
+            return 3 if any(SEVERITIES.index(f["severity"]) <= threshold for f in findings) else 0
         if args.command == "collect":
             if len(args.expected_account) != 12 or not args.expected_account.isdigit():
                 parser.error("--expected-account는 12자리 AWS 계정 ID여야 합니다.")

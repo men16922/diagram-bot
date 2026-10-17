@@ -45,7 +45,7 @@ def build_graph(snapshot):
                           "name": tags.get("Name") or attrs.get("DisplayName") or attrs.get("LoadBalancerName") or attrs.get("TargetGroupName")
                           or attrs.get("DBInstanceIdentifier") or attrs.get("AutoScalingGroupName") or attrs.get("FunctionName")
                           or attrs.get("CacheClusterId") or attrs.get("ClusterName") or attrs.get("serviceName")
-                          or attrs.get("DomainName") or attrs.get("ClusterIdentifier") or resource_id,
+                          or attrs.get("DomainName") or attrs.get("ClusterIdentifier") or attrs.get("GroupName") or resource_id,
                           "account": account, "region": region, "attributes": attrs,
                           "reference_only": reference, "source": source}
         return key
@@ -112,6 +112,9 @@ def build_graph(snapshot):
                 place_ip_target(raw, target_key, target, group.get("VpcId"), link)
             link(key, kind, rid, "registered_target", "DescribeTargetHealth.Target.Id", description,
                  {"port": target.get("Port"), "availability_zone": target.get("AvailabilityZone")})
+    for group in raw.get("security_groups", []):
+        # Collected for its rules (review, inspector); drawn only as a reference when requested.
+        node("security_group", group["GroupId"], group, "DescribeSecurityGroups")
     endpoints_and_transit(raw, node, link)
     infrastructure(raw, prefix, nodes, node, link)
     services(raw, prefix, nodes, node, link)

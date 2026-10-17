@@ -33,7 +33,7 @@
     <section class="metrics" id="metrics"></section>
     <section class="workspace">
       <div class="workspace-toolbar">
-        <div class="tabs"><button id="diagram-tab" class="tab active">구성도</button><button id="inventory-tab" class="tab">리소스 목록 <span id="total-count"></span></button></div>
+        <div class="tabs"><button id="diagram-tab" class="tab active">구성도</button><button id="inventory-tab" class="tab">리소스 목록 <span id="total-count"></span></button><button id="review-tab" class="tab">검토 결과 <span id="finding-count"></span></button></div>
         <div class="workspace-actions"><span id="save-state" role="status">불러오는 중</span><button id="save-button" class="button" disabled>편집본 저장</button><button id="export-button" class="button primary" disabled>↓ 다운로드</button></div>
       </div>
       <div class="viewbar" role="tablist" aria-label="구성도 보기"><button id="view-overview" class="view-button active" role="tab">전체 구성</button><button id="view-detail" class="view-button" role="tab">상세 구성</button><button id="view-focus" class="view-button" role="tab">선택 리소스</button><span id="view-scope" class="view-scope"></span><span id="partial-chip" class="badge warn" hidden>부분 조회 · 일부 리소스 누락 가능</span></div>
@@ -46,6 +46,7 @@
           <div id="editor-overlay" class="editor-overlay"><div class="loader"></div><h3>구성도를 준비하고 있습니다</h3><p id="editor-message">로컬 draw.io 편집기를 불러오는 중입니다.</p></div>
         </div>
         <div id="inventory" class="inventory" hidden><table><thead><tr><th>리소스</th><th>종류</th><th>ID / ARN</th><th>조회 근거</th></tr></thead><tbody id="inventory-rows"></tbody></table><p id="inventory-empty" hidden>조건에 맞는 리소스가 없습니다.</p></div>
+        <div id="review" class="review" hidden><div class="review-head"><div id="review-summary" class="review-summary"></div><select id="severity-filter" aria-label="심각도"><option value="all">모든 심각도</option><option value="high">높음</option><option value="medium">중간</option><option value="low">낮음</option></select></div><p class="review-note">수집한 설정만으로 판정한 결과입니다. 애플리케이션 수준 이중화·실제 트래픽은 별도로 확인하세요. 항목을 선택하면 리소스 속성과 관계가 열립니다.</p><ol id="review-rows" class="review-rows"></ol><p id="review-empty" hidden>해당 심각도의 검토 항목이 없습니다.</p></div>
         <aside class="inspector" id="inspector"><div class="inspector-title">RESOURCE DETAILS</div><div id="detail-body" class="detail-body"><div class="empty-detail"><div>⌖</div><h3>구성을 살펴보세요</h3><p>리소스를 선택하면 속성과<br>API에서 확인한 관계가 표시됩니다.</p></div></div></aside>
       </div>
       <footer class="workspace-footer"><div><span class="legend-line"></span> 설정상 연결 <span class="legend-ref"></span> 참조만 확인 <span class="legend-summary"></span> 요약 카드</div><span>실제 통신 여부는 별도 관측이 필요합니다.</span></footer>

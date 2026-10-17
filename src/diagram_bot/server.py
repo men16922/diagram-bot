@@ -25,6 +25,7 @@ from .demo import demo_snapshot
 from .samples import SAMPLES
 from .drawio import carry_annotations, generate_document, validate_document
 from .editor import VERSION, editor_path
+from .findings import review, summary
 from .graph import build_graph, upgrade_graph
 from .views import view_graph
 
@@ -186,6 +187,12 @@ def create_app(directory=None, editor_directory=None):
     @app.get("/api/snapshots/{identifier}")
     def read_snapshot(identifier: str):
         return get_snapshot(identifier)
+
+    @app.get("/api/snapshots/{identifier}/findings")
+    def read_findings(identifier: str):
+        snapshot = get_snapshot(identifier)
+        findings = review(snapshot["graph"], snapshot["coverage"])
+        return {"summary": summary(findings), "findings": findings}
 
     @app.post("/api/snapshots", status_code=201)
     def import_snapshot(snapshot: dict):
