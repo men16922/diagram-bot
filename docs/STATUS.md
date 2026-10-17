@@ -1,6 +1,6 @@
 # Status
 
-Last Updated: 2026-10-17
+Last Updated: 2026-10-18
 
 ## Active Plan
 
@@ -16,8 +16,8 @@ Last Updated: 2026-10-17
 
 - AWS topology refinement plan (docs/TOPOLOGY_PLAN.md): P1–P5 implemented and verified on the
   synthetic sample. Merged to main (fast-forward) on 2026-10-17 at the user's request.
-- Remaining work is manual only: live SSO collection check and human visual review
-  (docs/NEXT_PLAN.md). No [auto] backlog is approved.
+- All manual verification is done (live keys, workload stack, cross-account role, SSO, visual review).
+  Follow-ups from the visual review are tracked in docs/NEXT_PLAN.md. No [auto] backlog is approved.
 
 ## Current Baseline (v0.5.0)
 
@@ -106,10 +106,9 @@ Last Updated: 2026-10-17
 
 ## Open Limits
 
-- Live AWS collection verified on one account/region only (owner's test account, us-east-1,
-  IAM user keys via `.env`, 2026-10-17): see Verification. Not yet verified live: SSO profile
-  login, AssumeRole/multi-account, and every service with real resources (that account has only
-  the default VPC, IGW, route table, SGs and non-VPC Lambda).
+- Live AWS collection verified on one account (owner's test account, us-east-1/us-west-2) with keys, in-app SSO and
+  a cross-account role (2026-10-17). Real resources seen live: VPC, subnets, IGW, ALB/TG, ASG/EC2, RDS, SGs, Lambda;
+  every other service only on stubs/moto.
 - 100-resource views are structurally correct but dense; no large-environment claim.
 - Team mode provides local accounts and OIDC SSO, roles, TLS and audit; SAML only via an auth proxy; no built-in scheduler (use cron/CI with `review`/`diff` exit codes),
   listener rules, NACLs or Direct Connect. Licensed Apache-2.0; NOTICE holder "men16922 and Diagram Bot contributors" (both owner decisions, 2026-10-17).
