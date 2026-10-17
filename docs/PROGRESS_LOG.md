@@ -10,6 +10,9 @@ Last Updated: 2026-10-18
 - Registration routes get one colour per target group, so trunks sharing a gutter are told apart.
 - Truncated names end on a whole word before the ellipsis.
 - STATUS no longer lists finished manual checks as open; LESSONS records the bare-`pytest` AWS-env trap.
+- docs/ARCHITECTURE.md (owner request: 사례를 AWS Best Practice로): official sources per sample, verdicts, ranked
+  change list. Real gaps: Redshift Multi-AZ subnet group (2 of the required 3 subnets), analytics VPC cannot reach
+  on-premises over peering, single customer gateway, missing `ecr.api`/`ssmmessages` endpoints.
 - Verified: `make check` (lint + 119 tests + CLI round trip); `verify_demo.py` 27 checks, no page errors or external
   requests; docs/images and examples/demo regenerated from that run.
 

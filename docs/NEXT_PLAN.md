@@ -32,6 +32,12 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 - [x] Default chat model: Amazon Nova 2 Lite (owner's decision 2026-10-17). GPT-6 Luna stays selectable; it answers
   once AWS enables OpenAI models for the account (support-case draft prepared, owner sends it if wanted).
 
+## Sample Best-Practice Alignment (owner request 2026-10-18)
+
+- [x] docs/ARCHITECTURE.md: AWS sources, per-sample verdicts and a ranked change list.
+- [ ] Apply the change list (docs/ARCHITECTURE.md §4) — awaiting the owner's choice of items. Top: Redshift Multi-AZ
+  subnet group (MUST), data-platform peering+VGW → TGW hub, second CGW/VPN in hybrid, missing `ecr.api`/SSM endpoints.
+
 ## Candidate Follow-ups (not approved)
 
 - Design → IaC (CloudFormation/CDK) export; brownfield design starting from a collected snapshot; chat streaming.

@@ -1,8 +1,8 @@
-> ▶ NEXT SESSION: Chat design agent (Strands + Bedrock) shipped and verified live; default model Nova 2 Lite (owner's choice; GPT-6 Luna selectable, not yet enabled by AWS). Real-workload live check done (temporary stack). In-app SSO collection verified live. Visual review done (layout issues listed in NEXT_PLAN). No open manual verification. No [auto] backlog.
+> ▶ NEXT SESSION: Visual review follow-ups done (2026-10-18). Owner asked to align all 7 samples with AWS best practice: docs/ARCHITECTURE.md written (sources, verdicts, ranked changes in §4); next is applying the items the owner approves. No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 
-Last Updated: 2026-10-17
+Last Updated: 2026-10-18
 
 ## Baseline
 
@@ -11,7 +11,7 @@ pinned draw.io 32.4.1; boto3 collects read-only AWS configuration using existing
 The demo supports overview/detail/focus views, a deterministic layered layout, properties and
 relation evidence, native editing with revision history, draw.io/PNG exports and JSON/CSV inventory, architecture
 review/diff, team mode, and a chat design agent (Strands + Bedrock; tools draw standard designs, the model never
-invents resources). draw.io internals: docs/DRAWIO.md. Product scope and future proposals are in docs/PLAN.md.
+invents resources). draw.io internals: docs/DRAWIO.md. Sample best-practice basis: docs/ARCHITECTURE.md. Product scope and future proposals are in docs/PLAN.md.
 
 ## Read Order
 
