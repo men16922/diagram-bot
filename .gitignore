@@ -28,6 +28,7 @@ review.md
 topology.svg
 *.drawio
 !examples/demo/topology.drawio
+!examples/demo/edited-topology.drawio
 index.html
 !examples/demo/snapshot.json
 !examples/demo/inventory.csv

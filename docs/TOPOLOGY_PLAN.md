@@ -1,7 +1,8 @@
 # Diagram Bot — AWS 자동 구성도 개선 계획
 
 - 작성일: 2026-10-17
-- 상태: 계획 작성 완료. 아래 P1~P5 구현은 아직 시작하지 않았다.
+- 상태: P1~P5 구현·검증 완료(2026-10-17, 합성 샘플 기준). 실제 AWS SSO 수집 검증은 미완료.
+  구현 결과와 증거는 [STATUS.md](STATUS.md), 배치 엔진 판단은 [LAYOUT_EVALUATION.md](engineering/LAYOUT_EVALUATION.md).
 - 목표: 기존 AWS SSO로 조회한 설정을 자동 배치하고, 편집 가능한 `.drawio`와 PNG로 출력하는 시연 버전.
 - 현재 작업 기준: 이 문서. 기존 `PLAN.md`의 제품 확장안보다 이번 범위와 단계가 우선한다.
 

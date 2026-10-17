@@ -2,6 +2,19 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — Topology plan P1–P5 implemented (cloud session)
+
+- Installed overnight-harness v1.8.0 (Claude marketplace); `make overnight-where` resolves it.
+- P1/P2 commit: relation IDs, views.py, layout.py, serializer-only drawio.py, rich sample,
+  ELK experiment (scripts/experiments/elk) and evaluation doc.
+- P3/P4 commit: view-aware document API, history/relayout/restore, UI view switcher, focus view,
+  relation highlight, bridge relationId support; browser acceptance rewritten.
+- P5: examples/demo and docs/images regenerated from the final code; docs updated.
+- Verified: `make check` (42 tests + CLI round trip); Chromium acceptance 23 checks with no page
+  errors/external requests; geometry checker mutation-tested (overlap, clip, edge crossing).
+- Visual review of rendered views done by the implementer; human review remains [manual].
+- Not verified: live AWS SSO collection (no credentials in this environment).
+
 ## 2026-10-17 — Commit/push preparation
 
 - User requested committing and pushing the topology plan and prepared repository state.

@@ -4,41 +4,56 @@ Last Updated: 2026-10-17
 
 ## Active Plan
 
-- AWS topology refinement plan: docs/TOPOLOGY_PLAN.md; P1–P5 are not yet implemented.
-- Reuse direct SSO + EC2/ELBv2 collection. No Resource Explorer or DevOps Agent dependency.
-- Next implementation starts with graph/view contracts, then layout, views and export acceptance.
-- This planning pass changed documentation only; no application tests or live AWS calls were run.
+- AWS topology refinement plan (docs/TOPOLOGY_PLAN.md): P1–P5 implemented and verified on the
+  synthetic sample. Branch `claude/harness-plugin-install-yirqt3`; not yet merged to main.
+- Remaining work is manual only: live SSO collection check and human visual review
+  (docs/NEXT_PLAN.md). No [auto] backlog is approved.
 
-## Current Baseline
+## Current Baseline (v0.3)
 
-- Application: v0.2; last pushed baseline `d27657e` on main.
-- AWS VPC/Subnet/EC2/ELBv2/TargetGroup collection and explicit API relations implemented.
-- Native draw.io editing, persisted views, resource inspection, PNG and data exports implemented.
-- Existing verification: 24 pytest cases; Chromium editing/export flow; CI Python 3.11/3.12/3.13
-  and browser jobs passed at the application baseline.
-- Browser evidence: examples/demo/verification.json, topology.drawio, topology.png;
-  docs/images/workspace.png. These describe synthetic data, not a live AWS account.
+- Collection: unchanged direct SSO/SDK + EC2/ELBv2 Describe calls; coverage rows now name the
+  IAM action needed when a call is denied or partial (UI dialog and review.md).
+- Graph: relation IDs from source/relation/target + port/AZ qualifiers; independent of API
+  array order and target health. Same instance on two ports = two relations. Legacy snapshots
+  get IDs on read in their stored order, so saved `relationIndex` documents still resolve.
+- Views (`views.py`): overview (account/region + VPC summary cards), detail (one VPC), focus
+  (one resource, direct relations, required boundaries). Each reports visible / collected /
+  reference / hidden counts. SG/ENI/EBS references are an option; registered targets and
+  unqueried references always appear in the detail view.
+- Layout (`layout.py`, `diagram-bot-layered/2`): deterministic bands and AZ columns with explicit
+  channel/gutter routes; `drawio.py` only serializes. Engine recorded in each document.
+  ELK layered evaluated and not adopted: docs/engineering/LAYOUT_EVALUATION.md.
+- Documents: one per snapshot/view/VPC/resource/reference option; detail views keep the old
+  storage key. Saves and explicit relayouts archive the superseded revision (last 20);
+  relayout keeps user notes; archived revisions can be restored.
+- CLI `topology.drawio` is multi-page: overview + one detail page per VPC.
+- Sample: 3 VPCs (one empty), 2 AZs, multi-subnet ALB, NLB, 3 target groups, one instance on
+  two ports, IP target sharing an instance IP, unqueried instance, long Korean names,
+  partial DescribeInstances.
 
-## Harness Initialization — Complete
+## Verification (2026-10-17, this container)
 
-- Overnight Harness v1.8.0 installed in Codex; per-repo state scaffolded.
-- Engine: codex; model and reasoning effort inherit the installed CLI configuration.
-- Gate: `make check`; smoke: `make smoke-local`.
-- Runner/helpers/prompts/bibles remain plugin-owned; no copied executable runner.
-- Makefile resolver honors CODEX_HOME and follows installed versions without an absolute pin.
-- Linux/macOS background launch supported by the repo-local Makefile state.
-- No approved [auto] tasks yet; plugin defaults are preserved for contract/prompt routing.
-- User requested commit/push of the configuration and topology plan; no application changes made.
-- `harness-init --check`, plugin resolution, `make check`, MAX_ITER=0 startup/shutdown,
-  event ledger validation and config/doc checks passed. Full actor smoke is not claimed.
-- Installer re-run preserved existing files (0 created, 16 skipped).
-- Checkpoint recorded on 2026-10-17; current next work is P1 in docs/NEXT_PLAN.md.
-- Pre-commit verification: `make check` passed 24 tests and the five-artifact CLI round trip.
+- `make check`: 42 pytest cases + five-artifact CLI round trip passed.
+- Layout tests: no sibling overlap (icons + label boxes), nothing outside its container, no
+  routed segment through another icon/label, identical rerun — all sample views and both VPCs
+  of a 100-resource fixture. 100-resource layout of all pages ≈0.02 s (limit 5 s).
+- Browser (`scripts/verify_demo.py`, Chromium, draw.io 32.4.1): 23 checks incl. overview →
+  detail → focus, ALB relations/evidence, relation highlight, native keyboard move + note,
+  save/reload, `.drawio` with moved geometry, PNG 1×/2×/3× and transparent, relayout keeps
+  the note, restore, JSON/CSV, import. No page errors, no external requests.
+- Downloaded `.drawio` reopened in draw.io renders the same edit as the exported PNG.
+- Evidence: examples/demo/ (CLI report, edited-topology.drawio/png, verification.json),
+  docs/images/{overview,workspace,focus}.png. All synthetic, labelled SAMPLE.
+
+## Harness
+
+- overnight-harness v1.8.0 installed for Claude in this cloud container on 2026-10-17
+  (`make overnight-where` resolves it; `harness-init --check` OK). Codex CLI is not present
+  here; the repo's default engine remains codex. Cloud containers need reinstalling per session.
 
 ## Open Limits
 
-- Actual AWS credentials, permissions, networking and SSO refresh remain unverified.
-- No shared-user hosting, scheduled collection, snapshot diff, RDS/EKS or production-scale claim.
-- Browser verification requires a provisioned editor/Chromium and is separate from the offline gate.
-- Full actor execution and commit verification require an approved [auto] task and Codex access;
-  zero-iteration startup/shutdown verification does not prove model invocation or commit capability.
+- Live AWS credentials, permissions, networking and SSO refresh remain unverified.
+- 100-resource views are structurally correct but dense; no large-environment claim.
+- No shared-user hosting, scheduled collection, snapshot diff, RDS/EKS or listener rules.
+- Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.

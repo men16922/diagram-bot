@@ -9,6 +9,13 @@ Last Updated: 2026-10-17
   runtime. Keep existing CLI behavior and record which layout engine produced each document.
 - Demo completeness is the current quality target; docs/PLAN.md contains deferred product work.
 - Graph relationships come from AWS IDs/ARNs and explicit API fields, not LLM inference.
+- Relation IDs hash source/relation/target plus port/AZ qualifiers only; health and array order
+  never change an ID. Legacy edges are upgraded in stored order.
+- Layout: deterministic Python `diagram-bot-layered/2`; ELK layered rejected (AZ columns not
+  preserved, JS runtime needed for CLI parity). Evidence: docs/engineering/LAYOUT_EVALUATION.md.
+- Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
+- Automatic layout only on first generation or explicit relayout; superseded edits are archived
+  and user-added notes carried over.
 - draw.io is the native editor; PNG rendering uses the same current edited document.
 - Original snapshots and presentation edits are separate stores.
 - Overnight Harness behavior stays in the installed plugin; the repo owns config, permissions,

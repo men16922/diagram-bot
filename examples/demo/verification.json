@@ -3,21 +3,42 @@
   "page_errors": [],
   "external_requests": [],
   "png_2x_size": [
-    1938,
-    1400
+    2498,
+    2286
   ],
+  "moved_instance": {
+    "before": [
+      69.0,
+      70.0
+    ],
+    "after": [
+      109.0,
+      70.0
+    ]
+  },
   "checks": [
-    "native selection",
-    "coverage",
+    "overview summary + counts + partial chip",
+    "VPC card -> detail view",
+    "ALB relations + evidence",
+    "relation highlight",
+    "multi-port registration",
+    "instance AZ/subnet placement",
+    "focus view + return",
+    "coverage + IAM permission",
+    "reference-only target",
     "inventory search/type",
     "VPC switch",
-    "references",
+    "SG/ENI/EBS references",
+    "native keyboard move",
     "native note edit",
     "save/reload",
-    "drawio XML download",
+    "drawio XML download with moved geometry",
     "PNG 2x white",
     "PNG 1x transparent",
+    "PNG 3x",
     "JSON/CSV exports",
+    "relayout keeps note + archives edit",
+    "restore archived edit",
     "snapshot import"
   ]
 }

@@ -119,7 +119,8 @@ def generate_document(snapshot, vpc_id=None, include_references=False, view=None
     file = Element("mxfile", {"host": "Diagram Bot", "version": "2", "compressed": "false"})
     if view or vpc_id or resource:
         layout = layout_document(snapshot, view, vpc_id, resource, include_references, graph)
-        name = {"overview": "전체 구성", "detail": vpc_id, "focus": layout["view"]["resource"]}[layout["view"]["kind"]]
+        focus = next((n["name"] for n in graph["nodes"] if n["id"] == layout["view"]["resource"]), None)
+        name = {"overview": "전체 구성", "detail": vpc_id, "focus": focus}[layout["view"]["kind"]]
         page(file, layout, name or "AWS")
     else:
         page(file, layout_document(snapshot, "overview", graph=graph), "전체 구성")

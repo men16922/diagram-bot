@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: Read docs/STATUS.md, docs/NEXT_PLAN.md and docs/TOPOLOGY_PLAN.md. The new plan starts at P1; no overnight run has been requested.
+> ▶ NEXT SESSION: Read docs/STATUS.md and docs/NEXT_PLAN.md. Topology plan P1–P5 is done; only manual follow-ups remain and no overnight run has been requested.
 
 # Diagram Bot — Agent Brief
 
@@ -6,10 +6,10 @@ Last Updated: 2026-10-17
 
 ## Baseline
 
-Diagram Bot v0.2 is an AWS-only local demo application. FastAPI and buildless JavaScript embed
+Diagram Bot v0.3 is an AWS-only local demo application. FastAPI and buildless JavaScript embed
 pinned draw.io 32.4.1; boto3 collects read-only AWS configuration using existing SDK/SSO credentials.
-The demo supports VPC/AZ/subnet grouping, properties, native editing, saved views, draw.io/PNG
-exports and JSON/CSV inventory. Product scope and future proposals are in docs/PLAN.md.
+The demo supports overview/detail/focus views, a deterministic layered layout, properties and
+relation evidence, native editing with revision history, draw.io/PNG exports and JSON/CSV inventory. Product scope and future proposals are in docs/PLAN.md.
 
 ## Read Order
 
@@ -25,6 +25,7 @@ exports and JSON/CSV inventory. Product scope and future proposals are in docs/P
 - `make overnight-codex-once`: one iteration, only after approved [auto] work exists.
 - `make overnight-stop`: stop after the current iteration.
 - `diagram-bot serve`: manual demo; see docs/DEMO.md.
+- `python scripts/verify_demo.py [--chromium PATH]`: browser acceptance against a fresh `serve`.
 
 ## Boundaries
 
