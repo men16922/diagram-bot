@@ -2,6 +2,17 @@
 
 Last Updated: 2026-10-17
 
+## Chat design agent and live verification — completed 2026-10-17
+
+- Strands + Bedrock chat agent (24 tools, Nova 2 Lite default), designer, in-app SSO device-code sign-in, `--env-file`.
+- Live: real account, temporary workload stack (16/16), cross-account role, SSO collection, browser chat; fixes for
+  VPC-less Lambda, terminated instances, shell AWS_PROFILE in the gate, VPC-scoped search, SSO role race.
+- Details: docs/archive/PROGRESS_LOG-2026-10.md, docs/STATUS.md, docs/engineering/DEVOPS_AGENT_BENCHMARK.md.
+
+## v0.4–v0.5 (review, diff, multi-account, team mode, OIDC) — completed 2026-10-17
+
+- See CHANGELOG.md and docs/archive/PROGRESS_LOG-2026-10.md.
+
 ## AWS topology refinement P1–P5 (v0.3) — completed 2026-10-17
 
 - P1: stable relation IDs (port/AZ qualifiers, order/health independent), legacy upgrade,
