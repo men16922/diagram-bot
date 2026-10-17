@@ -5,7 +5,7 @@ Last Updated: 2026-10-17
 ## Active Plan
 
 - AWS topology refinement plan (docs/TOPOLOGY_PLAN.md): P1–P5 implemented and verified on the
-  synthetic sample. Branch `claude/harness-plugin-install-yirqt3`; not yet merged to main.
+  synthetic sample. Merged to main (fast-forward) on 2026-10-17 at the user's request.
 - Remaining work is manual only: live SSO collection check and human visual review
   (docs/NEXT_PLAN.md). No [auto] backlog is approved.
 

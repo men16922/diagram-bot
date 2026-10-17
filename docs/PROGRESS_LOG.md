@@ -13,7 +13,8 @@ Last Updated: 2026-10-17
 - Verified: `make check` (42 tests + CLI round trip); Chromium acceptance 23 checks with no page
   errors/external requests; geometry checker mutation-tested (overlap, clip, edge crossing).
 - Visual review of rendered views done by the implementer; human review remains [manual].
-- Not verified: live AWS SSO collection (no credentials in this environment).
+- Not verified: live AWS collection — container keys rejected (`InvalidClientTokenId`); the CLI
+  failed cleanly with exit 1. Merged to main by fast-forward at the user's request.
 
 ## 2026-10-17 — Commit/push preparation
 

@@ -23,7 +23,6 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
   (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, plus `AWS_SESSION_TOKEN` if temporary).
 - [ ] [manual] Human visual review of docs/images/*.png and examples/demo/edited-topology.png.
   Done: groups/edges judged readable by the presenter, or concrete layout issues listed here.
-- [ ] [manual] Review and merge branch `claude/harness-plugin-install-yirqt3` into main.
 
 ## Candidate Follow-ups (not approved)
 
