@@ -22,7 +22,7 @@ from diagram_bot.report import write_report  # noqa: E402
 
 REGION, ACCOUNT = "ap-northeast-2", "123456789012"
 # Operations the emulator does not implement; real AWS answers them.
-EMULATOR_GAPS = {"list_nodes", "describe_domain_nodes"}
+EMULATOR_GAPS = {"list_nodes", "describe_domain_nodes", "describe_placement_groups"}  # not implemented in moto
 
 
 def build(s, steps):
@@ -156,7 +156,7 @@ def environment(monkeypatch):
         monkeypatch.setenv(key, value)
     # moto loads service backends lazily; the parallel collector would race on those imports.
     for name in ("ec2", "elb", "elbv2", "rds", "autoscaling", "elasticache", "kafka", "awslambda", "eks", "ecs", "efs", "redshift",
-                 "opensearch", "es", "sts", "iam"):
+                 "opensearch", "es", "sts", "iam", "fsx", "sagemaker"):
         importlib.import_module(f"moto.{name}.models")
     with moto.mock_aws():
         session = boto3.Session(region_name=REGION)

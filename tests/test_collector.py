@@ -55,7 +55,7 @@ def test_elbv2_marker_pagination():
 class Session:
     def __init__(self):
         self.clients = {name: client(name) for name in ("sts", "ec2", "elbv2", "rds", "autoscaling", "elasticache", "kafka", "lambda", "eks",
-                                                                  "opensearch", "ecs", "efs", "redshift")}
+                                                                  "opensearch", "ecs", "efs", "redshift", "fsx", "sagemaker")}
 
     def client(self, name, **kwargs):
         return self.clients[name]
@@ -112,6 +112,14 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         stubs["ec2"].add_response("describe_vpn_connections", {"VpnConnections": []}, {})
         stubs["ec2"].add_response("describe_customer_gateways", {"CustomerGateways": []}, {})
         stubs["ec2"].add_response("describe_security_groups", {"SecurityGroups": [{"GroupId": "sg-a", "GroupName": "web"}]}, {})
+        stubs["ec2"].add_response("describe_placement_groups", {"PlacementGroups": [{"GroupName": "train-pg", "Strategy": "cluster"}]}, {})
+        stubs["fsx"].add_response("describe_file_systems", {"FileSystems": [{"FileSystemId": "fs-0123456789abcdef0", "FileSystemType": "LUSTRE",
+                                                                               "SubnetIds": ["subnet-0000000a"], "VpcId": "vpc-0000000a"}]}, {})
+        stubs["sagemaker"].add_response("list_endpoints", {"Endpoints": [{"EndpointName": "llm", "EndpointArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:endpoint/llm",
+                                                                         "CreationTime": "2026-01-01T00:00:00Z", "LastModifiedTime": "2026-01-01T00:00:00Z",
+                                                                         "EndpointStatus": "InService"}]}, {})
+        stubs["sagemaker"].add_response("list_clusters", {"ClusterSummaries": [{"ClusterName": "hp", "ClusterArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:cluster/hp",
+                                                                               "CreationTime": "2026-01-01T00:00:00Z", "ClusterStatus": "InService"}]}, {})
         stubs["eks"].add_response("describe_cluster", {"cluster": {"name": "platform", "resourcesVpcConfig": {"vpcId": "vpc-a", "subnetIds": ["subnet-a"]}}}, {"name": "platform"})
         stubs["eks"].add_response("list_nodegroups", {"nodegroups": ["general"]}, {"clusterName": "platform"})
         stubs["eks"].add_response("describe_nodegroup", {"nodegroup": {"nodegroupName": "general", "resources": {"autoScalingGroups": [{"name": "eks-general"}]}}},
@@ -128,8 +136,29 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         stubs["ecs"].add_client_error("describe_tasks", "AccessDeniedException", expected_params={"cluster": cluster, "tasks": ["task-a"]})
         stubs["efs"].add_response("describe_mount_targets", {"MountTargets": [{"MountTargetId": "fsmt-0000000a", "FileSystemId": "fs-a", "SubnetId": "subnet-0000000a",
                                                                                "LifeCycleState": "available"}]}, {"FileSystemId": "fs-a"})
+        stubs["sagemaker"].add_response("describe_endpoint", {"EndpointName": "llm", "EndpointArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:endpoint/llm",
+                                                               "EndpointConfigName": "llm-config", "EndpointStatus": "InService",
+                                                               "CreationTime": "2026-01-01T00:00:00Z", "LastModifiedTime": "2026-01-01T00:00:00Z"},
+                                        {"EndpointName": "llm"})
+        stubs["sagemaker"].add_response("describe_endpoint_config", {"EndpointConfigName": "llm-config", "CreationTime": "2026-01-01T00:00:00Z",
+                                                                     "EndpointConfigArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:endpoint-config/llm-config",
+                                                                     "ProductionVariants": [{"VariantName": "main", "ModelName": "llm-model",
+                                                                                             "InstanceType": "ml.g5.2xlarge", "InitialInstanceCount": 2}]},
+                                        {"EndpointConfigName": "llm-config"})
+        stubs["sagemaker"].add_response("describe_model", {"ModelName": "llm-model", "CreationTime": "2026-01-01T00:00:00Z",
+                                                           "ModelArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:model/llm-model",
+                                                           "VpcConfig": {"Subnets": ["subnet-a"], "SecurityGroupIds": ["sg-a"]}}, {"ModelName": "llm-model"})
+        stubs["sagemaker"].add_client_error("describe_cluster", "AccessDeniedException", expected_params={"ClusterName": "hp"})
         result = collect("ap-northeast-2", expected_account="111122223333", session=session)
         assert result["metadata"]["status"] == "partial"
+        # AI/ML: placement groups and FSx from list calls; a SageMaker endpoint joined with its config and models.
+        assert result["raw"]["placement_groups"][0]["Strategy"] == "cluster" and result["raw"]["fsx_file_systems"][0]["FileSystemType"] == "LUSTRE"
+        endpoint = result["raw"]["sagemaker_endpoints"][0]
+        assert endpoint["EndpointConfig"]["ProductionVariants"][0]["InstanceType"] == "ml.g5.2xlarge"
+        assert endpoint["Models"][0]["VpcConfig"]["Subnets"] == ["subnet-a"] and "ResponseMetadata" not in endpoint
+        hyperpod = next(c for c in result["coverage"] if c["operation"] == "describe_cluster" and c["service"] == "sagemaker")
+        assert hyperpod["status"] == "unavailable" and hyperpod["permission"] == "sagemaker:DescribeCluster"
+        assert result["raw"]["sagemaker_clusters"] == [] and "sagemaker_endpoint_names" not in result["raw"]
         assert result["raw"]["instances"] == [{"InstanceId": "i-a"}, {"InstanceId": "i-b"}]
         assert next(c for c in result["coverage"] if c["operation"] == "describe_instances")["items"] == 2
         assert result["coverage"][-1]["status"] == "not_discovered"

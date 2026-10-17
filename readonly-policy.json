@@ -45,7 +45,15 @@
         "ec2:DescribeVpnGateways",
         "ec2:DescribeVpnConnections",
         "ec2:DescribeCustomerGateways",
-        "ec2:DescribeSecurityGroups"
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribePlacementGroups",
+        "fsx:DescribeFileSystems",
+        "sagemaker:ListEndpoints",
+        "sagemaker:DescribeEndpoint",
+        "sagemaker:DescribeEndpointConfig",
+        "sagemaker:DescribeModel",
+        "sagemaker:ListClusters",
+        "sagemaker:DescribeCluster"
       ],
       "Resource": "*"
     }

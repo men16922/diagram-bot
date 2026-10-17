@@ -46,6 +46,12 @@ OPERATIONS = [
     ("ec2", "describe_customer_gateways", "CustomerGateways", "customer_gateways"),
     # Security group rules feed the architecture review (internet-exposed admin and data ports).
     ("ec2", "describe_security_groups", "SecurityGroups", "security_groups"),
+    # AI/ML infrastructure: cluster placement groups (EFA training), FSx file systems (Lustre training data and
+    # checkpoints), SageMaker real-time endpoints and HyperPod clusters.
+    ("ec2", "describe_placement_groups", "PlacementGroups", "placement_groups"),
+    ("fsx", "describe_file_systems", "FileSystems", "fsx_file_systems"),
+    ("sagemaker", "list_endpoints", "Endpoints", "sagemaker_endpoint_names"),
+    ("sagemaker", "list_clusters", "ClusterSummaries", "sagemaker_cluster_names"),
 ]
 # IAM service prefixes that differ from the boto3 client name.
 IAM_PREFIX = {"elbv2": "elasticloadbalancing", "opensearch": "es", "efs": "elasticfilesystem"}
@@ -70,7 +76,8 @@ def query(client, operation, key, params=None):
         else:
             pages = [getattr(client, operation)(**params)]
         for page in pages:
-            value = page.get(key, [])
+            # key None: the response itself describes one resource (SageMaker Describe* calls).
+            value = {k: v for k, v in page.items() if k != "ResponseMetadata"} if key is None else page.get(key, [])
             # Describe calls for one named resource return an object, list calls an array.
             rows.extend(value if isinstance(value, list) else [value])
             coverage["pages"] += 1
@@ -185,14 +192,30 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
         return {"efs_mount_targets": [m for fs in raw["efs_file_systems"]
                                       for m in call(log, "efs", "describe_mount_targets", "MountTargets", {"FileSystemId": fs["FileSystemId"]})]}
 
-    details = (target_health, eks, msk, opensearch, ecs, efs)
+    def sagemaker(log):
+        # An endpoint's instance type comes from its config, its subnets from the models' VpcConfig.
+        endpoints, clusters = [], []
+        for summary in raw["sagemaker_endpoint_names"]:
+            endpoint = call(log, "sagemaker", "describe_endpoint", None, {"EndpointName": summary["EndpointName"]})
+            if not endpoint:
+                continue
+            config = call(log, "sagemaker", "describe_endpoint_config", None, {"EndpointConfigName": endpoint[0]["EndpointConfigName"]})
+            variants = config[0].get("ProductionVariants", []) if config else []
+            models = [m for name in sorted({v["ModelName"] for v in variants if v.get("ModelName")})
+                      for m in call(log, "sagemaker", "describe_model", None, {"ModelName": name})]
+            endpoints.append({**endpoint[0], "EndpointConfig": config[0] if config else {}, "Models": models})
+        for summary in raw["sagemaker_cluster_names"]:
+            clusters += call(log, "sagemaker", "describe_cluster", None, {"ClusterName": summary["ClusterName"]})
+        return {"sagemaker_endpoints": endpoints, "sagemaker_clusters": clusters}
+
+    details = (target_health, eks, msk, opensearch, ecs, efs, sagemaker)
     detail_logs = [[] for _ in details]
     with ThreadPoolExecutor(max_workers=workers) as pool:
         updates = list(pool.map(lambda pair: pair[0](pair[1]), zip(details, detail_logs)))
     for update, log in zip(updates, detail_logs):
         raw.update(update)
         coverage += log
-    for name in ("eks_cluster_names", "opensearch_domain_names", "ecs_cluster_arns"):
+    for name in ("eks_cluster_names", "opensearch_domain_names", "ecs_cluster_arns", "sagemaker_endpoint_names", "sagemaker_cluster_names"):
         raw.pop(name)
     if any(c["status"] != "complete" for c in coverage if c["operation"] == "describe_target_groups"):
         coverage.append({"service": "elbv2", "operation": "describe_target_health",
@@ -205,7 +228,8 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
         "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway",
                   "NatGateway", "RouteTable", "RDS", "Aurora", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment",
-                  "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN", "SecurityGroupRules"],
+                  "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN", "SecurityGroupRules",
+                  "PlacementGroup", "FSx", "SageMakerEndpoint", "SageMakerHyperPod"],
         "limitations": ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
                         "여러 API의 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
                         "ENI·EBS는 EC2 응답의 참조만 표시합니다. 보안 그룹 규칙은 검토 결과와 속성 패널에만 쓰며 구성도에 선으로 그리지 않습니다.",

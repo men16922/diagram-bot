@@ -61,6 +61,7 @@
                     "ec2:DescribeInstances",
                     "ec2:DescribeInternetGateways",
                     "ec2:DescribeNatGateways",
+                    "ec2:DescribePlacementGroups",
                     "ec2:DescribeRouteTables",
                     "ec2:DescribeSecurityGroups",
                     "ec2:DescribeSubnets",
@@ -91,6 +92,7 @@
                     "es:DescribeDomainNodes",
                     "es:DescribeDomains",
                     "es:ListDomainNames",
+                    "fsx:DescribeFileSystems",
                     "kafka:ListClustersV2",
                     "kafka:ListNodes",
                     "lambda:ListFunctions",
@@ -98,6 +100,12 @@
                     "rds:DescribeDBInstances",
                     "redshift:DescribeClusterSubnetGroups",
                     "redshift:DescribeClusters",
+                    "sagemaker:DescribeCluster",
+                    "sagemaker:DescribeEndpoint",
+                    "sagemaker:DescribeEndpointConfig",
+                    "sagemaker:DescribeModel",
+                    "sagemaker:ListClusters",
+                    "sagemaker:ListEndpoints",
                     "sts:GetCallerIdentity"
                   ],
                   "Resource": "*"
