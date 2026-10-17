@@ -1,5 +1,6 @@
 """Synthetic fixtures for layout scale checks. Never presented as live account data."""
 from diagram_bot.demo import demo_snapshot
+from diagram_bot.designer import Design
 
 ARN = "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:"
 
@@ -34,3 +35,27 @@ def scale_snapshot(vpcs=2, azs=3, instances_per_subnet=12, load_balancers=3, gro
     snapshot["raw"] = raw
     snapshot["coverage"] = [{"service": "ec2", "operation": "describe_vpcs", "status": "complete"}]
     return snapshot
+
+
+def full_design():
+    """A chat-style design using every designer step: two VPCs, peering, VPN."""
+    d = Design("쇼핑몰", "us-east-1")
+    d.add_vpc("shop", "10.20.0.0/16", 3, ["public", "web", "app", "data"])
+    d.add_load_balancer("shop", "public-alb")
+    d.add_ec2_service("shop", "web", tier="web", load_balancer="public-alb", port=443)
+    d.add_load_balancer("shop", "internal-alb", scheme="internal")
+    d.add_ecs_service("shop", "orders", 2, "internal-alb")
+    d.add_database("shop", "orders-db", "mysql", True, True)
+    d.add_cache("shop", "session")
+    d.add_vpc_endpoints("shop", ["s3", "ssm"])
+    d.add_vpc("analytics", "10.30.0.0/16", 2, ["app", "data"], "none")
+    d.add_eks_cluster("analytics", "ml")
+    d.add_aurora("analytics", "warehouse")
+    d.add_kafka("analytics", "events")
+    d.add_opensearch("analytics", "logs")
+    d.add_file_system("analytics", "shared")
+    d.add_lambda("thumbnailer")
+    d.add_lambda("etl", vpc="analytics")
+    d.connect_vpcs("shop", "analytics")
+    d.add_vpn("analytics", "198.51.100.7")
+    return d

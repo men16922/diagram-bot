@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: Read docs/STATUS.md and docs/NEXT_PLAN.md. Topology plan P1–P5 is done; only manual follow-ups remain and no overnight run has been requested.
+> ▶ NEXT SESSION: Chat design agent (Strands + Bedrock) shipped and verified live with Nova 2 Lite; GPT-6 Luna still denied for the account (NEXT_PLAN manual item). Other manual work: live check on a real-workload account via SSO, human visual review. No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 
@@ -6,10 +6,12 @@ Last Updated: 2026-10-17
 
 ## Baseline
 
-Diagram Bot v0.3 is an AWS-only local demo application. FastAPI and buildless JavaScript embed
+Diagram Bot v0.5 (+ unreleased chat agent) is an AWS-only local application. FastAPI and buildless JavaScript embed
 pinned draw.io 32.4.1; boto3 collects read-only AWS configuration using existing SDK/SSO credentials.
 The demo supports overview/detail/focus views, a deterministic layered layout, properties and
-relation evidence, native editing with revision history, draw.io/PNG exports and JSON/CSV inventory. Product scope and future proposals are in docs/PLAN.md.
+relation evidence, native editing with revision history, draw.io/PNG exports and JSON/CSV inventory, architecture
+review/diff, team mode, and a chat design agent (Strands + Bedrock; tools draw standard designs, the model never
+invents resources). draw.io internals: docs/DRAWIO.md. Product scope and future proposals are in docs/PLAN.md.
 
 ## Read Order
 

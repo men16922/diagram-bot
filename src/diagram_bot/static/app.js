@@ -34,7 +34,7 @@ function setControls() {
   for(const id of ['snapshot-select','references','import-button'])$(id).disabled=state.busy||(state.ready&&state.loading);
   // Team mode roles: viewers read only, editors edit and import, admins also collect from AWS.
   if(state.role==='viewer')for(const id of ['save-button','note-button','reset-button','restore-button','import-button'])$(id).disabled=true;
-  $('collection-button').disabled=state.role!=='admin';
+  $('collection-button').disabled=state.role!=='admin';$('chat-button').disabled=state.role==='viewer';
   const locked=state.busy||(state.ready&&state.loading);
   $('view-overview').disabled=locked;$('view-detail').disabled=locked||!state.vpc;$('view-focus').disabled=locked||!state.selected;
   $('save-state').textContent=state.loading?'불러오는 중':state.busy?'처리 중':state.dirty?'저장하지 않은 편집':state.revision?`저장됨 · v${state.revision}`:'자동 생성 구성도';
@@ -83,7 +83,7 @@ window.addEventListener('message', event=>{
     if(message.data?.startsWith('data:image/png;base64,'))task.resolve(message.data);else task.reject(new Error('PNG를 생성하지 못했습니다. 해상도를 낮춰 다시 시도하세요.'));
   }
 });
-function snapshotLabel(item){const m=item.metadata;return m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.account_id} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;}
+function snapshotLabel(item){const m=item.metadata;if(m.design)return `설계 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;return m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.account_id} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;}
 async function refreshSnapshots(preferred) {
   const items=await api('/api/snapshots');state.snapshots=items;$('snapshot-select').replaceChildren();
   for(const item of items)$('snapshot-select').append(new Option(snapshotLabel(item),item.id));
@@ -103,8 +103,9 @@ async function loadSnapshot(id) {
 }
 function renderSummary() {
   const {metadata:m,graph}=state.snapshot;
-  $('region-label').textContent=m.region;$('account-summary').textContent=`ACCOUNT ${m.account_id}`;
-  $('demo-badge').hidden=!m.demo;$('scope-description').textContent=`${m.account_id} · ${m.region} · 수집 설정을 바탕으로 생성한 구성도`;
+  $('region-label').textContent=m.region;$('account-summary').textContent=m.design?'DESIGN · 실제 계정 아님':`ACCOUNT ${m.account_id}`;
+  $('demo-badge').hidden=!m.demo;$('demo-badge').textContent=m.design?'설계안':'샘플 데이터';
+  $('scope-description').textContent=m.design?`${m.region} · 채팅으로 만든 표준 아키텍처 설계안 (실제 계정 아님)`:`${m.account_id} · ${m.region} · 수집 설정을 바탕으로 생성한 구성도`;
   $('collected-at').textContent=`수집 ${new Date(m.finished_at).toLocaleString('ko-KR')} · ${m.demo?'합성 샘플':'AWS API 조회'}`;
   $('coverage-button').textContent=(m.status==='complete'?'● ':'◐ ')+(statuses[m.status]||m.status);
   $('coverage-button').classList.toggle('complete',m.status==='complete');
@@ -305,6 +306,55 @@ $('collection-form').onsubmit=async event=>{
     await refreshSnapshots(job.snapshot_id);await loadSnapshot(job.snapshot_id);$('collection-dialog').close();toast(job.status==='partial'?'부분 수집을 완료했습니다. 조회 상태를 확인하세요.':'AWS 수집을 완료했습니다.');
   }catch(error){$('collection-progress').textContent=error.message;}finally{$('start-collection').disabled=false;}
 };
+// Design chat: a Strands agent on Bedrock calls drawing and read-only collection tools; each change is a snapshot.
+// Model replies use a little Markdown; render headings, lists, **bold** and `code` as DOM nodes (never innerHTML).
+function inline(text) {
+  const parts=[];for(const piece of text.split(/(\*\*[^*]+\*\*|`[^`]+`)/)){if(!piece)continue;
+    if(piece.startsWith('**')&&piece.endsWith('**'))parts.push(el('strong',piece.slice(2,-2)));
+    else if(piece.startsWith('`')&&piece.endsWith('`'))parts.push(el('code',piece.slice(1,-1)));
+    else parts.push(document.createTextNode(piece));}
+  return parts;
+}
+function markdown(text) {
+  const box=el('div',undefined,'chat-text rich');let list=null;
+  for(const raw of text.split('\n')){const line=raw.trimEnd();
+    const heading=line.match(/^#{1,6}\s+(.*)$/),item=line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)$/);
+    if(item){if(!list){list=el('ul');box.append(list);}const li=el('li');li.append(...inline(item[1]));list.append(li);continue;}
+    list=null;
+    if(heading){const h=el('div',undefined,'chat-heading');h.append(...inline(heading[1]));box.append(h);}
+    else if(/^\s*(?:---|>\s*)/.test(line)&&line.replace(/[->\s]/g,'')===''){continue;}
+    else if(line.trim()){const p=el('p');p.append(...inline(line.replace(/^>\s*/,'')));box.append(p);}}
+  return box;
+}
+function chatMessage(role, text, meta) {
+  const item=el('div',undefined,`chat-message ${role}`);item.append(role==='assistant'?markdown(text):el('div',text,'chat-text'));
+  if(meta)item.append(el('small',meta,'chat-meta'));$('chat-log').append(item);$('chat-log').scrollTop=$('chat-log').scrollHeight;return item;
+}
+async function openChat() {
+  $('chat-panel').hidden=false;$('chat-input').focus();
+  if(state.chatReady!==undefined)return;
+  const info=await api('/api/agent');state.chatReady=info.ready;
+  $('chat-model').replaceChildren(...info.models.map(m=>new Option(m.label+(m.key===info.default?' (기본)':''),m.key)));$('chat-model').value=info.default;
+  if(!info.ready)chatMessage('system',"채팅 에이전트가 설치되지 않았습니다. pip install -e '.[agent]' 후 다시 시작하세요.");
+}
+$('chat-form').onsubmit=async event=>{
+  event.preventDefault();const message=$('chat-input').value.trim();if(!message||state.chatBusy)return;
+  if(state.dirty)await saveDocument(false);
+  state.chatBusy=true;$('chat-send').disabled=true;$('chat-input').value='';chatMessage('user',message);
+  const waiting=chatMessage('system','설계하는 중…');
+  try{
+    const result=await api('/api/agent/chat',{method:'POST',body:JSON.stringify({message,model:$('chat-model').value})});
+    waiting.remove();
+    const meta=`${result.model_label}${result.fallback?' · 대체 모델(기본 모델 사용 불가)':''} · 도구 ${result.tools_used.length}회`+(result.snapshots.length?` · 구성도 ${result.snapshots.length}회 갱신`:'');
+    chatMessage('assistant',result.reply||'(응답 없음)',meta);
+    const last=result.snapshots.at(-1);if(last){await refreshSnapshots(last);await loadSnapshot(last);}
+  }catch(error){waiting.remove();chatMessage('system',error.message);}
+  finally{state.chatBusy=false;$('chat-send').disabled=false;$('chat-input').focus();}
+};
+$('chat-input').onkeydown=event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('chat-form').requestSubmit();}};
+bind('chat-button',openChat);bind('chat-close',()=>{$('chat-panel').hidden=true;});
+bind('chat-reset',async()=>{await api('/api/agent/reset',{method:'POST'});$('chat-log').replaceChildren();chatMessage('system','새 대화를 시작합니다.');});
+for(const button of document.querySelectorAll('.chat-suggestion'))button.onclick=()=>{$('chat-input').value=button.textContent;$('chat-input').focus();};
 window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefault();event.returnValue='';}});
 async function start() {
   const boot=await api('/api/bootstrap');state.token=boot.token;state.role=boot.user.role;

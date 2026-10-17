@@ -276,9 +276,9 @@ def services(raw, prefix, nodes, node, link):
             link(key, "vpc", subnet_vpc[subnets[0]], "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
     for function in raw.get("lambda_functions", []):
         config = function.get("VpcConfig") or {}
-        if not config.get("VpcId"):
-            continue  # not attached to a VPC: outside the network diagram
         key = node("lambda_function", function["FunctionName"], function, "ListFunctions")
+        if not config.get("VpcId"):
+            continue  # not attached to a VPC: in the inventory, outside the network diagram
         link(key, "vpc", config["VpcId"], "in_vpc", "ListFunctions.VpcConfig.VpcId")
         for subnet in config.get("SubnetIds", []):
             link(key, "subnet", subnet, "lambda_subnet", "ListFunctions.VpcConfig.SubnetIds[]")

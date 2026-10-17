@@ -4,6 +4,10 @@ Last Updated: 2026-10-17
 
 ## Active Plan
 
+- 2026-10-17 chat design agent (Strands + Bedrock): chat panel, `diagram-bot chat`, `/api/agent/*`, 24 tools
+  (standard designs + read-only boto3 collection). Benchmark: docs/engineering/DEVOPS_AGENT_BENCHMARK.md;
+  draw.io internals: docs/DRAWIO.md.
+
 - v0.5.0 adds team mode (accounts, roles, TLS, audit log) and an AWS-emulator end-to-end test.
 - 2026-10-17 goal "엔터프라이즈 상용 제품 수준": v0.4.0 adds architecture review (findings + CLI gate),
   snapshot change review (drift gate), cross-account read-only role and multi-region/multi-account
@@ -43,9 +47,30 @@ Last Updated: 2026-10-17
   two ports, IP target sharing an instance IP, unqueried instance, long Korean names,
   partial DescribeInstances.
 
+## Chat Agent Verification (2026-10-17, local macOS, owner's test account)
+
+- Offline: designer steps/errors, 7 standards, tool schemas, scripted-model chat incl. GPT-6 denial → Nova fallback,
+  moto collection tool, chat API + audit, `.env` loader, design layout readability (`make check`, 106 tests).
+- Live Bedrock us-east-1 in Chromium: 3-AZ three-tier design (10 tool calls, 8 snapshots, review high 0), advice turn
+  without tools, live collection + SG review via chat (6 high, matches CLI). CLI `chat -m` with an EKS standard.
+- GPT-6 Luna: agreement AVAILABLE but every API (Converse, Chat Completions, Responses) returns "not available for
+  this account"; answers came from Nova 2 Lite and are labelled as fallback. Nova once invented an S3 storage tip in
+  free-form advice (prompt tightened); diagrams and findings are code-generated.
+
+## Live AWS Verification (2026-10-17, local macOS, owner's test account, us-east-1)
+
+- `diagram-bot collect` with `.env` keys: 30/30 calls complete in ≈6 s, exit 0. Counts equal the
+  AWS CLI: 1 VPC, 6 subnets, 1 IGW, 1 route table, 17 SGs, 21 Lambda (none VPC-attached), 1 cache
+  subnet group, 0 for every other service. Six SEC-SG-OPEN findings match the SG rules.
+- Web app: collection through the dialog, overview (VPC card + Lambda card), detail (IGW + six AZ
+  columns, all subnets public), inventory 47, review 6, coverage 30, `.drawio`/PNG/CSV exports;
+  no page errors or external requests. `review --fail-on high` → 3, `diff --fail-on-change` → 4/0.
+- Found and fixed: VPC-less Lambda missing from graph/inventory; shell `AWS_PROFILE` breaking
+  `make check` (ProfileNotFound).
+
 ## Verification (2026-10-17, this container)
 
-- `make check`: ruff lint + 90 pytest cases (incl. moto AWS-emulator end-to-end collection and team mode) + five-artifact CLI round trip passed.
+- `make check`: ruff lint + 106 pytest cases (incl. moto AWS-emulator end-to-end collection and team mode) + five-artifact CLI round trip passed.
 - Team mode (`scripts/verify_team.py`, Chromium): TLS server on 0.0.0.0, refusal without credentials, login/throttle, viewer/admin roles, cookie flags, logout, OIDC SSO through a loopback test provider, audit log.
 - Layout tests: no sibling overlap (icons + label boxes), nothing outside its container, no
   routed segment through another icon/label, identical rerun — all sample views and both VPCs
@@ -66,10 +91,10 @@ Last Updated: 2026-10-17
 
 ## Open Limits
 
-- Live AWS collection remains unverified. 2026-10-17 attempt from the cloud container: STS is
-  reachable but the container's environment keys return `InvalidClientTokenId`; `diagram-bot
-  collect` stopped with exit 1 and wrote no report (expected failure path). Needs a valid
-  read-only key or SSO profile for the intended account.
+- Live AWS collection verified on one account/region only (owner's test account, us-east-1,
+  IAM user keys via `.env`, 2026-10-17): see Verification. Not yet verified live: SSO profile
+  login, AssumeRole/multi-account, and every service with real resources (that account has only
+  the default VPC, IGW, route table, SGs and non-VPC Lambda).
 - 100-resource views are structurally correct but dense; no large-environment claim.
 - Team mode provides local accounts and OIDC SSO, roles, TLS and audit; SAML only via an auth proxy; no built-in scheduler (use cron/CI with `review`/`diff` exit codes),
   listener rules, NACLs or Direct Connect. Licensed Apache-2.0; NOTICE holder "men16922 and Diagram Bot contributors" (both owner decisions, 2026-10-17).

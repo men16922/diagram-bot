@@ -93,6 +93,24 @@ ALB는 여러 서브넷에 걸쳐도 VPC 수준에 한 번만 그리며, 서브�
 
 SDK 페이지네이션·재시도·타임아웃을 적용합니다. `partial`은 일부 페이지 실패, `unavailable`은 한 페이지도 조회하지 못한 상태이며 리소스가 없다는 뜻이 아닙니다. 앞서 조회한 데이터는 보존합니다. 수집 시작·종료 시각과 범위를 기록합니다. 서비스별로 병렬 조회하며 adaptive 재시도를 씁니다. 여러 API를 조회한 결과이므로 원자적 스냅샷은 아닙니다.
 
+## 채팅으로 아키텍처 설계 (Strands Agents + Amazon Bedrock)
+
+표준 인프라 아키텍처를 말로 요청하면 에이전트가 함수(도구)를 호출해 구성도를 그립니다. 실제 계정은 같은 채팅에서 읽기 전용으로 수집·검토합니다.
+모델은 구성도를 직접 그리지 않고 도구만 고릅니다. CIDR, AZ 분산, 라우팅, 보안 그룹, Multi-AZ 같은 세부 값은 코드가 모범 사례에 맞춰 정합니다.
+
+```bash
+pip install -e '.[agent]'                       # strands-agents
+diagram-bot serve --env-file .env               # 앱 왼쪽 아래 「채팅으로 설계」
+diagram-bot chat --env-file .env                # 터미널 대화형
+diagram-bot chat --env-file .env -m "서울 리전에 3 AZ 3계층 웹 서비스를 설계하고 검토해줘"
+```
+
+- `.env`에는 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`을 넣고, 선택으로 `AWS_ACCOUNT_ID`(수집 계정 확인)를 넣습니다. `.env`는 Git 추적에서 제외되어 있습니다. 키가 있으면 셸의 `AWS_PROFILE`보다 우선합니다.
+- 모델은 Bedrock Converse로 호출합니다. 기본은 OpenAI GPT-6 Luna이고, 사용할 수 없으면 Amazon Nova 2 Lite로 자동 전환합니다. Claude Sonnet 4.5도 고를 수 있으며, 응답마다 실제로 답한 모델이 표시됩니다. 계정에서 Bedrock 모델 액세스가 필요합니다.
+- 도구: 표준 아키텍처 7종 불러오기, VPC(AZ·계층·NAT 전략), ALB/NLB, EC2 Auto Scaling, ECS Fargate, EKS, RDS/Aurora, Redis, MSK, OpenSearch, EFS, Lambda, VPC 엔드포인트, 피어링, VPN, 검토. 수집 도구는 읽기 전용입니다(STS 확인, 리전 수집, 리소스 찾기, 검토).
+- 설계안은 스냅샷으로 저장되어 구성도, 검토, `.drawio`/PNG 다운로드, 변경 비교에 그대로 쓰입니다. 화면에는 `설계안`으로 표시되며 실제 계정 데이터가 아닙니다.
+- 벤치마킹(AWS DevOps Agent)과 설계 근거는 [docs/engineering/DEVOPS_AGENT_BENCHMARK.md](docs/engineering/DEVOPS_AGENT_BENCHMARK.md), draw.io 연동과 자동 배치는 [docs/DRAWIO.md](docs/DRAWIO.md)에 있습니다.
+
 ## 로컬 데이터와 CLI 보고서
 
 편집기는 기본적으로 `~/.cache/diagram-bot/drawio/32.4.1`, 스냅샷과 편집본은 `~/.local/share/diagram-bot`에 저장합니다. `XDG_CACHE_HOME`·`XDG_DATA_HOME` 또는 `serve --data-dir reports/workspace`로 위치를 바꿀 수 있습니다. 서버는 `127.0.0.1`에만 바인딩합니다.
@@ -136,7 +154,7 @@ python scripts/verify_demo.py
 
 자동 테스트 **90개**(AWS API 에뮬레이터 통합 테스트·팀 모드·SSO 포함)와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
 
-SAML 직접 연동(인증 프록시로 연결), 동시 편집 병합, 수집 작업의 재시작 복구, 내장 예약 수집(cron·CI에서 `collect`·`review`·`diff` 종료 코드 사용), 리스너 규칙·NACL·Direct Connect·실제 트래픽 분석은 포함하지 않습니다. 실제 AWS 계정에서의 권한·접속·SSO 갱신은 이 개발 환경에 자격 증명이 없어 검증하지 못했습니다. 수집 로직은 API별 모의 응답 테스트와 AWS API 에뮬레이터(moto)에 구성한 환경 전체를 수집하는 통합 테스트로 검증했습니다.
+SAML 직접 연동(인증 프록시로 연결), 동시 편집 병합, 수집 작업의 재시작 복구, 내장 예약 수집(cron·CI에서 `collect`·`review`·`diff` 종료 코드 사용), 리스너 규칙·NACL·Direct Connect·실제 트래픽 분석은 포함하지 않습니다. 실제 AWS 계정 수집은 한 계정·리전(IAM 사용자 키)에서 CLI와 웹 앱으로 검증했고, SSO 프로파일·교차 계정 역할·실제 워크로드가 있는 계정은 아직 검증하지 않았습니다. 수집 로직은 API별 모의 응답 테스트와 AWS API 에뮬레이터(moto)에 구성한 환경 전체를 수집하는 통합 테스트로 검증했습니다.
 
 ## 라이선스
 

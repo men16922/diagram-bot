@@ -65,4 +65,4 @@ python scripts/verify_demo.py   # 설치된 Chromium을 쓰려면 --chromium /pa
 - [CLI 다중 페이지 draw.io](../examples/demo/topology.drawio) · [브라우저 검증 결과](../examples/demo/verification.json)
 - [배치 엔진 평가](engineering/LAYOUT_EVALUATION.md)
 
-실제 AWS 계정 조회는 인증이 제공되지 않아 검증하지 않았습니다. 수집기의 페이지네이션·권한 오류·계정 불일치 등은 botocore Stubber로 검증합니다.
+실제 AWS 계정 조회는 한 계정·리전(기본 VPC·Lambda 위주의 테스트 계정)에서 검증했습니다. 수집기의 페이지네이션·권한 오류·계정 불일치 등은 botocore Stubber로 검증합니다.

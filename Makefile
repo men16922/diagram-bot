@@ -4,6 +4,8 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 export AWS_EC2_METADATA_DISABLED := true
 export AWS_CONFIG_FILE := /dev/null
 export AWS_SHARED_CREDENTIALS_FILE := /dev/null
+# A developer shell's profile or keys must not reach the offline gate (ProfileNotFound / real credentials).
+unexport AWS_PROFILE AWS_DEFAULT_PROFILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 
 .PHONY: check lint test smoke-local
 check: lint test smoke-local

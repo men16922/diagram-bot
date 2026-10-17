@@ -8,7 +8,7 @@ from diagram_bot.drawio import cell_id, generate_document, layout_document, vali
 from diagram_bot.editor import install_editor
 from diagram_bot.graph import build_graph
 from diagram_bot.samples import SAMPLES
-from fixtures import scale_snapshot
+from fixtures import full_design, scale_snapshot
 
 VIEWS = [("overview", None, None, False), ("detail", "vpc-demo", None, False), ("detail", "vpc-demo", None, True),
          ("detail", "vpc-staging", None, False), ("detail", "vpc-empty", None, False),
@@ -258,3 +258,20 @@ def test_editor_checksum_failure_keeps_existing_files(tmp_path):
     with pytest.raises(ValueError, match="SHA-256"):
         install_editor(archive, destination)
     assert marker.read_text() == "existing"
+
+
+def test_chat_design_is_readable():
+    """Designs built by the chat agent's tools pass the same overlap, containment and routing checks as samples."""
+    snapshot = full_design().snapshot()
+    graph = build_graph(snapshot)
+    assert_readable(layout_document(snapshot, "overview"))
+    for vpc in (n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc"):
+        for references in (False, True):
+            layout = layout_document(snapshot, "detail", vpc, None, references)
+            assert_readable(layout)
+            assert_no_shared_segments(layout)
+    for node in graph["nodes"]:
+        if node["kind"] in FOCUSED and not node["reference_only"]:
+            layout = layout_document(snapshot, "focus", None, node["id"], True)
+            assert_readable(layout)
+            assert_no_shared_segments(layout)

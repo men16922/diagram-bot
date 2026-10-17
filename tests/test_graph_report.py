@@ -165,3 +165,25 @@ def test_msk_brokers_follow_list_nodes():
     graph = build_graph(SAMPLES["eks-platform"]())
     brokers = sorted((n["attributes"]["BrokerIds"], n["attributes"]["Estimated"]) for n in graph["nodes"] if n["kind"] == "msk_broker")
     assert brokers == [([1], False), ([2], False), ([3], False)]
+
+
+def test_lambda_outside_vpc_is_inventoried_but_not_drawn(tmp_path):
+    # Live account check (2026-10-17): functions without VpcConfig were collected but missing from the inventory.
+    from diagram_bot.drawio import layout_document
+    snapshot = demo_snapshot()
+    snapshot["raw"]["lambda_functions"] = [{"FunctionName": "edge-handler", "Runtime": "python3.12",
+                                            "VpcConfig": {"SubnetIds": [], "SecurityGroupIds": [], "VpcId": ""}},
+                                           {"FunctionName": "cron-job", "Runtime": "nodejs22.x"}]
+    graph = build_graph(snapshot)
+    functions = [n for n in graph["nodes"] if n["kind"] == "lambda_function"]
+    assert sorted(n["name"] for n in functions) == ["cron-job", "edge-handler"]
+    assert not any(e["source"] in {n["id"] for n in functions} for e in graph["edges"])
+    for vpc in (n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc"):
+        assert not {n["id"] for n in functions} & set(view_graph(graph, "detail", vpc)["nodes"])
+    labels = [s["label"] for s in layout_document(snapshot, "overview")["shapes"]]
+    assert any(label.startswith("VPC 미연결 리전 서비스\nLambda 2개") for label in labels)
+    assert not any("배치 미확인" in label and "리소스 2개" in label for label in labels)
+    assert layout_document(snapshot, "focus", resource=functions[0]["id"])["shapes"]
+    write_report(snapshot, tmp_path)
+    with (tmp_path / "inventory.csv").open(encoding="utf-8-sig", newline="") as f:
+        assert {"cron-job", "edge-handler"} <= {r["resource_id"] for r in csv.DictReader(f)}

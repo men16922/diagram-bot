@@ -231,7 +231,8 @@ def layout_view(snapshot, graph, selection):
     canvas = Canvas()
     nodes, vpc_of, subnet_of = containment(graph)
     meta, counts, view = snapshot["metadata"], selection["counts"], selection["view"]
-    heading = f"{'SAMPLE · ' if meta.get('demo') else ''}AWS / {meta['account_id']} / {meta['region']}"
+    heading = (f"DESIGN · {meta.get('title', '')} / {meta['region']}" if meta.get("design")
+               else f"{'SAMPLE · ' if meta.get('demo') else ''}AWS / {meta['account_id']} / {meta['region']}")
     titles = {"overview": "전체 구성", "detail": "상세 구성", "focus": "선택 리소스"}
     subject = ""
     if view["kind"] == "detail":
@@ -265,13 +266,17 @@ SUMMARY = [("Subnet", "subnet"), ("EC2", "ec2"), ("LB", "load_balancer"), ("TG",
            ("Lambda", "lambda_function"), ("Endpoint", "vpc_endpoint"), ("VPN", "vpn_gateway"), ("Peering", "vpc_peering")]
 
 
+def cloud_label(meta):
+    return "AWS Cloud · 설계안 (실제 계정 아님)" if meta.get("design") else f"AWS Cloud · 계정 {meta['account_id']}"
+
+
 def overview(canvas, snapshot, graph, nodes, vpc_of):
     vpcs = sorted((n for n in nodes.values() if n["kind"] == "vpc"), key=lambda n: (n["name"], n["id"]))
     columns = 3
     card_w, gap = 320, 24
     width = 32 + columns * (card_w + gap)
     meta = snapshot["metadata"]
-    cloud = canvas.add("cloud", "1", 24, 112, width + 40, 0, "cloud", f"AWS Cloud · 계정 {meta['account_id']}")
+    cloud = canvas.add("cloud", "1", 24, 112, width + 40, 0, "cloud", cloud_label(meta))
     group = canvas.add("region", "cloud", 20, 44, width, 0, "region",
                        f"Region · {meta['region']} · VPC {len(vpcs)}개 · 요약 카드를 선택하면 상세 구성으로 이동")
     members = {}
@@ -297,8 +302,12 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
                  + "\n".join(rows) + f"\nAZ {', '.join(azs) if azs else '미확인'}")
         cards.append((label, vpc["id"], len(inside) == 0))
     # Collected security groups are rule sets, not placed resources; referenced ones still count.
-    outside = [n for n in nodes.values() if n["kind"] != "vpc" and n["id"] not in vpc_of
+    # Lambda functions without VpcConfig run outside every VPC; their placement is known, not missing.
+    regional = [n for n in nodes.values() if n["kind"] == "lambda_function" and n["id"] not in vpc_of]
+    outside = [n for n in nodes.values() if n["kind"] != "vpc" and n["id"] not in vpc_of and n["kind"] != "lambda_function"
                and not (n["kind"] == "security_group" and not n["reference_only"])]
+    if regional:
+        cards.append((f"VPC 미연결 리전 서비스\nLambda {len(regional)}개\n네트워크 구성도에는 그리지 않음\n리소스 목록·CSV에서 확인", None, False))
     if outside:
         refs = sum(n["reference_only"] for n in outside)
         cards.append((f"VPC 외 · 배치 미확인\n리소스 {len(outside)}개 (참조만 확인 {refs}개)\n보안 그룹·ENI·EBS·IP 대상 등\n상세 보기에서 관계 확인", None, False))
@@ -328,7 +337,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     frames_at = {}  # Auto Scaling group -> (frame cell, leftmost AZ column)
     meta = snapshot["metadata"]
     # AWS Architecture Icons nesting: AWS Cloud > Region > VPC > Availability Zone > subnet.
-    cloud = canvas.add("cloud", "1", 24, 112, 0, 0, "cloud", f"AWS Cloud · 계정 {meta['account_id']}")
+    cloud = canvas.add("cloud", "1", 24, 112, 0, 0, "cloud", cloud_label(meta))
     region = canvas.add("region", "cloud", 20, 44, 0, 0, "region", f"Region · {meta['region']}")
     cursor = 46
     tg_order = {}

@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 from importlib import metadata
 import sys
 from pathlib import Path
@@ -19,7 +20,9 @@ def main():
     parser = argparse.ArgumentParser(description="AWS 현행 구성도·리소스 내역 자동 생성")
     parser.add_argument("--version", action="version", version=f"diagram-bot {app_version()}")
     commands = parser.add_subparsers(dest="command", required=True)
-    live = commands.add_parser("collect", help="기존 SSO/SDK 인증 경로로 읽기 전용 조회")
+    env = argparse.ArgumentParser(add_help=False)
+    env.add_argument("--env-file", help="AWS_ACCESS_KEY_ID·AWS_SECRET_ACCESS_KEY·AWS_REGION 등을 읽을 .env 파일 (Git 추적 제외 경로)")
+    live = commands.add_parser("collect", parents=[env], help="기존 SSO/SDK 인증 경로로 읽기 전용 조회")
     live.add_argument("--profile", help="AWS SSO 프로파일; 생략하면 표준 SDK 인증 체인")
     live.add_argument("--region", required=True, action="append", help="리전 (여러 번 또는 쉼표로 여러 리전)")
     live.add_argument("--expected-account", help="조회할 12자리 AWS 계정 ID (역할 ARN이 없으면 필수)")
@@ -44,7 +47,11 @@ def main():
     compare.add_argument("--fail-on-change", action="store_true", help="변경이 있으면 종료 코드 4 (드리프트 감지용)")
     setup = commands.add_parser("setup-editor", help="고정 버전 draw.io 편집기 설치 (최초 한 번)")
     setup.add_argument("--archive", help="오프라인 설치용 공식 draw.war 경로")
-    serve = commands.add_parser("serve", help="draw.io 기반 로컬 시연 앱 실행")
+    talk = commands.add_parser("chat", parents=[env], help="채팅으로 표준 아키텍처 설계·AWS 읽기 전용 조회 (Strands + Bedrock)")
+    talk.add_argument("--model", help="gpt-6-luna(기본, 실패 시 nova-2-lite), nova-2-lite, claude-sonnet-4.5")
+    talk.add_argument("--output", default="reports/chat", help="설계·수집 결과 보고서 디렉터리")
+    talk.add_argument("-m", "--message", action="append", default=[], help="대화형 대신 보낼 메시지 (여러 번 지정 가능)")
+    serve = commands.add_parser("serve", parents=[env], help="draw.io 기반 로컬 시연 앱 실행")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--data-dir", help="스냅샷과 편집본 저장 디렉터리")
     serve.add_argument("--host", default="127.0.0.1", help="루프백이 아니면 --users·--certfile·--keyfile·--allowed-host 필수 (팀 모드)")
@@ -61,6 +68,11 @@ def main():
     account.add_argument("--password-stdin", action="store_true", help="비밀번호를 표준 입력 첫 줄에서 읽기 (자동화용)")
     args = parser.parse_args()
     try:
+        if getattr(args, "env_file", None):
+            loaded = load_env_file(args.env_file)
+            print(f"환경 파일 {args.env_file}: {', '.join(loaded) or '설정 없음'}", file=sys.stderr)
+        if args.command == "chat":
+            return run_chat(args)
         if args.command == "setup-editor":
             from .editor import install_editor
             print(f"draw.io 설치 완료: {install_editor(args.archive)}")
@@ -105,6 +117,57 @@ def main():
 
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def load_env_file(path):
+    """KEY=VALUE lines (comments, `export` and quotes allowed) into the process environment; returns the key names.
+    Keys from the file win, and an explicit profile is dropped when the file carries access keys, so the file is the
+    credential source the user pointed at."""
+    loaded = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.removeprefix("export ").split("=", 1)
+        key, value = key.strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        if key.isidentifier():
+            os.environ[key] = value
+            loaded.append(key)
+    if "AWS_ACCESS_KEY_ID" in loaded:
+        for name in ("AWS_PROFILE", "AWS_DEFAULT_PROFILE"):
+            os.environ.pop(name, None)
+    return loaded
+
+
+def run_chat(args):
+    from .agent import DEFAULT_MODEL, Chat, Workspace
+    output, count = Path(args.output), [0]
+
+    def save(snapshot):
+        count[0] += 1
+        meta = snapshot["metadata"]
+        name = f"{count[0]:02d}-{'design' if meta.get('design') else meta['account_id'] + '-' + meta['region']}"
+        path = write_report(snapshot, output / name)
+        print(f"  ↳ 구성도 {path.resolve()}", file=sys.stderr)
+        return name
+
+    chat = Chat(Workspace(save), args.model or DEFAULT_MODEL)
+    messages = iter(args.message) if args.message else None
+    print("Diagram Bot 채팅 · 표준 아키텍처 설계와 AWS 읽기 전용 조회 · 종료: exit", file=sys.stderr)
+    while True:
+        try:
+            message = next(messages) if messages else input("\n> ").strip()
+        except (StopIteration, EOFError, KeyboardInterrupt):
+            return 0
+        if message in ("exit", "quit"):
+            return 0
+        if not message:
+            continue
+        result = chat.ask(message)
+        note = " (대체 모델)" if result["fallback"] else ""
+        print(f"\n[{result['model_label']}{note} · 도구 {len(result['tools_used'])}회]\n{result['reply']}")
 
 
 def run_server(parser, args):

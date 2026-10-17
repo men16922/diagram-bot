@@ -2,6 +2,20 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를, 버전은 [Semantic Versioning](https://semver.org/lang/ko/)을 따릅니다.
 
+## [Unreleased]
+
+### Added
+- **채팅으로 아키텍처 설계:** Strands Agents + Amazon Bedrock(Converse) 에이전트. 웹 앱 `채팅으로 설계` 패널, `diagram-bot chat`, `POST /api/agent/chat`.
+  도구 24개(표준 아키텍처 7종, VPC·LB·EC2·ECS·EKS·RDS·Aurora·Redis·MSK·OpenSearch·EFS·Lambda·엔드포인트·피어링·VPN, 검토)와
+  boto3 읽기 전용 수집 도구(STS, 리전 수집, 리소스 찾기, 검토). 기본 GPT-6 Luna, 실패 시 Nova 2 Lite로 자동 전환하고 실제 답한 모델을 표시.
+- 설계안 스냅샷(`metadata.design`): `설계안`/`DESIGN` 표시, 검토·draw.io/PNG·변경 비교 지원.
+- `--env-file` (`collect`, `serve`, `chat`): `.env`의 AWS 키·리전을 읽고, 키가 있으면 셸 프로파일보다 우선.
+- 문서: `docs/DRAWIO.md`(draw.io 라이브러리·자동 배치·편집기 연동), `docs/engineering/DEVOPS_AGENT_BENCHMARK.md`.
+
+### Fixed
+- VPC에 연결되지 않은 Lambda 함수가 리소스 목록·CSV에서 빠지던 문제. 전체 구성에 `VPC 미연결 리전 서비스` 카드로 표시하고 상세 구성에는 그리지 않습니다.
+- 개발자 셸에 `AWS_PROFILE`이 설정되어 있으면 `make check`가 `ProfileNotFound`로 실패하던 문제.
+
 ## [0.5.0] - 2026-10-17
 
 ### Added

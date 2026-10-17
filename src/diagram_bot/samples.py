@@ -9,12 +9,12 @@ import ipaddress
 from .collector import now
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
-ARN = f"arn:aws:elasticloadbalancing:{REGION}:{ACCOUNT}:"
 
 
 class Sample:
-    def __init__(self, key, title, practices):
+    def __init__(self, key, title, practices, region=REGION, account=ACCOUNT):
         self.key, self.title, self.practices = key, title, practices
+        self.region, self.account = region, account
         self.raw = {"vpcs": [], "subnets": [], "instances": [], "load_balancers": [], "target_groups": [], "target_health": [],
                     "internet_gateways": [], "nat_gateways": [], "route_tables": [], "db_instances": [], "auto_scaling_groups": [],
                     "vpc_endpoints": [], "transit_gateways": [], "transit_gateway_attachments": [],
@@ -26,6 +26,10 @@ class Sample:
                     "security_groups": []}
         self.counter = 0
 
+    @property
+    def arn(self):
+        return f"arn:aws:elasticloadbalancing:{self.region}:{self.account}:"
+
     def tags(self, name, **extra):
         return [{"Key": "Name", "Value": name}] + [{"Key": k, "Value": v} for k, v in extra.items()]
 
@@ -34,7 +38,7 @@ class Sample:
         return key
 
     def subnet(self, key, vpc, az, cidr, name, tier):
-        self.raw["subnets"].append({"SubnetId": key, "VpcId": vpc, "AvailabilityZone": f"{REGION}{az}", "CidrBlock": cidr,
+        self.raw["subnets"].append({"SubnetId": key, "VpcId": vpc, "AvailabilityZone": f"{self.region}{az}", "CidrBlock": cidr,
                                     "MapPublicIpOnLaunch": tier == "public", "Tags": self.tags(name, Tier=tier)})
         return key
 
@@ -52,14 +56,14 @@ class Sample:
         return key
 
     def load_balancer(self, name, vpc, subnets, kind="application", scheme="internet-facing", sg=None):
-        arn = f"{ARN}loadbalancer/{ {'application': 'app', 'network': 'net', 'gateway': 'gwy'}[kind]}/{name}/{len(self.raw['load_balancers']) + 1:016x}"
+        arn = f"{self.arn}loadbalancer/{ {'application': 'app', 'network': 'net', 'gateway': 'gwy'}[kind]}/{name}/{len(self.raw['load_balancers']) + 1:016x}"
         azs = [{"ZoneName": next(s["AvailabilityZone"] for s in self.raw["subnets"] if s["SubnetId"] == key), "SubnetId": key} for key in subnets]
         self.raw["load_balancers"].append({"LoadBalancerArn": arn, "LoadBalancerName": name, "Type": kind, "VpcId": vpc,
                                            "Scheme": scheme, "AvailabilityZones": azs, "SecurityGroups": [sg] if sg else []})
         return arn
 
     def target_group(self, name, vpc, protocol, port, targets, lbs=(), target_type="instance", health="/health"):
-        arn = f"{ARN}targetgroup/{name}/{len(self.raw['target_groups']) + 1:016x}"
+        arn = f"{self.arn}targetgroup/{name}/{len(self.raw['target_groups']) + 1:016x}"
         self.raw["target_groups"].append({"TargetGroupArn": arn, "TargetGroupName": name, "VpcId": vpc, "TargetType": target_type,
                                           "Protocol": protocol, "Port": port, "HealthCheckPath": health, "LoadBalancerArns": list(lbs)})
         descriptions = []
@@ -113,15 +117,15 @@ class Sample:
         group = {"DBSubnetGroupName": f"{identifier}-subnets", "VpcId": vpc,
                  "Subnets": [{"SubnetIdentifier": subnet, "SubnetAvailabilityZone": {"Name": self.az_of(subnet)}} for subnet in subnets]}
         self.raw["db_instances"].append({
-            "DBInstanceIdentifier": identifier, "DBInstanceArn": f"arn:aws:rds:{REGION}:{ACCOUNT}:db:{identifier}",
-            "Engine": engine, "DBInstanceClass": size, "AvailabilityZone": f"{REGION}{primary}", "MultiAZ": bool(standby),
-            "SecondaryAvailabilityZone": f"{REGION}{standby}" if standby else None, "PubliclyAccessible": False,
+            "DBInstanceIdentifier": identifier, "DBInstanceArn": f"arn:aws:rds:{self.region}:{self.account}:db:{identifier}",
+            "Engine": engine, "DBInstanceClass": size, "AvailabilityZone": f"{self.region}{primary}", "MultiAZ": bool(standby),
+            "SecondaryAvailabilityZone": f"{self.region}{standby}" if standby else None, "PubliclyAccessible": False,
             "StorageEncrypted": True, "DBSubnetGroup": group, "ReadReplicaDBInstanceIdentifiers": [f"{identifier}-ro"] if replica else []})
         if replica:
             # Asynchronous read replica in a third AZ: read scaling, not failover.
             self.raw["db_instances"].append({
-                "DBInstanceIdentifier": f"{identifier}-ro", "DBInstanceArn": f"arn:aws:rds:{REGION}:{ACCOUNT}:db:{identifier}-ro",
-                "Engine": engine, "DBInstanceClass": size, "AvailabilityZone": f"{REGION}{replica}", "MultiAZ": False,
+                "DBInstanceIdentifier": f"{identifier}-ro", "DBInstanceArn": f"arn:aws:rds:{self.region}:{self.account}:db:{identifier}-ro",
+                "Engine": engine, "DBInstanceClass": size, "AvailabilityZone": f"{self.region}{replica}", "MultiAZ": False,
                 "PubliclyAccessible": False, "StorageEncrypted": True, "DBSubnetGroup": group,
                 "ReadReplicaSourceDBInstanceIdentifier": identifier})
 
@@ -140,14 +144,14 @@ class Sample:
     def gateway_endpoint(self, key, vpc, service, tables):
         """S3/DynamoDB gateway endpoint: reached through a prefix-list route in each listed table."""
         self.raw["vpc_endpoints"].append({"VpcEndpointId": key, "VpcId": vpc, "VpcEndpointType": "Gateway", "State": "available",
-                                          "ServiceName": f"com.amazonaws.{REGION}.{service}", "RouteTableIds": list(tables),
+                                          "ServiceName": f"com.amazonaws.{self.region}.{service}", "RouteTableIds": list(tables),
                                           "Tags": self.tags(f"{service}-gateway-endpoint")})
         for table in tables:
             self.route(table, f"pl-{service}", GatewayId=key)
 
     def interface_endpoint(self, key, vpc, service, subnets):
         self.raw["vpc_endpoints"].append({"VpcEndpointId": key, "VpcId": vpc, "VpcEndpointType": "Interface", "State": "available",
-                                          "ServiceName": f"com.amazonaws.{REGION}.{service}", "SubnetIds": list(subnets),
+                                          "ServiceName": f"com.amazonaws.{self.region}.{service}", "SubnetIds": list(subnets),
                                           "PrivateDnsEnabled": True, "Tags": self.tags(f"{service}-endpoint")})
 
     def transit_gateway(self, key, name):
@@ -165,7 +169,7 @@ class Sample:
         for index, az in enumerate([writer, *readers]):
             identifier = f"{cluster}-{index + 1}"
             self.raw["db_instances"].append({"DBInstanceIdentifier": identifier, "DBClusterIdentifier": cluster, "Engine": engine,
-                                             "DBInstanceClass": size, "AvailabilityZone": f"{REGION}{az}", "MultiAZ": False,
+                                             "DBInstanceClass": size, "AvailabilityZone": f"{self.region}{az}", "MultiAZ": False,
                                              "PubliclyAccessible": False, "StorageEncrypted": True, "DBSubnetGroup": group})
             members.append({"DBInstanceIdentifier": identifier, "IsClusterWriter": index == 0})
         self.raw["db_clusters"].append({"DBClusterIdentifier": cluster, "Engine": engine, "MultiAZ": bool(readers),
@@ -178,14 +182,14 @@ class Sample:
         for index, az in enumerate([primary, *replicas]):
             node = f"{group}-00{index + 1}"
             self.raw["cache_clusters"].append({"CacheClusterId": node, "ReplicationGroupId": group, "Engine": "redis", "CacheNodeType": size,
-                                               "PreferredAvailabilityZone": f"{REGION}{az}", "CacheSubnetGroupName": f"{group}-subnets"})
+                                               "PreferredAvailabilityZone": f"{self.region}{az}", "CacheSubnetGroupName": f"{group}-subnets"})
             members.append({"CacheClusterId": node, "CurrentRole": "primary" if index == 0 else "replica"})
         self.raw["replication_groups"].append({"ReplicationGroupId": group, "MultiAZ": "enabled", "AutomaticFailover": "enabled",
                                                "AtRestEncryptionEnabled": True, "TransitEncryptionEnabled": True,
                                                "NodeGroups": [{"NodeGroupId": "0001", "NodeGroupMembers": members}]})
 
     def kafka(self, name, subnets, brokers, size="kafka.m7g.large"):
-        arn = f"arn:aws:kafka:{REGION}:{ACCOUNT}:cluster/{name}/1"
+        arn = f"arn:aws:kafka:{self.region}:{self.account}:cluster/{name}/1"
         self.raw["msk_nodes"] += [{"ClusterArn": arn, "NodeType": "BROKER", "InstanceType": size,
                                    "BrokerNodeInfo": {"BrokerId": i + 1, "ClientSubnet": subnets[i % len(subnets)]}} for i in range(brokers)]
         self.raw["msk_clusters"].append({
@@ -216,7 +220,7 @@ class Sample:
             for index, az in enumerate([primary, *replicas]):
                 node = f"{group}-000{shard}-00{index + 1}"
                 self.raw["cache_clusters"].append({"CacheClusterId": node, "ReplicationGroupId": group, "Engine": "redis", "EngineVersion": "7.1",
-                                                   "CacheNodeType": size, "PreferredAvailabilityZone": f"{REGION}{az}",
+                                                   "CacheNodeType": size, "PreferredAvailabilityZone": f"{self.region}{az}",
                                                    "CacheSubnetGroupName": f"{group}-subnets"})
                 members.append({"CacheClusterId": node, "CurrentRole": "primary" if index == 0 else "replica"})
             node_groups.append({"NodeGroupId": f"000{shard}", "NodeGroupMembers": members})
@@ -225,9 +229,9 @@ class Sample:
 
     def opensearch(self, domain, vpc, subnets, data_per_az, masters_per_az=1, size="r6g.large.search", standby=None):
         """Three-AZ domain with dedicated masters; with standby, the standby AZ's data nodes take no traffic until failover."""
-        arn = f"arn:aws:es:{REGION}:{ACCOUNT}:domain/{domain}"
+        arn = f"arn:aws:es:{self.region}:{self.account}:domain/{domain}"
         self.raw["opensearch_domains"].append({
-            "DomainName": domain, "ARN": arn, "DomainId": f"{ACCOUNT}/{domain}", "EngineVersion": "OpenSearch_2.13",
+            "DomainName": domain, "ARN": arn, "DomainId": f"{self.account}/{domain}", "EngineVersion": "OpenSearch_2.13",
             "ClusterConfig": {"InstanceType": size, "InstanceCount": data_per_az * len(subnets), "DedicatedMasterEnabled": bool(masters_per_az),
                               "DedicatedMasterType": "m6g.large.search", "DedicatedMasterCount": masters_per_az * len(subnets),
                               "ZoneAwarenessEnabled": True, "ZoneAwarenessConfig": {"AvailabilityZoneCount": len(subnets)},
@@ -244,10 +248,10 @@ class Sample:
 
     def ecs_service(self, cluster, name, vpc, tasks, target_group=None, port=8080, launch="FARGATE"):
         """Fargate service with awsvpc tasks; each task's ENI address is the IP target ECS registers."""
-        cluster_arn = f"arn:aws:ecs:{REGION}:{ACCOUNT}:cluster/{cluster}"
+        cluster_arn = f"arn:aws:ecs:{self.region}:{self.account}:cluster/{cluster}"
         subnets = sorted({subnet for subnet, _ in tasks})
         self.raw["ecs_services"].append({
-            "serviceArn": f"arn:aws:ecs:{REGION}:{ACCOUNT}:service/{cluster}/{name}", "serviceName": name, "clusterArn": cluster_arn,
+            "serviceArn": f"arn:aws:ecs:{self.region}:{self.account}:service/{cluster}/{name}", "serviceName": name, "clusterArn": cluster_arn,
             "status": "ACTIVE", "launchType": launch, "desiredCount": len(tasks), "runningCount": len(tasks), "platformVersion": "1.4.0",
             "networkConfiguration": {"awsvpcConfiguration": {"subnets": subnets, "securityGroups": [f"sg-{name}"], "assignPublicIp": "DISABLED"}},
             "loadBalancers": [{"targetGroupArn": target_group, "containerName": name, "containerPort": port}] if target_group else [],
@@ -256,7 +260,7 @@ class Sample:
         for index, (subnet, ip) in enumerate(tasks):
             task_id = hashlib.sha256(f"{cluster}/{name}/{index}".encode()).hexdigest()[:32]
             self.raw["ecs_tasks"].append({
-                "taskArn": f"arn:aws:ecs:{REGION}:{ACCOUNT}:task/{cluster}/{task_id}", "clusterArn": cluster_arn, "group": f"service:{name}",
+                "taskArn": f"arn:aws:ecs:{self.region}:{self.account}:task/{cluster}/{task_id}", "clusterArn": cluster_arn, "group": f"service:{name}",
                 "launchType": launch, "lastStatus": "RUNNING", "availabilityZone": self.az_of(subnet), "cpu": "512", "memory": "1024",
                 "attachments": [{"type": "ElasticNetworkInterface", "status": "ATTACHED",
                                  "details": [{"name": "subnetId", "value": subnet}, {"name": "privateIPv4Address", "value": ip}]}]})
@@ -264,7 +268,7 @@ class Sample:
     def efs(self, key, name, vpc, subnets, one_zone=None):
         self.raw["efs_file_systems"].append({"FileSystemId": key, "Name": name, "PerformanceMode": "generalPurpose", "ThroughputMode": "elastic",
                                              "Encrypted": True, "LifeCycleState": "available", "NumberOfMountTargets": len(subnets),
-                                             **({"AvailabilityZoneName": f"{REGION}{one_zone}"} if one_zone else {}), "Tags": self.tags(name)})
+                                             **({"AvailabilityZoneName": f"{self.region}{one_zone}"} if one_zone else {}), "Tags": self.tags(name)})
         for i, subnet in enumerate(subnets):
             self.raw["efs_mount_targets"].append({"MountTargetId": f"fsmt-{key[3:]}{i}", "FileSystemId": key, "SubnetId": subnet, "VpcId": vpc,
                                                   "AvailabilityZoneName": self.az_of(subnet), "LifeCycleState": "available",
@@ -276,16 +280,16 @@ class Sample:
         roles = lambda: [{"NodeRole": "LEADER" if nodes > 1 and i == 0 else "COMPUTE-" + str(i)} for i in range(nodes)]
         self.raw["redshift_clusters"].append({
             "ClusterIdentifier": cluster, "NodeType": node_type, "NumberOfNodes": nodes, "ClusterStatus": "available", "VpcId": vpc,
-            "ClusterSubnetGroupName": f"{cluster}-subnets", "AvailabilityZone": f"{REGION}{primary}", "Encrypted": True,
+            "ClusterSubnetGroupName": f"{cluster}-subnets", "AvailabilityZone": f"{self.region}{primary}", "Encrypted": True,
             "PubliclyAccessible": False, "ClusterNodes": roles(), "MultiAZ": "Enabled" if secondary else "Disabled",
-            **({"MultiAZSecondary": {"AvailabilityZone": f"{REGION}{secondary}", "ClusterNodes": roles()}} if secondary else {})})
+            **({"MultiAZSecondary": {"AvailabilityZone": f"{self.region}{secondary}", "ClusterNodes": roles()}} if secondary else {})})
 
     def peering(self, key, requester, accepter, name):
         cidr = lambda vpc: next(v["CidrBlock"] for v in self.raw["vpcs"] if v["VpcId"] == vpc)
         self.raw["vpc_peering_connections"].append({
             "VpcPeeringConnectionId": key, "Status": {"Code": "active"}, "Tags": self.tags(name),
-            "RequesterVpcInfo": {"VpcId": requester, "OwnerId": ACCOUNT, "Region": REGION, "CidrBlock": cidr(requester)},
-            "AccepterVpcInfo": {"VpcId": accepter, "OwnerId": ACCOUNT, "Region": REGION, "CidrBlock": cidr(accepter)}})
+            "RequesterVpcInfo": {"VpcId": requester, "OwnerId": self.account, "Region": self.region, "CidrBlock": cidr(requester)},
+            "AccepterVpcInfo": {"VpcId": accepter, "OwnerId": self.account, "Region": self.region, "CidrBlock": cidr(accepter)}})
 
     def vpn(self, key, customer, ip, name, vgw=None, tgw=None, vpc=None, tunnels_up=2, vgw_name=None):
         """Site-to-Site VPN with two tunnels, terminated on a virtual private gateway or a Transit Gateway."""
@@ -345,7 +349,7 @@ class Sample:
         coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
                       "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in self.raw["target_health"]]
         return {"schema_version": 1, "metadata": {
-            "account_id": ACCOUNT, "region": REGION, "partition": "aws", "started_at": timestamp, "finished_at": timestamp,
+            "account_id": self.account, "region": self.region, "partition": "aws", "started_at": timestamp, "finished_at": timestamp,
             "status": "complete", "demo": True, "sample": self.key, "title": self.title, "practices": self.practices,
             "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway", "NatGateway",
                       "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGateway", "EKS", "MSK", "ElastiCache", "Lambda",

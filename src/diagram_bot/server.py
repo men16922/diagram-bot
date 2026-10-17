@@ -72,6 +72,11 @@ class RestoreRequest(RevisionRequest):
     from_revision: int = Field(ge=0)
 
 
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    model: str | None = Field(default=None, max_length=64)
+
+
 HISTORY = 20
 
 
@@ -92,8 +97,14 @@ headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.g
 if(r.ok)location.href='/';else document.getElementById('e').textContent=(await r.json()).detail;};</script></body></html>"""
 
 
-def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False, oidc=None):
-    """users: accounts for team mode (None = single local user). secure: served over TLS (Secure cookie, HSTS)."""
+def default_chat(workspace, model):
+    from .agent import Chat
+    return Chat(workspace, model)
+
+
+def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False, oidc=None, chat_factory=default_chat):
+    """users: accounts for team mode (None = single local user). secure: served over TLS (Secure cookie, HSTS).
+    chat_factory(workspace, model) builds the design/collection chat agent (replaced in tests)."""
     directory = Path(directory or data_path())
     snapshots = directory / "snapshots"
     documents = directory / "documents"
@@ -340,6 +351,54 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
     def compare_snapshots(identifier: str, other: str):
         """Changes from `other` (before) to `identifier` (after)."""
         return diff(get_snapshot(other), get_snapshot(identifier))
+
+    chats = {}  # one conversation per user: {"chat", "model"}
+
+    @app.get("/api/agent")
+    def agent_info():
+        from .agent import DEFAULT_MODEL, FALLBACK_MODEL, available_models
+        try:
+            import strands  # noqa: F401
+            ready = True
+        except ImportError:
+            ready = False
+        return {"ready": ready, "models": available_models(), "default": DEFAULT_MODEL, "fallback": FALLBACK_MODEL}
+
+    @app.post("/api/agent/chat")
+    def agent_chat(params: ChatRequest, request: Request):
+        from .agent import DEFAULT_MODEL, MODELS, Workspace
+        user = request.state.user
+        model = params.model or DEFAULT_MODEL
+        if model not in MODELS:
+            raise HTTPException(422, f"지원하지 않는 모델입니다: {model}")
+        can_collect = not auth or getattr(request.state, "role", "admin") == "admin"
+
+        def publish(snapshot):
+            identifier = save_snapshot(snapshot)
+            audit.write(user, "agent snapshot", target=identifier, design=bool(snapshot["metadata"].get("design")))
+            return identifier
+
+        with mutex:
+            current = chats.get(user)
+            if not current or current["model"] != model:
+                try:
+                    workspace = Workspace(publish, allow_collection=can_collect)
+                    current = chats[user] = {"chat": chat_factory(workspace, model), "model": model}
+                except ImportError as exc:
+                    raise HTTPException(503, "채팅 에이전트를 쓰려면 pip install -e '.[agent]'로 strands-agents를 설치하세요.") from exc
+        try:
+            return current["chat"].ask(params.message)
+        except (BotoCoreError, ClientError) as exc:
+            code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
+            raise HTTPException(502, f"Bedrock 호출 실패({code}): 모델 액세스·리전·자격 증명을 확인하세요.") from exc
+        except Exception as exc:  # noqa: BLE001 - the model provider's own errors are surfaced to the user, the chat stays usable
+            raise HTTPException(502, f"에이전트 응답 실패: {type(exc).__name__}: {str(exc)[:300]}") from exc
+
+    @app.post("/api/agent/reset")
+    def agent_reset(request: Request):
+        with mutex:
+            chats.pop(request.state.user, None)
+        return {"reset": True}
 
     @app.post("/api/snapshots", status_code=201)
     def import_snapshot(snapshot: dict):

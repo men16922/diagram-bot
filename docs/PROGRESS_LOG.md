@@ -2,6 +2,27 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — Chat design agent (user request: DevOps Agent 벤치마킹, Strands·Bedrock 채팅 설계)
+
+- Research: AWS DevOps Agent features mapped to Diagram Bot (docs/engineering/DEVOPS_AGENT_BENCHMARK.md).
+- `designer.py` (intent-level standard design steps on the sample builder; region-configurable `Sample`),
+  `agent.py` (Strands tools: design + read-only boto3 collection; ModelRouter GPT-6 Luna → Nova 2 Lite; sequential
+  tools; answering model reported), `/api/agent/*`, chat panel, `diagram-bot chat`, `--env-file`.
+- Bedrock: Nova 2 Lite / Claude tool use verified; GPT-6 Luna agreement accepted (user approved) but still denied.
+- docs/DRAWIO.md (libraries, layout algorithm, routing, editor bridge, exports). Verified: `make check` 106 tests,
+  live chat in Chromium (design, advice, collection) and CLI chat.
+
+## 2026-10-17 — First live AWS verification (goal: 검증 완료시까지 수행)
+
+- Owner's test account, us-east-1, keys from git-ignored `.env`: CLI collection 30/30 complete,
+  counts equal to the AWS CLI; web app collection, views, tabs and exports driven in Chromium.
+- Fixed: Lambda functions without VpcConfig were dropped from the graph, so inventory/CSV
+  (documented as the full collection) lost them; now nodes without a VPC edge, shown on a separate
+  overview card and never in detail views. Regression test added.
+- Fixed: `make check` failed with ProfileNotFound when the developer shell exports `AWS_PROFILE`;
+  the Makefile now unexports profile and key variables for the offline gate.
+- Verified: `make check` (lint + 91 tests + CLI round trip), also with real keys in the environment.
+
 ## 2026-10-17 — v0.5.0 team mode and AWS-emulator verification
 
 - Team mode (`auth.py`): PBKDF2 accounts, throttled login, Secure/HttpOnly/Strict session cookie,
