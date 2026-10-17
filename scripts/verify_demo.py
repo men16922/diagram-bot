@@ -301,6 +301,29 @@ def main():
         expect(detail).to_contain_text('SageMaker endpoint')
         page.screenshot(path=str(args.output / 'genai-rag.png'), full_page=True)
 
+        # 9d. Multi-account: account frames around VPC cards meeting at the Network account's shared Transit Gateway,
+        # then two account snapshots imported and merged through the 계정 통합 보기 dialog.
+        page.locator('#snapshot-select').select_option('sample-multi-account')
+        ready()
+        expect(page.locator('#view-overview')).to_have_class('view-button active')
+        expect(frame.get_by_text(starts('AWS 계정 · 222222222222'))).to_be_visible()
+        frame.get_by_text(starts('org-tgw')).click()
+        expect(detail).to_contain_text('111111111111')
+        page.screenshot(path=str(args.output / 'multi-account.png'), full_page=True)
+        from diagram_bot.samples import SAMPLES
+        for i, part in enumerate(SAMPLES['multi-account']()['parts'][1:]):
+            (args.output / f'account-{i}.json').write_text(json.dumps(part), encoding='utf-8')
+            page.locator('#import-file').set_input_files(args.output / f'account-{i}.json')
+            ready()
+        page.locator('#combine-button').click()
+        page.locator('#combine-rows label', has_text='222222222222').locator('input').check()
+        page.locator('#combine-rows label', has_text='333333333333').locator('input').check()
+        page.locator('#combine-title').fill('검증 조직')
+        page.locator('#combine-submit').click()
+        ready()
+        expect(page.locator('#toast')).to_contain_text('계정 통합 보기')
+        expect(frame.get_by_text(starts('AWS 계정 · 333333333333'))).to_be_visible()
+
         options = page.locator('#snapshot-select option').count()
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
         expect(page.locator('#snapshot-select option')).to_have_count(options + 1)
@@ -335,6 +358,7 @@ def main():
                          'network overview (TGW, customer gateways); data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
                          'AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review',
                          'GPU training: EFA, Capacity Block, placement group, FSx for Lustre, HyperPod; GenAI RAG: SageMaker endpoint',
+                         'multi-account: account frames, shared TGW, combine dialog',
                          'snapshot import', 'change review between snapshots']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))

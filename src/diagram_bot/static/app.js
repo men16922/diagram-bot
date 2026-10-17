@@ -35,7 +35,7 @@ function setControls() {
   $('restore-button').disabled=!state.ready||state.loading||state.busy||!state.history.length;
   for(const id of ['snapshot-select','references','import-button'])$(id).disabled=state.busy||(state.ready&&state.loading);
   // Team mode roles: viewers read only, editors edit and import, admins also collect from AWS.
-  if(state.role==='viewer')for(const id of ['save-button','note-button','reset-button','restore-button','import-button'])$(id).disabled=true;
+  if(state.role==='viewer')for(const id of ['save-button','note-button','reset-button','restore-button','import-button','combine-button'])$(id).disabled=true;
   $('collection-button').disabled=state.role!=='admin';$('chat-button').disabled=state.role==='viewer';
   const locked=state.busy||(state.ready&&state.loading);
   $('view-overview').disabled=locked;$('view-detail').disabled=locked||!state.vpc;$('view-focus').disabled=locked||!state.selected;
@@ -85,7 +85,7 @@ window.addEventListener('message', event=>{
     if(message.data?.startsWith('data:image/png;base64,'))task.resolve(message.data);else task.reject(new Error('PNG를 생성하지 못했습니다. 해상도를 낮춰 다시 시도하세요.'));
   }
 });
-function snapshotLabel(item){const m=item.metadata;if(m.design)return `설계 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;return m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.account_id} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;}
+function snapshotLabel(item){const m=item.metadata;if(m.combined&&!m.sample)return `통합 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;if(m.design)return `설계 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;return m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.account_id} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;}
 async function refreshSnapshots(preferred) {
   const items=await api('/api/snapshots');state.snapshots=items;$('snapshot-select').replaceChildren();
   for(const item of items)$('snapshot-select').append(new Option(snapshotLabel(item),item.id));
@@ -334,6 +334,23 @@ for(const mode of modes)bind(mode+'-tab',async()=>{state.mode=mode;$('canvas-are
 $('compare-select').onchange=()=>renderChanges().catch(e=>toast(e.message,true));
 $('severity-filter').onchange=renderReview;
 $('search').oninput=renderInventory;$('kind-filter').onchange=renderInventory;
+// Multi-account: pick account × region collections (not samples, designs or combined views) and merge them.
+$('combine-button').onclick=()=>{
+  const rows=$('combine-rows');rows.replaceChildren();
+  for(const item of state.snapshots.filter(i=>!i.metadata.combined&&!i.metadata.design)){
+    const label=el('label'),box=el('input');box.type='checkbox';box.value=item.id;label.append(box,document.createTextNode(`${item.metadata.account_id} · ${item.metadata.region} — ${snapshotLabel(item)}`));rows.append(label);
+  }
+  $('combine-dialog').showModal();
+};
+$('close-combine').onclick=()=>$('combine-dialog').close();
+$('combine-form').onsubmit=async event=>{
+  event.preventDefault();
+  try{
+    const ids=[...$('combine-rows').querySelectorAll('input:checked')].map(b=>b.value);
+    const result=await api('/api/snapshots/combine',{method:'POST',body:JSON.stringify({ids,title:$('combine-title').value||null})});
+    $('combine-dialog').close();await refreshSnapshots(result.id);await loadSnapshot(result.id);toast('계정 통합 보기를 만들었습니다.');
+  }catch(error){toast(error.message,true);}
+};
 $('snapshot-select').onchange=()=>loadSnapshot($('snapshot-select').value).catch(e=>toast(e.message,true));
 $('references').onchange=async()=>{try{if(state.dirty)await saveDocument(false);state.references=$('references').checked;await loadView();}catch(e){toast(e.message,true);$('references').checked=state.references;}};
 $('import-file').onchange=async()=>{

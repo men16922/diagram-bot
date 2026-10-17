@@ -44,6 +44,7 @@
     "network overview (TGW, customer gateways); data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways",
     "AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review",
     "GPU training: EFA, Capacity Block, placement group, FSx for Lustre, HyperPod; GenAI RAG: SageMaker endpoint",
+    "multi-account: account frames, shared TGW, combine dialog",
     "snapshot import",
     "change review between snapshots"
   ]

@@ -49,8 +49,8 @@ def assert_readable(layout):
     for shape in layout["shapes"]:
         siblings.setdefault(shape["parent"], []).append(shape["id"])
     for members in siblings.values():
-        # Auto Scaling group frames deliberately overlay AZ columns, as in AWS diagrams.
-        members = [m for m in members if shapes[m]["role"] != "asg"]
+        # Auto Scaling group frames deliberately overlay AZ columns, and account frames their VPC cards, as in AWS diagrams.
+        members = [m for m in members if shapes[m]["role"] not in ("asg", "account")]
         for i, a in enumerate(members):
             for b in members[i + 1:]:
                 assert not overlap(area[a], area[b]), (shapes[a]["label"], shapes[b]["label"])
@@ -338,6 +338,7 @@ def test_overview_draws_the_network_between_vpcs(key):
         "hybrid": ["attached_transit_gateway"] + ["vpn_connection"] * 2,
         "data-platform": ["attached_transit_gateway"] * 2 + ["vpn_connection"] * 2,
         "ai-platform": ["attached_transit_gateway"],
+        "multi-account": ["attached_transit_gateway"] * 3 + ["vpn_connection"] * 2,
     }.get(key, [])
     assert relations == expected
 

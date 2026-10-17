@@ -175,3 +175,15 @@ def test_outdated_samples_are_regenerated(tmp_path):
         pass
     fresh = json.loads(path.read_text(encoding='utf-8'))['metadata']
     assert fresh['sample_version'] == SAMPLE_VERSION and fresh['title'] != 'outdated'
+
+
+def test_combine_account_snapshots_into_one_network_view(client):
+    parts = SAMPLES['multi-account']()['parts']
+    ids = [client.post('/api/snapshots', json=part).json()['id'] for part in parts[1:]]
+    combined = client.post('/api/snapshots/combine', json={'ids': ids, 'title': '운영 조직'})
+    assert combined.status_code == 201
+    snapshot = client.get(f"/api/snapshots/{combined.json()['id']}").json()
+    assert snapshot['metadata']['combined'] and snapshot['metadata']['accounts'] == ['222222222222', '333333333333']
+    xml = client.get(f"/api/snapshots/{combined.json()['id']}/document?view=overview").json()['xml']
+    assert 'AWS 계정 · 222222222222' in xml and 'AWS 계정 · 333333333333' in xml
+    assert client.post('/api/snapshots/combine', json={'ids': [ids[0], ids[0]]}).status_code == 422

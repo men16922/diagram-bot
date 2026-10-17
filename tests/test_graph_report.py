@@ -1,3 +1,4 @@
+import pytest
 import copy
 import csv
 import json
@@ -239,3 +240,34 @@ def test_ai_platform_follows_the_ai_lenses():
     assert {"IpProtocol": "-1", "UserIdGroupPairs": [{"GroupId": "sg-train-efa"}]} in efa["IpPermissions"]
     assert all(r.get("IpRanges", [{}])[0].get("CidrIp") != "0.0.0.0/0" for r in efa["IpPermissionsEgress"])
     assert [(f["rule"], f["severity"]) for f in review(graph, snapshot["coverage"])] == [("REL-ASG-AZ", "low")]
+
+
+def test_combined_accounts_share_one_transit_gateway_and_one_peering():
+    """A RAM-shared Transit Gateway and a cross-account peering become one node each, owned by the owner account."""
+    from diagram_bot.combine import combine_snapshots
+    from diagram_bot.samples import SAMPLES, Sample
+    snapshot = SAMPLES["multi-account"]()
+    graph = build_graph(snapshot)
+    gateways = [n for n in graph["nodes"] if n["kind"] == "transit_gateway"]
+    assert [(n["account"], n["reference_only"]) for n in gateways] == [("111111111111", False)]
+    attached = {n["account"] for e in graph["edges"] if e["relation"] == "attached_transit_gateway"
+                for n in graph["nodes"] if n["id"] == e["source"]}
+    assert attached == {"111111111111", "222222222222", "333333333333"}
+    # Cross-account peering: each side reports the same pcx; the combined graph has one, linked to both VPCs.
+    sides = []
+    for account, vpc, cidr in (("444444444444", "vpc-0aaaa000000000044", "10.44.0.0/16"), ("555555555555", "vpc-0bbbb000000000055", "10.55.0.0/16")):
+        s = Sample("peer", "peer", [], account=account)
+        s.vpc(vpc, cidr, f"vpc-{account[:2]}")
+        s.raw["vpc_peering_connections"].append({"VpcPeeringConnectionId": "pcx-0cross0000000045", "Status": {"Code": "active"},
+                                                  "RequesterVpcInfo": {"VpcId": "vpc-0aaaa000000000044", "OwnerId": "444444444444", "CidrBlock": "10.44.0.0/16"},
+                                                  "AccepterVpcInfo": {"VpcId": "vpc-0bbbb000000000055", "OwnerId": "555555555555", "CidrBlock": "10.55.0.0/16"}})
+        sides.append(s.snapshot())
+    peered = build_graph(combine_snapshots(sides))
+    peerings = [n for n in peered["nodes"] if n["kind"] == "vpc_peering"]
+    assert len(peerings) == 1
+    assert sorted(e["target"].split("/")[0] for e in peered["edges"] if e["source"] == peerings[0]["id"] and e["relation"] == "in_vpc") == [
+        "444444444444", "555555555555"]
+    with pytest.raises(ValueError, match="두 개 이상"):
+        combine_snapshots(sides[:1])
+    with pytest.raises(ValueError, match="두 번"):
+        combine_snapshots([sides[0], sides[0]])

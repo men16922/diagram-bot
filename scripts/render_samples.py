@@ -41,7 +41,10 @@ def write_readme(output):
         nodes = [n for n in build_graph(snapshot)["nodes"] if not n["reference_only"]]
         counts = " · ".join(f"{label} {count}" for kind, label in COUNTS if (count := sum(n["kind"] == kind for n in nodes)))
         practices = "\n".join(f"- {line}" for line in snapshot["metadata"]["practices"])
-        images = "\n".join(f"![{key} {png.name}]({key}/{png.name})" for png in sorted((output / key).glob("*.png")) if png.name != "overview.png")
+        # A combined (multi-account) sample is about its overview: the network across accounts comes first.
+        pngs = sorted((output / key).glob("*.png"), key=lambda png: (png.name != "overview.png", png.name))
+        combined = snapshot["metadata"].get("combined")
+        images = "\n".join(f"![{key} {png.name}]({key}/{png.name})" for png in pngs if combined or png.name != "overview.png")
         sections.append(f"## {snapshot['metadata']['title']} — `{key}`\n\n{counts}\n\n{practices}\n\n{images}\n")
     readme.write_text(header + "\n" + "\n".join(sections), encoding="utf-8")
 

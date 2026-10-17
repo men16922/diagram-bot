@@ -299,7 +299,8 @@ def layout_view(snapshot, graph, selection):
     status = "부분 조회: " + ", ".join(incomplete) if incomplete else "조회 완료"
     scope = (f"{status} · {meta['finished_at']}\n표시 {counts['visible']}개 / 수집 {counts['collected']}개 · 참조 {counts['references']}개"
              f" · 숨김 {counts['hidden']}개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도"
-             + ("\n서브넷 구분: 라우팅 테이블의 0.0.0.0/0 경로 (IGW = 퍼블릭, NAT·TGW·VGW = 프라이빗, 없음 = 격리)" if snapshot["raw"].get("route_tables")
+             + ("\n서브넷 구분: 라우팅 테이블의 0.0.0.0/0 경로 (IGW = 퍼블릭, NAT·TGW·VGW = 프라이빗, 없음 = 격리)"
+                if any(part["raw"].get("route_tables") for part in snapshot.get("parts") or [snapshot])
                 else "\n퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)"))
     canvas.add("scope", "1", 24, 48, 960, 42, "caption", scope, layout=f"{ENGINE}/{VERSION}",
                view=view["kind"], vpc=view["vpc"] or "", focus=view["resource"] or "",
@@ -323,6 +324,8 @@ SUMMARY = [("Subnet", "subnet"), ("EC2", "ec2"), ("LB", "load_balancer"), ("TG",
 
 
 def cloud_label(meta):
+    if meta.get("combined"):
+        return f"AWS Cloud · 계정 {len(meta['accounts'])}개 (계정·리전별 수집 통합)"
     return "AWS Cloud · 설계안 (실제 계정 아님)" if meta.get("design") else f"AWS Cloud · 계정 {meta['account_id']}"
 
 
@@ -349,7 +352,9 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
     to_site = [(e, a, b) for e, a, b in links if nodes[b]["kind"] == "customer_gateway"]
     # Connected VPCs come first so their cards sit in the rows right above the network hubs.
     connected = {a for _, a, _ in to_hub}
-    vpcs.sort(key=lambda n: n["id"] not in connected)
+    combined = bool(snapshot["metadata"].get("combined"))
+    # Connected VPCs come first; a combined overview keeps each account's VPCs together.
+    vpcs.sort(key=lambda n: (n["account"] if combined else "", n["id"] not in connected))
     columns = 3
     card_w, gap = 320, 24
     width = 32 + columns * (card_w + gap)
@@ -377,7 +382,8 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
                 rows[-1] += " · " + item
             else:
                 rows.append(item)
-        label = (f"VPC · {fit_label(vpc['name'], 290, 1)}\n{vpc['attributes'].get('CidrBlock', '')} · {vpc['resource_id']}\n"
+        where = (f"계정 {vpc['account']}" + (f" · {vpc['region']}" if len(snapshot["metadata"]["regions"]) > 1 else "") + "\n") if combined else ""
+        label = (f"VPC · {fit_label(vpc['name'], 290, 1)}\n{where}{vpc['attributes'].get('CidrBlock', '')} · {vpc['resource_id']}\n"
                  + "\n".join(rows) + f"\nAZ {', '.join(azs) if azs else '미확인'}")
         cards.append((label, vpc["id"], len(inside) == 0))
     # Collected security groups are rule sets, not placed resources; referenced ones still count.
@@ -396,7 +402,7 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
         message = "조회된 VPC가 없습니다." if vpc_status == "complete" else "VPC 조회가 완료되지 않았습니다.\n빈 환경이 아니라 권한·조회 실패일 수 있습니다."
         cards.insert(0, (message, None, True))
     card_h = max([112] + [36 + 15 * (label.count("\n") + 1) for label, _, _ in cards])
-    if not to_hub:
+    if not to_hub and not combined:
         for i, (label, resource, empty) in enumerate(cards):
             canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + gap),
                        VPC_HEADER + 18 + (i // columns) * (card_h + gap), card_w, card_h, "summary", label,
@@ -404,10 +410,12 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
         group["h"] = VPC_HEADER + 18 + -(-len(cards) // columns) * (card_h + gap)
         cloud["h"] = group["y"] + group["h"] + 20
         return
-    network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, connected, to_hub, to_site)
+    account_of = {v["id"]: v["account"] for v in vpcs} if combined else None
+    network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, len(vpcs) if combined else len(connected), to_hub, to_site,
+            account_of)
 
 
-def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, connected, to_hub, to_site):
+def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, top_count, to_hub, to_site, account_of=None):
     """Overview with connections: connected VPC cards in rows, a band of network hubs (Transit Gateway,
     VPN gateway, peering) below them, the customer gateways in a data center box right of the AWS Cloud,
     and the remaining cards under the hubs.
@@ -415,9 +423,21 @@ def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, connect
     Every route has its own lane: a card's routes leave from separate points on its bottom edge, routes from
     upper rows drop through the gap right of their card, and each route has its own horizontal lane above the
     hubs, so two routes share a segment only where they meet at the same shape."""
-    top = cards[:len(connected)]
-    rest = cards[len(connected):]
-    rows = [top[i:i + columns] for i in range(0, len(top), columns)]
+    top = cards[:top_count]
+    rest = cards[top_count:]
+    # A combined overview frames each account's VPC cards (rows never mix accounts).
+    blocks = []
+    for card in top:
+        account = account_of.get(card[1]) if account_of else None
+        if not blocks or blocks[-1][0] != account:
+            blocks.append((account, []))
+        blocks[-1][1].append(card)
+    rows, row_block = [], []
+    for b, (_, members) in enumerate(blocks):
+        for i in range(0, len(members), columns):
+            rows.append(members[i:i + columns])
+            row_block.append(b)
+    head = 34 if account_of else 0
     hubs = sorted({b for _, _, b in to_hub} | {a for _, a, _ in to_site}, key=lambda k: (HUB_ORDER.get(nodes[k]["kind"], 9), nodes[k]["name"], k))
     sites = sorted({b for _, _, b in to_site}, key=lambda k: (nodes[k]["name"], k))
     hub_index = {k: i for i, k in enumerate(hubs)}
@@ -432,12 +452,23 @@ def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, connect
     gaps = [24 + 6 * n for n in gap_use]
     gutters = [24 + 6 * sum(len(by_card.get(resource, [])) for _, resource, _ in row) for row in rows[:-1]] + [0]
     xs = [24 + sum(card_w + gaps[c] for c in range(col)) for col in range(columns)]
-    ys = [VPC_HEADER + 18 + sum(card_h + gutters[r] for r in range(row)) for row in range(len(rows))]
+    ys, y = [], VPC_HEADER + 18
+    for r in range(len(rows)):
+        y += head if r == 0 or row_block[r] != row_block[r - 1] else 0
+        ys.append(y)
+        y += card_h + gutters[r]
     ox, oy = canvas.abs[group["id"]][0], canvas.abs[group["id"]][1]
+    for b, (account, _) in enumerate(blocks):
+        if account is None:
+            continue
+        mine = [r for r in range(len(rows)) if row_block[r] == b]
+        right = max(xs[len(rows[r]) - 1] + card_w for r in mine) + 4  # routes drop at card edge + 8: outside the frame
+        canvas.add(cell_id("account/" + account), group["id"], xs[0] - 12, ys[mine[0]] - head + 4, right - xs[0] + 12,
+                   ys[mine[-1]] + card_h + 10 - (ys[mine[0]] - head + 4), "account", f"AWS 계정 · {account}")
     for r, row in enumerate(rows):
         for c, (label, resource, empty) in enumerate(row):
             canvas.add(cell_id(resource), group["id"], xs[c], ys[r], card_w, card_h, "summary", label, resource=resource, empty=empty)
-    cards_bottom = ys[-1] + card_h
+    cards_bottom = ys[-1] + card_h + (10 if account_of else 0)
     lane_top = cards_bottom + 14
     hub_y = lane_top + 6 * len(to_hub) + 18
     grid_width = xs[-1] + card_w + gaps[-1]
@@ -523,6 +554,11 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     suppressed = set()  # registrations drawn as one target group -> Auto Scaling group edge
     frames_at = {}  # Auto Scaling group -> (frame cell, leftmost AZ column)
     meta = snapshot["metadata"]
+    if meta.get("combined"):
+        # One VPC (or resource) of a combined snapshot: its own account and region frame the drawing.
+        subject = next((nodes[k] for k in visible if nodes[k]["kind"] == "vpc"), None) or nodes.get(focus)
+        if subject:
+            meta = {**meta, "combined": False, "account_id": subject["account"], "region": subject["region"]}
     # AWS Architecture Icons nesting: AWS Cloud > Region > VPC > Availability Zone > subnet.
     cloud = canvas.add("cloud", "1", 24, 112, 0, 0, "cloud", cloud_label(meta))
     region = canvas.add("region", "cloud", 20, 44, 0, 0, "region", f"Region · {meta['region']}")

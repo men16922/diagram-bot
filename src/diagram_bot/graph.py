@@ -31,7 +31,41 @@ def upgrade_graph(graph):
     return graph
 
 
+# Resources one account can see that another owns: a Transit Gateway shared through RAM, a cross-account peering.
+SHARED_KINDS = {"transit_gateway", "vpc_peering"}
+
+
+def merge_graphs(graphs):
+    """One graph from several account × region graphs. Node IDs already carry account and region; a shared resource
+    becomes one node (the owner's copy, else a collected one) so attachments and peerings from every account meet."""
+    nodes, edges = {}, {}
+    for graph in graphs:
+        for n in graph["nodes"]:
+            if n["id"] not in nodes or (nodes[n["id"]]["reference_only"] and not n["reference_only"]):
+                nodes[n["id"]] = n
+    copies = {}
+    for n in nodes.values():
+        if n["kind"] in SHARED_KINDS:
+            copies.setdefault((n["kind"], n["resource_id"]), []).append(n)
+    alias = {}
+    for group in copies.values():
+        owner = min(group, key=lambda n: (n["attributes"].get("OwnerId") != n["account"], n["reference_only"], n["id"]))
+        alias.update({n["id"]: owner["id"] for n in group if n is not owner})
+    for graph in graphs:
+        for e in graph["edges"]:
+            e = {**e, "source": alias.get(e["source"], e["source"]), "target": alias.get(e["target"], e["target"])}
+            e["id"] = relation_id(e)
+            edges.setdefault(e["id"], e)
+    for key in alias:
+        nodes.pop(key)
+    return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
+            "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
+
+
 def build_graph(snapshot):
+    if snapshot.get("parts"):
+        # A combined snapshot (combine.py): each part is one account × region collection.
+        return merge_graphs([build_graph(part) for part in snapshot["parts"]])
     nodes, edges = {}, {}
     account, region = snapshot["metadata"]["account_id"], snapshot["metadata"]["region"]
     prefix = f"{account}/{region}/"

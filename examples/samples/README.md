@@ -170,3 +170,19 @@ VPC 1 · 서브넷 5 · EC2 9 · NAT 2 · Auto Scaling 그룹 1 · VPC 엔드포
 - 도형 밖 권고: 노드 간 통신 암호화·EFA 드라이버·NCCL 설정과 학습 작업 스케줄러(Slurm/Kubernetes) 구성 (MLSEC04-BP02)
 
 ![gpu-training gpu-training.png](gpu-training/gpu-training.png)
+
+## 멀티 계정 랜딩 존 (Network 계정 TGW 공유 · 중앙 egress · 워크로드 계정) — `multi-account`
+
+VPC 3 · 서브넷 14 · EC2 5 · 로드밸런서 2 · 대상 그룹 2 · NAT 2 · RDS/Aurora/DocumentDB 2 · Auto Scaling 그룹 2 · VPC 엔드포인트 2 · TGW 연결 3 · 고객 게이트웨이 2
+
+- 워크로드·환경은 계정으로 분리하고 네트워크는 Network 계정이 소유 (Organizing Your AWS Environment, AWS SRA Network account)
+- Transit Gateway는 Network 계정에 두고 RAM으로 워크로드 계정에 공유, 각 계정은 자기 VPC만 연결
+- 워크로드 VPC에는 IGW·NAT 없이 0.0.0.0/0 → TGW, 인터넷 egress는 Network 계정 VPC의 AZ별 NAT로 집중 (Multi-VPC 백서: centralized egress)
+- 운영은 3 AZ, 스테이징은 2 AZ, 데이터는 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (REL10-BP01)
+- 사내 데이터 센터는 TGW의 Site-to-Site VPN 2개(고객 게이트웨이 2개) (REL02-BP02)
+- 도형 밖 권고: 운영·스테이징 TGW 라우팅 테이블 분리와 스포크 간 blackhole, 검사 VPC(Network Firewall), Organizations OU·SCP (수집 범위 밖)
+
+![multi-account overview.png](multi-account/overview.png)
+![multi-account network-egress.png](multi-account/network-egress.png)
+![multi-account prod-workload.png](multi-account/prod-workload.png)
+![multi-account staging-workload.png](multi-account/staging-workload.png)

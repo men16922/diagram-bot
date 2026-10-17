@@ -390,7 +390,8 @@ class Design:
 
     # --- standards, review and output ------------------------------------------------------------
     def apply_standard(self, name):
-        if name not in SAMPLES:
+        # Standards are single-account designs; the multi-account sample is a combined collection, not a design.
+        if name not in STANDARDS:
             raise DesignError(f"표준 아키텍처가 아닙니다: {name}. 사용 가능: {', '.join(STANDARDS)}")
         snapshot = SAMPLES[name]()
         self.reset(snapshot["metadata"]["title"], snapshot["metadata"]["region"])

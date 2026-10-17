@@ -2,6 +2,16 @@
 
 Last Updated: 2026-10-18
 
+## 2026-10-18 — Multi-account view, live check of the AI calls (goal: 잔여 작업 완료시까지)
+
+- Multi-account: `combine.py` merges account × region snapshots; `merge_graphs` makes a RAM-shared Transit Gateway or a
+  cross-account peering one node (owner's copy). Overview frames each account's VPC cards (AWS account group) with routes
+  outside the frames. CLI `diagram-bot combine`, `POST /api/snapshots/combine`, app dialog `계정 통합 보기`; sample
+  `multi-account` (Network account TGW + central egress + VPN, prod and staging accounts).
+- Live (owner's account, us-east-1, `.env` keys, read-only): 34/34 calls complete, incl. DescribePlacementGroups,
+  fsx DescribeFileSystems, sagemaker ListEndpoints/ListClusters (0 resources, so non-empty shapes rest on Stubber tests).
+- Verified: `make check` 166 tests; verify_demo 30 checks (multi-account frames, shared TGW, combine dialog).
+
 ## 2026-10-18 — AI/GPU as a strength (owner: AI·GPU 쪽이 너무 약하다, 강점이 되어야 한다)
 
 - Collection: FSx, SageMaker real-time endpoints (config instance type, model VpcConfig) and HyperPod clusters, placement
@@ -93,19 +103,5 @@ Last Updated: 2026-10-18
   subject match, group→role mapping; unit tests with a PKCE-checking fake provider; Chromium run
   through a loopback provider in `scripts/verify_team.py`.
 - Verified: lint + 90 tests; `scripts/verify_team.py` in Chromium over TLS; CI runs both.
-
-## 2026-10-17 — Enterprise readiness (goal: 엔터프라이즈 상용 제품 수준까지 작업·검증)
-
-- Architecture review (`findings.py`): 27 deterministic reliability/security/operations rules from
-  API fields only; security group rules collected; review tab, review.md section, `review --fail-on`.
-- Change review (`diff.py`): resources/settings/relations between snapshots, volatile state ignored;
-  comparison tab, API, `diff --fail-on-change`.
-- Collector: AssumeRole with ExternalId capped by the ReadOnlyAccess session policy; CLI over
-  several roles × regions; per-service parallel calls with adaptive retries; mtime caches in server.
-- Quality: ruff in `make check` and CI, CI runs review/diff CLIs, scale tests (300 instances in one
-  VPC readable; 2,500-resource account < 20 s), CloudFormation role template kept equal to the
-  policy by test, version 0.4.0, CHANGELOG, SECURITY, OPERATIONS.
-- Verified: `make check` (lint + 73 tests + CLI round trip); browser acceptance 27 checks incl.
-  review tab and snapshot comparison, no page errors or external requests.
 
 Older entries: docs/archive/PROGRESS_LOG-2026-10.md

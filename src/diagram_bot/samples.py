@@ -7,6 +7,7 @@ import hashlib
 import ipaddress
 
 from .collector import now
+from .combine import combine_snapshots
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
 # Bumped whenever a sample's architecture changes; the server replaces stored samples of another version.
@@ -163,8 +164,10 @@ class Sample:
                                           "ServiceName": f"com.amazonaws.{self.region}.{service}", "SubnetIds": list(subnets),
                                           "PrivateDnsEnabled": True, "Tags": self.tags(f"{service}-endpoint")})
 
-    def transit_gateway(self, key, name):
-        self.raw["transit_gateways"].append({"TransitGatewayId": key, "State": "available", "Tags": self.tags(name)})
+    def transit_gateway(self, key, name, owner=None):
+        """A Transit Gateway; `owner` set to another account is how a RAM-shared gateway appears to this account."""
+        self.raw["transit_gateways"].append({"TransitGatewayId": key, "State": "available", "OwnerId": owner or self.account,
+                                             "Tags": self.tags(name)})
         return key
 
     def tgw_attachment(self, key, gateway, vpc, subnets, name):
@@ -793,6 +796,52 @@ def gpu_training():
     return s.snapshot()
 
 
+def multi_account():
+    """AWS SRA-style landing zone collected per account and combined: a Network account owns the Transit Gateway
+    (shared through RAM), central egress and the VPN; workload accounts attach their VPCs."""
+    network, prod, staging = "111111111111", "222222222222", "333333333333"
+    hub = "tgw-0sra000000000012"
+    n = Sample("multi-account", "Network 계정", [], account=network)
+    vpc = n.vpc("vpc-0network00000012", "10.0.0.0/16", "network-egress", Environment="shared")
+    public = [n.subnet(f"subnet-net-pub-{az}", vpc, az, f"10.0.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ab")]
+    attach = [n.subnet(f"subnet-net-tgw-{az}", vpc, az, f"10.0.{10 + i}.0/28", f"tgw-attach-{az}", "app") for i, az in enumerate("ab")]
+    n.network(vpc, "net", "ab", public, [attach])
+    n.transit_gateway(hub, "org-tgw")
+    n.tgw_attachment("tgw-attach-net", hub, vpc, attach, "egress-attachment")
+    n.route("rtb-net-public", "10.0.0.0/8", TransitGatewayId=hub)  # return path from the NAT to the workload VPCs
+    n.vpn("vpn-sra-dc-1", "cgw-sra-dc-1", "203.0.113.30", "corp-dc-cgw-1", tgw=hub)
+    n.vpn("vpn-sra-dc-2", "cgw-sra-dc-2", "198.51.100.30", "corp-dc-cgw-2", tgw=hub)
+    parts = [n.snapshot()]
+    for account, env, cidr, azs, size in ((prod, "prod", "10.10", "abc", "m7i.large"), (staging, "staging", "10.20", "ab", "t3.medium")):
+        w = Sample("multi-account", f"{env} 계정", [], account=account)
+        wvpc = w.vpc(f"vpc-0{env:0<8}000012"[:21], f"{cidr}.0.0/16", f"{env}-workload", Environment=env)
+        app = [w.subnet(f"subnet-{env}-app-{az}", wvpc, az, f"{cidr}.{i}.0/24", f"{env}-app-{az}", "app") for i, az in enumerate(azs)]
+        data = [w.subnet(f"subnet-{env}-data-{az}", wvpc, az, f"{cidr}.{10 + i}.0/24", f"{env}-data-{az}", "data") for i, az in enumerate(azs)]
+        # No internet gateway or NAT in workload accounts: everything leaves through the shared Transit Gateway.
+        w.transit_gateway(hub, "org-tgw", owner=network)
+        w.tgw_attachment(f"tgw-attach-{env}", hub, wvpc, app, f"{env}-attachment")
+        w.route_table(f"rtb-{env}-app", wvpc, f"{env}-app", app)
+        w.route(f"rtb-{env}-app", "0.0.0.0/0", TransitGatewayId=hub)
+        w.route_table(f"rtb-{env}-data", wvpc, f"{env}-data-isolated", data, main=True)
+        nodes = [w.instance(f"i-{env}app{az}0000012"[:19], app[i], f"{env}-app-{az}", size, sg=f"sg-{env}-app") for i, az in enumerate(azs)]
+        w.security_group(f"sg-{env}-app", wvpc, f"{env}-app", [(443, "10.0.0.0/8")])
+        alb = w.load_balancer(f"{env}-internal-alb", wvpc, app, scheme="internal", sg=f"sg-{env}-app")
+        group = w.target_group(f"{env}-app", wvpc, "HTTPS", 443, nodes, [alb])
+        w.auto_scaling_group(f"{env}-app-asg", nodes, app, [group], len(azs), 3 * len(azs))
+        w.database(f"{env}-db", wvpc, data, "a", "postgres", "db.r6g.large", standby="b")
+        w.gateway_endpoint(f"vpce-{env}-s3", wvpc, "s3", [f"rtb-{env}-app"])
+        parts.append(w.snapshot())
+    combined = combine_snapshots(parts, "멀티 계정 랜딩 존 (Network 계정 TGW 공유 · 중앙 egress · 워크로드 계정)")
+    combined["metadata"].update(sample="multi-account", sample_version=SAMPLE_VERSION, practices=[
+        "워크로드·환경은 계정으로 분리하고 네트워크는 Network 계정이 소유 (Organizing Your AWS Environment, AWS SRA Network account)",
+        "Transit Gateway는 Network 계정에 두고 RAM으로 워크로드 계정에 공유, 각 계정은 자기 VPC만 연결",
+        "워크로드 VPC에는 IGW·NAT 없이 0.0.0.0/0 → TGW, 인터넷 egress는 Network 계정 VPC의 AZ별 NAT로 집중 (Multi-VPC 백서: centralized egress)",
+        "운영은 3 AZ, 스테이징은 2 AZ, 데이터는 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (REL10-BP01)",
+        "사내 데이터 센터는 TGW의 Site-to-Site VPN 2개(고객 게이트웨이 2개) (REL02-BP02)",
+        "도형 밖 권고: 운영·스테이징 TGW 라우팅 테이블 분리와 스포크 간 blackhole, 검사 VPC(Network Firewall), Organizations OU·SCP (수집 범위 밖)"])
+    return combined
+
+
 SAMPLES = {"three-tier": three_tier, "microservices": microservices, "nlb-alb": static_ip_front,
            "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform, "data-platform": data_platform,
-           "ai-platform": ai_platform, "genai-rag": genai_rag, "gpu-training": gpu_training}
+           "ai-platform": ai_platform, "genai-rag": genai_rag, "gpu-training": gpu_training, "multi-account": multi_account}

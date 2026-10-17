@@ -45,6 +45,10 @@ def main():
     compare.add_argument("after")
     compare.add_argument("--format", choices=("markdown", "json"), default="markdown")
     compare.add_argument("--fail-on-change", action="store_true", help="변경이 있으면 종료 코드 4 (드리프트 감지용)")
+    merge = commands.add_parser("combine", help="계정·리전별 snapshot.json을 합쳐 계정 간 네트워크 연결도 보고서 생성")
+    merge.add_argument("snapshots", nargs="+", help="collect가 만든 snapshot.json (2개 이상)")
+    merge.add_argument("--output", required=True)
+    merge.add_argument("--title", help="통합 보기 이름")
     setup = commands.add_parser("setup-editor", help="고정 버전 draw.io 편집기 설치 (최초 한 번)")
     setup.add_argument("--archive", help="오프라인 설치용 공식 draw.war 경로")
     talk = commands.add_parser("chat", parents=[env], help="채팅으로 표준 아키텍처 설계·AWS 읽기 전용 조회 (Strands + Bedrock)")
@@ -99,6 +103,9 @@ def main():
             return collect_all(parser, args)
         if args.command == "demo":
             snapshot = SAMPLES[args.sample]() if args.sample else demo_snapshot()
+        elif args.command == "combine":
+            from .combine import combine_snapshots
+            snapshot = combine_snapshots([json.loads(Path(path).read_text(encoding="utf-8")) for path in args.snapshots], args.title)
         else:
             snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
             if snapshot.get("schema_version") != 1:

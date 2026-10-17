@@ -41,9 +41,9 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 
 ## Candidate Follow-ups (not approved)
 
-- Live check of the AI/ML calls (FSx, SageMaker endpoints/HyperPod, placement groups) on an account that has them.
+- Live check of the AI/ML calls with real resources (FSx, SageMaker endpoint/HyperPod, placement group); read-only calls verified
+  on an empty account 2026-10-18. Creating them costs money: needs the owner's approval.
 
-- Multi-account / multi-region view: merge several snapshots (accounts × regions) into one network diagram.
 
 - Optional sample items from ARCHITECTURE.md §4 #7 (microservices 3 AZ, EKS /28 cluster subnets, egress VPC).
 - Collection scope for drawn best practices: CloudFront/WAF, Elastic IPs, TGW route tables, Direct Connect, multi-account view.

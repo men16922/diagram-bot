@@ -7,10 +7,10 @@ Last Updated: 2026-10-18
 - 2026-10-18 samples aligned with AWS best practice (docs/ARCHITECTURE.md, plan docs/plans/2026-10-18-best-practice-samples.md):
   10 samples incl. `ai-platform`, `genai-rag`, `gpu-training`; AI/ML collection (FSx, SageMaker endpoints, HyperPod, placement groups,
   EFA/Capacity Block), AI/ML review pillar (17 rules), accelerated-instance/Bedrock/FSx icons, AI designer tools (27 tools),
-  sample reseeding by `SAMPLE_VERSION`, wrapped VPC attachment row. All samples review low or clean.
-- 2026-10-17 chat design agent (Strands + Bedrock): chat panel, `diagram-bot chat`, `/api/agent/*`, 24 tools
-  (standard designs + read-only boto3 collection). Benchmark: docs/engineering/DEVOPS_AGENT_BENCHMARK.md;
-  draw.io internals: docs/DRAWIO.md.
+  multi-account combine (CLI/API/app, account frames, shared TGW), 11 samples. All samples review low or clean.
+  Live 2026-10-18 (owner's account, us-east-1): 34/34 calls complete incl. the new FSx/SageMaker/placement-group calls (0 resources).
+- 2026-10-17 chat design agent (Strands + Bedrock): chat panel, `diagram-bot chat`, `/api/agent/*` (now 27 tools).
+  Benchmark: docs/engineering/DEVOPS_AGENT_BENCHMARK.md; draw.io internals: docs/DRAWIO.md.
 
 - v0.5.0 adds team mode (accounts, roles, TLS, audit log) and an AWS-emulator end-to-end test.
 - 2026-10-17 goal "엔터프라이즈 상용 제품 수준": v0.4.0 adds architecture review (findings + CLI gate),
@@ -99,7 +99,7 @@ Last Updated: 2026-10-18
 ## Verification (2026-10-17, cloud container)
 
 - Gate, team-mode Chromium run, layout tests, 27 browser checks and evidence files: docs/archive/STATUS-verification-2026-10.md.
-  Current gate: `make check` = ruff + 160 pytest cases + CLI round trip; `verify_demo.py` 29 browser checks (2026-10-18).
+  Current gate: `make check` = ruff + 166 pytest cases + CLI round trip; `verify_demo.py` 30 browser checks (2026-10-18).
 
 ## Harness
 

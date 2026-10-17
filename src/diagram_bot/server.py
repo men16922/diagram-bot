@@ -80,6 +80,11 @@ class RestoreRequest(RevisionRequest):
     from_revision: int = Field(ge=0)
 
 
+class CombineRequest(BaseModel):
+    ids: list[str]
+    title: str | None = None
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     model: str | None = Field(default=None, max_length=64)
@@ -428,6 +433,15 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
             return {"id": save_snapshot(snapshot)}
         except (ValueError, KeyError, TypeError, AttributeError) as exc:
             raise HTTPException(422, f"스냅샷 형식을 확인하세요: {exc}") from exc
+
+    @app.post("/api/snapshots/combine", status_code=201)
+    def combine(params: CombineRequest):
+        """One snapshot from several account × region snapshots: the overview draws the network across accounts."""
+        from .combine import combine_snapshots
+        try:
+            return {"id": save_snapshot(combine_snapshots([get_snapshot(i) for i in params.ids], params.title))}
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @app.get("/api/snapshots/{identifier}/document")
     def read_document(identifier: str, view: str | None = None, vpc: str | None = None, resource: str | None = None,

@@ -244,3 +244,19 @@ def test_deploy_template_grants_exactly_the_collector_actions():
     assert {permission(service, operation) for service, operation, *_ in OPERATIONS} <= policy
     assert all(a.split(":")[1].startswith(("Describe", "List", "Get")) for a in granted)
     assert "sts:ExternalId" in json.dumps(role["AssumeRolePolicyDocument"])
+
+
+def test_cli_combine_writes_one_report_for_several_accounts(monkeypatch, tmp_path):
+    import json
+
+    from diagram_bot import cli
+    from diagram_bot.samples import SAMPLES
+    paths = []
+    for i, part in enumerate(SAMPLES["multi-account"]()["parts"]):
+        paths.append(tmp_path / f"part-{i}.json")
+        paths[-1].write_text(json.dumps(part), encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["diagram-bot", "combine", *map(str, paths), "--output", str(tmp_path / "out"), "--title", "조직"])
+    assert cli.main() == 0
+    report = json.loads((tmp_path / "out" / "snapshot.json").read_text(encoding="utf-8"))
+    assert report["metadata"]["combined"] and len(report["parts"]) == 3
+    assert "AWS 계정 · 111111111111" in (tmp_path / "out" / "topology.drawio").read_text(encoding="utf-8")

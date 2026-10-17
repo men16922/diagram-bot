@@ -26,7 +26,7 @@ diagram-bot serve
 
 `setup-editor`는 최초 한 번 공식 draw.io **32.4.1** 배포물(약 48 MB)을 다운로드하고 고정 SHA-256을 확인합니다. 이후 구성도 편집과 PNG 생성은 로컬에서 수행합니다. 오프라인 설치에는 동일 버전의 공식 `draw.war`를 준비해 `diagram-bot setup-editor --archive /path/to/draw.war`를 사용합니다. [배포물 출처와 라이선스](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
-[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 10종](examples/samples/README.md) · [사례 아키텍처 기준](docs/ARCHITECTURE.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
+[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 11종](examples/samples/README.md) · [사례 아키텍처 기준](docs/ARCHITECTURE.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
 
 ## 시연 버전에서 할 수 있는 것
 
@@ -35,6 +35,7 @@ diagram-bot serve
   (인터넷에 열린 Jupyter·Ray·MLflow·vLLM 포트, GPU 노드 퍼블릭 노출, 여러 AZ에 걸친 EFA 학습, 단일 AZ 추론, EFA 보안 그룹, Spot EFA, 배치 그룹 누락,
   GPU 서브넷 IP 부족, 학습 노드와 다른 AZ의 Lustre, Scratch Lustre, Bedrock 엔드포인트 AZ·프라이빗 DNS, VPC 밖·단일 AZ SageMaker 엔드포인트 등).
   AI 사례 3종(사설 EKS GPU 플랫폼, Bedrock RAG, GPU 분산 학습)과 채팅 설계 도구(GPU 노드 그룹·FSx·SageMaker 엔드포인트)를 제공합니다. 근거: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 5절.
+- **여러 계정 연결도:** 계정·리전별 수집을 `계정 통합 보기`(앱)나 `diagram-bot combine a/snapshot.json b/snapshot.json --output 경로`로 합치면 AWS 계정 프레임 안의 VPC 카드와 RAM으로 공유된 Transit Gateway·계정 간 피어링·VPN을 한 연결도로 그립니다. 각 VPC의 상세 구성과 검토도 그대로 동작합니다.
 - **세 가지 보기:** VPC 카드와 Transit Gateway·피어링·VPN(온프레미스까지) 연결도의 `전체 구성`, 한 VPC의 AZ·서브넷·EC2·ALB·대상 그룹을 그린 `상세 구성`, 선택 리소스와 직접 관계·필요한 상위 경계만 그린 `선택 리소스`. 각 보기는 표시/수집/참조/숨김 수와 부분 조회 여부를 함께 보여줍니다.
 - **인프라 아키텍처 표기:** AWS Cloud > Region > VPC > AZ > 서브넷(라우팅으로 퍼블릭·프라이빗·격리 구분)에 Internet/NAT Gateway, VPC 엔드포인트, Transit Gateway 연결, VPC 피어링, Site-to-Site VPN(VGW/TGW → 고객 게이트웨이, 터널 상태), EKS(컨트롤 플레인·노드 그룹), ECS 서비스·Fargate 태스크, MSK 브로커, OpenSearch 노드, ElastiCache, RDS·Aurora·DocumentDB·Neptune, EFS 마운트 타깃, Redshift, VPC Lambda, AZ를 가로지르는 Auto Scaling 그룹·ECS 서비스 프레임을 AWS Architecture Icons 스타일로 그립니다.
 - **고가용성 표기:** 각 리소스가 어느 AZ·서브넷에서 어떤 역할인지 라벨에 표시합니다. RDS primary/standby/read replica, Multi-AZ DB 클러스터 readable standby, Aurora·DocumentDB writer/reader, ElastiCache 샤드별 primary/replica, OpenSearch AZ별 data·master 노드 수와 standby AZ, MSK AZ별 브로커 ID, Redshift Multi-AZ primary/secondary, EFS Regional/One Zone, Auto Scaling·EKS 노드 그룹 min/desired/max, ECS 실행/원하는 태스크 수.

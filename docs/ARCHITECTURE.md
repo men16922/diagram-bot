@@ -2,7 +2,7 @@
 
 Last Updated: 2026-10-18
 
-샘플 10종(`src/diagram_bot/samples.py`)은 데모 데이터이자 채팅 에이전트의 표준 설계(`designer.py` `STANDARDS`)다.
+샘플 11종(`src/diagram_bot/samples.py`)은 데모 데이터이자 채팅 에이전트의 표준 설계(`designer.py` `STANDARDS`)다.
 이 문서는 각 사례가 따라야 할 AWS 공식 권고를 출처와 함께 정리하고, 현재 샘플과의 차이와 변경안을 기록한다.
 변경안은 2026-10-18 소유자 지시로 반영했다(4절·5.9절의 반영 현황).
 
@@ -24,7 +24,7 @@ Last Updated: 2026-10-18
 | --- | --- |
 | 수집·도형화 가능 | VPC, 서브넷, 라우팅 테이블, IGW, NAT, VPC 엔드포인트, TGW·attachment, 피어링, VGW·CGW·Site-to-Site VPN, ELB(ALB/NLB/GWLB)·대상 그룹, EC2·ASG, ECS, EKS·노드 그룹, Lambda, RDS·Aurora·DocumentDB, ElastiCache, MSK, OpenSearch, EFS, Redshift, 보안 그룹, **AI/ML: FSx(Lustre 등), SageMaker 실시간 엔드포인트, SageMaker HyperPod, 클러스터 배치 그룹, EC2의 EFA 인터페이스·Capacity Block·용량 예약** |
 | 수집 안 함 (도형 불가) | CloudFront, AWS WAF, Shield, Route 53(Resolver 포함), Global Accelerator, Network Firewall, Direct Connect, Elastic IP, TGW 라우팅 테이블, NACL, 리스너 규칙, Organizations(계정·OU), S3, DynamoDB, Bedrock 설정(Guardrails·호출 로깅·Knowledge Base), SageMaker 학습 작업·노트북, Kubernetes 객체(Karpenter·KEDA·device plugin) |
-| 구조상 제약 | 스냅샷은 계정 × 리전 하나 단위라 한 구성도에 여러 계정을 그릴 수 없다 |
+| 여러 계정 | 수집은 계정 × 리전 단위. `diagram-bot combine`·앱의 `계정 통합 보기`로 합치면 전체 구성에 AWS 계정 프레임과 공유 TGW·계정 간 피어링을 그린다 (`multi-account` 사례) |
 
 ## 2. 공통 원칙 (모든 사례)
 
@@ -92,7 +92,7 @@ SRA Network account, TGW isolated VPCs with shared services.
 
 | 항목 | AWS 권고 | 강도 | 현재 샘플 | 조치 |
 | --- | --- | --- | --- | --- |
-| 계정 분리 | 환경마다 계정, TGW는 Network 계정에서 RAM 공유 | REC(강함) | 한 계정 | **X** (다중 계정 구성도) / P |
+| 계정 분리 | 환경마다 계정, TGW는 Network 계정에서 RAM 공유 | REC(강함) | 한 계정 (VPC 분리 예시) | 별도 사례 `multi-account`가 계정 분리·RAM 공유 TGW·중앙 egress를 그림 (2026-10-18) |
 | TGW 격리 | 운영·스테이징 별도 라우팅 테이블, 공용만 양쪽 전파, 스포크 간 blackhole | REC | 모든 VPC가 같은 10.0.0.0/8 경로 | **P** (TGW 라우팅 테이블 미수집) |
 | TGW attachment | AZ마다 서브넷 하나 | REC | 운영 3 AZ, 스테이징 2 AZ, 공용 2 AZ | 충족 |
 | 운영 NAT | AZ마다 | REC | AZ마다 | 충족 |
@@ -164,7 +164,7 @@ Multi-VPC 백서(VPC peering, VPN).
 | 7 | 선택 | microservices 3 AZ, eks Aurora reader 추가·/28 클러스터 서브넷, environments egress VPC | OPT |
 
 수집 범위 확장 후보(별도 승인 필요): CloudFront·WAF(엣지), Elastic IP(NLB 고정 IP), TGW 라우팅 테이블(환경 격리),
-Direct Connect, 다중 계정 구성도(계정 그룹).
+Direct Connect. 다중 계정 구성도는 계정 통합 보기로 구현했다(2026-10-18).
 
 AI/GPU 워크로드 관련 변경안(신규 AI 사례, GPU 아이콘, 검토 규칙)은 5.5–5.9절에 따로 둔다.
 
