@@ -8,7 +8,7 @@ import hashlib
 import re
 
 SEVERITIES = ("high", "medium", "low")
-PILLARS = {"reliability": "안정성", "security": "보안", "operations": "운영"}
+PILLARS = {"reliability": "안정성", "security": "보안", "operations": "운영", "ai": "AI/ML"}
 # Ports that should never be open to the internet: remote administration and data stores.
 ADMIN_PORTS = {22: "SSH", 3389: "RDP"}
 DATA_PORTS = {3306: "MySQL", 5432: "PostgreSQL", 1433: "SQL Server", 1521: "Oracle", 6379: "Redis", 11211: "Memcached",
@@ -17,6 +17,18 @@ WORLD = {"0.0.0.0/0", "::/0"}
 # EFA-capable training families (tightly coupled; EFA traffic cannot cross AZs) and accelerated inference families.
 TRAINING = re.compile(r"^(p4d|p5|p6|trn)")
 INFERENCE = re.compile(r"^(g\d|inf)")
+ACCELERATED = re.compile(r"^(p|g|trn|inf|dl)\d")
+# Notebook, experiment-tracking, distributed-compute and model-serving consoles that should never face the internet.
+AI_PORTS = {8888: "Jupyter", 6006: "TensorBoard", 8265: "Ray 대시보드", 10001: "Ray 클라이언트", 5000: "MLflow", 7860: "Gradio",
+            8501: "Streamlit", 11434: "Ollama", 8000: "vLLM/Triton HTTP", 8001: "Triton gRPC"}
+# IPs a node takes from its subnet (SageMaker HyperPod prerequisites: P5 on EKS 81, on Slurm 32).
+NODE_IPS = {True: 81, False: 32}
+ML_ENDPOINT = re.compile(r"\.(bedrock[a-z-]*|sagemaker\.[a-z.-]+)$")
+
+
+def efa_node(attrs):
+    """Tightly coupled training node: an EFA interface, or an EFA training family."""
+    return any(i.get("InterfaceType") == "efa" for i in attrs.get("NetworkInterfaces", [])) or bool(TRAINING.match(str(attrs.get("InstanceType", ""))))
 
 
 def review(graph, coverage=()):
@@ -75,14 +87,14 @@ def review(graph, coverage=()):
         training, inference = any(TRAINING.match(t) for t in types), any(INFERENCE.match(t) for t in types)
         evidence = f"DescribeAutoScalingGroups.VPCZoneIdentifier → AZ {', '.join(sorted(zones))} · InstanceType {', '.join(sorted(types))}"
         if training and len(zones) > 1:
-            add("REL-GPU-TRAIN-AZ", "medium", "reliability", group["id"], "EFA 학습 노드 그룹이 여러 AZ에 걸쳐 있음", evidence,
+            add("REL-GPU-TRAIN-AZ", "medium", "ai", group["id"], "EFA 학습 노드 그룹이 여러 AZ에 걸쳐 있음", evidence,
                 "EFA 트래픽은 AZ를 넘지 못합니다. 강결합 학습 노드는 한 AZ(클러스터 배치 그룹 또는 Capacity Block)에 두고, "
                 "체크포인트(FSx for Lustre·S3)로 다른 AZ에서 다시 시작하세요.")
         elif training and len(zones) == 1:
-            add("REL-ASG-AZ", "low", "reliability", group["id"], "학습 노드 그룹이 한 AZ에만 있음 (강결합 학습은 의도적 단일 AZ)", evidence,
+            add("REL-ASG-AZ", "low", "ai", group["id"], "학습 노드 그룹이 한 AZ에만 있음 (강결합 학습은 의도적 단일 AZ)", evidence,
                 "EFA 학습은 단일 AZ가 맞습니다. 체크포인트 저장소와 다른 AZ에서 다시 시작하는 경로(IaC·용량)를 확인하세요.")
         elif inference and len(zones) == 1:
-            add("REL-GPU-INFER-AZ", "medium", "reliability", group["id"], "GPU 추론 노드 그룹이 한 AZ에만 있음", evidence,
+            add("REL-GPU-INFER-AZ", "medium", "ai", group["id"], "GPU 추론 노드 그룹이 한 AZ에만 있음", evidence,
                 "추론 노드를 두 개 이상의 AZ에 분산하고 로드 밸런서 뒤에서 자동 확장하세요 (GENREL02-BP01).")
         elif subnets and len(zones) == 1:
             add("REL-ASG-AZ", "medium", "reliability", group["id"], "Auto Scaling 그룹이 한 AZ의 서브넷만 사용",
@@ -210,7 +222,7 @@ def review(graph, coverage=()):
         if (a.get("MetadataOptions") or {}).get("HttpTokens") == "optional":
             add("SEC-IMDSV1", "medium", "security", instance["id"], "IMDSv1 허용 (IMDSv2 강제 안 됨)",
                 "DescribeInstances.MetadataOptions.HttpTokens = optional", "HttpTokens를 required로 바꿔 IMDSv2만 허용하세요.")
-        if a.get("PublicIpAddress"):
+        if a.get("PublicIpAddress") and not ACCELERATED.match(str(a.get("InstanceType", ""))):
             add("SEC-EC2-PUBLIC-IP", "low", "security", instance["id"], "인스턴스에 퍼블릭 IP 직접 할당",
                 f"DescribeInstances.PublicIpAddress = {a['PublicIpAddress']}",
                 "로드밸런서·NAT 뒤 프라이빗 서브넷에 두고 관리 접근은 Session Manager를 사용하세요.")
@@ -225,6 +237,12 @@ def review(graph, coverage=()):
                 exposed = {"모든 포트": None}
             else:
                 exposed = {name: port for port, name in {**ADMIN_PORTS, **DATA_PORTS}.items() if low <= port <= high}
+                for port, name in AI_PORTS.items():
+                    if low <= port <= high:
+                        add("SEC-AI-PORT-OPEN", "high", "ai", group["id"], f"인터넷(0.0.0.0/0)에 {name} {port} 허용",
+                            f"DescribeSecurityGroups.IpPermissions: {protocol} {low}-{high} ← {', '.join(sorted(sources & WORLD))}",
+                            "노트북·실험 추적·분산 컴퓨팅 콘솔과 모델 서버는 인터넷에 열지 말고 SSM 포트 포워딩·내부 ALB·VPC 엔드포인트로만 접근하세요 "
+                            "(ML Lens MLSEC03-BP02: ML 환경의 무제한 인터넷 접근은 안티 패턴).")
             for name, port in exposed.items():
                 add("SEC-SG-OPEN", "high", "security", group["id"], f"인터넷(0.0.0.0/0)에 {name}{f' {port}' if port else ''} 허용",
                     f"DescribeSecurityGroups.IpPermissions: {protocol} {low}-{high} ← {', '.join(sorted(sources & WORLD))}",
@@ -236,14 +254,14 @@ def review(graph, coverage=()):
         a = instance["attributes"]
         sgs = [g.get("GroupId") for g in a.get("SecurityGroups", [])]
         # Judged only when every attached group was collected; one finding per Auto Scaling group.
-        if not TRAINING.match(str(a.get("InstanceType", ""))) or not sgs or any(sg not in groups for sg in sgs):
+        if not efa_node(a) or not sgs or any(sg not in groups for sg in sgs):
             continue
         self_all = any(str(rule.get("IpProtocol")) == "-1" and any(pair.get("GroupId") == sg for pair in rule.get("UserIdGroupPairs", []))
                        for sg in sgs for rule in groups[sg]["attributes"].get("IpPermissions", []))
         key = in_group.get(instance["id"], instance["id"])
         if not self_all and key not in reported:
             reported.add(key)
-            add("SEC-EFA-SG", "medium", "security", key, "EFA 학습 노드의 보안 그룹에 자기 참조 전체 허용 규칙 없음",
+            add("SEC-EFA-SG", "medium", "ai", key, "EFA 학습 노드의 보안 그룹에 자기 참조 전체 허용 규칙 없음",
                 f"DescribeSecurityGroups.IpPermissions ({', '.join(sgs)}): IpProtocol -1 ← 같은 그룹 없음",
                 "EFA 인스턴스는 같은 보안 그룹을 쓰고 그 그룹 자신에서 오는 모든 트래픽을 허용해야 합니다. 없으면 EFA 통신이 조용히 실패합니다.")
     for cluster in collected("eks_cluster"):
@@ -252,6 +270,8 @@ def review(graph, coverage=()):
             add("SEC-EKS-PUBLIC", "medium", "security", cluster["id"], "EKS API 엔드포인트가 인터넷 전체에 공개",
                 "DescribeCluster.resourcesVpcConfig.endpointPublicAccess = true, publicAccessCidrs = 0.0.0.0/0",
                 "프라이빗 엔드포인트를 쓰거나 publicAccessCidrs를 회사 대역으로 제한하세요.")
+
+    ai_review(graph, nodes, edges, collected, out, add)
 
     # --- Operations --------------------------------------------------------------------------
     missing = [c for c in coverage if c.get("status") not in ("complete", None)]
@@ -264,6 +284,134 @@ def review(graph, coverage=()):
     order = {s: i for i, s in enumerate(SEVERITIES)}
     unique = {f["id"]: f for f in found}
     return sorted(unique.values(), key=lambda f: (order[f["severity"]], f["pillar"], f["rule"], f["resource_name"] or ""))
+
+
+def ai_review(graph, nodes, edges, collected, out, add):
+    """AI/ML workload checks (Well-Architected Generative AI and Machine Learning lenses, HPC lens), from API fields only."""
+    subnets = {n["resource_id"]: n for n in collected("subnet")}
+    zone = lambda subnet: (subnets.get(subnet) or {}).get("attributes", {}).get("AvailabilityZone")
+    vpc_of = {e["source"]: e["target"] for e in edges if e["relation"] == "in_vpc"}
+    group_of = {e["target"]: e["source"] for e in edges if e["relation"] == "asg_member"}
+    placement = {e["source"]: nodes.get(e["target"], {}) for e in edges if e["relation"] == "in_placement_group"}
+    instances = collected("ec2")
+    accelerated = [i for i in instances if ACCELERATED.match(str(i["attributes"].get("InstanceType", "")))]
+    once = set()
+
+    def per_group(rule, instance):
+        """One finding per Auto Scaling group (or per instance outside a group)."""
+        key = group_of.get(instance["id"], instance["id"])
+        if (rule, key) in once:
+            return None
+        once.add((rule, key))
+        return key
+
+    for instance in accelerated:
+        a = instance["attributes"]
+        subnet = subnets.get(a.get("SubnetId"))
+        public = a.get("PublicIpAddress") or (subnet and subnet.get("route_class") == "public")
+        if public and (key := per_group("SEC-GPU-PUBLIC", instance)):
+            add("SEC-GPU-PUBLIC", "high", "ai", key, "GPU/가속 인스턴스가 인터넷에 직접 노출",
+                f"DescribeInstances.PublicIpAddress = {a.get('PublicIpAddress') or '없음'} · 서브넷 경로 = {(subnet or {}).get('route_class', '?')}",
+                "GPU 노드는 프라이빗 서브넷에 두고 모델·데이터 접근은 VPC 엔드포인트(S3·ECR·Bedrock)로, 관리 접근은 Session Manager로 하세요 (MLSEC03-BP02, GENSEC01-BP02).")
+        if not efa_node(a):
+            continue
+        if a.get("InstanceLifecycle") == "spot" and (key := per_group("REL-GPU-SPOT-EFA", instance)):
+            add("REL-GPU-SPOT-EFA", "medium", "ai", key, "EFA 학습 노드가 Spot 인스턴스",
+                f"DescribeInstances.InstanceLifecycle = spot · InstanceType {a.get('InstanceType')}",
+                "같은 AZ·배치 그룹에 모인 EFA 노드는 Spot 회수가 한꺼번에 일어날 수 있습니다. 강결합 학습은 Capacity Block·ODCR·Savings Plans를 쓰고 "
+                "Spot은 체크포인트가 잦은 소규모 작업에만 쓰세요 (EKS AI/ML Networking).")
+        group = placement.get(instance["id"])
+        clustered = group and group.get("attributes", {}).get("Strategy") == "cluster"
+        known = group is None or group.get("attributes", {}).get("Strategy")  # a named group that was not collected: undecided
+        if not clustered and known and a.get("InstanceLifecycle") != "capacity-block" and (key := per_group("OPS-GPU-PLACEMENT", instance)):
+            add("OPS-GPU-PLACEMENT", "low", "ai", key, "EFA 학습 노드가 클러스터 배치 그룹·Capacity Block 밖에 있음",
+                f"DescribeInstances.Placement.GroupName = {(a.get('Placement') or {}).get('GroupName') or '없음'} · InstanceLifecycle = {a.get('InstanceLifecycle') or '온디맨드'}",
+                "노드 간 지연을 줄이려면 클러스터 배치 그룹(한 유형·한 번의 시작 요청)이나 Capacity Block(UltraCluster 자동 배치)을 쓰세요. "
+                "둘은 함께 쓸 수 없습니다 (EC2 placement strategies, Capacity Blocks).")
+
+    # IP headroom for GPU node groups that still scale out (each P5 takes 81 IPs on EKS, 32 elsewhere).
+    for group in collected("auto_scaling_group"):
+        members = [nodes[e["target"]] for e in out(group["id"], "asg_member") if e["target"] in nodes]
+        p5 = [m for m in members if str(m["attributes"].get("InstanceType", "")).startswith("p5")]
+        if not p5:
+            continue
+        eks = any(t.get("Key") == "eks:cluster-name" for t in p5[0]["attributes"].get("Tags", []))
+        grow = max(0, int(group["attributes"].get("MaxSize") or 0) - len(members))
+        chosen = [s for s in (group["attributes"].get("VPCZoneIdentifier") or "").split(",") if s]
+        free = [subnets[s]["attributes"].get("AvailableIpAddressCount") for s in chosen if s in subnets]
+        if grow and free and None not in free and sum(free) < grow * NODE_IPS[eks]:
+            add("REL-GPU-SUBNET-IP", "medium", "ai", group["id"], "GPU 노드 그룹 확장에 서브넷 IP가 부족",
+                f"MaxSize {group['attributes'].get('MaxSize')} − 현재 {len(members)} = {grow}대 × {NODE_IPS[eks]} IP > 가용 {sum(free)} "
+                f"(DescribeSubnets.AvailableIpAddressCount)",
+                "서브넷 CIDR은 나중에 늘릴 수 없습니다. GPU 노드용 큰 서브넷(/20 이상)이나 보조 CIDR(100.64.0.0/10)·접두사 위임을 쓰세요 "
+                "(SageMaker HyperPod 사전 조건, EKS IP 최적화).")
+
+    # Private access to Bedrock and SageMaker from every AZ where clients run.
+    compute_azs = {}
+    for n in instances + collected("ecs_task"):
+        az = n["attributes"].get("Placement", {}).get("AvailabilityZone") or n["attributes"].get("availabilityZone")
+        if az and n["id"] in vpc_of:
+            compute_azs.setdefault(vpc_of[n["id"]], set()).add(az)
+    for endpoint in collected("vpc_endpoint"):
+        a = endpoint["attributes"]
+        match = ML_ENDPOINT.search(str(a.get("ServiceName", "")))
+        if not match or a.get("VpcEndpointType") != "Interface":
+            continue
+        if a.get("PrivateDnsEnabled") is False:
+            add("SEC-AI-ENDPOINT-DNS", "medium", "ai", endpoint["id"], f"{match.group(1)} 엔드포인트의 프라이빗 DNS 꺼짐",
+                "DescribeVpcEndpoints.PrivateDnsEnabled = false",
+                "SDK의 기본 호출이 공용 엔드포인트로 나갑니다. 프라이빗 DNS를 켜서 모델 호출이 VPC 안에 머물게 하세요 (GENSEC01-BP02).")
+        covered = {zone(s) for s in a.get("SubnetIds", [])} - {None}
+        missing = compute_azs.get(vpc_of.get(endpoint["id"]), set()) - covered
+        if covered and missing:
+            add("REL-AI-ENDPOINT-AZ", "medium", "ai", endpoint["id"], f"{match.group(1)} 엔드포인트가 클라이언트가 있는 AZ 일부에 없음",
+                f"DescribeVpcEndpoints.SubnetIds → AZ {', '.join(sorted(covered))} · 컴퓨팅 AZ {', '.join(sorted(missing))} 없음",
+                "모델을 호출하는 컴퓨팅이 있는 모든 AZ에 엔드포인트 서브넷을 두세요. AZ 장애 시 호출 경로가 함께 끊깁니다 "
+                "(GENREL02-BP01, SageMaker 런타임 엔드포인트는 클라이언트 AZ마다 필요).")
+
+    # Data next to training: FSx for Lustre in the AZ of the training nodes, persistent rather than scratch.
+    lustre = [f for f in collected("fsx_file_system") if f["attributes"].get("FileSystemType") == "LUSTRE"]
+    lustre_azs = {}
+    for system in lustre:
+        lustre_azs.setdefault(vpc_of.get(system["id"]), set()).update(zone(s) for s in system["attributes"].get("SubnetIds", []))
+        deployment = (system["attributes"].get("LustreConfiguration") or {}).get("DeploymentType", "")
+        if deployment.startswith("SCRATCH"):
+            add("OPS-FSX-SCRATCH", "low", "ai", system["id"], f"FSx for Lustre {deployment}: 데이터 복제 없음",
+                f"DescribeFileSystems.LustreConfiguration.DeploymentType = {deployment}",
+                "Scratch는 서버 장애 시 데이터가 남지 않습니다. 체크포인트·장기 데이터는 PERSISTENT_2와 S3 연동(데이터 리포지토리)에 두세요 (GENREL06-BP01).")
+    for instance in instances:
+        a = instance["attributes"]
+        vpc = vpc_of.get(instance["id"])
+        azs = lustre_azs.get(vpc)
+        if efa_node(a) and azs and (a.get("Placement") or {}).get("AvailabilityZone") not in azs and (key := per_group("REL-FSX-TRAIN-AZ", instance)):
+            add("REL-FSX-TRAIN-AZ", "medium", "ai", key, "학습 노드와 FSx for Lustre가 다른 AZ",
+                f"학습 노드 AZ {(a.get('Placement') or {}).get('AvailabilityZone')} · Lustre AZ {', '.join(sorted(z for z in azs if z))}",
+                "Lustre는 학습 노드와 같은 AZ에 두세요. AZ 간 트래픽은 지연·비용이 늘고 그 AZ 장애에 학습이 묶입니다 (HPCREL01-BP01, MLCOST06-BP03).")
+    endpoints_s3 = {vpc_of.get(e["id"]) for e in collected("vpc_endpoint") if str(e["attributes"].get("ServiceName", "")).endswith(".s3")
+                    and e["attributes"].get("VpcEndpointType") == "Gateway"}
+    for vpc in sorted({vpc_of.get(i["id"]) for i in accelerated} - endpoints_s3 - {None}):
+        add("OPS-GPU-S3-ENDPOINT", "low", "ai", vpc, "GPU 워크로드 VPC에 S3 게이트웨이 엔드포인트 없음",
+            "DescribeVpcEndpoints: com.amazonaws.<region>.s3 Gateway 없음",
+            "데이터셋·모델 가중치·체크포인트를 NAT로 주고받으면 비용이 크고 인터넷 경로를 탑니다. S3 게이트웨이 엔드포인트를 추가하세요 (MLSEC03-BP02).")
+
+    # SageMaker: endpoints inside the VPC and spread over AZs; HyperPod in private subnets.
+    for endpoint in collected("sagemaker_endpoint"):
+        a = endpoint["attributes"]
+        chosen = a.get("Subnets") or []
+        if not chosen:
+            add("SEC-SAGEMAKER-VPC", "medium", "ai", endpoint["id"], "SageMaker 엔드포인트가 VPC 밖(서비스 네트워크)에서 실행",
+                "DescribeModel.VpcConfig 없음", "모델에 VpcConfig(프라이빗 서브넷·보안 그룹)를 지정해 데이터 경로를 VPC 안에 두세요 (MLSEC03-BP02).")
+        azs = {zone(s) for s in chosen} - {None}
+        if int(a.get("InstanceCount") or 0) < 2 or (chosen and len(azs) < 2):
+            add("REL-SAGEMAKER-AZ", "medium", "ai", endpoint["id"], "SageMaker 엔드포인트가 AZ 장애를 견디지 못함",
+                f"인스턴스 {a.get('InstanceCount')}대 · 서브넷 AZ {', '.join(sorted(azs)) or '서비스 관리'}",
+                "인스턴스를 2대 이상으로 하고 서로 다른 AZ의 서브넷을 2개 이상 지정하세요. SageMaker가 인스턴스를 AZ에 나눠 배치합니다 (MLCOST06-BP03, MLREL05-BP01).")
+    for cluster in collected("sagemaker_cluster"):
+        chosen = (cluster["attributes"].get("VpcConfig") or {}).get("Subnets", [])
+        if any((subnets.get(s) or {}).get("route_class") == "public" for s in chosen):
+            add("SEC-HYPERPOD-PUBLIC", "high", "ai", cluster["id"], "HyperPod 클러스터가 퍼블릭 서브넷에 있음",
+                "DescribeCluster.VpcConfig.Subnets → 0.0.0.0/0 → IGW",
+                "HyperPod는 프라이빗 서브넷에 두고 S3 엔드포인트와 필요한 인터페이스 엔드포인트로 통신하세요 (GENSEC01-BP02, HyperPod 사전 조건).")
 
 
 def summary(findings):

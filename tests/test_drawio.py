@@ -299,7 +299,7 @@ def test_accelerated_instances_use_their_aws_icons(instance_type, shape):
 def test_gpu_instances_are_labelled():
     from diagram_bot.layout import resource_label
     label = lambda t: resource_label({"kind": "ec2", "name": "node", "attributes": {"InstanceType": t}})
-    assert label("p5.48xlarge") == "node\np5.48xlarge · GPU" and label("g6e.2xlarge").endswith("· GPU")
+    assert label("p5.48xlarge") == "node\np5.48xlarge\nGPU" and label("g6e.2xlarge").endswith("\nGPU")
     assert label("m7g.large") == "node\nm7g.large" and label("inf2.xlarge") == "node\ninf2.xlarge"
 
 

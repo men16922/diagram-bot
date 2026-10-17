@@ -22,7 +22,9 @@ STANDARDS = {
     "hybrid": "하이브리드 (Transit Gateway + Site-to-Site VPN)",
     "eks-platform": "EKS 플랫폼 (EKS, Aurora, Redis, MSK, Lambda, 엔드포인트)",
     "data-platform": "데이터 플랫폼 (ECS, OpenSearch, RDS, Redis, EFS, Redshift, TGW, 이중화 VPN)",
-    "ai-platform": "AI 플랫폼 (사설 EKS GPU 추론 3 AZ·EFA 학습 단일 AZ, Bedrock 엔드포인트, Aurora pgvector, EFS)",
+    "ai-platform": "AI 플랫폼 (사설 EKS GPU 추론 3 AZ·EFA 학습 단일 AZ·배치 그룹, FSx for Lustre, Bedrock 엔드포인트, Aurora pgvector, EFS)",
+    "genai-rag": "생성형 AI RAG 앱 (ECS Fargate 3 AZ, Bedrock 엔드포인트, Aurora pgvector, 시맨틱 캐시, SageMaker 리랭커)",
+    "gpu-training": "GPU 분산 학습 클러스터 (p5 Capacity Block·trn2 배치 그룹, EFA, FSx for Lustre, HyperPod)",
 }
 
 
@@ -206,6 +208,22 @@ class Design:
         self.record("add_eks_cluster", vpc=vpc, name=name, node_type=node_type, nodes_per_az=int(nodes_per_az))
         return {"cluster": key, "nodes": len(nodes), "endpoint": "private"}
 
+    def training_subnet(self, v, beside):
+        """A dedicated /20 next to `beside` (same AZ and route table): GPU nodes take many IPs and a subnet cannot grow."""
+        az = self.sample.az_of(beside)[-1]
+        key = f"subnet-{v['key']}-train-{az}"
+        if any(s["SubnetId"] == key for s in self.sample.raw["subnets"]):
+            return key
+        used = [ipaddress.ip_network(s["CidrBlock"]) for s in self.sample.raw["subnets"] if s["VpcId"] == v["id"]]
+        block = next((b for b in ipaddress.ip_network(v["cidr"]).subnets(new_prefix=20) if not any(b.overlaps(u) for u in used)), None)
+        if block is None:
+            raise DesignError(f"VPC {v['name']}에 학습용 /20 서브넷을 만들 여유 CIDR이 없습니다. 더 큰 VPC CIDR을 쓰세요.")
+        self.sample.subnet(key, v["id"], az, str(block), f"{v['key']}-train-{az}", "app")
+        for table in self.sample.raw["route_tables"]:
+            if any(a.get("SubnetId") == beside for a in table["Associations"]):
+                table["Associations"].append({"RouteTableAssociationId": f"rtbassoc-{key[7:]}", "SubnetId": key})
+        return key
+
     def add_gpu_node_group(self, vpc, cluster, name, instance_type, per_az=1, training=False, minimum=None, maximum=None):
         """GPU/accelerator node group on an existing EKS cluster: inference spreads over the cluster's AZs,
         EFA training stays in one AZ with a self-referencing security group (EFA cannot cross AZs)."""
@@ -219,11 +237,13 @@ class Design:
         group = slug(name)
         if any(n["nodegroupName"] == group for n in eks["nodegroups"]):
             raise DesignError(f"이미 있는 노드 그룹입니다: {name}")
-        subnets = eks["resourcesVpcConfig"]["subnetIds"][:1] if training else eks["resourcesVpcConfig"]["subnetIds"]
+        subnets = [self.training_subnet(v, eks["resourcesVpcConfig"]["subnetIds"][0])] if training else eks["resourcesVpcConfig"]["subnetIds"]
         sg = self.security_group(v, f"{key}-{group}-efa", [(None, "self"), (443, v["cidr"])], egress=("self", v["cidr"])) if training \
             else self.security_group(v, f"{key}-nodes", [(443, v["cidr"])])
+        # Training nodes: EFA interfaces in one cluster placement group (EC2 placement strategies).
+        placement = self.sample.placement_group(f"{key}-{group}-pg") if training else None
         nodes = [self.sample.instance(f"i-{key}-{group}-{self.sample.az_of(subnet)[-1]}{n + 1}", subnet,
-                                      f"{group}-{self.sample.az_of(subnet)[-1]}{n + 1}", instance_type, sg=sg,
+                                      f"{group}-{self.sample.az_of(subnet)[-1]}{n + 1}", instance_type, sg=sg, efa=training, placement=placement,
                                       **{"eks:cluster-name": key, "eks:nodegroup-name": group})
                  for subnet in subnets for n in range(int(per_az))]
         minimum = int(minimum) if minimum is not None else (0 if training else len(nodes))

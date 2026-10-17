@@ -256,11 +256,17 @@ def test_gpu_node_groups_follow_the_ai_lenses():
     assert d.add_gpu_node_group("ai", "llm", "inference", "g6e.2xlarge")["azs"] == ["us-east-1a", "us-east-1b", "us-east-1c"]
     result = d.add_gpu_node_group("ai", "llm", "train", "p5.48xlarge", per_az=2, training=True)
     assert result == {"node_group": "train", "nodes": 2, "azs": ["us-east-1a"], "efa": True}
+    # A dedicated /20 training subnet in the same AZ, EFA interfaces and one cluster placement group.
+    train = next(s for s in d.sample.raw["subnets"] if s["SubnetId"] == "subnet-ai-train-a")
+    assert train["CidrBlock"].endswith("/20") and train["AvailabilityZone"] == "us-east-1a"
+    trainers = [i for i in d.sample.raw["instances"] if i["InstanceType"] == "p5.48xlarge"]
+    assert all(i["SubnetId"] == "subnet-ai-train-a" and i["Placement"]["GroupName"] == "llm-train-pg"
+               and i["NetworkInterfaces"][0]["InterfaceType"] == "efa" for i in trainers)
     efa = next(g for g in d.sample.raw["security_groups"] if g["GroupId"] == "sg-ai-llm-train-efa")
     assert {"IpProtocol": "-1", "UserIdGroupPairs": [{"GroupId": "sg-ai-llm-train-efa"}]} in efa["IpPermissions"]
     assert [n["nodegroupName"] for n in d.sample.raw["eks_clusters"][0]["nodegroups"]] == ["general", "inference", "train"]
     found = [(f["rule"], f["severity"]) for f in d.review()["findings"]]
-    assert ("REL-ASG-AZ", "low") in found and not any(rule.startswith(("REL-GPU", "SEC-EFA")) for rule, _ in found)
+    assert ("REL-ASG-AZ", "low") in found and not any(rule.startswith(("REL-GPU", "SEC-EFA", "OPS-GPU")) for rule, _ in found)
     with pytest.raises(DesignError, match="GPU/가속"):
         d.add_gpu_node_group("ai", "llm", "cpu", "m7g.large")
     with pytest.raises(DesignError, match="EKS 클러스터가 설계에 없습니다"):

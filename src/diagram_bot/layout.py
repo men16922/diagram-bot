@@ -192,8 +192,9 @@ def resource_label(node):
         capacity = {"capacity-block": "Capacity Block", "spot": "spot"}.get(attrs.get("InstanceLifecycle")) \
             or ("ODCR" if attrs.get("CapacityReservationId") else None)
         group = (attrs.get("Placement") or {}).get("GroupName")
-        return lines(name, " · ".join(filter(None, (attrs.get("InstanceType"), "GPU" if GPU.match(instance_family(node)) else None,
-                                                    "EFA" if efa else None))),
+        # One fact group per line so a 140 px label never cuts EFA or the capacity source.
+        return lines(name, attrs.get("InstanceType"),
+                     " · ".join(filter(None, ("GPU" if GPU.match(instance_family(node)) else None, "EFA" if efa else None))),
                      " · ".join(filter(None, (capacity, f"PG {group}" if group else None))))
     if kind == "load_balancer" and attrs.get("Type"):
         short = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
@@ -249,18 +250,18 @@ def resource_label(node):
             attrs.get("FileSystemType"), attrs.get("FileSystemType", ""))
         config = attrs.get("LustreConfiguration") or attrs.get("OntapConfiguration") or attrs.get("OpenZFSConfiguration") \
             or attrs.get("WindowsConfiguration") or {}
-        throughput = config.get("PerUnitStorageThroughput")
         size = f"{attrs['StorageCapacity'] / 1024:g} TiB" if attrs.get("StorageCapacity") else None
-        return lines(name, f"FSx for {kind_name}", config.get("DeploymentType"),
-                     " · ".join(filter(None, (size, f"{throughput} MB/s/TiB" if throughput else None))))
+        return lines(name, f"FSx for {kind_name}", config.get("DeploymentType"), size)
     if kind == "sagemaker_endpoint":
-        return lines(name, f"SageMaker endpoint · {attrs.get('EndpointStatus', '')}".rstrip(" ·"),
+        return lines(name, f"SageMaker · {attrs.get('EndpointStatus', '')}".rstrip(" ·"),
                      f"{attrs.get('InstanceType', '')} × {attrs.get('InstanceCount', 0)}")
     if kind == "sagemaker_cluster":
         groups = attrs.get("InstanceGroups", [])
         orchestrator = "EKS" if (attrs.get("Orchestrator") or {}).get("Eks") else "Slurm"
-        return lines(name, f"SageMaker HyperPod · {orchestrator}",
-                     *[f"{g.get('InstanceType', '')} × {g.get('CurrentCount', g.get('TargetCount', ''))}" for g in groups[:2]])
+        # The largest instance groups, without the "ml." prefix (full types in the inspector).
+        top = sorted(groups, key=lambda g: -(g.get("CurrentCount") or g.get("TargetCount") or 0))[:2]
+        return lines(name, f"HyperPod · {orchestrator}",
+                     *[f"{str(g.get('InstanceType', '')).removeprefix('ml.')} × {g.get('CurrentCount', g.get('TargetCount', ''))}" for g in top])
     if kind == "redshift_cluster":
         role = attrs.get("Role") or "single-AZ"
         return lines(attrs.get("ClusterIdentifier") or name, "Redshift", f"{attrs.get('NodeType', '')} × {attrs.get('NodesHere', '')}", role)

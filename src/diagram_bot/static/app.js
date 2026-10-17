@@ -190,7 +190,7 @@ function renderInventory() {
   const active=Boolean($('search').value)||$('kind-filter').value!=='all';$('search-results').hidden=!active||state.mode==='inventory';$('search-results').replaceChildren();
   if(active){$('search-results').append(el('span',`${viewNames[state.view]} 범위 · ${matches.length}개`,'search-scope'));for(const item of matches.slice(0,30)){const button=el('button',item.name);button.onclick=()=>showResource(item.id);$('search-results').append(button);}if(!matches.length)$('search-results').append(el('span','검색 결과가 없습니다.'));}
 }
-const severityNames={high:'높음',medium:'중간',low:'낮음'},pillarNames={reliability:'안정성',security:'보안',operations:'운영'};
+const severityNames={high:'높음',medium:'중간',low:'낮음'},pillarNames={reliability:'안정성',security:'보안',operations:'운영',ai:'AI/ML'};
 function renderReview() {
   const {summary,findings}=state.review||{summary:{},findings:[]};
   $('finding-count').textContent=summary.high?`${summary.high} 높음`:findings.length;

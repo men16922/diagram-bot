@@ -95,9 +95,12 @@ def gpu_snapshot(train_azs="a", infer_azs="ab", efa_self=True):
     s = Sample("gpu", "GPU", [])
     vpc = s.vpc("vpc-gpu", "10.90.0.0/16", "gpu")
     subnets = {az: s.subnet(f"subnet-gpu-{az}", vpc, az, f"10.90.{i}.0/24", f"gpu-{az}", "app") for i, az in enumerate("abc")}
+    s.route_table("rtb-gpu", vpc, "gpu", list(subnets.values()))
+    s.gateway_endpoint("vpce-gpu-s3", vpc, "s3", ["rtb-gpu"])
     s.security_group("sg-efa", vpc, "efa", [(None, "self")] if efa_self else [(443, "10.90.0.0/16")], egress=("self",))
     s.security_group("sg-infer", vpc, "infer", [(8080, "10.90.0.0/16")])
-    train = [s.instance(f"i-train{az}", subnets[az], f"train-{az}", "p5.48xlarge", sg="sg-efa") for az in train_azs]
+    s.placement_group("train-pg")
+    train = [s.instance(f"i-train{az}", subnets[az], f"train-{az}", "p5.48xlarge", sg="sg-efa", efa=True, placement="train-pg") for az in train_azs]
     infer = [s.instance(f"i-infer{az}", subnets[az], f"infer-{az}", "g6e.2xlarge", sg="sg-infer") for az in infer_azs]
     s.auto_scaling_group("gpu-train", train, [subnets[az] for az in train_azs], minimum=0)
     s.auto_scaling_group("gpu-infer", infer, [subnets[az] for az in infer_azs])
@@ -113,3 +116,38 @@ def test_gpu_placement_rules():
     assert {("REL-GPU-TRAIN-AZ", "gpu-train"), ("REL-GPU-INFER-AZ", "gpu-infer"), ("SEC-EFA-SG", "gpu-train")} <= found
     # The inference group is not reported twice (generic single-AZ rule).
     assert ("REL-ASG-AZ", "gpu-infer") not in found
+
+
+def test_ai_review_pack_flags_each_ml_anti_pattern():
+    """Every AI/ML rule fires on its anti-pattern and names the lens practice to follow."""
+    from diagram_bot.samples import Sample
+    s = Sample("ai-bad", "AI anti-patterns", [])
+    vpc = s.vpc("vpc-aibad", "10.91.0.0/16", "ai-bad")
+    a = s.subnet("subnet-aibad-a", vpc, "a", "10.91.0.0/24", "gpu-a", "app")
+    b = s.subnet("subnet-aibad-b", vpc, "b", "10.91.1.0/24", "gpu-b", "app")
+    pub = s.subnet("subnet-aibad-pub", vpc, "a", "10.91.9.0/24", "public-a", "public")
+    igw = s.internet_gateway("igw-aibad", vpc, "igw")
+    s.route_table("rtb-aibad-pub", vpc, "public", [pub], gateway=igw)
+    s.security_group("sg-notebook", vpc, "notebook", [(8888, "0.0.0.0/0")])
+    infer = s.instance("i-aibadinfer", a, "infer", "g5.xlarge", sg="sg-notebook")
+    s.raw["instances"][-1]["PublicIpAddress"] = "203.0.113.50"
+    trainers = [s.instance(f"i-aibadtrain{n}", a, f"train-{n}", "p5.48xlarge", efa=True, lifecycle="spot",
+                           **{"eks:cluster-name": "ml"}) for n in range(2)]
+    s.auto_scaling_group("ml-train", trainers, [a], minimum=0, maximum=10)
+    s.auto_scaling_group("ml-infer", [infer], [a, b])
+    s.interface_endpoint("vpce-aibad-bedrock", vpc, "bedrock-runtime", [b])
+    s.raw["vpc_endpoints"][-1]["PrivateDnsEnabled"] = False
+    s.instance("i-aibadclient", b, "client", "m7g.large")
+    s.fsx_lustre("fs-0aibad000000001", "scratch", vpc, b, deployment="SCRATCH_2")
+    s.sagemaker_endpoint("llm", "ml.g5.2xlarge", 1)
+    s.hyperpod("hp", [pub], [("workers", "ml.p5.48xlarge", 4)])
+    found = {(f["rule"], f["resource_name"]): f for f in findings(s.snapshot())}
+    expected = [("SEC-AI-PORT-OPEN", "notebook"), ("SEC-GPU-PUBLIC", "ml-infer"), ("REL-GPU-SPOT-EFA", "ml-train"),
+                ("OPS-GPU-PLACEMENT", "ml-train"), ("REL-GPU-SUBNET-IP", "ml-train"), ("SEC-AI-ENDPOINT-DNS", "bedrock-runtime-endpoint"),
+                ("REL-AI-ENDPOINT-AZ", "bedrock-runtime-endpoint"), ("OPS-FSX-SCRATCH", "scratch"), ("REL-FSX-TRAIN-AZ", "ml-train"),
+                ("OPS-GPU-S3-ENDPOINT", "ai-bad"), ("SEC-SAGEMAKER-VPC", "llm"), ("REL-SAGEMAKER-AZ", "llm"), ("SEC-HYPERPOD-PUBLIC", "hp")]
+    for key in expected:
+        assert key in found, key
+        assert found[key]["pillar"] == "ai" and found[key]["evidence"] and found[key]["recommendation"]
+    # A GPU instance with a public IP is reported once, as the AI rule, not also as the generic low finding.
+    assert ("SEC-EC2-PUBLIC-IP", "infer") not in found

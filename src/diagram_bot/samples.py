@@ -10,7 +10,7 @@ from .collector import now
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
 # Bumped whenever a sample's architecture changes; the server replaces stored samples of another version.
-SAMPLE_VERSION = 2
+SAMPLE_VERSION = 3
 
 
 class Sample:
@@ -667,11 +667,12 @@ def ai_platform():
         "인터넷 경로 없는 사설 VPC: IGW·NAT 없이 Transit Gateway로 사내망·중앙 egress에 연결 (MLSEC03-BP02)",
         "Bedrock·ECR·EKS·STS·CloudWatch Logs 등은 세 AZ의 인터페이스 엔드포인트, S3는 게이트웨이 엔드포인트로 사설 호출 (GENSEC01-BP02)",
         "GPU 추론 노드 그룹(g6e)은 세 AZ에 분산하고 내부 ALB가 추론 파드 IP를 대상으로 등록, 자동 확장 (GENREL02-BP01, MLREL05-BP01)",
-        "EFA 학습 노드 그룹(p5)은 의도적으로 한 AZ의 전용 /20 서브넷에, 자기 참조 전체 허용 보안 그룹 (EFA는 AZ를 넘지 못함, HPCREL01-BP02)",
+        "EFA 학습 노드 그룹(p5)은 의도적으로 한 AZ의 전용 /20 서브넷과 클러스터 배치 그룹에, 자기 참조 전체 허용 보안 그룹 (EFA는 AZ를 넘지 못함, HPCREL01-BP02)",
+        "체크포인트·학습 데이터는 학습 노드와 같은 AZ의 FSx for Lustre PERSISTENT_2 (GENREL06-BP01, HPCREL01-BP01)",
         "학습과 추론은 노드 그룹·인스턴스 유형을 분리 (MLPERF04-BP01), 학습 노드 그룹은 0까지 축소 (GENSUS01-BP01)",
         "RAG 벡터 저장소는 VPC 안 격리 서브넷의 Aurora PostgreSQL(pgvector) writer/reader, 노드 보안 그룹만 허용 (GENSEC01-BP03)",
         "모델 캐시는 세 AZ 마운트 타깃의 EFS (EKS AI/ML Storage)",
-        "도형 밖 권고: 학습 배치는 클러스터 배치 그룹 또는 Capacity Block(둘 중 하나), 체크포인트는 같은 AZ의 S3 연동 FSx for Lustre (GENREL06-BP01)",
+        "도형 밖 권고: FSx for Lustre를 S3 데이터 리포지토리와 연결해 체크포인트를 S3로 내보내고 다른 AZ에서 재시작 (HPCREL01-BP02)",
         "도형 밖 권고: Bedrock 모델 호출 로깅(기본 꺼짐)·Guardrails·InvokeModel만 허용하는 엔드포인트 정책, S3는 SSE-KMS와 aws:SourceVpce (수집 범위 밖)",
         "도형 밖 권고: Karpenter·KEDA·NVIDIA/EFA device plugin은 Kubernetes 객체라 그리지 않음 (Karpenter 노드는 ASG 없는 EC2로 표시)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60009", "10.80.0.0/16", "ai-platform", Environment="production")
@@ -700,8 +701,11 @@ def ai_platform():
               for i, az in enumerate(azs)]
     infer = [s.instance(f"i-aiinf{az}000000009", app[i], f"gpu-inference-{az}", "g6e.2xlarge", sg="sg-ai-nodes", **eks_tags("gpu-inference"))
              for i, az in enumerate(azs)]
-    trainers = [s.instance(f"i-aitrn{n}0000000009", train, f"gpu-train-{n}", "p5.48xlarge", sg="sg-train-efa", **eks_tags("gpu-train"))
-                for n in (1, 2)]
+    # Training nodes: EFA interfaces in one cluster placement group; checkpoints on FSx for Lustre in the same AZ.
+    s.placement_group("ai-train-pg")
+    trainers = [s.instance(f"i-aitrn{n}0000000009", train, f"gpu-train-{n}", "p5.48xlarge", sg="sg-train-efa", efa=True,
+                           placement="ai-train-pg", **eks_tags("gpu-train")) for n in (1, 2)]
+    s.fsx_lustre("fs-0ai1ustre0000009", "ai-checkpoints", vpc, train, capacity=9600, throughput=500)
     s.auto_scaling_group("eks-ai-system-1a2b", system, app, minimum=3, maximum=6)
     s.auto_scaling_group("eks-ai-gpu-inference-3c4d", infer, app, minimum=3, maximum=12)
     s.auto_scaling_group("eks-ai-gpu-train-5e6f", trainers, [train], minimum=0, maximum=8)
@@ -716,6 +720,79 @@ def ai_platform():
     return s.snapshot()
 
 
+def genai_rag():
+    s = Sample("genai-rag", "생성형 AI RAG 애플리케이션 (Bedrock · Aurora pgvector · 시맨틱 캐시)", [
+        "채팅 API는 세 AZ의 ECS Fargate 태스크, 인터넷용 ALB는 퍼블릭 서브넷에만 (REL10-BP01, SEC05-BP01)",
+        "Bedrock 런타임·에이전트 런타임과 ECR·CloudWatch Logs·Secrets Manager·STS는 세 AZ의 인터페이스 엔드포인트로 사설 호출 (GENSEC01-BP02, GENREL02-BP01)",
+        "벡터 저장소는 격리 서브넷의 Aurora PostgreSQL(pgvector) writer와 다른 두 AZ의 reader, 앱 태스크 보안 그룹만 허용 (GENSEC01-BP03, GENREL02-BP01)",
+        "시맨틱 캐시·세션은 ElastiCache Redis primary/replica 자동 장애 조치로 같은 질의의 모델 호출을 줄임",
+        "문서 수집은 VPC 안 Lambda와 ECS 워커가 청크·임베딩 후 벡터 저장소에 적재, S3는 게이트웨이 엔드포인트",
+        "자체 호스팅 리랭커는 VPC 안 SageMaker 실시간 엔드포인트(인스턴스 2대, 서로 다른 AZ) (MLSEC03-BP02, MLCOST06-BP03)",
+        "도형 밖 권고: Bedrock Guardrails로 입출력 검증, 모델 호출 로깅(기본 꺼짐) 켜기, 엔드포인트 정책은 InvokeModel만 (GENSEC02-BP01, GENSEC01-BP04, GENSEC01-BP01)",
+        "도형 밖 권고: 처리량은 지리 교차 리전 추론 프로필 또는 Provisioned Throughput(둘 중 하나), ALB 앞 AWS WAF·CloudFront (GENREL01-BP01, REL02-BP01)"])
+    vpc = s.vpc("vpc-0a1b2c3d4e5f60010", "10.110.0.0/16", "genai-rag", Environment="production")
+    azs = "abc"
+    public = [s.subnet(f"subnet-rag-pub-{az}", vpc, az, f"10.110.{i}.0/24", f"public-{az}", "public") for i, az in enumerate(azs)]
+    app = [s.subnet(f"subnet-rag-app-{az}", vpc, az, f"10.110.{16 * (i + 1)}.0/20", f"app-{az}", "app") for i, az in enumerate(azs)]
+    data = [s.subnet(f"subnet-rag-data-{az}", vpc, az, f"10.110.{100 + i}.0/24", f"data-{az}", "data") for i, az in enumerate(azs)]
+    s.network(vpc, "rag", azs, public, [app])
+    s.security_group("sg-rag-alb", vpc, "rag-alb", [(443, "0.0.0.0/0")])
+    s.security_group("sg-rag-tasks", vpc, "rag-tasks", [(8080, "sg-rag-alb")])
+    s.security_group("sg-rag-db", vpc, "rag-vectors", [(5432, "sg-rag-tasks")])
+    s.security_group("sg-rag-cache", vpc, "semantic-cache", [(6379, "sg-rag-tasks")])
+    alb = s.load_balancer("rag-chat-alb", vpc, public, sg="sg-rag-alb")
+    tasks = [(subnet, s.address(subnet, 21 + i)) for i, subnet in enumerate(app)]
+    group = s.target_group("chat-api-tasks", vpc, "HTTP", 8080, [(ip, 8080, s.az_of(subnet)) for subnet, ip in tasks], [alb],
+                           target_type="ip", health="/healthz")
+    s.ecs_service("rag", "chat-api", vpc, tasks, group)
+    s.ecs_service("rag", "ingest-worker", vpc, [(subnet, s.address(subnet, 60 + i)) for i, subnet in enumerate(app[:2])])
+    s.function("document-ingest", vpc, app)
+    for service in ("bedrock-runtime", "bedrock-agent-runtime", "ecr.api", "ecr.dkr", "logs", "secretsmanager", "sts"):
+        s.interface_endpoint(f"vpce-rag-{service.replace('.', '-')}", vpc, service, app)
+    s.gateway_endpoint("vpce-rag-s3", vpc, "s3", [f"rtb-rag-private-{az}" for az in azs])
+    s.aurora("rag-vectors", vpc, data, "a", ["b", "c"])
+    s.redis("semantic-cache", vpc, data, "b", ["c"])
+    s.sagemaker_endpoint("rag-reranker", "ml.g5.xlarge", 2, app[:2], sg="sg-rag-tasks")
+    return s.snapshot()
+
+
+def gpu_training():
+    s = Sample("gpu-training", "GPU 분산 학습 클러스터 (EFA · Capacity Block · FSx for Lustre · HyperPod)", [
+        "강결합 학습 노드는 한 AZ의 전용 /20 컴퓨트 서브넷에, 모든 EFA 노드가 자기 참조 전체 허용 보안 그룹 공유 (EFA는 AZ·VPC를 넘지 못함, HPCREL01-BP02)",
+        "p5 학습 큐는 Capacity Block(UltraCluster 자동 배치), trn2 큐는 클러스터 배치 그룹 + 용량 예약(ODCR): 둘은 함께 쓸 수 없음 (EC2 Capacity Blocks)",
+        "학습 데이터·체크포인트는 같은 AZ의 FSx for Lustre PERSISTENT_2 (GENREL06-BP01, HPCREL01-BP01, MLCOST06-BP03)",
+        "관리형 대안으로 같은 컴퓨트 서브넷의 SageMaker HyperPod(Slurm) 클러스터 (GENPERF03-BP01)",
+        "헤드 노드와 로그인 노드는 프라이빗 서브넷, 관리 접근은 Session Manager 엔드포인트, S3는 게이트웨이 엔드포인트 (MLSEC03-BP02)",
+        "학습과 추론은 인스턴스 유형을 분리하고 학습은 Spot을 쓰지 않음 (MLPERF04-BP01, EKS AI/ML Networking)",
+        "도형 밖 권고: Lustre를 S3 데이터 리포지토리와 연결하고 IaC로 다른 AZ에서 클러스터를 다시 띄우는 복구 절차 (HPCREL01-BP02)",
+        "도형 밖 권고: 노드 간 통신 암호화·EFA 드라이버·NCCL 설정과 학습 작업 스케줄러(Slurm/Kubernetes) 구성 (MLSEC04-BP02)"])
+    vpc = s.vpc("vpc-0a1b2c3d4e5f60011", "10.120.0.0/16", "gpu-training", Environment="research")
+    public = [s.subnet(f"subnet-trn-pub-{az}", vpc, az, f"10.120.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ab")]
+    head = [s.subnet(f"subnet-trn-head-{az}", vpc, az, f"10.120.{10 + i}.0/24", f"head-{az}", "app") for i, az in enumerate("ab")]
+    compute = s.subnet("subnet-trn-compute-a", vpc, "a", "10.120.32.0/20", "compute-a", "app")
+    s.network(vpc, "trn", "ab", public, [head])
+    # The compute subnet shares AZ a's private route table (NAT in the same AZ).
+    next(t for t in s.raw["route_tables"] if t["RouteTableId"] == "rtb-trn-private-a")["Associations"].append(
+        {"RouteTableAssociationId": "rtbassoc-trn-compute-a", "SubnetId": compute})
+    s.security_group("sg-trn-efa", vpc, "trn-efa", [(None, "self"), (22, "sg-trn-head")], egress=("self", "10.120.0.0/16"))
+    s.security_group("sg-trn-head", vpc, "trn-head", [(443, "10.120.0.0/16")])
+    s.instance("i-trnhead0000000011", head[0], "slurm-head", "m7i.2xlarge", sg="sg-trn-head")
+    logins = [s.instance(f"i-trnlogin{az}00000011", head[i], f"login-{az}", "m7i.xlarge", sg="sg-trn-head") for i, az in enumerate("ab")]
+    s.auto_scaling_group("trn-login-asg", logins, head, minimum=2, maximum=4)
+    for n in range(4):
+        s.instance(f"i-trnp5{n}0000000011", compute, f"p5-train-{n + 1}", "p5.48xlarge", sg="sg-trn-efa", efa=True, lifecycle="capacity-block")
+    s.placement_group("trn2-pg")
+    for n in range(2):
+        s.instance(f"i-trntrn{n}000000011", compute, f"trn2-train-{n + 1}", "trn2.48xlarge", sg="sg-trn-efa", efa=True, placement="trn2-pg")
+        s.raw["instances"][-1]["CapacityReservationId"] = "cr-0trn2reserved0011"
+    s.fsx_lustre("fs-0trainingdata011", "training-data", vpc, compute, capacity=19200, throughput=500)
+    s.hyperpod("hp-slurm", [compute], [("controller", "ml.m5.2xlarge", 1), ("workers", "ml.p5.48xlarge", 8)])
+    s.gateway_endpoint("vpce-trn-s3", vpc, "s3", ["rtb-trn-private-a", "rtb-trn-private-b"])
+    for service in ("ssm", "ssmmessages", "ec2messages", "logs", "ecr.api", "ecr.dkr", "sts"):
+        s.interface_endpoint(f"vpce-trn-{service.replace('.', '-')}", vpc, service, head)
+    return s.snapshot()
+
+
 SAMPLES = {"three-tier": three_tier, "microservices": microservices, "nlb-alb": static_ip_front,
            "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform, "data-platform": data_platform,
-           "ai-platform": ai_platform}
+           "ai-platform": ai_platform, "genai-rag": genai_rag, "gpu-training": gpu_training}
