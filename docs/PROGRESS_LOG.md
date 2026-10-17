@@ -1,6 +1,17 @@
 # Progress Log
 
-Last Updated: 2026-10-17
+Last Updated: 2026-10-18
+
+## 2026-10-18 — Visual review follow-ups (user request: 잔여 작업 우선순위 수행)
+
+- Detail views opened at 23–31 % at 1440×900 (fit whole diagram); the editor bridge now fits down to 60 % only,
+  then fits the width from the top-left. `verify_demo.py` asserts the start zoom.
+- Toasts moved to the top of the page (were over the canvas's data tier).
+- Registration routes get one colour per target group, so trunks sharing a gutter are told apart.
+- Truncated names end on a whole word before the ellipsis.
+- STATUS no longer lists finished manual checks as open; LESSONS records the bare-`pytest` AWS-env trap.
+- Verified: `make check` (lint + 119 tests + CLI round trip); `verify_demo.py` 27 checks, no page errors or external
+  requests; docs/images and examples/demo regenerated from that run.
 
 ## 2026-10-17 — Chat design agent (user request: DevOps Agent 벤치마킹, Strands·Bedrock 채팅 설계)
 

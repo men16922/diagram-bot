@@ -1,6 +1,6 @@
 # Next Plan
 
-Last Updated: 2026-10-17
+Last Updated: 2026-10-18
 
 ## Current Scope
 
@@ -25,17 +25,9 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
   code and allowed access at the owner's request), account and CloudOpsReadOnly auto-selected, collection complete with
   the same 47 resources / node IDs as the key-based collection; audited as `via: sso:CloudOpsReadOnly`.
 - [x] [manual] Visual review of docs/images/*.png and examples/demo/edited-topology.png — done 2026-10-17 by the agent
-  (model review of all 8 screenshots + the edited PNG; presenter judgment still welcome). Grouping (Cloud > Region >
-  VPC > AZ > tiered subnets), icons, HA labels and the overview cards read correctly. Concrete issues found:
-  1. Three-AZ detail views (eks-platform, data-platform, workspace) open at the page-fit zoom of 30–41 %: labels are
-     illegible and the diagram uses under half of the canvas width (fit by height). Fit to width / readable start zoom.
-  2. edited-topology: four to five target-group routes share the left gutter of AZ a, 8 px apart over the whole
-     height, and the demo-api → i-demo-missing route runs down the VPC margin into the reference box; at 1× it is
-     hard to tell which route ends where (edge bundling or per-target-group colouring).
-  3. Toasts ("직접 관계 2개를 구성도에서 강조했습니다", hidden-resource notice) cover the lower canvas, i.e. the data
-     tier, for several seconds.
-  4. Long names are truncated with "…" in the diagram (e.g. the batch-server label); full text is only in the tooltip
-     and inspector — acceptable, but the cut makes the m6i.large line look like part of the name.
+  (model review of all 8 screenshots + the edited PNG). All four issues it found were fixed on 2026-10-18 (PROGRESS_LOG):
+  readable start zoom (was 23–31 % at 1440×900), toasts moved off the canvas, one colour per target group route,
+  word-boundary cuts for long names.
 
 - [x] Default chat model: Amazon Nova 2 Lite (owner's decision 2026-10-17). GPT-6 Luna stays selectable; it answers
   once AWS enables OpenAI models for the account (support-case draft prepared, owner sends it if wanted).
@@ -44,7 +36,7 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 
 - Design → IaC (CloudFormation/CDK) export; brownfield design starting from a collected snapshot; chat streaming.
 
-- Readability for dense views (≈100 resources): edge bundling or per-target-group filtering.
+- Readability for dense views (≈100 resources): edge bundling or per-target-group filtering (route colours done).
 - Placement edges in focus view use draw.io auto-routing; route them through gutters.
 - A SessionStart hook to reinstall overnight-harness in cloud sessions automatically.
 

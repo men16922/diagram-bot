@@ -96,7 +96,7 @@ Last Updated: 2026-10-18
 ## Verification (2026-10-17, cloud container)
 
 - Gate, team-mode Chromium run, layout tests, 27 browser checks and evidence files: docs/archive/STATUS-verification-2026-10.md.
-  Current gate: `make check` = ruff + 118 pytest cases + CLI round trip.
+  Current gate: `make check` = ruff + 119 pytest cases + CLI round trip.
 
 ## Harness
 
