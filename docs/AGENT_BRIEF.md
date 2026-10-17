@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: Chat design agent (Strands + Bedrock) shipped and verified live; default model Nova 2 Lite (owner's choice; GPT-6 Luna selectable, not yet enabled by AWS). Real-workload live check done (temporary stack). Open manual work: in-app SSO approval (paused by the owner), human visual review. No [auto] backlog.
+> ▶ NEXT SESSION: Chat design agent (Strands + Bedrock) shipped and verified live; default model Nova 2 Lite (owner's choice; GPT-6 Luna selectable, not yet enabled by AWS). Real-workload live check done (temporary stack). Open manual work: in-app SSO approval (needs the owner's Identity Center sign-in). Visual review done (issues in NEXT_PLAN). No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 
