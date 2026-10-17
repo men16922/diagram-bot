@@ -18,9 +18,10 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 
 - [x] [manual] Validate AWS collection on one account/region — done 2026-10-17 with IAM user keys
   (STATUS.md "Live AWS Verification").
-- [ ] [manual] Live check on an account with real workloads (EC2/ALB/RDS etc.), via an SSO
-  profile and, if used, a cross-account role. Done: resources/relations matched against the
-  console, findings reviewed, results in STATUS.md.
+- [x] [manual] Live check with real workloads — done 2026-10-17 on a temporary CloudFormation stack
+  (VPC, ALB, ASG × 2 t3.micro, RDS), created and deleted with the user's approval (STATUS.md).
+- [ ] [manual] SSO profile and cross-account role collection on a real organization. Done: `collect
+  --profile <sso>` and `--role-arn` succeed and match the console. Blocked: no SSO/Identity Center here.
 - [ ] [manual] Human visual review of docs/images/*.png and examples/demo/edited-topology.png.
   Done: groups/edges judged readable by the presenter, or concrete layout issues listed here.
 

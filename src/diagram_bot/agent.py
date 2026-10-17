@@ -88,15 +88,26 @@ class Workspace:
                 "resources": kinds, "incomplete_calls": problems, "findings": summary(review(graph, snapshot["coverage"])),
                 "snapshot_id": self.publish(snapshot)}
 
-    def find_collected_resources(self, kind=None, search=None, limit=30):
+    def find_collected_resources(self, kind=None, search=None, vpc=None, limit=30):
         if not self.collected:
             raise ValueError("아직 수집한 스냅샷이 없습니다. 먼저 collect_aws_resources를 호출하세요.")
+        graph = self.collected["graph"]
+        nodes = {n["id"]: n for n in graph["nodes"]}
+        vpc_of = {e["source"]: e["target"] for e in graph["edges"] if e["relation"] == "in_vpc"}
+        scope = None
+        if vpc:
+            scope = {n["id"] for n in nodes.values() if n["kind"] == "vpc" and vpc.lower() in (n["resource_id"].lower(), n["name"].lower())}
+            if not scope:
+                known = ", ".join(f"{n['name']} ({n['resource_id']})" for n in nodes.values() if n["kind"] == "vpc")
+                raise ValueError(f"VPC '{vpc}'가 스냅샷에 없습니다. 수집된 VPC: {known}")
         text = (search or "").lower()
-        rows = [n for n in self.collected["graph"]["nodes"] if not n["reference_only"] and (not kind or n["kind"] == kind)
+        rows = [n for n in nodes.values() if not n["reference_only"] and (not kind or n["kind"] == kind)
+                and (scope is None or vpc_of.get(n["id"]) in scope or n["id"] in scope)
                 and text in json.dumps([n["name"], n["resource_id"], n["attributes"]], ensure_ascii=False, default=str).lower()]
-        keep = ("VpcId", "SubnetId", "CidrBlock", "AvailabilityZone", "InstanceType", "Engine", "Runtime", "Type", "Scheme", "State")
+        keep = ("SubnetId", "CidrBlock", "AvailabilityZone", "InstanceType", "Engine", "Runtime", "Type", "Scheme", "State", "MultiAZ")
         return {"total": len(rows), "resources": [
             {"kind": n["kind"], "name": n["name"], "id": n["resource_id"],
+             **({"vpc": nodes[vpc_of[n["id"]]]["name"]} if n["id"] in vpc_of else {}),
              **{k: n["attributes"][k] for k in keep if isinstance(n["attributes"].get(k), (str, int, bool))}}
             for n in rows[:max(1, min(int(limit), 100))]]}
 
@@ -136,10 +147,11 @@ def build_tools(workspace):
         return w.collect_aws_resources(region or None, expected_account or None)
 
     @tool
-    def find_collected_resources(kind: str = "", search: str = "", limit: int = 30) -> dict:
-        """마지막으로 수집한 스냅샷에서 리소스를 찾습니다. kind 예: vpc, subnet, ec2, load_balancer, db_instance, lambda_function,
-        security_group, eks_cluster. search는 이름·ID·속성 텍스트 검색."""
-        return w.find_collected_resources(kind or None, search or None, limit)
+    def find_collected_resources(kind: str = "", search: str = "", vpc: str = "", limit: int = 30) -> dict:
+        """마지막으로 수집한 스냅샷에서 리소스를 찾습니다. kind 예: vpc, subnet, ec2, load_balancer, target_group, auto_scaling_group,
+        db_instance, lambda_function, security_group, eks_cluster. vpc는 VPC 이름 또는 ID로 그 VPC 안의 리소스만 찾습니다
+        (특정 VPC의 구성을 물으면 search 대신 vpc를 쓰세요). search는 리소스 이름·ID·속성 텍스트 검색."""
+        return w.find_collected_resources(kind or None, search or None, vpc or None, limit)
 
     @tool
     def review_collected_resources() -> dict:

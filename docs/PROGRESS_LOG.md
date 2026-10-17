@@ -9,6 +9,8 @@ Last Updated: 2026-10-17
   `agent.py` (Strands tools: design + read-only boto3 collection; ModelRouter GPT-6 Luna → Nova 2 Lite; sequential
   tools; answering model reported), `/api/agent/*`, chat panel, `diagram-bot chat`, `--env-file`.
 - Bedrock: Nova 2 Lite / Claude tool use verified; GPT-6 Luna agreement accepted (user approved) but still denied.
+- Live workload check on a temporary CloudFormation stack (created/deleted with approval): 16/16 checks; chat tool
+  gained a VPC scope after the model missed an ALB when searching by VPC name.
 - docs/DRAWIO.md (libraries, layout algorithm, routing, editor bridge, exports). Verified: `make check` 106 tests,
   live chat in Chromium (design, advice, collection) and CLI chat.
 

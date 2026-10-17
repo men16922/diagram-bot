@@ -69,6 +69,8 @@
   - 비용 절감 조언: 도구를 쓰지 않음.
   - 실제 계정 수집과 보안 검토: 수집 도구로 SG 개방 6건을 정확히 보고했습니다.
   - CLI 채팅으로 EKS 표준을 불러와 검토했습니다.
+- 실제 워크로드: 사용자 승인으로 임시 CloudFormation 스택(VPC, ALB, ASG, RDS)을 만들어 채팅으로 수집·요약하게 한 뒤 삭제했습니다.
+  첫 답변은 VPC 이름으로 검색하다 ALB를 놓쳤습니다. 그래서 `find_collected_resources`에 `vpc` 범위를 추가했고, 다시 물었을 때 ALB, ASG, RDS(Single-AZ)와 검토 결과를 정확히 요약했습니다.
 - **GPT-6 Luna:** 이 계정에서 Marketplace 약정(`create-foundation-model-agreement`)을 사용자 승인으로 수락했습니다. 약정 상태는 `AVAILABLE`이지만 Converse, Chat Completions, Responses 호출 모두 `not available for this account`로 거부됩니다.
   그래서 실제 응답은 Nova 2 Lite가 했습니다(대체 표시). 계정 단위 사용 가능 여부는 AWS 측에서 해결해야 하고, 풀리면 코드 변경 없이 GPT-6 Luna가 답합니다.
 - Nova 2 Lite는 비용 조언에서 설계에 없는 S3 스토리지 항목을 지어낸 적이 있습니다. 시스템 프롬프트에 "설계에 없는 서비스·수치는 말하지 말 것"을 추가했습니다. 구성도와 검토 결과는 코드가 만들기 때문에 이 문제의 영향을 받지 않습니다.

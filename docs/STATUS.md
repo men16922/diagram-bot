@@ -47,6 +47,16 @@ Last Updated: 2026-10-17
   two ports, IP target sharing an instance IP, unqueried instance, long Korean names,
   partial DescribeInstances.
 
+## Live Workload Verification (2026-10-17, temporary stack, us-east-1)
+
+- With the user's approval a CloudFormation stack (VPC 2 AZ public/app/data, IGW, ALB + target group, ASG of
+  2 × t3.micro, RDS PostgreSQL db.t4g.micro Single-AZ) was created, collected and deleted.
+- 16/16 checks vs CloudFormation physical IDs: route classes (public/isolated), ALB in both public subnets, TG
+  targets = ASG instances placed in app subnets, ASG members, RDS in one data subnet, IGW; findings REL-RDS-SINGLE-AZ
+  and REL-TG-UNHEALTHY (no web server running) are correct. Detail diagram reviewed (ASG frame across AZs).
+- Chat over the same account: first answer missed the ALB (search by VPC name); `find_collected_resources` gained a
+  `vpc` scope and results carry the VPC name; rerun answered correctly.
+
 ## Chat Agent Verification (2026-10-17, local macOS, owner's test account)
 
 - Offline: designer steps/errors, 7 standards, tool schemas, scripted-model chat incl. GPT-6 denial → Nova fallback,

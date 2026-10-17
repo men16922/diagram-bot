@@ -187,6 +187,14 @@ def test_collection_tool_against_the_aws_emulator(monkeypatch):
         assert result["snapshot_id"] == "live" and result["resources"]["vpc"] >= 1 and result["resources"]["subnet"] >= 1
         found = workspace.find_collected_resources("vpc", "10.9.0.0")
         assert found["total"] == 1 and found["resources"][0]["id"] == vpc
+        # A VPC scope (by ID or Name tag) finds resources whose names do not contain the VPC's name.
+        ec2.create_tags(Resources=[vpc], Tags=[{"Key": "Name", "Value": "verify-net"}])
+        workspace.collect_aws_resources()
+        inside = workspace.find_collected_resources("subnet", vpc="verify-net")
+        assert inside["total"] == 1 and inside["resources"][0]["vpc"] == "verify-net"
+        assert workspace.find_collected_resources(vpc=vpc)["total"] >= 2
+        with pytest.raises(ValueError, match="수집된 VPC"):
+            workspace.find_collected_resources(vpc="nope")
         assert "summary" in workspace.review_collected_resources()
         assert saved[0]["metadata"].get("design") is None
 

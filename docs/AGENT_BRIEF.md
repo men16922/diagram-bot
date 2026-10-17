@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: Chat design agent (Strands + Bedrock) shipped and verified live with Nova 2 Lite; GPT-6 Luna still denied for the account (NEXT_PLAN manual item). Other manual work: live check on a real-workload account via SSO, human visual review. No [auto] backlog.
+> ▶ NEXT SESSION: Chat design agent (Strands + Bedrock) shipped and verified live with Nova 2 Lite; GPT-6 Luna still denied for the account (NEXT_PLAN manual item). Real-workload live check done (temporary stack). Open manual work: SSO/cross-account on a real org, human visual review. No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 
