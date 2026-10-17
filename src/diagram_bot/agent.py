@@ -34,6 +34,8 @@ SYSTEM_PROMPT = """당신은 AWS 표준 인프라 아키텍처 설계 도우미�
 - 새 설계는 new_design → add_vpc → (로드 밸런서·서비스·데이터) 순서로 만듭니다. 표준 패턴을 원하면 list_standard_architectures 후 apply_standard_architecture를 씁니다.
 - 기본값은 AWS Well-Architected 모범 사례: AZ 3개(최소 2개), 퍼블릭에는 로드 밸런서·NAT만, 앱·데이터는 프라이빗,
   DB는 Multi-AZ, AZ별 NAT, S3 게이트웨이·SSM 인터페이스 엔드포인트. 사용자가 비용 절감을 원하면 NAT 1개 등으로 조정하고 그 영향을 알려주세요.
+- AI/GPU 워크로드: 추론 노드는 여러 AZ, EFA 학습 노드는 한 AZ(add_gpu_node_group training=true), Bedrock은 bedrock-runtime
+  인터페이스 엔드포인트로 사설 호출. 사설 GPU 플랫폼이 필요하면 표준 ai-platform을 먼저 고려하세요.
 - 설계를 마치면 review_design으로 검토하고, 중요한 결과와 개선안을 짧게 정리합니다.
 - 실제 계정은 aws_identity, collect_aws_resources, find_collected_resources, review_collected_resources로 읽기 전용 조회만 합니다.
   리소스를 만들거나 바꾸는 AWS 호출은 하지 않습니다(도구도 없습니다).
@@ -208,6 +210,13 @@ def build_tools(workspace):
         return change("add_eks_cluster", vpc=vpc, name=name, node_type=node_type, nodes_per_az=nodes_per_az, tier=tier)
 
     @tool
+    def add_gpu_node_group(vpc: str, cluster: str, name: str, instance_type: str, per_az: int = 1, training: bool = False) -> dict:
+        """기존 EKS 클러스터에 GPU/가속 노드 그룹을 추가합니다. 추론(training=false)은 클러스터의 모든 AZ에 분산하고,
+        EFA 학습(training=true)은 한 AZ에만 두고 자기 참조 보안 그룹을 만듭니다. 예: g6e.2xlarge(추론), p5.48xlarge(학습)."""
+        return change("add_gpu_node_group", vpc=vpc, cluster=cluster, name=name, instance_type=instance_type, per_az=per_az,
+                      training=training)
+
+    @tool
     def add_database(vpc: str, name: str, engine: str = "postgres", multi_az: bool = True, read_replica: bool = False,
                      instance_class: str = "db.r6g.large") -> dict:
         """data 계층에 RDS(mysql, postgres, mariadb 등)를 추가합니다. multi_az는 동기식 대기, read_replica는 별도 AZ 읽기 복제본."""
@@ -271,7 +280,7 @@ def build_tools(workspace):
 
     return [aws_identity, collect_aws_resources, find_collected_resources, review_collected_resources,
             list_standard_architectures, apply_standard_architecture, new_design, add_vpc, add_load_balancer, add_ec2_service,
-            add_ecs_service, add_eks_cluster, add_database, add_aurora, add_cache, add_kafka, add_opensearch, add_file_system,
+            add_ecs_service, add_eks_cluster, add_gpu_node_group, add_database, add_aurora, add_cache, add_kafka, add_opensearch, add_file_system,
             add_lambda, add_vpc_endpoints, connect_vpcs, add_vpn, describe_design, review_design]
 
 

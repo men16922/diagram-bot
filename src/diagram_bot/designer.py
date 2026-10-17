@@ -13,6 +13,7 @@ from .samples import SAMPLES, Sample
 
 AZ_LETTERS = "abcdef"
 TIERS = ("public", "web", "app", "data")
+ACCELERATED = re.compile(r"^(p|g|trn|inf|dl)\d")
 STANDARDS = {
     "three-tier": "3계층 웹 (ALB → 웹 ASG → 내부 ALB → 앱 ASG → RDS Multi-AZ, 3 AZ)",
     "microservices": "마이크로서비스 (ALB 경로 라우팅, EC2 ASG + ECS Fargate, RDS Multi-AZ)",
@@ -120,10 +121,10 @@ class Design:
         return {"vpc": name, "subnets": {t: len(v) for t, v in layers.items()}, "azs": [f"{self.region}{a}" for a in letters],
                 "nat_gateways": 0 if nat == "none" or "public" not in layers else (len(letters) if nat == "per_az" else 1)}
 
-    def security_group(self, vpc, name, ingress):
+    def security_group(self, vpc, name, ingress, egress=("0.0.0.0/0",)):
         key = f"sg-{vpc['key']}-{slug(name)}"
         if key not in vpc["sgs"]:
-            self.sample.security_group(key, vpc["id"], f"{vpc['key']}-{slug(name)}", ingress)
+            self.sample.security_group(key, vpc["id"], f"{vpc['key']}-{slug(name)}", ingress, egress)
             vpc["sgs"].add(key)
         return key
 
@@ -204,6 +205,37 @@ class Design:
                                                                             "desiredSize": len(nodes)})])
         self.record("add_eks_cluster", vpc=vpc, name=name, node_type=node_type, nodes_per_az=int(nodes_per_az))
         return {"cluster": key, "nodes": len(nodes), "endpoint": "private"}
+
+    def add_gpu_node_group(self, vpc, cluster, name, instance_type, per_az=1, training=False, minimum=None, maximum=None):
+        """GPU/accelerator node group on an existing EKS cluster: inference spreads over the cluster's AZs,
+        EFA training stays in one AZ with a self-referencing security group (EFA cannot cross AZs)."""
+        v = self.vpc(vpc)
+        key = slug(cluster)
+        eks = next((c for c in self.sample.raw["eks_clusters"] if c["name"] == key and c["resourcesVpcConfig"]["vpcId"] == v["id"]), None)
+        if not eks:
+            raise DesignError(f"EKS 클러스터가 설계에 없습니다: {cluster}. add_eks_cluster로 먼저 만드세요.")
+        if not ACCELERATED.match(str(instance_type)):
+            raise DesignError(f"GPU/가속 인스턴스 유형을 지정하세요 (예: g6e.2xlarge, p5.48xlarge, inf2.xlarge, trn2.48xlarge): {instance_type}")
+        group = slug(name)
+        if any(n["nodegroupName"] == group for n in eks["nodegroups"]):
+            raise DesignError(f"이미 있는 노드 그룹입니다: {name}")
+        subnets = eks["resourcesVpcConfig"]["subnetIds"][:1] if training else eks["resourcesVpcConfig"]["subnetIds"]
+        sg = self.security_group(v, f"{key}-{group}-efa", [(None, "self"), (443, v["cidr"])], egress=("self", v["cidr"])) if training \
+            else self.security_group(v, f"{key}-nodes", [(443, v["cidr"])])
+        nodes = [self.sample.instance(f"i-{key}-{group}-{self.sample.az_of(subnet)[-1]}{n + 1}", subnet,
+                                      f"{group}-{self.sample.az_of(subnet)[-1]}{n + 1}", instance_type, sg=sg,
+                                      **{"eks:cluster-name": key, "eks:nodegroup-name": group})
+                 for subnet in subnets for n in range(int(per_az))]
+        minimum = int(minimum) if minimum is not None else (0 if training else len(nodes))
+        maximum = int(maximum) if maximum is not None else max(len(nodes) * 4, minimum)
+        asg = f"eks-{key}-{group}"
+        self.sample.auto_scaling_group(asg, nodes, subnets, minimum=minimum, maximum=maximum)
+        eks["nodegroups"].append({"nodegroupName": group, "instanceTypes": [instance_type],
+                                  "scalingConfig": {"minSize": minimum, "maxSize": maximum, "desiredSize": len(nodes)},
+                                  "resources": {"autoScalingGroups": [{"name": asg}]}})
+        self.record("add_gpu_node_group", vpc=vpc, cluster=cluster, name=name, instance_type=instance_type, per_az=int(per_az),
+                    training=bool(training), minimum=minimum, maximum=maximum)
+        return {"node_group": group, "nodes": len(nodes), "azs": sorted({self.sample.az_of(s) for s in subnets}), "efa": bool(training)}
 
     def add_database(self, vpc, name, engine="postgres", multi_az=True, read_replica=False, instance_class="db.r6g.large"):
         v = self.vpc(vpc)

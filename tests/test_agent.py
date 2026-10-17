@@ -245,3 +245,26 @@ def test_gateway_endpoint_without_nat_uses_the_main_table():
     d.add_vpc_endpoints("private", ["s3"])
     endpoint = d.sample.raw["vpc_endpoints"][0]
     assert endpoint["VpcEndpointType"] == "Gateway" and endpoint["RouteTableIds"] == ["rtb-private-main"]
+
+
+def test_gpu_node_groups_follow_the_ai_lenses():
+    """Inference spreads over the cluster's AZs; EFA training stays in one AZ with a self-referencing group."""
+    d = Design("AI", "us-east-1")
+    d.add_vpc("ai", "10.40.0.0/16", 3, ["app", "data"], "none")
+    d.add_vpc_endpoints("ai", ["s3", "bedrock-runtime", "ecr.api", "ecr.dkr"])
+    d.add_eks_cluster("ai", "llm")
+    assert d.add_gpu_node_group("ai", "llm", "inference", "g6e.2xlarge")["azs"] == ["us-east-1a", "us-east-1b", "us-east-1c"]
+    result = d.add_gpu_node_group("ai", "llm", "train", "p5.48xlarge", per_az=2, training=True)
+    assert result == {"node_group": "train", "nodes": 2, "azs": ["us-east-1a"], "efa": True}
+    efa = next(g for g in d.sample.raw["security_groups"] if g["GroupId"] == "sg-ai-llm-train-efa")
+    assert {"IpProtocol": "-1", "UserIdGroupPairs": [{"GroupId": "sg-ai-llm-train-efa"}]} in efa["IpPermissions"]
+    assert [n["nodegroupName"] for n in d.sample.raw["eks_clusters"][0]["nodegroups"]] == ["general", "inference", "train"]
+    found = [(f["rule"], f["severity"]) for f in d.review()["findings"]]
+    assert ("REL-ASG-AZ", "low") in found and not any(rule.startswith(("REL-GPU", "SEC-EFA")) for rule, _ in found)
+    with pytest.raises(DesignError, match="GPU/가속"):
+        d.add_gpu_node_group("ai", "llm", "cpu", "m7g.large")
+    with pytest.raises(DesignError, match="EKS 클러스터가 설계에 없습니다"):
+        d.add_gpu_node_group("ai", "missing", "gpu", "g6e.xlarge")
+    with pytest.raises(DesignError, match="이미 있는 노드 그룹"):
+        d.add_gpu_node_group("ai", "llm", "inference", "g6e.xlarge")
+    assert "add_gpu_node_group" in {t.tool_spec["name"] for t in build_tools(Workspace(lambda s: "x"))}
