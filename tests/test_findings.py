@@ -87,3 +87,29 @@ def test_cli_review_exit_code_gates_on_severity(tmp_path):
     clean = tmp_path / "clean.json"
     clean.write_text(json.dumps(SAMPLES["three-tier"]()), encoding="utf-8")
     assert subprocess.run([sys.executable, "-m", "diagram_bot.cli", "review", str(clean), "--fail-on", "low"]).returncode == 0
+
+
+def gpu_snapshot(train_azs="a", infer_azs="ab", efa_self=True):
+    """A small VPC with an EFA training group and a GPU inference group, built like the samples."""
+    from diagram_bot.samples import Sample
+    s = Sample("gpu", "GPU", [])
+    vpc = s.vpc("vpc-gpu", "10.90.0.0/16", "gpu")
+    subnets = {az: s.subnet(f"subnet-gpu-{az}", vpc, az, f"10.90.{i}.0/24", f"gpu-{az}", "app") for i, az in enumerate("abc")}
+    s.security_group("sg-efa", vpc, "efa", [(None, "self")] if efa_self else [(443, "10.90.0.0/16")], egress=("self",))
+    s.security_group("sg-infer", vpc, "infer", [(8080, "10.90.0.0/16")])
+    train = [s.instance(f"i-train{az}", subnets[az], f"train-{az}", "p5.48xlarge", sg="sg-efa") for az in train_azs]
+    infer = [s.instance(f"i-infer{az}", subnets[az], f"infer-{az}", "g6e.2xlarge", sg="sg-infer") for az in infer_azs]
+    s.auto_scaling_group("gpu-train", train, [subnets[az] for az in train_azs], minimum=0)
+    s.auto_scaling_group("gpu-infer", infer, [subnets[az] for az in infer_azs])
+    return s.snapshot()
+
+
+def test_gpu_placement_rules():
+    # Best practice: single-AZ EFA training (low reminder only), multi-AZ inference, self-referencing EFA group.
+    good = findings(gpu_snapshot())
+    assert [(f["rule"], f["severity"], f["resource_name"]) for f in good if f["rule"] != "OPS-COVERAGE"] == [
+        ("REL-ASG-AZ", "low", "gpu-train")]
+    found = rules(gpu_snapshot(train_azs="ab", infer_azs="a", efa_self=False))
+    assert {("REL-GPU-TRAIN-AZ", "gpu-train"), ("REL-GPU-INFER-AZ", "gpu-infer"), ("SEC-EFA-SG", "gpu-train")} <= found
+    # The inference group is not reported twice (generic single-AZ rule).
+    assert ("REL-ASG-AZ", "gpu-infer") not in found

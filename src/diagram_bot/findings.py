@@ -5,6 +5,7 @@ that lacks its input (permission denied, field absent) reports nothing rather th
 coverage finding lists what could not be read.
 """
 import hashlib
+import re
 
 SEVERITIES = ("high", "medium", "low")
 PILLARS = {"reliability": "안정성", "security": "보안", "operations": "운영"}
@@ -13,6 +14,9 @@ ADMIN_PORTS = {22: "SSH", 3389: "RDP"}
 DATA_PORTS = {3306: "MySQL", 5432: "PostgreSQL", 1433: "SQL Server", 1521: "Oracle", 6379: "Redis", 11211: "Memcached",
               9200: "OpenSearch", 27017: "MongoDB/DocumentDB", 9092: "Kafka", 5439: "Redshift", 2049: "NFS"}
 WORLD = {"0.0.0.0/0", "::/0"}
+# EFA-capable training families (tightly coupled; EFA traffic cannot cross AZs) and accelerated inference families.
+TRAINING = re.compile(r"^(p4d|p5|p6|trn)")
+INFERENCE = re.compile(r"^(g\d|inf)")
 
 
 def review(graph, coverage=()):
@@ -61,10 +65,26 @@ def review(graph, coverage=()):
             add("REL-TG-UNHEALTHY", "medium", "reliability", group["id"], f"비정상 대상 {len(unhealthy)}개",
                 "DescribeTargetHealth.TargetHealth.State = unhealthy/unavailable (조회 시점)",
                 "헬스 체크 경로·보안 그룹·애플리케이션 상태를 확인하세요.")
+    def instance_types(group):
+        return {nodes.get(e["target"], {}).get("attributes", {}).get("InstanceType", "") for e in out(group["id"], "asg_member")}
+
     for group in collected("auto_scaling_group"):
         subnets = [s for s in (group["attributes"].get("VPCZoneIdentifier") or "").split(",") if s]
         zones = {zone_of.get(s) for s in subnets} - {None}
-        if subnets and len(zones) == 1:
+        types = instance_types(group)
+        training, inference = any(TRAINING.match(t) for t in types), any(INFERENCE.match(t) for t in types)
+        evidence = f"DescribeAutoScalingGroups.VPCZoneIdentifier → AZ {', '.join(sorted(zones))} · InstanceType {', '.join(sorted(types))}"
+        if training and len(zones) > 1:
+            add("REL-GPU-TRAIN-AZ", "medium", "reliability", group["id"], "EFA 학습 노드 그룹이 여러 AZ에 걸쳐 있음", evidence,
+                "EFA 트래픽은 AZ를 넘지 못합니다. 강결합 학습 노드는 한 AZ(클러스터 배치 그룹 또는 Capacity Block)에 두고, "
+                "체크포인트(FSx for Lustre·S3)로 다른 AZ에서 다시 시작하세요.")
+        elif training and len(zones) == 1:
+            add("REL-ASG-AZ", "low", "reliability", group["id"], "학습 노드 그룹이 한 AZ에만 있음 (강결합 학습은 의도적 단일 AZ)", evidence,
+                "EFA 학습은 단일 AZ가 맞습니다. 체크포인트 저장소와 다른 AZ에서 다시 시작하는 경로(IaC·용량)를 확인하세요.")
+        elif inference and len(zones) == 1:
+            add("REL-GPU-INFER-AZ", "medium", "reliability", group["id"], "GPU 추론 노드 그룹이 한 AZ에만 있음", evidence,
+                "추론 노드를 두 개 이상의 AZ에 분산하고 로드 밸런서 뒤에서 자동 확장하세요 (GENREL02-BP01).")
+        elif subnets and len(zones) == 1:
             add("REL-ASG-AZ", "medium", "reliability", group["id"], "Auto Scaling 그룹이 한 AZ의 서브넷만 사용",
                 f"DescribeAutoScalingGroups.VPCZoneIdentifier → AZ {sorted(zones)[0]}",
                 "여러 AZ의 서브넷을 지정해 AZ 장애 시 다른 AZ에서 인스턴스를 띄울 수 있게 하세요.")
@@ -209,6 +229,23 @@ def review(graph, coverage=()):
                 add("SEC-SG-OPEN", "high", "security", group["id"], f"인터넷(0.0.0.0/0)에 {name}{f' {port}' if port else ''} 허용",
                     f"DescribeSecurityGroups.IpPermissions: {protocol} {low}-{high} ← {', '.join(sorted(sources & WORLD))}",
                     "관리 접근은 Session Manager, 데이터 저장소는 애플리케이션 보안 그룹만 허용하도록 좁히세요.")
+    groups = {g["resource_id"]: g for g in collected("security_group")}
+    in_group = {e["target"]: e["source"] for e in edges if e["relation"] == "asg_member"}
+    reported = set()
+    for instance in collected("ec2"):
+        a = instance["attributes"]
+        sgs = [g.get("GroupId") for g in a.get("SecurityGroups", [])]
+        # Judged only when every attached group was collected; one finding per Auto Scaling group.
+        if not TRAINING.match(str(a.get("InstanceType", ""))) or not sgs or any(sg not in groups for sg in sgs):
+            continue
+        self_all = any(str(rule.get("IpProtocol")) == "-1" and any(pair.get("GroupId") == sg for pair in rule.get("UserIdGroupPairs", []))
+                       for sg in sgs for rule in groups[sg]["attributes"].get("IpPermissions", []))
+        key = in_group.get(instance["id"], instance["id"])
+        if not self_all and key not in reported:
+            reported.add(key)
+            add("SEC-EFA-SG", "medium", "security", key, "EFA 학습 노드의 보안 그룹에 자기 참조 전체 허용 규칙 없음",
+                f"DescribeSecurityGroups.IpPermissions ({', '.join(sgs)}): IpProtocol -1 ← 같은 그룹 없음",
+                "EFA 인스턴스는 같은 보안 그룹을 쓰고 그 그룹 자신에서 오는 모든 트래픽을 허용해야 합니다. 없으면 EFA 통신이 조용히 실패합니다.")
     for cluster in collected("eks_cluster"):
         config = cluster["attributes"].get("resourcesVpcConfig") or {}
         if config.get("endpointPublicAccess") and "0.0.0.0/0" in config.get("publicAccessCidrs", ["0.0.0.0/0"]):
