@@ -16,6 +16,8 @@ Last Updated: 2026-10-18
 - Live SSO through the new profile menu (owner approved device code): roles listed, CloudOpsReadOnly preselected, profile shows
   `CloudOpsReadOnly @ account (SSO)`, collection dialog shows the identity, us-east-1 collected (47 resources). verify_demo 32 checks
   now walk the same SSO UI against a stand-in Identity Center.
+- Live SSO sign-out round trip: profile returns to 로그인 at once, POST .../logout 200, the server session is gone (404);
+  verify_demo also asserts the logout request reaches the server.
 
 ## 2026-10-18 — Multi-account view, live check of the AI calls (goal: 잔여 작업 완료시까지)
 

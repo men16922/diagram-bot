@@ -387,7 +387,7 @@ def main():
         # 12. SSO sign-in through the profile menu against a stand-in Identity Center API (the live device-code flow was
         # verified on 2026-10-17): device code, approval, roles, `role @ account (SSO)`, then the collection request
         # carries the SSO session and role. The collection itself is intercepted, never sent to AWS.
-        polls, collected = [], []
+        polls, collected, signed_out = [], [], []
         def fake_sso(route):
             url, method = route.request.url, route.request.method
             if url.endswith('/api/sso/defaults'):
@@ -398,7 +398,8 @@ def main():
             if '/roles' in url:
                 return route.fulfill(json={'roles': ['AdministratorAccess', 'CloudOpsReadOnly']})
             if url.endswith('/logout'):
-                return route.fulfill(json={'signed_out': True})
+                signed_out.append(url)
+                return route.fulfill(json={'logged_out': True})
             polls.append(url)
             return route.fulfill(json={'status': 'pending', 'interval': 1} if len(polls) == 1 else
                                  {'status': 'authorized', 'interval': 1, 'accounts': [{'id': '444455556666', 'name': 'prod'}]})
@@ -428,6 +429,8 @@ def main():
         page.locator('#profile-button').click()
         page.locator('#profile-signout').click()
         expect(page.locator('#profile-label')).to_have_text('로그인')
+        expect(page.locator('#toast')).to_contain_text('로그아웃했습니다')
+        assert signed_out == [signed_out[0]] and signed_out[0].endswith('/api/sso/login/check/logout'), signed_out  # token discarded on the server
         page.unroute('**/api/sso/**')
         page.unroute('**/api/collections')
         assert not errors, errors

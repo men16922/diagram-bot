@@ -325,8 +325,11 @@ bind('use-profile',async()=>{
     toast(`로그인했습니다 · ${identityText().title}`);
   }catch(error){$('signin-status').textContent=error.message;}
 });
-bind('profile-signout',async()=>{closeProfile();if(state.sso)await api(`/api/sso/login/${state.sso.id}/logout`,{method:'POST'}).catch(()=>{});
-  state.sso=null;state.identity=null;$('aws-account').value='';ssoView('form');renderProfile();toast('AWS 자격 증명에서 로그아웃했습니다.');});
+bind('profile-signout',async()=>{
+  // Sign out locally at once; the server then discards the SSO token and invalidates it with sso:Logout.
+  closeProfile();const flow=state.sso;state.sso=null;state.identity=null;$('aws-account').value='';ssoView('form');renderProfile();
+  if(flow)await api(`/api/sso/login/${flow.id}/logout`,{method:'POST'}).catch(error=>toast(`SSO 토큰 폐기에 실패했습니다: ${error.message}`,true));
+  toast('AWS 자격 증명에서 로그아웃했습니다.');});
 bind('collection-button',()=>{closeProfile();
   const text=identityText(),box=$('collection-identity');box.replaceChildren(el('b',state.identity?text.title:'기본 SDK 인증 체인 (로그인하지 않음)'),el('span',state.identity?text.detail:'이 기기의 환경 변수·기본 프로파일을 씁니다.'));
   const change=el('button','로그인 변경','text-button');change.type='button';change.onclick=()=>{$('collection-dialog').close();$('signin-button').click();};box.append(el('br'),change);
