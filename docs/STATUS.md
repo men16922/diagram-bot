@@ -65,7 +65,8 @@ Last Updated: 2026-10-17
 - Found and fixed: terminated EC2 instances (still listed ~1 h after the test stack's deletion) were drawn as
   unplaced resources and inventoried; they are now skipped like deleted VPN connections.
 - SSO: in-app device-code sign-in (`sso.py`, `/api/sso/*`, collection dialog) implemented; start URL auto-discovered
-  from Identity Center; device code shown in the live app. Approval + SSO collection paused by the owner.
+  from Identity Center; device code shown in the live app; an unapproved code expired after 10 min and was reported
+  and audited (`sso login expired`). Approval + SSO collection still need the owner's sign-in.
 - GPT-6: other regions briefly answered "Your account is currently being verified"; once that cleared (Nova works in
   us-east-2/us-west-2), GPT-6 Luna was still "not available for this account" in every region. Not a timing issue:
   the account needs AWS (Sales/Support) to enable OpenAI models.
