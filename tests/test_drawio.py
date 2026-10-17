@@ -79,11 +79,12 @@ def segments(edge):
 
 
 def assert_no_shared_segments(layout):
-    """Two routes may share a segment only when they share a source (a bus) or a target."""
+    """Two routes may share a segment only when they meet at a common shape (a target group's bus, whether the
+    route is a registration leaving it or a group frame edge arriving at it)."""
     routed = [e for e in layout["edges"] if e["points"]]
     for i, a in enumerate(routed):
         for b in routed[i + 1:]:
-            if a["source"] == b["source"] or a["target"] == b["target"]:
+            if {a["source"], a["target"]} & {b["source"], b["target"]}:
                 continue
             for axis, c, lo, hi in segments(a):
                 for axis2, c2, lo2, hi2 in segments(b):

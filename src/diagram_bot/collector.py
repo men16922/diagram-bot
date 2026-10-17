@@ -78,6 +78,9 @@ def query(client, operation, key, params=None):
         coverage["status"] = "partial" if coverage["pages"] else "unavailable"
         coverage["error_code"] = (exc.response["Error"]["Code"]
                                   if isinstance(exc, ClientError) else type(exc).__name__)
+    except Exception as exc:  # noqa: BLE001 - one unexpected SDK/endpoint failure must not discard the other services
+        coverage["status"] = "partial" if coverage["pages"] else "unavailable"
+        coverage["error_code"] = type(exc).__name__
     coverage.update(finished_at=now(), items=len(rows))
     return rows, coverage
 
