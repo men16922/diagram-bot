@@ -9,7 +9,7 @@ subnet or an icon. Identical input and options always yield identical coordinate
 import hashlib
 import re
 
-from .views import AUXILIARY, GROUP_TARGETS, GROUPS, HUB_ORDER, REGIONAL, containment, overview_links
+from .views import AUXILIARY, GROUP_TARGETS, GROUPS, HUB_ORDER, REGIONAL, UNDRAWN_KINDS, containment, overview_links
 
 ENGINE, VERSION = "diagram-bot-layered", 2
 ICON, LINE, MAX_LINES = 52, 15, 4
@@ -485,9 +485,11 @@ def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
     # Lambda functions without VpcConfig run outside every VPC; their placement is known, not missing.
     regional = [n for n in nodes.values() if n["kind"] in ("lambda_function", "sagemaker_endpoint") and n["id"] not in vpc_of]
     # Only collected resources whose VPC is unknown; references (SG/ENI/EBS IDs seen in other responses) are not placed resources.
-    outside = [n for n in nodes.values() if n["kind"] not in ("vpc", "lambda_function", "sagemaker_endpoint", "placement_group", "security_group",
-                                                               "transit_gateway", "customer_gateway", "vpn_gateway", "vpc_peering")
-               and n["id"] not in vpc_of and not n["reference_only"]]
+    # Logical groups (DB cluster, replication group, file system…) are drawn through their members, and on-premises
+    # IP targets are outside every VPC by design: neither is an unplaced resource.
+    outside = [n for n in nodes.values() if n["kind"] not in ("vpc", "lambda_function", "sagemaker_endpoint", "security_group",
+                                                               "transit_gateway", "customer_gateway", "vpn_gateway", "vpc_peering", *UNDRAWN_KINDS)
+               and n["id"] not in vpc_of and not n["reference_only"] and not outside_vpc(n)]
     if regional:
         kinds = " · ".join(f"{label} {count}개" for label, kind in (("Lambda", "lambda_function"), ("SageMaker 엔드포인트", "sagemaker_endpoint"))
                            if (count := sum(n["kind"] == kind for n in regional)))

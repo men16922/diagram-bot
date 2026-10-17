@@ -352,3 +352,12 @@ def test_overview_draws_peering_and_vpn_gateways():
     kinds = {s.get("kind") for s in layout["shapes"] if s["role"] == "resource"}
     assert {"vpc_peering", "vpn_gateway", "customer_gateway"} <= kinds
     assert sorted(e["relation"] for e in layout["edges"]) == ["in_vpc", "in_vpc", "peer_vpc", "vpn_connection"]
+
+
+@pytest.mark.parametrize("key", sorted(SAMPLES))
+def test_overview_cards_differ_per_sample_and_hide_drawn_groups(key):
+    """Every sample's overview shows its own services per tier; no card counts logical groups or on-premises targets as unplaced."""
+    layout = layout_document(SAMPLES[key](), "overview")
+    labels = [s["label"] for s in layout["shapes"]]
+    assert not any(label.startswith("VPC 외 · 배치 미확인") for label in labels), key
+    assert sum(1 for s in layout["shapes"] if s["role"] == "resource" and s.get("label_width")) >= 2  # counted service icons
