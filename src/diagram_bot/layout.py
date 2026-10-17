@@ -7,6 +7,7 @@ groups run through the channel and the gutters between AZ columns, so they never
 subnet or an icon. Identical input and options always yield identical coordinates.
 """
 import hashlib
+import re
 
 from .views import AUXILIARY, GROUP_TARGETS, GROUPS, REGIONAL, containment
 
@@ -118,9 +119,27 @@ def tier_rank(subnet):
     return 3 if subnet.get("route_class") == "isolated" else 2
 
 
+# Accelerated EC2 families with their own AWS Architecture Icons (GPU P/G, Trainium, Inferentia, Gaudi DL).
+ACCELERATED = re.compile(r"^(p|g|trn|inf|dl)\d")
+ACCELERATED_ICON = {"p": "gpu_p", "g": "gpu_g", "trn": "trainium", "inf": "inferentia", "dl": "dl1"}
+ML_ENDPOINTS = re.compile(r"\.(bedrock|sagemaker)[.-]?")
+
+
+def accelerated_family(node):
+    """'p', 'g', 'trn', 'inf' or 'dl' for an accelerated instance, else None."""
+    match = ACCELERATED.match(str(node["attributes"].get("InstanceType", "")))
+    return match.group(1) if match else None
+
+
 def icon_variant(node):
-    """Icon choice within a kind: load balancer type, database and cache engine, file system class."""
+    """Icon choice within a kind: load balancer type, database and cache engine, file system class,
+    accelerated instance family and AI service endpoints."""
     attrs = node["attributes"]
+    if node["kind"] == "ec2" and accelerated_family(node):
+        return ACCELERATED_ICON[accelerated_family(node)]
+    if node["kind"] == "vpc_endpoint":
+        match = ML_ENDPOINTS.search(str(attrs.get("ServiceName", "")) + ".")
+        return match.group(1) if match else None
     if node["kind"] == "load_balancer":
         return attrs.get("Type")
     if node["kind"] in ("db_instance", "db_standby"):

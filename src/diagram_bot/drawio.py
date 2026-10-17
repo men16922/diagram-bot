@@ -46,6 +46,11 @@ RESOURCE_ICONS = {
     "efs_standard": ("elastic_file_system_standard", "#7AA116"),
     "efs_one_zone": ("elastic_file_system_one_zone", "#7AA116"),
     "redshift_cluster": ("redshift_ra3", "#8C4FFF"),
+    "gpu_p": ("p4_instance", "#ED7100"),
+    "gpu_g": ("g4dn", "#ED7100"),
+    "trainium": ("trainium_instance", "#ED7100"),
+    "inferentia": ("inferentia", "#ED7100"),
+    "dl1": ("ec2_dl1_instance", "#ED7100"),
 }
 # Square resource-icon tiles for things without a resource-level icon.
 ICONS = {
@@ -57,6 +62,8 @@ ICONS = {
     "msk_broker": ("managed_streaming_for_kafka", "#8C4FFF"),
     "documentdb": ("documentdb_with_mongodb_compatibility", "#C925D1"),
     "neptune": ("neptune", "#C925D1"),
+    "bedrock": ("bedrock", "#01A88D"),
+    "sagemaker": ("sagemaker", "#01A88D"),
 }
 COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
 # Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.

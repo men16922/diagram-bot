@@ -4,10 +4,10 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from diagram_bot.demo import ALB, demo_snapshot
-from diagram_bot.drawio import cell_id, generate_document, layout_document, validate_document
+from diagram_bot.drawio import cell_id, generate_document, layout_document, resource_style, validate_document
 from diagram_bot.editor import install_editor
 from diagram_bot.graph import build_graph
-from diagram_bot.layout import fit_label
+from diagram_bot.layout import fit_label, icon_variant
 from diagram_bot.samples import SAMPLES
 from fixtures import full_design, scale_snapshot
 
@@ -284,3 +284,19 @@ def test_truncated_label_ends_at_a_word():
     assert fit_label(name, 140, 3) == "주문 정산 야간 배치 처리 서버 (월말 대사 작업 전용…"
     assert fit_label("platform-orders-api-writer-primary-cluster", 140, 1).endswith("…")
     assert fit_label("short name", 140, 1) == "short name"
+
+
+@pytest.mark.parametrize("instance_type, shape", [
+    ("p5.48xlarge", "p4_instance"), ("g6e.2xlarge", "g4dn"), ("trn2.48xlarge", "trainium_instance"),
+    ("inf2.xlarge", "inferentia"), ("dl1.24xlarge", "ec2_dl1_instance"), ("m7g.large", "instance2"), ("i4i.large", "instance2")])
+def test_accelerated_instances_use_their_aws_icons(instance_type, shape):
+    node = {"kind": "ec2", "attributes": {"InstanceType": instance_type}}
+    assert f"shape=mxgraph.aws4.{shape};" in resource_style({"kind": "ec2", "variant": icon_variant(node)})
+
+
+@pytest.mark.parametrize("service, icon", [("bedrock-runtime", "bedrock"), ("bedrock-agent-runtime", "bedrock"),
+                                           ("sagemaker.runtime", "sagemaker"), ("ecr.api", None), ("s3", None)])
+def test_ai_service_endpoints_use_their_service_icons(service, icon):
+    node = {"kind": "vpc_endpoint", "attributes": {"ServiceName": f"com.amazonaws.us-east-1.{service}"}}
+    style = resource_style({"kind": "vpc_endpoint", "variant": icon_variant(node)})
+    assert (f"resIcon=mxgraph.aws4.{icon};" in style) if icon else "shape=mxgraph.aws4.endpoints;" in style
