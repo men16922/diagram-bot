@@ -10,8 +10,9 @@ Last Updated: 2026-10-17
 - Demo completeness is the current quality target; docs/PLAN.md contains deferred product work.
 - Graph relationships come from AWS IDs/ARNs and explicit API fields, not LLM inference.
 - Chat design agent (2026-10-17, user request): Strands Agents on Bedrock Converse; the model only picks tools,
-  `designer.py` decides CIDRs, AZ spread, routes, SGs and HA placement. Default GPT-6 Luna with ModelRouter fallback
-  to Nova 2 Lite (user asked for GPT-6, then Nova 2 as an alternative); the answering model is always shown. Tools run
+  `designer.py` decides CIDRs, AZ spread, routes, SGs and HA placement. Default Nova 2 Lite (owner's decision 2026-10-17
+  while GPT-6 Luna is not enabled for the account); GPT-6 Luna / Claude Sonnet 4.5 selectable with ModelRouter
+  fallback to Nova 2 Lite; the answering model is always shown. Tools run
   sequentially (steps depend on each other). No AWS write tools. Designs reuse the snapshot `raw` format, flagged
   `metadata.design`. GPT-6 Luna Marketplace agreement accepted on the owner's account with the user's approval.
 - Relation IDs hash source/relation/target plus port/AZ qualifiers only; health and array order

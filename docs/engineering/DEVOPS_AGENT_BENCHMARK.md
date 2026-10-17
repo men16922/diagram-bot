@@ -42,9 +42,8 @@
 - **프레임워크:** Strands Agents 1.61 (`strands-agents`), 도구는 `@tool` 함수입니다.
   설계 단계는 서로 의존하므로(서비스는 로드 밸런서가 있어야 함) `SequentialToolExecutor`로 요청 순서대로 실행합니다.
 - **모델:** Amazon Bedrock Converse API (`strands.models.bedrock.BedrockModel`). `ModelRouter` + `FallbackStrategy`로 대체 모델을 둡니다.
-  - 기본: **OpenAI GPT-6 Luna** (`global.openai.gpt-6-luna`)
-  - 대체: **Amazon Nova 2 Lite** (`us.amazon.nova-2-lite-v1:0`)
-  - 선택: Anthropic Claude Sonnet 4.5
+  - 기본: **Amazon Nova 2 Lite** (`us.amazon.nova-2-lite-v1:0`). GPT-6 Luna가 이 계정에서 아직 열리지 않아 사용자가 결정했습니다.
+  - 선택: **OpenAI GPT-6 Luna** (`global.openai.gpt-6-luna`), Anthropic Claude Sonnet 4.5. 고른 모델이 거부되면 Nova 2 Lite로 전환합니다.
   - 실제로 답한 모델은 응답마다 표시합니다(대체 모델을 썼는지 포함).
 - **도구 24개**
   - 수집(읽기 전용, boto3): `aws_identity`, `collect_aws_resources`, `find_collected_resources`, `review_collected_resources`

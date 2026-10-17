@@ -48,7 +48,7 @@ def main():
     setup = commands.add_parser("setup-editor", help="고정 버전 draw.io 편집기 설치 (최초 한 번)")
     setup.add_argument("--archive", help="오프라인 설치용 공식 draw.war 경로")
     talk = commands.add_parser("chat", parents=[env], help="채팅으로 표준 아키텍처 설계·AWS 읽기 전용 조회 (Strands + Bedrock)")
-    talk.add_argument("--model", help="gpt-6-luna(기본, 실패 시 nova-2-lite), nova-2-lite, claude-sonnet-4.5")
+    talk.add_argument("--model", help="nova-2-lite(기본), gpt-6-luna, claude-sonnet-4.5 (다른 모델이 실패하면 nova-2-lite로 전환)")
     talk.add_argument("--output", default="reports/chat", help="설계·수집 결과 보고서 디렉터리")
     talk.add_argument("-m", "--message", action="append", default=[], help="대화형 대신 보낼 메시지 (여러 번 지정 가능)")
     serve = commands.add_parser("serve", parents=[env], help="draw.io 기반 로컬 시연 앱 실행")

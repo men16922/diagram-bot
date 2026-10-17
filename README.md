@@ -106,7 +106,7 @@ diagram-bot chat --env-file .env -m "서울 리전에 3 AZ 3계층 웹 서비스
 ```
 
 - `.env`에는 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`을 넣고, 선택으로 `AWS_ACCOUNT_ID`(수집 계정 확인)를 넣습니다. `.env`는 Git 추적에서 제외되어 있습니다. 키가 있으면 셸의 `AWS_PROFILE`보다 우선합니다.
-- 모델은 Bedrock Converse로 호출합니다. 기본은 OpenAI GPT-6 Luna이고, 사용할 수 없으면 Amazon Nova 2 Lite로 자동 전환합니다. Claude Sonnet 4.5도 고를 수 있으며, 응답마다 실제로 답한 모델이 표시됩니다. 계정에서 Bedrock 모델 액세스가 필요합니다.
+- 모델은 Bedrock Converse로 호출합니다. 기본은 Amazon Nova 2 Lite입니다. OpenAI GPT-6 Luna와 Claude Sonnet 4.5도 고를 수 있고, 고른 모델을 쓸 수 없으면 Nova 2 Lite로 자동 전환합니다. 응답마다 실제로 답한 모델이 표시됩니다. 계정에서 Bedrock 모델 액세스가 필요합니다.
 - 도구: 표준 아키텍처 7종 불러오기, VPC(AZ·계층·NAT 전략), ALB/NLB, EC2 Auto Scaling, ECS Fargate, EKS, RDS/Aurora, Redis, MSK, OpenSearch, EFS, Lambda, VPC 엔드포인트, 피어링, VPN, 검토. 수집 도구는 읽기 전용입니다(STS 확인, 리전 수집, 리소스 찾기, 검토).
 - 설계안은 스냅샷으로 저장되어 구성도, 검토, `.drawio`/PNG 다운로드, 변경 비교에 그대로 쓰입니다. 화면에는 `설계안`으로 표시되며 실제 계정 데이터가 아닙니다.
 - 벤치마킹(AWS DevOps Agent)과 설계 근거는 [docs/engineering/DEVOPS_AGENT_BENCHMARK.md](docs/engineering/DEVOPS_AGENT_BENCHMARK.md), draw.io 연동과 자동 배치는 [docs/DRAWIO.md](docs/DRAWIO.md)에 있습니다.

@@ -27,9 +27,8 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 - [ ] [manual] Human visual review of docs/images/*.png and examples/demo/edited-topology.png.
   Done: groups/edges judged readable by the presenter, or concrete layout issues listed here.
 
-- [ ] [manual] GPT-6 Luna access: agreement accepted 2026-10-17 but invocations are still denied for this account
-  in every region, also after the account's new-account verification cleared — ask AWS Sales/Support to enable it.
-  Done: `diagram-bot chat -m "hi"` answers with "OpenAI GPT-6 Luna" (no fallback label), or AWS confirms ineligibility.
+- [x] Default chat model: Amazon Nova 2 Lite (owner's decision 2026-10-17). GPT-6 Luna stays selectable; it answers
+  once AWS enables OpenAI models for the account (support-case draft prepared, owner sends it if wanted).
 
 ## Candidate Follow-ups (not approved)
 

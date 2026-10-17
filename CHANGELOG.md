@@ -7,7 +7,7 @@
 ### Added
 - **채팅으로 아키텍처 설계:** Strands Agents + Amazon Bedrock(Converse) 에이전트. 웹 앱 `채팅으로 설계` 패널, `diagram-bot chat`, `POST /api/agent/chat`.
   도구 24개(표준 아키텍처 7종, VPC·LB·EC2·ECS·EKS·RDS·Aurora·Redis·MSK·OpenSearch·EFS·Lambda·엔드포인트·피어링·VPN, 검토)와
-  boto3 읽기 전용 수집 도구(STS, 리전 수집, 리소스 찾기, 검토). 기본 GPT-6 Luna, 실패 시 Nova 2 Lite로 자동 전환하고 실제 답한 모델을 표시.
+  boto3 읽기 전용 수집 도구(STS, 리전 수집, 리소스 찾기, 검토). 기본 Amazon Nova 2 Lite(GPT-6 Luna·Claude Sonnet 4.5 선택 가능, 실패 시 Nova로 자동 전환)이며 실제 답한 모델을 표시.
 - 설계안 스냅샷(`metadata.design`): `설계안`/`DESIGN` 표시, 검토·draw.io/PNG·변경 비교 지원.
 - **앱에서 IAM Identity Center(SSO) 로그인:** 수집 화면의 `SSO로 로그인`(device code 방식). 승인 링크·코드만 화면에 보이고
   토큰·자격 증명은 서버 메모리에만 둡니다. 계정·역할 선택 후 그 역할로 수집하고, 채팅 에이전트도 같은 역할로 조회합니다(admin 전용, 감사 로그).

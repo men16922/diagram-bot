@@ -17,11 +17,13 @@ from .findings import review, summary
 from .graph import build_graph
 
 MODELS = {
-    "gpt-6-luna": ("OpenAI GPT-6 Luna", "global.openai.gpt-6-luna"),
     "nova-2-lite": ("Amazon Nova 2 Lite", "us.amazon.nova-2-lite-v1:0"),
+    "gpt-6-luna": ("OpenAI GPT-6 Luna", "global.openai.gpt-6-luna"),
     "claude-sonnet-4.5": ("Anthropic Claude Sonnet 4.5", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
 }
-DEFAULT_MODEL = "gpt-6-luna"
+# Nova 2 Lite by the owner's choice (2026-10-17): GPT-6 Luna is not yet enabled for the account. Another chosen model
+# falls back to Nova 2 Lite when Bedrock refuses it.
+DEFAULT_MODEL = "nova-2-lite"
 FALLBACK_MODEL = "nova-2-lite"
 
 SYSTEM_PROMPT = """당신은 AWS 표준 인프라 아키텍처 설계 도우미입니다. 사용자는 한국어로 요청합니다.

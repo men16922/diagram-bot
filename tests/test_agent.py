@@ -214,7 +214,7 @@ def test_chat_api_saves_designs_as_snapshots(tmp_path):
     with TestClient(create_app(tmp_path / "data", tmp_path / "no-editor", chat_factory=FakeChat)) as client:
         client.headers["X-Diagram-Bot"] = client.get("/api/bootstrap").json()["token"]
         info = client.get("/api/agent").json()
-        assert info["ready"] and info["default"] == "gpt-6-luna" and {m["key"] for m in info["models"]} == set(MODELS)
+        assert info["ready"] and info["default"] == "nova-2-lite" and {m["key"] for m in info["models"]} == set(MODELS)
         assert client.post("/api/agent/chat", json={"message": "hi"}, headers={"X-Diagram-Bot": "wrong"}).status_code == 403
         assert client.post("/api/agent/chat", json={"message": "hi", "model": "gpt-9"}).status_code == 422
         result = client.post("/api/agent/chat", json={"message": "VPC 그려줘", "model": "nova-2-lite"}).json()
