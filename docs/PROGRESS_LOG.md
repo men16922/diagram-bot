@@ -11,6 +11,8 @@ Last Updated: 2026-10-17
 - Bedrock: Nova 2 Lite / Claude tool use verified; GPT-6 Luna agreement accepted (user approved) but still denied.
 - Live workload check on a temporary CloudFormation stack (created/deleted with approval): 16/16 checks; chat tool
   gained a VPC scope after the model missed an ALB when searching by VPC name.
+- Cross-account role path verified live with the repo template (temporary, deleted); terminated instances no longer
+  drawn or inventoried.
 - docs/DRAWIO.md (libraries, layout algorithm, routing, editor bridge, exports). Verified: `make check` 106 tests,
   live chat in Chromium (design, advice, collection) and CLI chat.
 

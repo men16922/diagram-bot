@@ -67,11 +67,14 @@ def build_graph(snapshot):
              ("load_balancers", "load_balancer", "LoadBalancerArn", "DescribeLoadBalancers"),
              ("target_groups", "target_group", "TargetGroupArn", "DescribeTargetGroups")]
     raw = snapshot["raw"]
+    # DescribeInstances keeps terminated instances for about an hour; they have no subnet and no longer exist.
+    current = lambda collection: [item for item in raw.get(collection, [])
+                                  if not (collection == "instances" and (item.get("State") or {}).get("Name") == "terminated")]
     for collection, kind, field, api in specs:
-        for item in raw.get(collection, []):
+        for item in current(collection):
             node(kind, item[field], item, api)
     for collection, kind, field, api in specs:
-        for item in raw.get(collection, []):
+        for item in current(collection):
             key = prefix + kind + "/" + item[field]
             if kind != "vpc":
                 link(key, "vpc", item.get("VpcId"), "in_vpc", api + ".VpcId")

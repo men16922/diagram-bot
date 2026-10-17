@@ -187,3 +187,17 @@ def test_lambda_outside_vpc_is_inventoried_but_not_drawn(tmp_path):
     write_report(snapshot, tmp_path)
     with (tmp_path / "inventory.csv").open(encoding="utf-8-sig", newline="") as f:
         assert {"cron-job", "edge-handler"} <= {r["resource_id"] for r in csv.DictReader(f)}
+
+
+def test_terminated_instances_are_not_drawn_or_inventoried():
+    # Live check (2026-10-17): instances of a deleted stack stayed in DescribeInstances as "terminated" without a subnet
+    # and showed up as unplaced resources.
+    snapshot = demo_snapshot()
+    gone = copy.deepcopy(snapshot["raw"]["instances"][0])
+    gone.update(InstanceId="i-gone0000000000001", State={"Code": 48, "Name": "terminated"})
+    gone.pop("SubnetId", None)
+    gone.pop("VpcId", None)
+    snapshot["raw"]["instances"].append(gone)
+    graph = build_graph(snapshot)
+    assert not any(n["resource_id"] == "i-gone0000000000001" for n in graph["nodes"])
+    assert any(n["resource_id"] == snapshot["raw"]["instances"][0]["InstanceId"] for n in graph["nodes"])
