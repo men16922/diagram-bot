@@ -23,8 +23,23 @@ def main():
     render.add_argument("--output", required=True)
     demo = commands.add_parser("demo", help="인증 없이 샘플 보고서 생성")
     demo.add_argument("--output", default="reports/demo")
+    setup = commands.add_parser("setup-editor", help="고정 버전 draw.io 편집기 설치 (최초 한 번)")
+    setup.add_argument("--archive", help="오프라인 설치용 공식 draw.war 경로")
+    serve = commands.add_parser("serve", help="draw.io 기반 로컬 시연 앱 실행")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--data-dir", help="스냅샷과 편집본 저장 디렉터리")
     args = parser.parse_args()
     try:
+        if args.command == "setup-editor":
+            from .editor import install_editor
+            print(f"draw.io 설치 완료: {install_editor(args.archive)}")
+            return 0
+        if args.command == "serve":
+            import uvicorn
+            from .server import create_app
+            print(f"Diagram Bot: http://127.0.0.1:{args.port}", flush=True)
+            uvicorn.run(create_app(args.data_dir), host="127.0.0.1", port=args.port)
+            return 0
         if args.command == "collect":
             if len(args.expected_account) != 12 or not args.expected_account.isdigit():
                 parser.error("--expected-account는 12자리 AWS 계정 ID여야 합니다.")

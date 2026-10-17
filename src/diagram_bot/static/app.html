@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Diagram Bot · AWS Workspace</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Diagram Bot 홈"><span class="brand-mark">D<span>↗</span></span><div>Diagram Bot<small>AWS WORKSPACE</small></div></a>
+    <div class="side-caption">WORKSPACE <span class="cloud-pill">AWS</span></div>
+    <label class="side-label" for="snapshot-select">수집 이력</label>
+    <select id="snapshot-select" aria-label="수집 이력"></select>
+    <div id="account-summary" class="account-summary"></div>
+    <div class="side-caption">ENVIRONMENTS <span id="environment-count"></span></div>
+    <button class="environment all active" id="all-environments"><span>▦</span><div>전체 환경<small>모든 VPC 구성 보기</small></div></button>
+    <div id="environments"></div>
+    <div class="sidebar-bottom">
+      <button class="side-action" id="import-button">↥ <span>스냅샷 JSON 가져오기</span></button>
+      <input type="file" id="import-file" accept="application/json,.json" hidden>
+      <button class="side-action" id="collection-button">⊕ <span>AWS에서 새로 수집</span></button>
+      <div class="local-status"><span></span> 로컬 워크스페이스 <small>데이터는 이 기기에 저장됩니다.</small></div>
+    </div>
+  </aside>
+  <main>
+    <header class="topbar"><div class="breadcrumb">AWS <span>/</span> <b id="region-label">—</b> <span>/</span> Infrastructure</div><div class="topbar-right"><span class="read-only">READ-ONLY COLLECTION</span><span class="avatar">DB</span></div></header>
+    <section class="page-heading">
+      <div><div class="kicker">INFRASTRUCTURE EXPLORER</div><h1 id="environment-title">AWS 구성도</h1><p id="scope-description">AWS 설정을 읽고, 구성 관계를 한눈에 살펴보세요.</p></div>
+      <div class="heading-actions"><span id="demo-badge" class="badge sample">샘플 데이터</span><button id="coverage-button" class="status-button">수집 상태</button></div>
+    </section>
+    <section class="metrics" id="metrics"></section>
+    <section class="workspace">
+      <div class="workspace-toolbar">
+        <div class="tabs"><button id="diagram-tab" class="tab active">구성도</button><button id="inventory-tab" class="tab">리소스 목록 <span id="total-count"></span></button></div>
+        <div class="workspace-actions"><span id="save-state" role="status">불러오는 중</span><button id="save-button" class="button" disabled>편집본 저장</button><button id="export-button" class="button primary" disabled>↓ 다운로드</button></div>
+      </div>
+      <div class="filterbar"><div class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="이름, ID, IP, 태그 검색" aria-label="리소스 검색"></div><select id="kind-filter" aria-label="리소스 종류"><option value="all">모든 리소스</option></select><label class="check"><input type="checkbox" id="references">참조 리소스 표시</label><div class="filter-spacer"></div><button id="note-button" class="text-button" disabled>＋ 메모</button><button id="reset-button" class="text-button" disabled>자동 배치로 복원</button></div>
+      <div id="search-results" class="search-results" hidden></div>
+      <div class="workspace-content">
+        <div class="canvas-area" id="canvas-area">
+          <div class="canvas-header"><span class="dot"></span><span>draw.io editor</span><span class="canvas-help">도형을 선택해 속성을 확인하고, 드래그해 배치를 조정하세요.</span></div>
+          <iframe id="editor" title="AWS 구성도 draw.io 편집기" referrerpolicy="no-referrer"></iframe>
+          <div id="editor-overlay" class="editor-overlay"><div class="loader"></div><h3>구성도를 준비하고 있습니다</h3><p id="editor-message">로컬 draw.io 편집기를 불러오는 중입니다.</p></div>
+        </div>
+        <div id="inventory" class="inventory" hidden><table><thead><tr><th>리소스</th><th>종류</th><th>ID / ARN</th><th>조회 근거</th></tr></thead><tbody id="inventory-rows"></tbody></table><p id="inventory-empty" hidden>조건에 맞는 리소스가 없습니다.</p></div>
+        <aside class="inspector" id="inspector"><div class="inspector-title">RESOURCE DETAILS</div><div id="detail-body" class="detail-body"><div class="empty-detail"><div>⌖</div><h3>구성을 살펴보세요</h3><p>리소스를 선택하면 속성과<br>API에서 확인한 관계가 표시됩니다.</p></div></div></aside>
+      </div>
+      <footer class="workspace-footer"><div><span class="legend-line"></span> 설정상 연결 <span class="legend-ref"></span> 참조만 확인</div><span>실제 통신 여부는 별도 관측이 필요합니다.</span></footer>
+    </section>
+    <div class="page-footer"><span id="collected-at"></span><span>Diagram Bot · draw.io powered</span></div>
+  </main>
+</div>
+<div id="toast" role="status" hidden></div>
+<dialog id="export-dialog"><form method="dialog"><div class="dialog-heading"><div><div class="kicker">EXPORT DIAGRAM</div><h2>구성도 다운로드</h2></div><button class="close-button" aria-label="닫기">×</button></div><p class="dialog-description">현재 환경의 최신 편집본을 다운로드합니다.<br>화면 밖 도형도 포함해 구성도 전체가 출력됩니다.</p><div class="export-choices"><button type="button" id="download-drawio" class="export-card"><span class="file-icon orange">▦</span><div><strong>draw.io 파일</strong><small>도형과 연결선을 다시 편집할 수 있어요.</small><code>.drawio</code></div><span>↓</span></button><button type="button" id="download-png" class="export-card"><span class="file-icon blue">▧</span><div><strong>PNG 이미지</strong><small>보고서와 발표 자료에 바로 사용할 수 있어요.</small><code>.png</code></div><span>↓</span></button></div><div class="export-options"><label>PNG 해상도 <select id="png-scale"><option value="1">1×</option><option value="2" selected>2× 권장</option><option value="3">3×</option></select></label><label class="check"><input type="checkbox" id="png-transparent">투명 배경</label></div><div class="data-exports"><span>수집 데이터</span><button type="button" id="download-json">JSON</button><button type="button" id="download-csv">CSV</button></div><p class="small-note">수동 편집은 구성도 표현에만 적용됩니다. JSON·CSV는 수집 당시의 전체 리소스를 담습니다.</p></form></dialog>
+<dialog id="coverage-dialog"><form method="dialog"><div class="dialog-heading"><div><div class="kicker">COLLECTION COVERAGE</div><h2>수집 상태와 범위</h2></div><button class="close-button" aria-label="닫기">×</button></div><p class="dialog-description">조회 불가는 리소스가 없다는 뜻이 아닙니다.</p><div id="coverage-rows"></div><ul id="limitations"></ul></form></dialog>
+<dialog id="collection-dialog"><form id="collection-form"><div class="dialog-heading"><div><div class="kicker">CONNECT AWS</div><h2>AWS 설정 수집</h2></div><button type="button" class="close-button" id="close-collection" aria-label="닫기">×</button></div><p class="dialog-description">기존 AWS SDK·SSO 인증을 사용해 읽기 전용으로 조회합니다.</p><label class="field">AWS 프로파일<select id="aws-profile"><option value="">기본 SDK 인증 체인</option></select></label><label class="field">예상 계정 ID<input id="aws-account" required pattern="[0-9]{12}" maxlength="12" placeholder="123456789012"></label><label class="field">리전<input id="aws-region" required value="ap-northeast-2"></label><p class="small-note">SSO가 만료됐다면 터미널에서 <code>aws sso login --profile 프로파일명</code>을 실행하세요.</p><button id="start-collection" type="submit" class="button primary wide">읽기 전용 수집 시작</button><p id="collection-progress" role="status"></p></form></dialog>
+</body></html>

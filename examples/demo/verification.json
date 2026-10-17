@@ -1,0 +1,23 @@
+{
+  "browser": "Chromium",
+  "page_errors": [],
+  "external_requests": [],
+  "png_2x_size": [
+    1938,
+    1400
+  ],
+  "checks": [
+    "native selection",
+    "coverage",
+    "inventory search/type",
+    "VPC switch",
+    "references",
+    "native note edit",
+    "save/reload",
+    "drawio XML download",
+    "PNG 2x white",
+    "PNG 1x transparent",
+    "JSON/CSV exports",
+    "snapshot import"
+  ]
+}

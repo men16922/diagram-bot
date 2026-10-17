@@ -5,6 +5,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from .graph import build_graph
+from .drawio import generate_document
 
 
 def csv_safe(value):
@@ -18,6 +19,7 @@ def write_report(snapshot, directory):
     output.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(snapshot, ensure_ascii=False, indent=2, default=str)
     (output / "snapshot.json").write_text(payload, encoding="utf-8")
+    (output / "topology.drawio").write_text(generate_document(snapshot), encoding="utf-8")
     # JSON is embedded in HTML; escape characters capable of closing a script tag.
     embedded = payload.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
     template = files("diagram_bot").joinpath("viewer.html").read_text(encoding="utf-8")

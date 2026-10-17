@@ -11,10 +11,11 @@ git clone https://github.com/men16922/diagram-bot.git
 cd diagram-bot
 python -m venv .venv
 source .venv/bin/activate
-pip install -e '.[test]' build
+pip install -e '.[test,browser]' build
 pytest -q
 python -m build
-diagram-bot demo --output reports/demo
+diagram-bot setup-editor
+diagram-bot serve --data-dir reports/workspace
 ```
 
 ## 변경 사항 올리기
@@ -32,7 +33,7 @@ gh pr create --base main
 ## CI와 추적 범위
 
 - `pyproject.toml`: 설치 가능한 Python 패키지와 `diagram-bot` CLI.
-- `.github/workflows/ci.yml`: Python 3.11/3.12/3.13에서 패키지 빌드, wheel 설치, pytest, 샘플 보고서 생성·재렌더링.
+- `.github/workflows/ci.yml`: Python 3.11/3.12/3.13 패키지 테스트와 Chromium 기반 실제 draw.io 편집·다운로드 검증. 브라우저 산출물은 Actions artifact로 보관.
 - `.github/pull_request_template.md`: 변경 내용과 검증 결과 기록.
 - `.gitignore`: 가상환경, 빌드 결과, `.env`, `.aws`, 키 파일, 수집 산출물 제외.
 - `examples/demo`: 실제 AWS 정보가 아닌 합성 샘플만 예외적으로 포함.

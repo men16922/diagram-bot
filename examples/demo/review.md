@@ -2,15 +2,15 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-16T21:55:45.697601+00:00 ~ 2026-10-16T21:55:45.697601+00:00
+- 수집 구간: 2026-10-17T02:02:14.921796+00:00 ~ 2026-10-17T02:02:14.921796+00:00
 - 수집 상태: partial
 - 샘플 데이터: True
 
 ## 조회 범위와 결과
 
-- ec2 / describe_vpcs: complete, 1개, 오류 없음; 범위 {}
-- ec2 / describe_subnets: complete, 2개, 오류 없음; 범위 {}
-- ec2 / describe_instances: partial, 2개, 오류 UnauthorizedOperation; 범위 {}
+- ec2 / describe_vpcs: complete, 2개, 오류 없음; 범위 {}
+- ec2 / describe_subnets: complete, 3개, 오류 없음; 범위 {}
+- ec2 / describe_instances: partial, 3개, 오류 UnauthorizedOperation; 범위 {}
 - elbv2 / describe_load_balancers: complete, 1개, 오류 없음; 범위 {}
 - elbv2 / describe_target_groups: complete, 1개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/demo-web/456"}

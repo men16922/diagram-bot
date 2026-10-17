@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-16T21:55:45.697601+00:00",
-    "finished_at": "2026-10-16T21:55:45.697601+00:00",
+    "started_at": "2026-10-17T02:02:14.921796+00:00",
+    "finished_at": "2026-10-17T02:02:14.921796+00:00",
     "status": "partial",
     "demo": true,
     "scope": [
@@ -27,21 +27,21 @@
       "service": "ec2",
       "operation": "describe_vpcs",
       "status": "complete",
-      "items": 1,
+      "items": 2,
       "pages": 1
     },
     {
       "service": "ec2",
       "operation": "describe_subnets",
       "status": "complete",
-      "items": 2,
+      "items": 3,
       "pages": 1
     },
     {
       "service": "ec2",
       "operation": "describe_instances",
       "status": "partial",
-      "items": 2,
+      "items": 3,
       "pages": 1,
       "error_code": "UnauthorizedOperation"
     },
@@ -81,6 +81,16 @@
             "Value": "Diagram Bot Demo Network"
           }
         ]
+      },
+      {
+        "VpcId": "vpc-staging",
+        "CidrBlock": "10.30.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Staging Network"
+          }
+        ]
       }
     ],
     "subnets": [
@@ -95,6 +105,12 @@
         "VpcId": "vpc-demo",
         "AvailabilityZone": "ap-northeast-2c",
         "CidrBlock": "10.20.3.0/24"
+      },
+      {
+        "SubnetId": "subnet-staging",
+        "VpcId": "vpc-staging",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.30.1.0/24"
       }
     ],
     "instances": [
@@ -145,6 +161,25 @@
           {
             "Key": "Name",
             "Value": "web-c"
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-staging",
+        "VpcId": "vpc-staging",
+        "SubnetId": "subnet-staging",
+        "InstanceType": "t3.micro",
+        "State": {
+          "Name": "running"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-api"
+          },
+          {
+            "Key": "Environment",
+            "Value": "staging"
           }
         ]
       }
@@ -284,6 +319,35 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/ec2/i-staging",
+        "resource_id": "i-staging",
+        "kind": "ec2",
+        "name": "staging-api",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-staging",
+          "VpcId": "vpc-staging",
+          "SubnetId": "subnet-staging",
+          "InstanceType": "t3.micro",
+          "State": {
+            "Name": "running"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-api"
+            },
+            {
+              "Key": "Environment",
+              "Value": "staging"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
         "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/demo-alb/123",
         "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/demo-alb/123",
         "kind": "load_balancer",
@@ -379,6 +443,22 @@
         "source": "DescribeSubnets"
       },
       {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-staging",
+        "resource_id": "subnet-staging",
+        "kind": "subnet",
+        "name": "subnet-staging",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-staging",
+          "VpcId": "vpc-staging",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.30.1.0/24"
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
         "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/demo-web/456",
         "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/demo-web/456",
         "kind": "target_group",
@@ -424,6 +504,26 @@
             {
               "Key": "Name",
               "Value": "Diagram Bot Demo Network"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-staging",
+        "resource_id": "vpc-staging",
+        "kind": "vpc",
+        "name": "Staging Network",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-staging",
+          "CidrBlock": "10.30.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "Staging Network"
             }
           ]
         },
@@ -489,6 +589,22 @@
         "inferred": false
       },
       {
+        "source": "111122223333/ap-northeast-2/ec2/i-staging",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-staging",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "details": {},
+        "inferred": false
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-staging",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "details": {},
+        "inferred": false
+      },
+      {
         "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/demo-alb/123",
         "target": "111122223333/ap-northeast-2/subnet/subnet-a",
         "relation": "in_subnet",
@@ -535,6 +651,14 @@
       {
         "source": "111122223333/ap-northeast-2/subnet/subnet-c",
         "target": "111122223333/ap-northeast-2/vpc/vpc-demo",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "details": {},
+        "inferred": false
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-staging",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging",
         "relation": "in_vpc",
         "evidence": "DescribeSubnets.VpcId",
         "details": {},
