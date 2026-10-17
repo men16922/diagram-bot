@@ -36,11 +36,11 @@ Last Updated: 2026-10-17
 
 ## Verification (2026-10-17, this container)
 
-- `make check`: 42 pytest cases + five-artifact CLI round trip passed.
+- `make check`: 48 pytest cases + five-artifact CLI round trip passed (GitHub Actions green on main 15665ad).
 - Layout tests: no sibling overlap (icons + label boxes), nothing outside its container, no
   routed segment through another icon/label, identical rerun — all sample views and both VPCs
   of a 100-resource fixture. 100-resource layout of all pages ≈0.02 s (limit 5 s).
-- Browser (`scripts/verify_demo.py`, Chromium, draw.io 32.4.1): 23 checks incl. overview →
+- Browser (`scripts/verify_demo.py`, Chromium, draw.io 32.4.1): 25 checks incl. overview →
   detail → focus, ALB relations/evidence, relation highlight, native keyboard move + note,
   save/reload, `.drawio` with moved geometry, PNG 1×/2×/3× and transparent, relayout keeps
   the note, restore, JSON/CSV, import. No page errors, no external requests.
@@ -61,5 +61,6 @@ Last Updated: 2026-10-17
   collect` stopped with exit 1 and wrote no report (expected failure path). Needs a valid
   read-only key or SSO profile for the intended account.
 - 100-resource views are structurally correct but dense; no large-environment claim.
-- No shared-user hosting, scheduled collection, snapshot diff, RDS/EKS or listener rules.
+- No shared-user hosting, scheduled collection, snapshot diff or listener rules. ECS, EFS and
+  OpenSearch are not collected. EKS/MSK/ElastiCache/Lambda calls are verified on stubs only.
 - Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.
