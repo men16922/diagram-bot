@@ -146,18 +146,36 @@ def test_service_placement_and_high_availability_roles():
     assert sorted((n["attributes"]["Shard"], n["attributes"]["CurrentRole"]) for n in by_kind("cache_node")) == [
         ("0001", "primary"), ("0001", "replica"), ("0002", "primary"), ("0002", "replica")]
     assert sorted(n["attributes"]["Role"] for n in by_kind("redshift_cluster")) == ["primary", "secondary"]
-    # EFS mount target per AZ; peering visible from both VPCs; VPN tunnels on the customer gateway.
+    # EFS mount target per AZ; one Transit Gateway joins both VPCs and terminates two VPNs (two customer gateways).
     assert len(by_kind("efs_mount_target")) == 3
-    peering = by_kind("vpc_peering")[0]["id"]
-    for vpc in ("vpc-0a1b2c3d4e5f60007", "vpc-0a1b2c3d4e5f60008"):
+    assert not by_kind("vpc_peering") and not by_kind("vpn_gateway")
+    assert {n["attributes"]["VpcId"] for n in by_kind("tgw_attachment")} == {"vpc-0a1b2c3d4e5f60007", "vpc-0a1b2c3d4e5f60008"}
+    vpns = [e for e in graph["edges"] if e["relation"] == "vpn_connection"]
+    assert sorted(nodes[e["target"]]["attributes"]["IpAddress"] for e in vpns) == ["198.51.100.20", "203.0.113.20"]
+    assert all(e["details"]["Tunnels"] == "2/2 UP" for e in vpns)
+    for e in vpns:
+        assert e["target"] in view_graph(graph, "detail", "vpc-0a1b2c3d4e5f60008")["nodes"]
+
+
+def test_peering_and_virtual_private_gateway_vpn():
+    """Peering and a VGW-terminated VPN (the chat designer's connect_vpcs/add_vpn) stay covered without a sample."""
+    from fixtures import full_design
+    snapshot = full_design().snapshot()
+    graph = build_graph(snapshot)
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    vpcs = {n["name"]: n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc"}
+    peering = next(n["id"] for n in graph["nodes"] if n["kind"] == "vpc_peering")
+    for vpc in vpcs.values():
         assert peering in view_graph(graph, "detail", vpc)["nodes"]
     vpn = next(e for e in graph["edges"] if e["relation"] == "vpn_connection")
-    assert vpn["details"]["Tunnels"] == "2/2 UP" and nodes[vpn["target"]]["attributes"]["IpAddress"] == "203.0.113.20"
-    assert vpn["target"] in view_graph(graph, "detail", "vpc-0a1b2c3d4e5f60008")["nodes"]
+    assert vpn["details"]["Tunnels"] == "2/2 UP" and nodes[vpn["target"]]["attributes"]["IpAddress"] == "198.51.100.7"
+    assert vpn["target"] in view_graph(graph, "detail", vpcs["analytics"])["nodes"]
     # A default route to the virtual private gateway classifies the subnet as private (VGW).
-    table = next(t for t in snapshot["raw"]["route_tables"] if t["RouteTableId"] == "rtb-an-main")
-    table["Routes"].append({"DestinationCidrBlock": "0.0.0.0/0", "GatewayId": "vgw-analytics0008", "State": "active"})
-    assert {n.get("route_class") for n in build_graph(snapshot)["nodes"] if n["kind"] == "subnet" and "an-data" in n["id"]} == {"vgw"}
+    table = next(t for t in snapshot["raw"]["route_tables"] if t["RouteTableId"] == "rtb-analytics-main")
+    vgw = snapshot["raw"]["vpn_gateways"][0]["VpnGatewayId"]
+    table["Routes"].append({"DestinationCidrBlock": "0.0.0.0/0", "GatewayId": vgw, "State": "active"})
+    classes = {n.get("route_class") for n in build_graph(snapshot)["nodes"] if n["kind"] == "subnet" and n["attributes"]["VpcId"] == vpcs["analytics"]}
+    assert classes == {"vgw"}
 
 
 def test_msk_brokers_follow_list_nodes():

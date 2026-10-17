@@ -399,7 +399,9 @@ def three_tier():
     s.security_group("sg-app", vpc, "prod-app", [(8080, "sg-internal-alb")])
     s.security_group("sg-prod-db", vpc, "prod-db", [(3306, "sg-app")])
     s.gateway_endpoint("vpce-prod-s3", vpc, "s3", [f"rtb-prod-private-{az}" for az in "abc"])
-    s.interface_endpoint("vpce-prod-ssm", vpc, "ssm", app)
+    # Session Manager needs ssm, ssmmessages and ec2messages to reach instances without a NAT path.
+    for service in ("ssm", "ssmmessages", "ec2messages"):
+        s.interface_endpoint(f"vpce-prod-{service}", vpc, service, app)
     return s.snapshot()
 
 
@@ -425,7 +427,9 @@ def microservices():
     s.auto_scaling_group("orders-asg", orders, private, [orders_tg])
     s.database("commerce-db", vpc, data, "a", "postgres", "db.r6g.xlarge", standby="b")
     s.gateway_endpoint("vpce-commerce-s3", vpc, "s3", [f"rtb-commerce-private-{az}" for az in "ab"])
-    s.interface_endpoint("vpce-commerce-ecr", vpc, "ecr.dkr", private)
+    # Fargate image pulls need both ECR endpoints (plus S3); awslogs needs the logs endpoint.
+    for service in ("ecr.api", "ecr.dkr", "logs"):
+        s.interface_endpoint(f"vpce-commerce-{service.replace('.', '-')}", vpc, service, private)
     for name, port, offset in (("cart-svc", 9000, 41), ("payments-svc", 9100, 88)):
         tasks = [(subnet, s.address(subnet, offset + i)) for i, subnet in enumerate(private)]
         group = s.target_group(f"{name}-ecs", vpc, "HTTP", port, [(ip, port, s.az_of(subnet)) for subnet, ip in tasks],
@@ -507,7 +511,9 @@ def hybrid():
     hub = s.transit_gateway("tgw-hybrid00000005", "hybrid-tgw")
     s.route("rtb-hybrid-main", "192.168.0.0/16", TransitGatewayId=hub)
     s.tgw_attachment("tgw-attach-hybrid", hub, vpc, app, "migration-attachment")
+    # Redundant on-premises side: two customer gateways (separate devices and ISPs), each with a two-tunnel VPN.
     s.vpn("vpn-hybrid-seoul", "cgw-seoul-dc", "203.0.113.10", "seoul-dc-cgw", tgw=hub)
+    s.vpn("vpn-hybrid-seoul-2", "cgw-seoul-dc-2", "198.51.100.10", "seoul-dc-cgw-2", tgw=hub)
     alb = s.load_balancer("erp-internal-alb", vpc, app, scheme="internal", sg="sg-erp-alb")
     erp = s.target_group("erp-cloud", vpc, "HTTPS", 443, cloud, [alb])
     s.auto_scaling_group("erp-cloud-asg", cloud, app, [erp])
@@ -547,6 +553,7 @@ def eks_platform():
     s.kafka("platform-events", data, 3)
     s.function("order-events-consumer", vpc, nodes)
     s.gateway_endpoint("vpce-platform-s3", vpc, "s3", [f"rtb-platform-private-{az}" for az in azs])
+    s.interface_endpoint("vpce-platform-ecr-api", vpc, "ecr.api", nodes)
     s.interface_endpoint("vpce-platform-ecr", vpc, "ecr.dkr", nodes)
     s.interface_endpoint("vpce-platform-sts", vpc, "sts", nodes)
     return s.snapshot()
@@ -580,15 +587,23 @@ def data_platform():
     s.gateway_endpoint("vpce-dp-s3", vpc, "s3", [f"rtb-dp-private-{az}" for az in azs])
     s.interface_endpoint("vpce-dp-ecr", vpc, "ecr.dkr", app)
     analytics = s.vpc("vpc-0a1b2c3d4e5f60008", "10.71.0.0/16", "analytics", Environment="production")
-    warehouse = [s.subnet(f"subnet-an-data-{az}", analytics, az, f"10.71.{10 + i}.0/24", f"warehouse-{az}", "data") for i, az in enumerate("ab")]
+    # Redshift Multi-AZ requires a subnet group with three or more subnets.
+    warehouse = [s.subnet(f"subnet-an-data-{az}", analytics, az, f"10.71.{10 + i}.0/24", f"warehouse-{az}", "data") for i, az in enumerate("abc")]
     s.route_table("rtb-an-main", analytics, "analytics-isolated", main=True)
-    s.peering("pcx-dp-analytics0007", vpc, analytics, "data-platform-to-analytics")
-    s.route("rtb-an-main", "10.70.0.0/16", VpcPeeringConnectionId="pcx-dp-analytics0007")
-    for az in azs:
-        s.route(f"rtb-dp-private-{az}", "10.71.0.0/16", VpcPeeringConnectionId="pcx-dp-analytics0007")
-    s.vpn("vpn-an-corp", "cgw-corp-dc", "203.0.113.20", "corp-dc-cgw", vgw="vgw-analytics0008", vpc=analytics, vgw_name="analytics-vgw")
-    s.route("rtb-an-main", "192.168.0.0/16", GatewayId="vgw-analytics0008")
-    s.redshift("warehouse", analytics, warehouse, "a", "b", "ra3.4xlarge", 2)
+    # One Transit Gateway joins both VPCs and terminates the VPN. Peering is not transitive: the data platform
+    # VPC could not reach on premises through a VPN attached to the analytics VPC.
+    hub = s.transit_gateway("tgw-dp0000000000007", "data-tgw")
+    s.tgw_attachment("tgw-attach-dp", hub, vpc, app, "data-platform-attachment")
+    s.tgw_attachment("tgw-attach-an", hub, analytics, warehouse, "analytics-attachment")
+    for cidr in ("10.71.0.0/16", "192.168.0.0/16"):
+        for az in azs:
+            s.route(f"rtb-dp-private-{az}", cidr, TransitGatewayId=hub)
+    for cidr in ("10.70.0.0/16", "192.168.0.0/16"):
+        s.route("rtb-an-main", cidr, TransitGatewayId=hub)
+    # Two customer gateways on separate ISPs, each with its own two-tunnel VPN over BGP (ECMP on the TGW).
+    s.vpn("vpn-dp-corp-1", "cgw-corp-dc-1", "203.0.113.20", "corp-dc-cgw-1", tgw=hub)
+    s.vpn("vpn-dp-corp-2", "cgw-corp-dc-2", "198.51.100.20", "corp-dc-cgw-2", tgw=hub)
+    s.redshift("warehouse", analytics, warehouse, "a", "b", "ra3.4xlarge", 4)  # Multi-AZ: two or more nodes per AZ
     s.aurora("profiles-docdb", analytics, warehouse, "a", ["b"], engine="docdb", size="db.r6g.large")
     return s.snapshot()
 

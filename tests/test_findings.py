@@ -52,7 +52,7 @@ def test_single_az_and_unencrypted_resources_are_reported():
     for expected in [("REL-RDS-SINGLE-AZ", "catalog-db"), ("SEC-RDS-PUBLIC", "catalog-db"), ("SEC-ENCRYPTION", "catalog-db"),
                      ("REL-CACHE-FAILOVER", "session-cache"), ("SEC-TRANSIT", "session-cache"), ("REL-SEARCH-AZ", "logs-search"),
                      ("REL-SEARCH-MASTER", "logs-search"), ("REL-REDSHIFT-AZ", "warehouse"), ("SEC-ENCRYPTION", "warehouse"),
-                     ("REL-EFS-ONE-ZONE", "shared-assets"), ("REL-VPN-TUNNEL", "corp-dc-cgw"), ("REL-ECS-RUNNING", "data-api")]:
+                     ("REL-EFS-ONE-ZONE", "shared-assets"), ("REL-VPN-TUNNEL", "corp-dc-cgw-1"), ("REL-ECS-RUNNING", "data-api")]:
         assert expected in found, expected
     # A read replica is not a single-AZ primary.
     assert ("REL-RDS-SINGLE-AZ", "catalog-db-ro") not in found

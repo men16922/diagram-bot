@@ -232,7 +232,7 @@ def main():
         frame.get_by_text(starts('platform-events')).first.click()
         expect(detail).to_contain_text('MSK 클러스터')
         page.screenshot(path=str(args.output / 'eks-platform.png'), full_page=True)
-        # 9. Data platform: ECS service frame, OpenSearch per-AZ nodes, read replica, then VPN in the peered VPC.
+        # 9. Data platform: ECS service frame, OpenSearch per-AZ nodes, read replica, then the TGW VPNs from the analytics VPC.
         page.locator('#snapshot-select').select_option('sample-data-platform')
         ready()
         page.locator('[data-vpc="vpc-0a1b2c3d4e5f60007"]').click()
@@ -247,9 +247,11 @@ def main():
         page.screenshot(path=str(args.output / 'data-platform.png'), full_page=True)
         page.locator('[data-vpc="vpc-0a1b2c3d4e5f60008"]').click()
         ready()
-        frame.get_by_text(starts('corp-dc-cgw')).click()
-        expect(detail).to_contain_text('2/2 UP')
-        expect(detail).to_contain_text('Site-to-Site VPN')
+        # Both VPCs reach on premises through the Transit Gateway: two customer gateways, each with a two-tunnel VPN.
+        for cgw in ('corp-dc-cgw-1', 'corp-dc-cgw-2'):
+            frame.get_by_text(starts(cgw)).click()
+            expect(detail).to_contain_text('2/2 UP')
+            expect(detail).to_contain_text('Site-to-Site VPN')
 
         options = page.locator('#snapshot-select option').count()
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
@@ -282,7 +284,7 @@ def main():
                          'JSON/CSV/review CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
                          'infrastructure sample: ASG frame, RDS standby, route-classified subnet',
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
-                         'data platform: ECS service frame, OpenSearch standby AZ, read replica, VPN customer gateway',
+                         'data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
                          'snapshot import', 'change review between snapshots']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
