@@ -65,14 +65,30 @@ diagram-bot diff reports/yesterday/snapshot.json reports/today/snapshot.json --f
 `serve --data-dir`로 위치를 바꿀 수 있습니다. 백업은 이 디렉터리를 복사하면 되고, 스냅샷 파일은 다른 환경에서 `스냅샷 JSON 가져오기`로 열 수 있습니다.
 스냅샷에는 리소스 ID·IP·태그가 들어 있으므로 회사 데이터 분류 기준에 맞는 저장소에 보관하세요.
 
-## 공유 환경
+## 공유 환경 (팀 모드)
 
-앱은 단일 사용자 로컬 실행을 전제로 루프백에만 바인딩합니다. 팀이 함께 쓰려면 다음 중 하나를 고르세요.
+기본 실행은 단일 사용자용으로 루프백(127.0.0.1)에만 열립니다. 팀이 함께 쓰려면 팀 모드로 실행합니다.
 
-- 보고서 공유: `collect`/`render`로 만든 `index.html`(단일 파일 뷰어)과 `topology.drawio`를 사내 저장소에 올립니다.
-- 원격 데스크톱·Cloud9·SSM 포트 포워딩(`aws ssm start-session --document-name AWS-StartPortForwardingSession`)으로 각자 접속합니다.
+```bash
+diagram-bot user add alice --role admin  --file /etc/diagram-bot/users.json   # 비밀번호를 두 번 입력 (12자 이상)
+diagram-bot user add bob   --role editor --file /etc/diagram-bot/users.json
+diagram-bot user add carol --role viewer --file /etc/diagram-bot/users.json
+diagram-bot serve --host 0.0.0.0 --port 8443 --data-dir /var/lib/diagram-bot \
+  --users /etc/diagram-bot/users.json --certfile /etc/diagram-bot/tls.crt --keyfile /etc/diagram-bot/tls.key \
+  --allowed-host diagrams.corp.example.com
+```
 
-인증 없는 상태로 `0.0.0.0`에 노출하는 실행 옵션은 제공하지 않습니다.
+- 루프백이 아닌 주소는 사용자 파일, TLS 인증서·키, 허용 호스트 이름이 모두 있어야 열립니다. 하나라도 없으면 시작하지 않습니다.
+- 역할: `viewer` 구성도·검토·비교 보기 / `editor` 편집 저장·자동 재배치·복원·스냅샷 가져오기 / `admin` AWS 수집과 감사 로그 조회까지.
+- 비밀번호는 PBKDF2-SHA256(600,000회, 사용자별 salt)로 저장되고 사용자 파일은 `0600` 권한으로 만들어집니다. 사용자 파일을 바꾸면 서버를 다시 시작하세요.
+- 같은 주소에서 로그인을 5번 실패하면 15분 동안 막힙니다. 세션은 8시간 뒤 만료되고 서버를 다시 시작하면 모두 다시 로그인합니다.
+- 쿠키는 HttpOnly·Secure·SameSite=Strict이고 HSTS를 보냅니다. Host 헤더는 `--allowed-host`만 허용합니다.
+- **감사 로그:** `<data-dir>/audit.log`(JSON Lines)에 로그인 성공·실패·차단, 로그아웃, 모든 변경 요청(사용자·경로·대상·결과 코드·접속 주소), 수집 결과가 남습니다.
+  admin은 `GET /api/audit?limit=200`으로 최근 항목을 볼 수 있습니다. 회사 로그 수집기로 이 파일을 전송하세요.
+- SSO(OIDC/SAML)가 필요하면 인증 프록시(예: ALB OIDC 인증, oauth2-proxy) 뒤에 두고, 프록시와 이 서버 사이도 TLS로 연결하세요. 앱 자체 계정은 그대로 역할 구분에 씁니다.
+- 수집에 쓰는 AWS 자격 증명은 서버 프로세스의 SDK 인증 체인(인스턴스 역할 등)입니다. 사용자에게 AWS 키를 입력받지 않습니다.
+
+보고서만 공유하려면 `collect`/`render`로 만든 `index.html`(단일 파일 뷰어)과 `topology.drawio`를 사내 저장소에 올리는 방법도 있습니다.
 
 ## 문제 해결
 

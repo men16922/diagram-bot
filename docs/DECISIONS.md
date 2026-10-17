@@ -37,8 +37,9 @@ Last Updated: 2026-10-17
 - Architecture review reports only what API fields decide; a missing input yields no finding plus
   an OPS-COVERAGE row, never a guess. Reference samples must stay free of high/medium findings.
 - Change review compares configuration, not observations (health, running counts, telemetry).
-- Cross-account sessions always carry the ReadOnlyAccess session policy; the server stays
-  loopback-only (no unauthenticated network exposure option).
+- Cross-account sessions always carry the ReadOnlyAccess session policy.
+- Network exposure only in team mode (users file + TLS + allowed hosts); there is no option to serve
+  unauthenticated on a non-loopback address. SSO is delegated to an authenticating proxy.
 - Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
 - Automatic layout only on first generation or explicit relayout; superseded edits are archived
   and user-added notes carried over.

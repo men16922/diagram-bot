@@ -13,6 +13,7 @@ function el(tag, text, className) { const element=document.createElement(tag); i
 function toast(message, error=false) { $('toast').textContent=message; $('toast').className=error?'error':''; $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true,error?8500:4000); }
 async function api(path, options={}) {
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json','X-Diagram-Bot':state.token,...options.headers}});
+  if(response.status===401){location.href='/login';throw new Error('로그인이 필요합니다.');}
   const data=await response.json();
   if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'요청 값을 확인하세요.');
   return data;
@@ -31,6 +32,9 @@ function setControls() {
   for(const id of ['save-button','export-button','note-button','reset-button'])$(id).disabled=!state.ready||state.loading||state.busy;
   $('restore-button').disabled=!state.ready||state.loading||state.busy||!state.history.length;
   for(const id of ['snapshot-select','references','import-button'])$(id).disabled=state.busy||(state.ready&&state.loading);
+  // Team mode roles: viewers read only, editors edit and import, admins also collect from AWS.
+  if(state.role==='viewer')for(const id of ['save-button','note-button','reset-button','restore-button','import-button'])$(id).disabled=true;
+  $('collection-button').disabled=state.role!=='admin';
   const locked=state.busy||(state.ready&&state.loading);
   $('view-overview').disabled=locked;$('view-detail').disabled=locked||!state.vpc;$('view-focus').disabled=locked||!state.selected;
   $('save-state').textContent=state.loading?'불러오는 중':state.busy?'처리 중':state.dirty?'저장하지 않은 편집':state.revision?`저장됨 · v${state.revision}`:'자동 생성 구성도';
@@ -149,6 +153,7 @@ async function switchView(view, options={}) {
   }catch(error){toast(error.message,true);}
 }
 async function saveDocument(notify=true) {
+  if(state.role==='viewer'){state.dirty=false;return;}
   if(state.busy)throw new Error('이전 작업을 완료한 뒤 다시 시도하세요.');
   state.busy=true;setControls();
   try{
@@ -302,7 +307,10 @@ $('collection-form').onsubmit=async event=>{
 };
 window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefault();event.returnValue='';}});
 async function start() {
-  const boot=await api('/api/bootstrap');state.token=boot.token;
+  const boot=await api('/api/bootstrap');state.token=boot.token;state.role=boot.user.role;
+  if(boot.team){const name=boot.user.name;$('user-avatar').textContent=name.slice(0,2).toUpperCase();$('user-avatar').title=`${name} · ${boot.user.role}`;
+    $('user-role').textContent=`${name} · ${{viewer:'보기 전용',editor:'편집',admin:'관리자'}[boot.user.role]}`;$('user-role').hidden=false;$('logout-button').hidden=false;}
+  bind('logout-button',async()=>{await api('/api/logout',{method:'POST'});location.href='/login';});
   for(const profile of boot.profiles)$('aws-profile').append(new Option(profile,profile));
   await refreshSnapshots('demo');await loadSnapshot('demo');
   if(!boot.editor_ready){state.loading=false;setControls();$('editor-message').textContent='터미널에서 diagram-bot setup-editor를 실행한 뒤 앱을 다시 시작하세요.';document.querySelector('.loader').hidden=true;return;}

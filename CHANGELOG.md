@@ -2,6 +2,19 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를, 버전은 [Semantic Versioning](https://semver.org/lang/ko/)을 따릅니다.
 
+## [0.5.0] - 2026-10-17
+
+### Added
+- **팀 모드:** `serve --host 0.0.0.0 --users users.json --certfile … --keyfile … --allowed-host …`. 루프백이 아닌 주소는 사용자 파일·TLS·허용 호스트가
+  모두 있어야 열립니다. 로그인(PBKDF2-SHA256 600,000회, 실패 5회/15분 제한), HttpOnly·Secure·SameSite=Strict 세션 쿠키(8시간), HSTS,
+  역할(viewer 읽기 / editor 편집·가져오기 / admin 수집·감사 로그), `diagram-bot user add|remove|list`.
+- **감사 로그:** 로그인·로그아웃·모든 변경 요청·수집 결과를 `audit.log`(JSON Lines)에 남기고 admin은 `GET /api/audit`로 봅니다. 로컬 모드도 기록합니다.
+- AWS API 에뮬레이터(moto) 통합 테스트: 실제 boto3 직렬화로 20여 종 리소스를 만들고 병렬 수집·그래프·검토·보고서까지 확인합니다.
+- `scripts/verify_team.py`: TLS 서버·로그인·역할·감사 로그 브라우저 검증(CI 포함).
+
+### Fixed
+- 한 API가 예상하지 못한 예외를 내도 그 API만 `조회 불가`로 기록하고 나머지 서비스 수집을 계속합니다.
+
 ## [0.4.0] - 2026-10-17
 
 ### Added

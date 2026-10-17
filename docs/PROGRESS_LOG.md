@@ -2,6 +2,16 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — v0.5.0 team mode and AWS-emulator verification
+
+- Team mode (`auth.py`): PBKDF2 accounts, throttled login, Secure/HttpOnly/Strict session cookie,
+  viewer/editor/admin enforced server-side, HSTS, Host allow-list first, JSON Lines audit log,
+  `user add|remove|list`; non-loopback serve refused without users + TLS + allowed hosts.
+- moto end-to-end test over real boto3 serialization (20+ resource types, AssumeRole via STS).
+  It surfaced two real issues, both fixed: an unexpected exception from one API aborted the whole
+  collection; the shared-segment check rejected a target group's own bus (frame + registration).
+- Verified: lint + 82 tests; `scripts/verify_team.py` in Chromium over TLS; CI runs both.
+
 ## 2026-10-17 — Enterprise readiness (goal: 엔터프라이즈 상용 제품 수준까지 작업·검증)
 
 - Architecture review (`findings.py`): 27 deterministic reliability/security/operations rules from

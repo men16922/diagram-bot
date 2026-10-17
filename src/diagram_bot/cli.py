@@ -47,6 +47,17 @@ def main():
     serve = commands.add_parser("serve", help="draw.io 기반 로컬 시연 앱 실행")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--data-dir", help="스냅샷과 편집본 저장 디렉터리")
+    serve.add_argument("--host", default="127.0.0.1", help="루프백이 아니면 --users·--certfile·--keyfile·--allowed-host 필수 (팀 모드)")
+    serve.add_argument("--users", help="팀 모드 사용자 파일 (diagram-bot user add로 생성)")
+    serve.add_argument("--certfile", help="TLS 인증서 (PEM)")
+    serve.add_argument("--keyfile", help="TLS 개인 키 (PEM)")
+    serve.add_argument("--allowed-host", action="append", default=[], help="접속에 쓰는 호스트 이름 (여러 번 지정 가능)")
+    account = commands.add_parser("user", help="팀 모드 사용자 관리")
+    account.add_argument("action", choices=("add", "remove", "list"))
+    account.add_argument("name", nargs="?")
+    account.add_argument("--file", required=True, help="사용자 파일 경로")
+    account.add_argument("--role", choices=("viewer", "editor", "admin"), default="viewer")
+    account.add_argument("--password-stdin", action="store_true", help="비밀번호를 표준 입력 첫 줄에서 읽기 (자동화용)")
     args = parser.parse_args()
     try:
         if args.command == "setup-editor":
@@ -54,11 +65,9 @@ def main():
             print(f"draw.io 설치 완료: {install_editor(args.archive)}")
             return 0
         if args.command == "serve":
-            import uvicorn
-            from .server import create_app
-            print(f"Diagram Bot: http://127.0.0.1:{args.port}", flush=True)
-            uvicorn.run(create_app(args.data_dir), host="127.0.0.1", port=args.port)
-            return 0
+            return run_server(parser, args)
+        if args.command == "user":
+            return manage_user(parser, args)
         if args.command == "diff":
             load = lambda path: json.loads(Path(path).read_text(encoding="utf-8"))
             result = diff(load(args.before), load(args.after))
@@ -92,6 +101,57 @@ def main():
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"실패: {exc}", file=sys.stderr)
         return 1
+
+
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def run_server(parser, args):
+    import uvicorn
+
+    from .auth import load_users
+    from .server import create_app
+    team = args.host not in LOOPBACK_HOSTS
+    if team and not (args.users and args.certfile and args.keyfile and args.allowed_host):
+        parser.error("루프백이 아닌 주소로 열려면 --users, --certfile, --keyfile, --allowed-host가 모두 필요합니다 (인증 없는 네트워크 노출 금지).")
+    if bool(args.certfile) != bool(args.keyfile):
+        parser.error("--certfile과 --keyfile은 함께 지정하세요.")
+    users = load_users(args.users) if args.users else None
+    secure = bool(args.certfile)
+    app = create_app(args.data_dir, users=users, allowed_hosts=args.allowed_host, secure=secure)
+    shown = args.allowed_host[0] if args.allowed_host else args.host
+    print(f"Diagram Bot: {'https' if secure else 'http'}://{shown}:{args.port}" + (f" · 팀 모드 사용자 {len(users)}명" if users else ""), flush=True)
+    uvicorn.run(app, host=args.host, port=args.port, ssl_certfile=args.certfile, ssl_keyfile=args.keyfile,
+                proxy_headers=False, server_header=False)
+    return 0
+
+
+def manage_user(parser, args):
+    import getpass
+
+    from .auth import ROLES, remove_user, save_user
+    if args.action == "list":
+        data = json.loads(Path(args.file).read_text(encoding="utf-8")) if Path(args.file).exists() else {"users": []}
+        for user in data["users"]:
+            print(f"{user['name']}\t{user['role']}")
+        return 0
+    if not args.name:
+        parser.error("사용자 이름이 필요합니다.")
+    if args.action == "remove":
+        remove_user(args.file, args.name)
+        print(f"삭제: {args.name}")
+        return 0
+    if args.password_stdin:
+        password = sys.stdin.readline().rstrip("\n")
+    else:
+        password = getpass.getpass("비밀번호: ")
+        if getpass.getpass("비밀번호 확인: ") != password:
+            parser.error("비밀번호가 일치하지 않습니다.")
+    if len(password) < 12:
+        parser.error("비밀번호는 12자 이상이어야 합니다.")
+    save_user(args.file, args.name, args.role, password)
+    print(f"저장: {args.name} ({args.role}) · 역할: {', '.join(ROLES)}")
+    return 0
 
 
 def app_version():

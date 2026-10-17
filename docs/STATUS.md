@@ -4,6 +4,7 @@ Last Updated: 2026-10-17
 
 ## Active Plan
 
+- v0.5.0 adds team mode (accounts, roles, TLS, audit log) and an AWS-emulator end-to-end test.
 - 2026-10-17 goal "엔터프라이즈 상용 제품 수준": v0.4.0 adds architecture review (findings + CLI gate),
   snapshot change review (drift gate), cross-account read-only role and multi-region/multi-account
   collection, parallel collection, scale tests, lint in the gate, CHANGELOG/SECURITY/OPERATIONS docs
@@ -14,7 +15,7 @@ Last Updated: 2026-10-17
 - Remaining work is manual only: live SSO collection check and human visual review
   (docs/NEXT_PLAN.md). No [auto] backlog is approved.
 
-## Current Baseline (v0.4.0)
+## Current Baseline (v0.5.0)
 
 - Collection: direct SSO/SDK, read-only EC2/ELBv2/RDS/Auto Scaling/EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/
   Lambda calls plus VPC peering and Site-to-Site VPN, incl. internet and
@@ -44,7 +45,8 @@ Last Updated: 2026-10-17
 
 ## Verification (2026-10-17, this container)
 
-- `make check`: ruff lint + 73 pytest cases + five-artifact CLI round trip passed.
+- `make check`: ruff lint + 82 pytest cases (incl. moto AWS-emulator end-to-end collection and team mode) + five-artifact CLI round trip passed.
+- Team mode (`scripts/verify_team.py`, Chromium): TLS server on 0.0.0.0, refusal without credentials, login/throttle, viewer/admin roles, cookie flags, logout, audit log.
 - Layout tests: no sibling overlap (icons + label boxes), nothing outside its container, no
   routed segment through another icon/label, identical rerun — all sample views and both VPCs
   of a 100-resource fixture. 100-resource layout of all pages ≈0.02 s (limit 5 s).
@@ -69,7 +71,7 @@ Last Updated: 2026-10-17
   collect` stopped with exit 1 and wrote no report (expected failure path). Needs a valid
   read-only key or SSO profile for the intended account.
 - 100-resource views are structurally correct but dense; no large-environment claim.
-- No shared-user hosting/authentication, built-in scheduler (use cron/CI with `review`/`diff` exit codes),
+- Team mode provides accounts/roles/TLS/audit; no direct SSO (use an auth proxy), no built-in scheduler (use cron/CI with `review`/`diff` exit codes),
   listener rules, NACLs or Direct Connect. No project LICENSE file yet (owner decision).
   EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN calls are verified on stubs only;
   ElastiCache Serverless, MSK Serverless, EKS Fargate profiles and Aurora Global Database are not drawn.

@@ -64,6 +64,8 @@ jobs:
             sleep 1
           done
           python scripts/verify_demo.py
+      - name: Verify team mode (TLS, sign-in, roles, audit)
+        run: python scripts/verify_team.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

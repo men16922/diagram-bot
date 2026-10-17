@@ -1,4 +1,5 @@
-"""Loopback-only demo workspace. AWS credentials stay in the SDK process."""
+"""Workspace server. Loopback-only by default; team mode adds accounts, roles, TLS and an audit log.
+AWS credentials stay in the SDK process."""
 import hashlib
 import json
 import os
@@ -14,8 +15,8 @@ from uuid import uuid4
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -25,6 +26,7 @@ from .demo import demo_snapshot
 from .samples import SAMPLES
 from .drawio import carry_annotations, generate_document, validate_document
 from .editor import VERSION, editor_path
+from .auth import SESSION_SECONDS, AuditLog, Authenticator, allowed
 from .cli import app_version
 from .diff import diff
 from .findings import review, summary
@@ -56,6 +58,11 @@ class DocumentRequest(BaseModel):
     revision: int = Field(ge=0)
 
 
+class LoginRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=256)
+
+
 class RevisionRequest(BaseModel):
     revision: int = Field(ge=0)
 
@@ -67,7 +74,23 @@ class RestoreRequest(RevisionRequest):
 HISTORY = 20
 
 
-def create_app(directory=None, editor_directory=None):
+COOKIE = "diagram_bot_session"
+LOOPBACK = ["localhost", "127.0.0.1", "[::1]", "testserver"]
+LOGIN_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diagram Bot 로그인</title><style>body{font-family:-apple-system,"Segoe UI","Noto Sans KR",Arial,sans-serif;background:#F3F5F8;display:grid;
+place-items:center;min-height:100vh;margin:0;color:#233247}form{background:#fff;border:1px solid #DFE6EF;border-radius:12px;padding:32px;width:320px}
+h1{font-size:20px;margin:0 0 20px}label{display:block;font-size:12px;color:#5A6C86;margin:14px 0 6px}input{width:100%;box-sizing:border-box;padding:10px;
+border:1px solid #DCE5F0;border-radius:6px;font-size:14px}button{margin-top:20px;width:100%;padding:11px;border:0;border-radius:6px;background:#4773DD;
+color:#fff;font-size:14px}p{color:#B4403F;font-size:12px;min-height:1em}</style></head><body><form id="f"><h1>Diagram Bot</h1>
+<label for="n">사용자</label><input id="n" autocomplete="username" required><label for="p">비밀번호</label>
+<input id="p" type="password" autocomplete="current-password" required><button>로그인</button><p id="e" role="alert"></p></form>
+<script>document.getElementById('f').onsubmit=async e=>{e.preventDefault();const r=await fetch('/api/login',{method:'POST',
+headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('n').value,password:document.getElementById('p').value})});
+if(r.ok)location.href='/';else document.getElementById('e').textContent=(await r.json()).detail;};</script></body></html>"""
+
+
+def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False):
+    """users: accounts for team mode (None = single local user). secure: served over TLS (Secure cookie, HSTS)."""
     directory = Path(directory or data_path())
     snapshots = directory / "snapshots"
     documents = directory / "documents"
@@ -79,6 +102,8 @@ def create_app(directory=None, editor_directory=None):
     mutex = threading.Lock()
     executor = ThreadPoolExecutor(max_workers=1)
     jobs = {}
+    auth = Authenticator(users) if users else None
+    audit = AuditLog(directory / "audit.log")
 
     def save_snapshot(snapshot, identifier=None):
         if snapshot.get("schema_version") != 1:
@@ -106,26 +131,47 @@ def create_app(directory=None, editor_directory=None):
         executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title="Diagram Bot", lifespan=lifespan, docs_url=None, redoc_url=None)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
-
     @app.middleware("http")
     async def protect_mutations(request, call_next):
-        if request.method in {"POST", "PUT", "DELETE", "PATCH"}:
-            if request.headers.get("x-diagram-bot") != token:
-                return JSONResponse({"detail": "앱 세션이 만료되었습니다. 새로고침하세요."}, status_code=403)
+        path, method = request.url.path, request.method
+        client = request.client.host if request.client else None
+        request.state.user = "local"
+        mutation = method in {"POST", "PUT", "DELETE", "PATCH"}
+        if auth and path not in ("/login", "/api/login"):
+            session = auth.session(request.cookies.get(COOKIE))
+            if not session:
+                if path.startswith("/api/"):
+                    return JSONResponse({"detail": "로그인이 필요합니다."}, status_code=401)
+                return RedirectResponse("/login", status_code=303)
+            request.state.user, request.state.role = session["name"], session["role"]
+            if not allowed(session["role"], method, path):
+                audit.write(session["name"], f"{method} {path}", result="denied", client=client)
+                return JSONResponse({"detail": f"{session['role']} 역할로는 할 수 없는 작업입니다."}, status_code=403)
+        if mutation:
             origin = request.headers.get("origin")
             if origin and urlparse(origin).netloc != request.headers.get("host"):
                 return JSONResponse({"detail": "허용되지 않은 요청 출처"}, status_code=403)
+            # Login has no page token yet; it is protected by the Origin check, JSON body and throttling.
+            if path != "/api/login" and request.headers.get("x-diagram-bot") != token:
+                return JSONResponse({"detail": "앱 세션이 만료되었습니다. 새로고침하세요."}, status_code=403)
             if len(await request.body()) > 15 * 1024 * 1024:
                 return JSONResponse({"detail": "파일은 최대 15 MiB입니다."}, status_code=413)
         response = await call_next(request)
+        if mutation and path not in ("/api/login", "/api/logout"):
+            audit.write(request.state.user, f"{method} {path}", target=str(request.url.query) or None,
+                        result=response.status_code, client=client)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
+        if secure:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
         if request.url.path.startswith("/api/") or request.url.path == "/":
             response.headers["Cache-Control"] = "no-store"
         if request.url.path == "/":
             response.headers["X-Frame-Options"] = "DENY"
         return response
+
+    # Registered last so it runs first: an unknown Host is rejected before any session or redirect logic.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOOPBACK + list(allowed_hosts))
 
     cache, summaries = {}, {}  # parsed snapshots (a few) and list rows, keyed by file modification time
 
@@ -180,14 +226,52 @@ def create_app(directory=None, editor_directory=None):
     def home():
         return static.joinpath("app.html").read_text(encoding="utf-8")
 
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page():
+        if not auth:
+            return RedirectResponse("/", status_code=303)
+        return HTMLResponse(LOGIN_PAGE, headers={"X-Frame-Options": "DENY", "Cache-Control": "no-store"})
+
+    @app.post("/api/login")
+    def login(credentials: LoginRequest, request: Request):
+        client = request.client.host if request.client else None
+        if not auth:
+            raise HTTPException(404, "팀 모드가 아닙니다.")
+        if auth.throttled(client):
+            audit.write(credentials.name, "login", result="throttled", client=client)
+            raise HTTPException(429, "로그인 실패가 많습니다. 15분 후 다시 시도하세요.")
+        session = auth.login(credentials.name, credentials.password, client)
+        audit.write(credentials.name, "login", result="ok" if session else "failed", client=client)
+        if not session:
+            raise HTTPException(401, "사용자 이름 또는 비밀번호가 올바르지 않습니다.")
+        response = JSONResponse({"name": credentials.name})
+        response.set_cookie(COOKIE, session, max_age=SESSION_SECONDS, httponly=True, secure=secure, samesite="strict", path="/")
+        return response
+
+    @app.post("/api/logout")
+    def logout(request: Request):
+        if auth:
+            auth.logout(request.cookies.get(COOKIE))
+            audit.write(request.state.user, "logout", client=request.client.host if request.client else None)
+        response = JSONResponse({"ok": True})
+        response.delete_cookie(COOKIE, path="/")
+        return response
+
+    @app.get("/api/audit")
+    def read_audit(request: Request, limit: int = 200):
+        if auth and request.state.role != "admin":
+            raise HTTPException(403, "감사 로그는 admin만 볼 수 있습니다.")
+        return audit.tail(max(1, min(limit, 1000)))
+
     @app.get("/api/bootstrap")
-    def bootstrap():
+    def bootstrap(request: Request):
         try:
             profiles = boto3.Session().available_profiles
         except BotoCoreError:
             profiles = []
         return {"token": token, "editor_ready": (editor / "js/app.min.js").is_file(), "editor_version": VERSION, "profiles": profiles,
-                "version": app_version()}
+                "version": app_version(), "team": bool(auth),
+                "user": {"name": request.state.user, "role": getattr(request.state, "role", "admin")}}
 
     @app.get("/api/snapshots")
     def list_snapshots():
@@ -295,7 +379,8 @@ def create_app(directory=None, editor_directory=None):
         return describe(saved, selection, history)
 
     @app.post("/api/collections", status_code=202)
-    def start_collection(params: CollectionRequest):
+    def start_collection(params: CollectionRequest, request: Request):
+        user = request.state.user
         with mutex:
             if any(j["status"] in {"queued", "running"} for j in jobs.values()):
                 raise HTTPException(409, "현재 수집이 진행 중입니다.")
@@ -316,6 +401,8 @@ def create_app(directory=None, editor_directory=None):
             except Exception:
                 jobs[identifier].update(status="failed", error="수집을 완료하지 못했습니다. 마지막 스냅샷은 보존됩니다.")
             jobs[identifier]["finished_at"] = now()
+            audit.write(user, "collection", target=f"{params.role_arn or params.expected_account}/{params.region}",
+                        result=jobs[identifier]["status"], snapshot=jobs[identifier].get("snapshot_id"))
 
         executor.submit(work)
         return jobs[identifier]
