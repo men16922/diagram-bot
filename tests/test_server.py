@@ -158,3 +158,20 @@ def test_collection_request_validates_role_arn(client):
     bad = client.post('/api/collections', json={'region': 'ap-northeast-2', 'expected_account': '111122223333',
                                                 'role_arn': 'arn:aws:iam::1:user/admin'})
     assert bad.status_code == 422
+
+
+def test_outdated_samples_are_regenerated(tmp_path):
+    """Stored samples of an older SAMPLE_VERSION are replaced; the demo snapshot is left alone."""
+    from diagram_bot.samples import SAMPLE_VERSION
+    data = tmp_path / 'data'
+    with TestClient(create_app(data, tmp_path / 'no-editor')):
+        pass
+    path = data / 'snapshots' / 'sample-three-tier.json'
+    old = json.loads(path.read_text(encoding='utf-8'))
+    old['metadata']['sample_version'] = SAMPLE_VERSION - 1
+    old['metadata']['title'] = 'outdated'
+    path.write_text(json.dumps(old), encoding='utf-8')
+    with TestClient(create_app(data, tmp_path / 'no-editor')):
+        pass
+    fresh = json.loads(path.read_text(encoding='utf-8'))['metadata']
+    assert fresh['sample_version'] == SAMPLE_VERSION and fresh['title'] != 'outdated'

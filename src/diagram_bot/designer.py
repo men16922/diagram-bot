@@ -275,9 +275,9 @@ class Design:
         for service in services:
             service = str(service).lower()
             if service in ("s3", "dynamodb"):
-                if not v["private_tables"]:
-                    raise DesignError("게이트웨이 엔드포인트에는 NAT 경로가 있는 프라이빗 라우트 테이블이 필요합니다.")
-                self.sample.gateway_endpoint(f"vpce-{v['key']}-{service}", v["id"], service, v["private_tables"])
+                # Without NAT the private subnets keep the main table, which then carries the endpoint route.
+                tables = v["private_tables"] or [f"rtb-{v['key']}-main"]
+                self.sample.gateway_endpoint(f"vpce-{v['key']}-{service}", v["id"], service, tables)
             else:
                 tier = "app" if "app" in v["tiers"] else next(iter(v["tiers"]))
                 self.sample.interface_endpoint(f"vpce-{v['key']}-{slug(service)}", v["id"], service, self.tier(v, tier))

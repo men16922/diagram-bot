@@ -236,3 +236,12 @@ def test_env_file_loads_keys_and_drops_the_profile(tmp_path, monkeypatch):
     assert load_env_file(env) == ["AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
     assert os.environ["AWS_ACCESS_KEY_ID"] == "AKIDEXAMPLE" and os.environ["AWS_SECRET_ACCESS_KEY"] == "secret"
     assert "AWS_PROFILE" not in os.environ
+
+
+def test_gateway_endpoint_without_nat_uses_the_main_table():
+    """A private-only VPC (no IGW or NAT) still gets an S3 gateway endpoint, routed through its main table."""
+    d = Design()
+    d.add_vpc("private", "10.30.0.0/16", 2, tiers=["app", "data"], nat="none")
+    d.add_vpc_endpoints("private", ["s3"])
+    endpoint = d.sample.raw["vpc_endpoints"][0]
+    assert endpoint["VpcEndpointType"] == "Gateway" and endpoint["RouteTableIds"] == ["rtb-private-main"]

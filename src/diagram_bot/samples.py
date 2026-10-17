@@ -9,6 +9,8 @@ import ipaddress
 from .collector import now
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
+# Bumped whenever a sample's architecture changes; the server replaces stored samples of another version.
+SAMPLE_VERSION = 2
 
 
 class Sample:
@@ -80,13 +82,17 @@ class Sample:
         cidr = next(s["CidrBlock"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
         return str(ipaddress.ip_network(cidr)[offset])
 
-    def security_group(self, key, vpc, name, ingress):
-        """Ingress as (port, source): a CIDR, or another group's ID for tier-to-tier rules."""
-        rules = [{"IpProtocol": "tcp", "FromPort": port, "ToPort": port,
-                  **({"UserIdGroupPairs": [{"GroupId": source}]} if source.startswith("sg-") else {"IpRanges": [{"CidrIp": source}]})}
-                 for port, source in ingress]
-        self.raw["security_groups"].append({"GroupId": key, "GroupName": name, "VpcId": vpc, "IpPermissions": rules,
-                                            "IpPermissionsEgress": [{"IpProtocol": "-1", "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]})
+    def security_group(self, key, vpc, name, ingress, egress=("0.0.0.0/0",)):
+        """Rules as (port, source): a CIDR, another group's ID or "self"; port None allows all traffic.
+
+        Egress is a list of sources with all traffic allowed (the default is AWS's 0.0.0.0/0)."""
+        def rule(port, source):
+            source = key if source == "self" else source
+            ports = {"IpProtocol": "-1"} if port is None else {"IpProtocol": "tcp", "FromPort": port, "ToPort": port}
+            return {**ports, **({"UserIdGroupPairs": [{"GroupId": source}]} if source.startswith("sg-") else {"IpRanges": [{"CidrIp": source}]})}
+        self.raw["security_groups"].append({"GroupId": key, "GroupName": name, "VpcId": vpc,
+                                            "IpPermissions": [rule(port, source) for port, source in ingress],
+                                            "IpPermissionsEgress": [rule(None, source) for source in egress]})
 
     def az_of(self, subnet):
         return next(s["AvailabilityZone"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
@@ -350,7 +356,7 @@ class Sample:
                       "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in self.raw["target_health"]]
         return {"schema_version": 1, "metadata": {
             "account_id": self.account, "region": self.region, "partition": "aws", "started_at": timestamp, "finished_at": timestamp,
-            "status": "complete", "demo": True, "sample": self.key, "title": self.title, "practices": self.practices,
+            "status": "complete", "demo": True, "sample": self.key, "sample_version": SAMPLE_VERSION, "title": self.title, "practices": self.practices,
             "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway", "NatGateway",
                       "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGateway", "EKS", "MSK", "ElastiCache", "Lambda",
                       "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN"],

@@ -24,7 +24,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .collector import collect, now
 from .demo import demo_snapshot
-from .samples import SAMPLES
+from .samples import SAMPLE_VERSION, SAMPLES
 from .drawio import carry_annotations, generate_document, validate_document
 from .editor import VERSION, editor_path
 from .auth import SESSION_SECONDS, AuditLog, Authenticator, allowed
@@ -147,7 +147,13 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
     if not (snapshots / "demo.json").exists():
         save_snapshot(demo_snapshot(), "demo")
     for key, build in SAMPLES.items():
-        if not (snapshots / f"sample-{key}.json").exists():
+        # Samples are synthetic and regenerated when their architecture changes (SAMPLE_VERSION).
+        path = snapshots / f"sample-{key}.json"
+        try:
+            current = json.loads(path.read_text(encoding="utf-8"))["metadata"].get("sample_version") == SAMPLE_VERSION
+        except (OSError, ValueError, KeyError, TypeError):
+            current = False
+        if not current:
             save_snapshot(build(), f"sample-{key}")
 
     @asynccontextmanager
