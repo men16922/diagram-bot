@@ -4,14 +4,19 @@ Draw.loadPlugin(function (ui) {
   const graph = ui.editor.graph;
   Editor.defaultCompressed = false;
   const send = data => parent.postMessage(JSON.stringify(data), location.origin);
+  const cells = () => Object.values(graph.getModel().cells);
+  const isRelation = cell => cell?.getAttribute && (cell.getAttribute('relationId') != null || cell.getAttribute('relationIndex') != null);
   graph.getSelectionModel().addListener(mxEvent.CHANGE, function () {
+    // Multi-selection is used for relation highlighting; only a single cell drives the inspector.
+    if (graph.getSelectionCount() > 1) return;
     const cell = graph.getSelectionCell();
-    send({event: 'diagramBotSelection', resourceId: cell?.getAttribute('resourceId'),
-      relationIndex: cell?.getAttribute('relationIndex'), label: cell ? graph.convertValueToString(cell) : null});
+    send({event: 'diagramBotSelection', resourceId: cell?.getAttribute('resourceId'), summary: cell?.getAttribute('summary') === '1',
+      relationId: cell?.getAttribute('relationId'), relationIndex: cell?.getAttribute('relationIndex'),
+      label: cell ? graph.convertValueToString(cell) : null});
   });
   const originalDisconnect = graph.isCellDisconnectable;
   graph.isCellDisconnectable = function (cell, terminal, source) {
-    return cell?.getAttribute('relationIndex') == null && originalDisconnect.apply(this, arguments);
+    return !isRelation(cell) && originalDisconnect.apply(this, arguments);
   };
   window.addEventListener('message', function (event) {
     if (event.origin !== location.origin || event.source !== parent) return;
@@ -30,7 +35,16 @@ Draw.loadPlugin(function (ui) {
         const xml = ui.getFileData(true, false, false, null, true, false, null, false, null, true);
         send({event: 'diagramBotDocument', requestId: message.requestId, xml});
       } else if (message.action === 'diagramBotSelect') {
-        const cell = Object.values(graph.getModel().cells).find(c => c.getAttribute('resourceId') === message.resourceId);
+        const cell = cells().find(c => c.getAttribute && c.getAttribute('resourceId') === message.resourceId);
+        if (!cell) { send({event: 'diagramBotNotVisible'}); return; }
+        const related = new Set(message.relations || []);
+        const edges = cells().filter(c => c.getAttribute && related.has(c.getAttribute('relationId')));
+        graph.setSelectionCells([cell, ...edges]);
+        graph.scrollCellToVisible(cell);
+        if (message.relations) send({event: 'diagramBotHighlighted', count: edges.length});
+      } else if (message.action === 'diagramBotSelectRelation') {
+        const cell = cells().find(c => c.getAttribute && ((message.relationId && c.getAttribute('relationId') === message.relationId)
+          || (message.relationIndex != null && c.getAttribute('relationIndex') === String(message.relationIndex))));
         if (cell) { graph.setSelectionCell(cell); graph.scrollCellToVisible(cell); }
         else send({event: 'diagramBotNotVisible'});
       } else if (message.action === 'diagramBotNote') {

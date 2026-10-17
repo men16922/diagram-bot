@@ -74,7 +74,8 @@ def resource_label(node):
         target = attrs.get("Target", {})
         return f"{target.get('Id', node['name'])}:{target.get('Port', '')}"
     if node["kind"] == "load_balancer" and attrs.get("Type"):
-        return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{attrs['Type']} · {attrs.get('Scheme', '')}".rstrip(" ·")
+        kind = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
+        return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{kind} · {attrs.get('Scheme', '')}".rstrip(" ·")
     if node["kind"] == "target_group" and attrs.get("Protocol"):
         return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{attrs['Protocol']}:{attrs.get('Port', '')} · {attrs.get('TargetType', '')}"
     return node["name"]

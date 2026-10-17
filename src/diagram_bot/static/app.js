@@ -3,7 +3,8 @@ const $ = id => document.getElementById(id);
 const names = {vpc:'VPC',subnet:'Subnet',ec2:'EC2',load_balancer:'Load balancer',target_group:'Target group',registered_target:'등록 대상',security_group:'Security group',network_interface:'Network interface',volume:'EBS volume'};
 const relationNames = {in_vpc:'VPC 소속',in_subnet:'서브넷 배치',associated_load_balancer:'로드밸런서 연결',registered_target:'대상 등록',uses_security_group:'보안 그룹 연결',attached_interface:'ENI 장착',attached_volume:'EBS 장착'};
 const statuses = {complete:'조회 완료',partial:'부분 조회',unavailable:'조회 불가',not_discovered:'미발견 범위'};
-const state = {token:null,snapshot:null,snapshotId:null,vpc:null,references:false,revision:0,xml:null,ready:false,loading:true,dirty:false,busy:false,mode:'diagram',selected:null};
+const viewNames = {overview:'전체 구성',detail:'상세 구성',focus:'선택 리소스'};
+const state = {token:null,snapshot:null,snapshotId:null,view:'overview',vpc:null,focus:null,references:false,revision:0,xml:null,history:[],visible:null,counts:null,ready:false,loading:true,dirty:false,busy:false,mode:'diagram',selected:null};
 const pending = new Map();
 let editorTimer, toastTimer, pngWaiter = null;
 function el(tag, text, className) { const element=document.createElement(tag); if(text!==undefined)element.textContent=text; if(className)element.className=className; return element; }
@@ -15,15 +16,21 @@ async function api(path, options={}) {
   return data;
 }
 function post(message) { $('editor').contentWindow.postMessage(JSON.stringify(message),location.origin); }
-function documentUrl(reset=false) {
-  const query=new URLSearchParams({references:String(state.references)});
-  if(state.vpc)query.set('vpc',state.vpc);
+const node = id => state.snapshot.graph.nodes.find(n=>n.id===id);
+const vpcNode = resourceId => state.snapshot.graph.nodes.find(n=>n.kind==='vpc'&&n.resource_id===resourceId);
+function documentUrl(suffix='', reset=false) {
+  const query=new URLSearchParams({view:state.view,references:String(state.references)});
+  if(state.view==='detail')query.set('vpc',state.vpc);
+  if(state.view==='focus')query.set('resource',state.focus);
   if(reset)query.set('reset','true');
-  return `/api/snapshots/${state.snapshotId}/document?${query}`;
+  return `/api/snapshots/${state.snapshotId}/document${suffix}?${query}`;
 }
 function setControls() {
   for(const id of ['save-button','export-button','note-button','reset-button'])$(id).disabled=!state.ready||state.loading||state.busy;
+  $('restore-button').disabled=!state.ready||state.loading||state.busy||!state.history.length;
   for(const id of ['snapshot-select','references','import-button'])$(id).disabled=state.busy||(state.ready&&state.loading);
+  const locked=state.busy||(state.ready&&state.loading);
+  $('view-overview').disabled=locked;$('view-detail').disabled=locked||!state.vpc;$('view-focus').disabled=locked||!state.selected;
   $('save-state').textContent=state.loading?'불러오는 중':state.busy?'처리 중':state.dirty?'저장하지 않은 편집':state.revision?`저장됨 · v${state.revision}`:'자동 생성 구성도';
 }
 function sendDocument() {
@@ -59,10 +66,11 @@ window.addEventListener('message', event=>{
   }
   if(message.event==='diagramBotSelection'){
     if(message.resourceId)showResource(message.resourceId,false);
-    else if(message.relationIndex!=null)showRelation(Number(message.relationIndex));
-    else if(message.label){$('detail-body').replaceChildren(el('div','DIAGRAM ELEMENT','detail-kind'),el('h3',message.label,'detail-name'),el('p','표현용 그룹 또는 사용자 주석입니다. 수집한 AWS 속성은 변경되지 않습니다.','small-note'));}
+    else if(message.relationId||message.relationIndex!=null)showRelation(message.relationId,message.relationIndex);
+    else if(message.label){$('detail-body').replaceChildren(el('div','DIAGRAM ELEMENT','detail-kind'),el('h3',message.label,'detail-name'),el('p','표현용 그룹, 요약 또는 사용자 주석입니다. 수집한 AWS 속성은 변경되지 않습니다.','small-note'));}
   }
-  if(message.event==='diagramBotNotVisible')toast('현재 구성도에서 숨겨진 리소스입니다. 속성 패널에서 내용을 확인하세요.');
+  if(message.event==='diagramBotNotVisible')toast('현재 보기에서 숨겨진 리소스입니다. 속성 패널에서 내용을 확인하거나 선택 리소스 보기를 여세요.');
+  if(message.event==='diagramBotHighlighted')toast(message.count?`직접 관계 ${message.count}개를 구성도에서 강조했습니다.`:'이 보기에 그려진 직접 관계가 없습니다. 선택 리소스 보기에서 확인하세요.');
   if(message.event==='diagramBotNoteAdded')toast('메모를 추가했습니다. 더블클릭해 내용을 수정하세요.');
   if(message.event==='export'&&pngWaiter){
     const task=pngWaiter;pngWaiter=null;clearTimeout(task.timer);
@@ -77,9 +85,10 @@ async function refreshSnapshots(preferred) {
 }
 async function loadSnapshot(id) {
   if(state.dirty)await saveDocument(false);
-  state.snapshot=await api(`/api/snapshots/${id}`);state.snapshotId=id;state.vpc=state.snapshot.graph.nodes.find(n=>n.kind==='vpc')?.resource_id||null;state.selected=null;
+  state.snapshot=await api(`/api/snapshots/${id}`);state.snapshotId=id;
+  state.view='overview';state.vpc=state.snapshot.graph.nodes.find(n=>n.kind==='vpc')?.resource_id||null;state.focus=null;state.selected=null;
   $('snapshot-select').value=id;
-  renderSummary();renderInventory();await loadView();
+  renderSummary();await loadView();
 }
 function renderSummary() {
   const {metadata:m,graph}=state.snapshot;
@@ -88,36 +97,49 @@ function renderSummary() {
   $('collected-at').textContent=`수집 ${new Date(m.finished_at).toLocaleString('ko-KR')} · ${m.demo?'합성 샘플':'AWS API 조회'}`;
   $('coverage-button').textContent=(m.status==='complete'?'● ':'◐ ')+(statuses[m.status]||m.status);
   $('coverage-button').classList.toggle('complete',m.status==='complete');
+  $('partial-chip').hidden=m.status==='complete';
   const count=kind=>graph.nodes.filter(n=>n.kind===kind&&!n.reference_only).length;
   $('metrics').replaceChildren();
   for(const [label,value,icon,unit] of [['VPC ENVIRONMENTS',count('vpc'),'▦','개 환경'],['SUBNETS',count('subnet'),'⊞','개 서브넷'],['COMPUTE',count('ec2'),'▣','개 인스턴스'],['LOAD BALANCERS',count('load_balancer'),'⇄','개 로드밸런서']]){
     const box=el('div',undefined,'metric');box.append(el('div',icon,'metric-icon'));const content=el('div');content.append(el('div',label,'metric-label'));const number=el('div',String(value),'metric-number');number.append(el('small',unit));content.append(number);box.append(content);$('metrics').append(box);
   }
   $('environments').replaceChildren();const vpcs=graph.nodes.filter(n=>n.kind==='vpc');$('environment-count').textContent=vpcs.length;
-  for(const node of vpcs){const button=el('button',undefined,'environment');button.dataset.vpc=node.resource_id;const label=el('div',node.name);label.append(el('small',node.attributes.CidrBlock||node.resource_id));button.append(el('span','◇'),label);button.onclick=()=>switchView(node.resource_id);$('environments').append(button);}
+  for(const vpc of vpcs){const button=el('button',undefined,'environment');button.dataset.vpc=vpc.resource_id;const label=el('div',vpc.name);label.append(el('small',vpc.attributes.CidrBlock||vpc.resource_id));button.append(el('span','◇'),label);button.onclick=()=>switchView('detail',{vpc:vpc.resource_id});$('environments').append(button);}
   $('kind-filter').replaceChildren(new Option('모든 리소스','all'));
   for(const kind of [...new Set(graph.nodes.map(n=>n.kind))])$('kind-filter').append(new Option(names[kind]||kind,kind));
   $('total-count').textContent=graph.nodes.length;
   $('coverage-rows').replaceChildren();
-  for(const row of state.snapshot.coverage){const container=el('div',undefined,'coverage-row');const text=el('div',row.operation);text.append(el('small',`${row.items??'—'}개 · ${row.pages??'—'} 페이지${row.error_code?' · '+row.error_code:''}`));container.append(text,el('span',statuses[row.status]||row.status,'badge'+(row.status!=='complete'?' warn':'')));$('coverage-rows').append(container);}
+  for(const row of state.snapshot.coverage){const container=el('div',undefined,'coverage-row');const text=el('div',row.operation);text.append(el('small',`${row.items??'—'}개 · ${row.pages??'—'} 페이지${row.error_code?' · '+row.error_code:''}${row.status!=='complete'&&row.permission?' · 필요 권한 '+row.permission:''}`));container.append(text,el('span',statuses[row.status]||row.status,'badge'+(row.status!=='complete'?' warn':'')));$('coverage-rows').append(container);}
   $('limitations').replaceChildren(...(m.limitations||[]).map(s=>el('li',s)));
 }
-async function loadView(reset=false) {
+function applyDocument(document) {
+  state.xml=document.xml;state.revision=document.revision;state.history=document.history||[];state.visible=new Set(document.visible||[]);state.counts=document.counts;
+  const c=document.counts;
+  $('view-scope').textContent=c?`표시 ${c.visible}개 / 수집 ${c.collected}개 · 참조 ${c.references}개 · 이 보기에서 숨김 ${c.hidden}개`:'';
+}
+async function loadView() {
   state.loading=true;setControls();
   try{
-    const document=await api(documentUrl(reset));state.xml=document.xml;state.revision=document.revision;state.dirty=false;
-    $('environment-title').textContent=state.vpc?state.snapshot.graph.nodes.find(n=>n.resource_id===state.vpc)?.name:'AWS 구성도';
-    documentActive();if(state.ready)sendDocument();
+    applyDocument(await api(documentUrl()));state.dirty=false;
+    const title=state.view==='detail'?vpcNode(state.vpc)?.name:state.view==='focus'?node(state.focus)?.name:'AWS 전체 구성';
+    $('environment-title').textContent=title||'AWS 구성도';
+    documentActive();if(state.selected&&node(state.selected))showResource(state.selected,false);
+    if(state.ready)sendDocument();else{state.loading=false;setControls();}
   }catch(error){state.loading=false;setControls();throw error;}
 }
 function documentActive() {
-  $('all-environments').classList.toggle('active',!state.vpc);
-  document.querySelectorAll('[data-vpc]').forEach(b=>b.classList.toggle('active',b.dataset.vpc===state.vpc));
-  renderInventory();
+  $('all-environments').classList.toggle('active',state.view==='overview');
+  document.querySelectorAll('[data-vpc]').forEach(b=>b.classList.toggle('active',state.view==='detail'&&b.dataset.vpc===state.vpc));
+  for(const view of Object.keys(viewNames))$('view-'+view).classList.toggle('active',state.view===view);
+  setControls();renderInventory();
 }
-async function switchView(vpc) {
+async function switchView(view, options={}) {
   if(state.loading||state.busy)return;
-  try{if(state.dirty)await saveDocument(false);state.vpc=vpc;await loadView();}catch(error){toast(error.message,true);}
+  try{
+    if(state.dirty)await saveDocument(false);
+    state.view=view;if(options.vpc)state.vpc=options.vpc;if(options.focus)state.focus=options.focus;
+    await loadView();
+  }catch(error){toast(error.message,true);}
 }
 async function saveDocument(notify=true) {
   if(state.busy)throw new Error('이전 작업을 완료한 뒤 다시 시도하세요.');
@@ -125,51 +147,68 @@ async function saveDocument(notify=true) {
   try{
     const xml=await requestDocument();
     const saved=await api(documentUrl(),{method:'PUT',body:JSON.stringify({xml,revision:state.revision})});
-    state.xml=xml;state.revision=saved.revision;state.dirty=false;if(notify)toast('편집본을 로컬에 저장했습니다.');
+    applyDocument(saved);state.dirty=false;if(notify)toast('편집본을 로컬에 저장했습니다.');
     return xml;
   }finally{state.busy=false;setControls();}
+}
+async function replaceDocument(suffix, body, message) {
+  if(state.dirty)await saveDocument(false);
+  state.busy=true;setControls();
+  try{applyDocument(await api(documentUrl(suffix),{method:'POST',body:JSON.stringify({revision:state.revision,...body})}));}
+  finally{state.busy=false;}
+  sendDocument();toast(message);
 }
 function matchingResources() {
   if(!state.snapshot)return[];
   const search=$('search').value.toLowerCase(),kind=$('kind-filter').value;
-  const nodes=state.snapshot.graph.nodes;
-  const vpcNode=nodes.find(n=>n.resource_id===state.vpc);
-  const contained=new Set(state.snapshot.graph.edges.filter(e=>e.relation==='in_vpc'&&e.target===vpcNode?.id).map(e=>e.source));
-  if(vpcNode)contained.add(vpcNode.id);
-  for(const edge of state.snapshot.graph.edges)if(edge.relation==='registered_target'&&contained.has(edge.source))contained.add(edge.target);
-  if(state.references){for(const edge of state.snapshot.graph.edges)if(contained.has(edge.source))contained.add(edge.target);}
-  return nodes.filter(n=>(!state.vpc||contained.has(n.id))&&(!n.reference_only||state.references)&&(kind==='all'||n.kind===kind)&&JSON.stringify([n.name,n.resource_id,n.attributes]).toLowerCase().includes(search));
+  return state.snapshot.graph.nodes.filter(n=>(state.view==='overview'||state.visible?.has(n.id))&&(!n.reference_only||state.references||state.visible?.has(n.id))&&(kind==='all'||n.kind===kind)&&JSON.stringify([n.name,n.resource_id,n.attributes]).toLowerCase().includes(search));
 }
 function renderInventory() {
   const matches=matchingResources();$('inventory-rows').replaceChildren();
-  for(const node of matches){const row=el('tr');row.tabIndex=0;row.append(el('td',node.name),el('td',names[node.kind]),el('td',node.resource_id),el('td',node.reference_only?'참조만 확인':node.source));row.onclick=()=>showResource(node.id);row.onkeydown=e=>{if(e.key==='Enter')showResource(node.id);};$('inventory-rows').append(row);}
+  for(const item of matches){const row=el('tr');row.tabIndex=0;row.append(el('td',item.name),el('td',names[item.kind]),el('td',item.resource_id),el('td',item.reference_only?'참조만 확인':item.source));row.onclick=()=>showResource(item.id);row.onkeydown=e=>{if(e.key==='Enter')showResource(item.id);};$('inventory-rows').append(row);}
   $('inventory-empty').hidden=matches.length>0;
   const active=Boolean($('search').value)||$('kind-filter').value!=='all';$('search-results').hidden=!active||state.mode==='inventory';$('search-results').replaceChildren();
-  if(active){for(const node of matches.slice(0,30)){const button=el('button',node.name);button.onclick=()=>showResource(node.id);$('search-results').append(button);}if(!matches.length)$('search-results').append(el('span','검색 결과가 없습니다.'));}
+  if(active){$('search-results').append(el('span',`${viewNames[state.view]} 범위 · ${matches.length}개`,'search-scope'));for(const item of matches.slice(0,30)){const button=el('button',item.name);button.onclick=()=>showResource(item.id);$('search-results').append(button);}if(!matches.length)$('search-results').append(el('span','검색 결과가 없습니다.'));}
 }
+function relationsOf(id) {return state.snapshot.graph.edges.filter(e=>(e.source===id||e.target===id)&&e.relation!=='in_vpc');}
+function actionButton(label, handler) {const button=el('button',label,'button');button.onclick=()=>Promise.resolve().then(handler).catch(error=>toast(error.message,true));return button;}
 function showResource(id, select=true) {
-  const node=state.snapshot.graph.nodes.find(n=>n.id===id);if(!node)return;state.selected=id;
-  const body=$('detail-body');body.replaceChildren(el('div',names[node.kind]||node.kind,'detail-kind'),el('h3',node.name,'detail-name'),el('div',node.resource_id,'detail-id'));
-  const badge=el('p',node.reference_only?'참조만 확인 · 상세 미조회':'API 응답에서 조회됨','small-note');body.append(badge);
-  const fields=[['계정',node.account],['리전',node.region],['인스턴스 유형',node.attributes.InstanceType],['CIDR',node.attributes.CidrBlock],['AZ',node.attributes.AvailabilityZone||node.attributes.Placement?.AvailabilityZone],['상태',node.attributes.State?.Name||node.attributes.State?.Code],['프로토콜',node.attributes.Protocol],['포트',node.attributes.Port],['VPC',node.attributes.VpcId],['서브넷',node.attributes.SubnetId],['스킴',node.attributes.Scheme]];
-  const list=el('dl');for(const [key,value]of fields)if(value!==undefined){const item=el('div',undefined,'detail-field');item.append(el('dt',key),el('dd',String(value)));list.append(item);}body.append(list);
-  if(node.attributes.Tags?.length){body.append(el('div','TAGS','detail-section'));for(const tag of node.attributes.Tags)body.append(el('p',`${tag.Key} = ${tag.Value}`,'small-note'));}
-  body.append(el('div','API에서 확인한 관계','detail-section'));
-  for(const edge of state.snapshot.graph.edges.filter(e=>e.source===id||e.target===id)){
-    const other=state.snapshot.graph.nodes.find(n=>n.id===(edge.source===id?edge.target:edge.source));
-    const button=el('button',`${relationNames[edge.relation]||edge.relation} · ${other.name}`,'relation-button');button.append(el('small',edge.evidence));button.onclick=()=>showResource(other.id);body.append(button);
+  const item=node(id);if(!item)return;state.selected=id;setControls();
+  const body=$('detail-body');body.replaceChildren(el('div',names[item.kind]||item.kind,'detail-kind'),el('h3',item.name,'detail-name'),el('div',item.resource_id,'detail-id'));
+  body.append(el('p',item.reference_only?'참조만 확인 · 상세 미조회':'API 응답에서 조회됨','small-note'));
+  const actions=el('div',undefined,'inspector-actions');
+  if(item.kind==='vpc'&&!(state.view==='detail'&&state.vpc===item.resource_id))actions.append(actionButton('상세 구성 보기',()=>switchView('detail',{vpc:item.resource_id})));
+  if(item.kind!=='vpc'&&!(state.view==='focus'&&state.focus===id))actions.append(actionButton('선택 리소스 보기',()=>switchView('focus',{focus:id})));
+  if(state.view==='focus')actions.append(actionButton('상세 구성으로 돌아가기',()=>switchView('detail',{vpc:vpcOf(state.focus)||state.vpc})));
+  const related=relationsOf(id).map(e=>e.id);
+  if(related.length&&state.view!=='overview')actions.append(actionButton('직접 관계 강조',()=>post({action:'diagramBotSelect',resourceId:id,relations:related})));
+  if(actions.children.length)body.append(actions);
+  const fields=[['계정',item.account],['리전',item.region],['인스턴스 유형',item.attributes.InstanceType],['CIDR',item.attributes.CidrBlock],['AZ',item.attributes.AvailabilityZone||item.attributes.Placement?.AvailabilityZone],['상태',item.attributes.State?.Name||item.attributes.State?.Code],['프로토콜',item.attributes.Protocol],['포트',item.attributes.Port],['VPC',item.attributes.VpcId],['서브넷',item.attributes.SubnetId],['스킴',item.attributes.Scheme]];
+  const list=el('dl');for(const [key,value]of fields)if(value!==undefined){const field=el('div',undefined,'detail-field');field.append(el('dt',key),el('dd',String(value)));list.append(field);}body.append(list);
+  if(item.attributes.Tags?.length){body.append(el('div','TAGS','detail-section'));for(const tag of item.attributes.Tags)body.append(el('p',`${tag.Key} = ${tag.Value}`,'small-note'));}
+  body.append(el('div',`API에서 확인한 관계 · ${related.length}개`,'detail-section'));
+  for(const edge of relationsOf(id)){
+    const other=node(edge.source===id?edge.target:edge.source);
+    const qualifier=[edge.qualifiers?.port&&`:${edge.qualifiers.port}`,edge.qualifiers?.availability_zone].filter(Boolean).join(' · ');
+    const button=el('button',`${relationNames[edge.relation]||edge.relation} · ${other.name}${qualifier?' · '+qualifier:''}`,'relation-button');button.append(el('small',edge.evidence));
+    button.onclick=()=>{showRelation(edge.id);if(state.ready&&!state.loading)post({action:'diagramBotSelectRelation',relationId:edge.id});};body.append(button);
   }
-  const raw=el('details');raw.append(el('summary','원본 속성 보기'),el('pre',JSON.stringify(node.attributes,null,2)));body.append(raw);
+  const raw=el('details');raw.append(el('summary','원본 속성 보기'),el('pre',JSON.stringify(item.attributes,null,2)));body.append(raw);
   if(select&&state.ready&&!state.loading)post({action:'diagramBotSelect',resourceId:id});
 }
-function showRelation(index) {
-  const edge=state.snapshot.graph.edges[index];if(!edge)return;
-  $('detail-body').replaceChildren(el('div','CONFIGURATION RELATION','detail-kind'),el('h3',relationNames[edge.relation]||edge.relation,'detail-name'),el('p','AWS API에서 확인한 설정 관계입니다. 실제 통신 여부를 의미하지 않습니다.','small-note'),el('pre',JSON.stringify(edge,null,2)));
+function vpcOf(id) {const edge=state.snapshot.graph.edges.find(e=>e.source===id&&e.relation==='in_vpc');return edge?node(edge.target)?.resource_id:null;}
+function showRelation(id, index) {
+  const edges=state.snapshot.graph.edges;
+  const edge=id?edges.find(e=>e.id===id):edges[Number(index)];if(!edge)return;
+  const body=$('detail-body');
+  body.replaceChildren(el('div','CONFIGURATION RELATION','detail-kind'),el('h3',relationNames[edge.relation]||edge.relation,'detail-name'),el('p','AWS API에서 확인한 설정 관계입니다. 실제 통신 여부를 의미하지 않습니다.','small-note'));
+  for(const key of ['source','target']){const other=node(edge[key]);if(other){const button=el('button',`${key==='source'?'출발':'대상'} · ${names[other.kind]||other.kind} · ${other.name}`,'relation-button');button.onclick=()=>showResource(other.id);body.append(button);}}
+  body.append(el('pre',JSON.stringify(edge,null,2)));
 }
 function download(name, content, type) {
   const url=URL.createObjectURL(new Blob([content],{type}));const link=el('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-function filename(extension) {return `diagram-bot-${state.snapshot.metadata.account_id}-${state.vpc||'all'}-v${state.revision}.${extension}`;}
+function filename(extension) {const scope=state.view==='detail'?state.vpc:state.view==='focus'?`focus-${node(state.focus)?.resource_id.split('/').pop()}`:'overview';return `diagram-bot-${state.snapshot.metadata.account_id}-${scope}-v${state.revision}.${extension}`;}
 async function downloadDiagram() {
   const xml=await saveDocument(false);download(filename('drawio'),xml,'application/xml');toast('편집 가능한 draw.io 파일을 다운로드했습니다.');
 }
@@ -187,16 +226,20 @@ async function downloadPng() {
   }finally{state.busy=false;setControls();$('download-png').disabled=false;}
 }
 function csvCell(value){let text=typeof value==='object'?JSON.stringify(value):String(value??'');if(/^\s*[=+\-@]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';}
-function downloadCsv(){const fields=['account','region','kind','resource_id','name','reference_only','source','attributes'];const rows=[fields,...state.snapshot.graph.nodes.map(n=>fields.map(f=>n[f]))];download('inventory.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
+function downloadCsv(){const fields=['account','region','kind','resource_id','name','reference_only','source','attributes'];const rows=[fields,...state.snapshot.graph.nodes.map(n=>fields.map(f=>n[f]))];download('inventory.csv','﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
 function bind(id, handler) {$(id).onclick=()=>Promise.resolve().then(handler).catch(error=>toast(error.message,true));}
-bind('all-environments',()=>switchView(null));
+bind('all-environments',()=>switchView('overview'));
+bind('view-overview',()=>switchView('overview'));
+bind('view-detail',()=>switchView('detail',{vpc:state.vpc}));
+bind('view-focus',()=>switchView('focus',{focus:state.selected}));
 bind('save-button',()=>saveDocument());
 bind('export-button',()=>{$('export-dialog').showModal();});
 bind('coverage-button',()=>{$('coverage-dialog').showModal();});
 bind('collection-button',()=>{$('collection-dialog').showModal();});
 bind('close-collection',()=>{$('collection-dialog').close();});
 bind('note-button',()=>post({action:'diagramBotNote'}));
-bind('reset-button',async()=>{if(state.dirty)await saveDocument(false);await loadView(true);state.dirty=true;setControls();toast('자동 생성 배치를 불러왔습니다. 저장하면 기존 편집본에 적용됩니다.');});
+bind('reset-button',()=>replaceDocument('/relayout',{},'자동 배치를 다시 실행했습니다. 이전 편집본은 보관되고 메모는 유지됩니다.'));
+bind('restore-button',()=>{const last=state.history.at(-1);return replaceDocument('/restore',{from_revision:last.revision},`보관된 v${last.revision} 편집본을 복원했습니다.`);});
 bind('download-drawio',downloadDiagram);bind('download-png',downloadPng);
 bind('download-json',()=>download('snapshot.json',JSON.stringify(state.snapshot,null,2),'application/json'));bind('download-csv',downloadCsv);
 bind('import-button',()=>$('import-file').click());

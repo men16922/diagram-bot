@@ -1,3 +1,5 @@
+import hashlib
+import json
 import time
 
 import pytest
@@ -41,6 +43,7 @@ def test_mutation_protection_and_import_validation(client):
 def test_document_persistence_conflict_and_scope(client, tmp_path):
     url = '/api/snapshots/demo/document?vpc=vpc-demo'
     generated = client.get(url).json()
+    assert generated['view']['kind'] == 'detail' and generated['counts']['visible'] < generated['counts']['collected'] + generated['counts']['references']
     original_snapshot = client.get('/api/snapshots/demo').json()
     xml = generated['xml'].replace('web-a', 'Reviewed web-a')
     saved = client.put(url, json={'xml': xml, 'revision': 0})
@@ -57,6 +60,60 @@ def test_document_persistence_conflict_and_scope(client, tmp_path):
     assert client.put(url, json={'xml': '<html/>', 'revision': 1}).status_code == 422
     assert client.get('/api/snapshots/demo/document?vpc=unknown').status_code == 422
     assert client.put('/api/snapshots/demo/document?vpc=unknown', json={'xml': xml, 'revision': 0}).status_code == 422
+    assert client.get('/api/snapshots/demo/document?view=focus&resource=missing').status_code == 422
+    assert client.get('/api/snapshots/demo/document?view=sideways').status_code == 422
+
+
+def test_views_are_isolated_documents(client):
+    urls = ['/api/snapshots/demo/document?view=overview', '/api/snapshots/demo/document?view=detail&vpc=vpc-demo',
+            '/api/snapshots/demo/document?view=detail&vpc=vpc-staging', '/api/snapshots/demo/document?view=focus&resource=i-demo-a',
+            '/api/snapshots/demo/document?view=focus&resource=i-demo-a&references=true']
+    documents = [client.get(url).json() for url in urls]
+    assert [d['view']['kind'] for d in documents] == ['overview', 'detail', 'detail', 'focus', 'focus']
+    assert len({d['xml'] for d in documents}) == len(urls)
+    focus = documents[3]
+    assert focus['view']['resource'].endswith('/ec2/i-demo-a') and len(focus['visible']) == focus['counts']['visible'] == 4
+    edited = focus['xml'].replace('web-a', 'focused web-a')
+    assert client.put(urls[3], json={'xml': edited, 'revision': 0}).json()['revision'] == 1
+    assert all(client.get(url).json()['revision'] == 0 for url in urls[:3] + urls[4:])
+    # A node ID and a raw resource ID address the same focus document.
+    node_id = focus['view']['resource']
+    assert client.get('/api/snapshots/demo/document?view=focus&resource=' + node_id).json()['xml'] == edited
+
+
+def test_relayout_archives_edit_and_keeps_notes_then_restore(client):
+    url = '/api/snapshots/demo/document?view=detail&vpc=vpc-demo'
+    generated = client.get(url).json()['xml']
+    note = ('<mxCell id="note-1" value="검토 메모 · 유지" style="rounded=1;" vertex="1" parent="1">'
+            '<mxGeometry x="900" y="40" width="220" height="85" as="geometry"/></mxCell>')
+    moved = generated.replace('</root>', note + '</root>').replace('x="24" y="112"', 'x="300" y="400"')
+    assert client.put(url, json={'xml': moved, 'revision': 0}).json()['revision'] == 1
+    assert client.post(url.replace('/document?', '/document/relayout?'), json={'revision': 0}).status_code == 409
+    relaid = client.post(url.replace('/document?', '/document/relayout?'), json={'revision': 1}).json()
+    assert relaid['revision'] == 2 and 'note-1' in relaid['xml'] and '검토 메모 · 유지' in relaid['xml']
+    assert 'x="300" y="400"' not in relaid['xml'] and 'x="24" y="112"' in relaid['xml']
+    assert relaid['xml'].count('note-1') == 1
+    assert [h['revision'] for h in relaid['history']] == [1]
+    restored = client.post(url.replace('/document?', '/document/restore?'), json={'revision': 2, 'from_revision': 1}).json()
+    assert restored['revision'] == 3 and restored['xml'] == moved
+    assert [h['revision'] for h in restored['history']] == [1, 2]
+    assert client.post(url.replace('/document?', '/document/restore?'), json={'revision': 3, 'from_revision': 9}).status_code == 404
+
+
+def test_legacy_snapshot_and_detail_document_stay_usable(client, tmp_path):
+    data = tmp_path / 'data'
+    legacy = client.get('/api/snapshots/demo').json()
+    for edge in legacy['graph']['edges']:
+        del edge['id'], edge['qualifiers']
+    (data / 'snapshots' / 'legacy.json').write_text(json.dumps(legacy), encoding='utf-8')
+    key = hashlib.sha256('legacy|vpc-demo|False'.encode()).hexdigest()
+    old_xml = client.get('/api/snapshots/demo/document?vpc=vpc-demo').json()['xml'].replace('web-a', 'legacy web-a')
+    (data / 'documents' / f'{key}.json').write_text(json.dumps({'xml': old_xml, 'revision': 4, 'saved_at': 'x'}), encoding='utf-8')
+    upgraded = client.get('/api/snapshots/legacy').json()
+    assert all(e['id'].startswith('rel-') for e in upgraded['graph']['edges'])
+    assert [(e['source'], e['target']) for e in upgraded['graph']['edges']] == [(e['source'], e['target']) for e in legacy['graph']['edges']]
+    document = client.get('/api/snapshots/legacy/document?vpc=vpc-demo').json()
+    assert document['revision'] == 4 and 'legacy web-a' in document['xml']
 
 
 @pytest.mark.parametrize('fail', [False, True])

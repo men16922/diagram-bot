@@ -15,7 +15,7 @@
     <select id="snapshot-select" aria-label="수집 이력"></select>
     <div id="account-summary" class="account-summary"></div>
     <div class="side-caption">ENVIRONMENTS <span id="environment-count"></span></div>
-    <button class="environment all active" id="all-environments"><span>▦</span><div>전체 환경<small>모든 VPC 구성 보기</small></div></button>
+    <button class="environment all active" id="all-environments"><span>▦</span><div>전체 구성<small>계정·리전·VPC 요약</small></div></button>
     <div id="environments"></div>
     <div class="sidebar-bottom">
       <button class="side-action" id="import-button">↥ <span>스냅샷 JSON 가져오기</span></button>
@@ -36,7 +36,8 @@
         <div class="tabs"><button id="diagram-tab" class="tab active">구성도</button><button id="inventory-tab" class="tab">리소스 목록 <span id="total-count"></span></button></div>
         <div class="workspace-actions"><span id="save-state" role="status">불러오는 중</span><button id="save-button" class="button" disabled>편집본 저장</button><button id="export-button" class="button primary" disabled>↓ 다운로드</button></div>
       </div>
-      <div class="filterbar"><div class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="이름, ID, IP, 태그 검색" aria-label="리소스 검색"></div><select id="kind-filter" aria-label="리소스 종류"><option value="all">모든 리소스</option></select><label class="check"><input type="checkbox" id="references">참조 리소스 표시</label><div class="filter-spacer"></div><button id="note-button" class="text-button" disabled>＋ 메모</button><button id="reset-button" class="text-button" disabled>자동 배치로 복원</button></div>
+      <div class="viewbar" role="tablist" aria-label="구성도 보기"><button id="view-overview" class="view-button active" role="tab">전체 구성</button><button id="view-detail" class="view-button" role="tab">상세 구성</button><button id="view-focus" class="view-button" role="tab">선택 리소스</button><span id="view-scope" class="view-scope"></span><span id="partial-chip" class="badge warn" hidden>부분 조회 · 일부 리소스 누락 가능</span></div>
+      <div class="filterbar"><div class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="이름, ID, IP, 태그 검색" aria-label="리소스 검색"></div><select id="kind-filter" aria-label="리소스 종류"><option value="all">모든 리소스</option></select><label class="check"><input type="checkbox" id="references">SG·ENI·EBS 참조 표시</label><span class="filter-note">검색·종류 필터는 목록과 검색 결과에 적용 · 캔버스는 현재 보기 기준</span><div class="filter-spacer"></div><button id="note-button" class="text-button" disabled>＋ 메모</button><button id="reset-button" class="text-button" disabled>자동 배치 다시 실행</button><button id="restore-button" class="text-button" disabled>이전 편집본 복원</button></div>
       <div id="search-results" class="search-results" hidden></div>
       <div class="workspace-content">
         <div class="canvas-area" id="canvas-area">
@@ -47,7 +48,7 @@
         <div id="inventory" class="inventory" hidden><table><thead><tr><th>리소스</th><th>종류</th><th>ID / ARN</th><th>조회 근거</th></tr></thead><tbody id="inventory-rows"></tbody></table><p id="inventory-empty" hidden>조건에 맞는 리소스가 없습니다.</p></div>
         <aside class="inspector" id="inspector"><div class="inspector-title">RESOURCE DETAILS</div><div id="detail-body" class="detail-body"><div class="empty-detail"><div>⌖</div><h3>구성을 살펴보세요</h3><p>리소스를 선택하면 속성과<br>API에서 확인한 관계가 표시됩니다.</p></div></div></aside>
       </div>
-      <footer class="workspace-footer"><div><span class="legend-line"></span> 설정상 연결 <span class="legend-ref"></span> 참조만 확인</div><span>실제 통신 여부는 별도 관측이 필요합니다.</span></footer>
+      <footer class="workspace-footer"><div><span class="legend-line"></span> 설정상 연결 <span class="legend-ref"></span> 참조만 확인 <span class="legend-summary"></span> 요약 카드</div><span>실제 통신 여부는 별도 관측이 필요합니다.</span></footer>
     </section>
     <div class="page-footer"><span id="collected-at"></span><span>Diagram Bot · draw.io powered</span></div>
   </main>

@@ -1,12 +1,26 @@
 """Browser acceptance test. Run against a fresh local Diagram Bot workspace."""
 import argparse
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 
 from PIL import Image
 from playwright.sync_api import expect, sync_playwright
+
+
+def starts(text):
+    """Multi-line draw.io labels render as one element; match the first line."""
+    return re.compile('^' + re.escape(text))
+
+
+def geometry(xml, resource_suffix):
+    for obj in ET.fromstring(xml).iter('object'):
+        if obj.get('resourceId', '').endswith(resource_suffix):
+            g = obj.find('mxCell/mxGeometry')
+            return float(g.get('x')), float(g.get('y'))
+    raise AssertionError(resource_suffix)
 
 
 def main():
@@ -22,38 +36,81 @@ def main():
         page = browser.new_page(viewport={'width': 1600, 'height': 1100}, device_scale_factor=1)
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.on('request', lambda req: external.append(req.url) if req.url.startswith(('http:', 'https:')) and urlparse(req.url).netloc != urlparse(args.url).netloc else None)
+        ready = lambda: expect(page.locator('#save-button')).to_be_enabled(timeout=60000)
         page.goto(args.url)
-        expect(page.locator('#save-button')).to_be_enabled(timeout=60000)
+        ready()
         frame = page.frame_locator('#editor')
-        frame.get_by_text('web-a', exact=True).click()
-        expect(page.locator('#detail-body')).to_contain_text('i-demo-a')
-        expect(page.locator('#detail-body')).to_contain_text('DescribeInstances.SubnetId')
-        page.screenshot(path=str(args.output / 'workspace.png'), full_page=True)
+        detail = page.locator('#detail-body')
 
+        # 1. Overview: summary cards, counts and partial coverage are visible; a VPC card leads to detail.
+        expect(page.locator('#view-overview')).to_have_class('view-button active')
+        expect(page.locator('#partial-chip')).to_be_visible()
+        expect(page.locator('#view-scope')).to_contain_text('수집 18개')
+        frame.get_by_text(starts('VPC · 주문 서비스 운영 네트워크')).click()
+        expect(detail).to_contain_text('vpc-demo')
+        page.screenshot(path=str(args.output / 'overview.png'), full_page=True)
+        detail.get_by_role('button', name='상세 구성 보기').click()
+        ready()
+        expect(page.locator('#view-detail')).to_have_class('view-button active')
+        expect(page.locator('#environment-title')).to_have_text('주문 서비스 운영 네트워크')
+
+        # 2. ALB: target groups, registered targets and API evidence.
+        frame.get_by_text(starts('demo-alb')).click()
+        expect(detail).to_contain_text('DescribeTargetGroups.LoadBalancerArns[]')
+        expect(detail).to_contain_text('서브넷 배치 · public-a · ap-northeast-2a')
+        detail.get_by_role('button', name='직접 관계 강조').click()
+        expect(page.locator('#toast')).to_contain_text('직접 관계 2개')
+        frame.get_by_text(starts('demo-web')).click()
+        expect(detail).to_contain_text('대상 등록 · web-a · :8443')
+        expect(detail).to_contain_text('DescribeTargetHealth.Target.Id')
+
+        # 3. Detail placement of an instance, then the focused-resource view and back.
+        frame.get_by_text('web-c', exact=True).click()
+        expect(detail).to_contain_text('subnet-app-c')
+        expect(detail).to_contain_text('DescribeInstances.SubnetId')
+        page.screenshot(path=str(args.output / 'workspace.png'), full_page=True)
+        detail.get_by_role('button', name='선택 리소스 보기').click()
+        ready()
+        expect(page.locator('#view-focus')).to_have_class('view-button active')
+        expect(page.locator('#view-scope')).to_contain_text('표시 5개')
+        expect(frame.get_by_text(starts('demo-api'))).to_be_visible()
+        expect(frame.get_by_text('web-a', exact=True)).to_have_count(0)
+        page.screenshot(path=str(args.output / 'focus.png'), full_page=True)
+        detail.get_by_role('button', name='상세 구성으로 돌아가기').click()
+        ready()
+
+        # 4. Partial collection and reference-only resources.
         page.locator('#coverage-button').click()
         expect(page.locator('#coverage-dialog')).to_contain_text('UnauthorizedOperation')
+        expect(page.locator('#coverage-dialog')).to_contain_text('ec2:DescribeInstances')
         page.locator('#coverage-dialog [aria-label="닫기"]').click()
+        frame.get_by_text('i-demo-missing', exact=True).click()
+        expect(detail).to_contain_text('참조만 확인')
         page.locator('#inventory-tab').click()
         page.locator('#search').fill('web-a')
         expect(page.locator('#inventory-rows tr')).to_have_count(1)
         page.locator('#search').fill('')
         page.locator('#kind-filter').select_option('ec2')
-        expect(page.locator('#inventory-rows tr')).to_have_count(2)
+        expect(page.locator('#inventory-rows tr')).to_have_count(4)
         page.locator('#kind-filter').select_option('all')
         page.locator('#diagram-tab').click()
-
         page.locator('[data-vpc="vpc-staging"]').click()
-        expect(page.locator('#save-button')).to_be_enabled()
+        ready()
         expect(frame.get_by_text('staging-api', exact=True)).to_be_visible()
         page.locator('[data-vpc="vpc-demo"]').click()
-        expect(page.locator('#save-button')).to_be_enabled()
+        ready()
         page.locator('#references').check()
-        expect(page.locator('#save-button')).to_be_enabled()
+        ready()
         expect(frame.get_by_text('sg-web', exact=True)).to_be_visible()
         page.locator('#references').uncheck()
-        expect(page.locator('#save-button')).to_be_enabled()
+        ready()
 
-        # Use native draw.io editing, not a test-only API to change the document.
+        # 5. Native edits: move an instance with the keyboard and write a review note.
+        generated = page.evaluate("fetch('/api/snapshots/demo/document?view=detail&vpc=vpc-demo&references=false').then(r => r.json())")
+        before = geometry(generated['xml'], '/ec2/i-demo-c')
+        frame.get_by_text('web-c', exact=True).click()
+        for _ in range(4):
+            frame.locator('.geDiagramContainer').press('Shift+ArrowRight')
         page.locator('#note-button').click()
         note = frame.locator('.geDiagramContainer').get_by_text('검토 메모', exact=False).last
         note.dblclick()
@@ -64,18 +121,23 @@ def main():
         page.locator('#save-button').click()
         expect(page.locator('#save-state')).to_contain_text('저장됨')
         page.reload()
-        expect(page.locator('#save-button')).to_be_enabled(timeout=60000)
+        ready()
+        page.locator('[data-vpc="vpc-demo"]').click()
+        ready()
         frame = page.frame_locator('#editor')
         expect(frame.get_by_text('시연 검토 완료 · 사용자 메모', exact=True)).to_be_visible()
+
+        # 6. The same edited document goes to .drawio and PNG.
         page.locator('#export-button').click()
         with page.expect_download() as event:
             page.locator('#download-drawio').click()
         event.value.save_as(args.output / 'topology.drawio')
-        xml = (args.output / 'topology.drawio').read_text(encoding="utf-8")
+        xml = (args.output / 'topology.drawio').read_text(encoding='utf-8')
         root = ET.fromstring(xml)
         assert root.find('diagram/mxGraphModel') is not None
-        assert '시연 검토 완료' in xml
-        assert 'resourceId=' in xml and 'relationIndex=' in xml
+        assert '시연 검토 완료' in xml and 'relationId=' in xml and 'layout="diagram-bot-layered/2"' in xml
+        moved = geometry(xml, '/ec2/i-demo-c')
+        assert moved[0] > before[0] and moved[1] == before[1], (before, moved)
         with page.expect_download(timeout=60000) as event:
             page.locator('#download-png').click()
         event.value.save_as(args.output / 'topology.png')
@@ -84,18 +146,21 @@ def main():
             assert img.format == 'PNG' and min(img.size) > 500
             assert img.convert('RGB').getextrema()[0][0] < 150
             assert img.convert('RGBA').getpixel((0, 0))[3] == 255
-        page.locator('#png-scale').select_option('1')
-        page.locator('#png-transparent').check()
-        with page.expect_download(timeout=60000) as event:
-            page.locator('#download-png').click()
-        event.value.save_as(args.output / 'topology-transparent.png')
-        with Image.open(args.output / 'topology-transparent.png') as img:
-            assert all(abs(big - small * 2) <= 2 for big, small in zip(double_size, img.size))
-            assert img.convert('RGBA').getpixel((0, 0))[3] == 0
+        for scale in ('1', '3'):
+            page.locator('#png-scale').select_option(scale)
+            page.locator('#png-transparent').set_checked(scale == '1')
+            with page.expect_download(timeout=60000) as event:
+                page.locator('#download-png').click()
+            name = 'topology-transparent.png' if scale == '1' else 'topology-3x.png'
+            event.value.save_as(args.output / name)
+            with Image.open(args.output / name) as img:
+                factor = int(scale) / 2
+                assert all(abs(big * factor - small) <= 3 for big, small in zip(double_size, img.size)), (double_size, img.size)
+                assert img.convert('RGBA').getpixel((0, 0))[3] == (0 if scale == '1' else 255)
         with page.expect_download() as event:
             page.locator('#download-json').click()
         event.value.save_as(args.output / 'snapshot.json')
-        snapshot = json.loads((args.output / 'snapshot.json').read_text(encoding="utf-8"))
+        snapshot = json.loads((args.output / 'snapshot.json').read_text(encoding='utf-8'))
         assert snapshot['metadata']['demo'] is True
         assert '시연 검토 완료' not in json.dumps(snapshot, ensure_ascii=False)
         with page.expect_download() as event:
@@ -104,17 +169,35 @@ def main():
         assert 'i-demo-a' in (args.output / 'inventory.csv').read_text(encoding='utf-8-sig')
         page.locator('#export-dialog [aria-label="닫기"]').click()
         page.screenshot(path=str(args.output / 'workspace-edited.png'), full_page=True)
+
+        # 7. Explicit relayout keeps the note and archives the moved layout; restore brings it back.
+        page.locator('#reset-button').click()
+        expect(page.locator('#toast')).to_contain_text('이전 편집본은 보관')
+        ready()
+        expect(frame.get_by_text('시연 검토 완료 · 사용자 메모', exact=True)).to_be_visible()
+        relaid = page.evaluate("fetch('/api/snapshots/demo/document?view=detail&vpc=vpc-demo&references=false').then(r => r.json())")
+        assert geometry(relaid['xml'], '/ec2/i-demo-c') == before and relaid['history']
+        page.locator('#restore-button').click()
+        expect(page.locator('#toast')).to_contain_text('복원했습니다')
+        ready()
+        restored = page.evaluate("fetch('/api/snapshots/demo/document?view=detail&vpc=vpc-demo&references=false').then(r => r.json())")
+        assert geometry(restored['xml'], '/ec2/i-demo-c') == moved
+
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
         expect(page.locator('#snapshot-select option')).to_have_count(2)
-        expect(page.locator('#save-button')).to_be_enabled()
+        ready()
         expect(page.locator('#save-state')).to_have_text('자동 생성 구성도')
         assert not errors, errors
         assert not external, external
         browser.close()
     report = {'browser': 'Chromium', 'page_errors': errors, 'external_requests': external, 'png_2x_size': double_size,
-              'checks': ['native selection', 'coverage', 'inventory search/type', 'VPC switch', 'references',
-                         'native note edit', 'save/reload', 'drawio XML download', 'PNG 2x white', 'PNG 1x transparent',
-                         'JSON/CSV exports', 'snapshot import']}
+              'moved_instance': {'before': before, 'after': moved},
+              'checks': ['overview summary + counts + partial chip', 'VPC card -> detail view', 'ALB relations + evidence',
+                         'relation highlight', 'multi-port registration', 'instance AZ/subnet placement', 'focus view + return',
+                         'coverage + IAM permission', 'reference-only target', 'inventory search/type', 'VPC switch',
+                         'SG/ENI/EBS references', 'native keyboard move', 'native note edit', 'save/reload',
+                         'drawio XML download with moved geometry', 'PNG 2x white', 'PNG 1x transparent', 'PNG 3x',
+                         'JSON/CSV exports', 'relayout keeps note + archives edit', 'restore archived edit', 'snapshot import']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 

@@ -7,7 +7,8 @@ from .graph import build_graph
 from .layout import cell_id, layout_view
 from .views import view_graph
 
-__all__ = ["cell_id", "generate_document", "layout_document", "validate_document"]
+__all__ = ["carry_annotations", "cell_id", "generate_document", "layout_document", "validate_document"]
+GENERATED = {"0", "1", "heading", "scope", "account", "references"}
 
 RELATIONS = {
     "associated_load_balancer": "LB 연결", "registered_target": "대상 등록",
@@ -125,3 +126,28 @@ def generate_document(snapshot, vpc_id=None, include_references=False, view=None
         for vpc in sorted(n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc"):
             page(file, layout_document(snapshot, "detail", vpc, None, include_references, graph), vpc)
     return tostring(file, encoding="unicode")
+
+
+def carry_annotations(saved_xml, generated_xml):
+    """Copy user-added cells (notes, shapes, user edges) from the first page of an edited document.
+
+    Generated cells are recognised by their deterministic IDs or AWS attributes, so a relayout
+    replaces them while user annotations keep their own geometry.
+    """
+    saved, generated = validate_document(saved_xml), validate_document(generated_xml)
+    target = generated.find("diagram/mxGraphModel/root") if generated.tag == "mxfile" else generated.find("root")
+    source = saved.find("diagram/mxGraphModel/root") if saved.tag == "mxfile" else saved.find("root")
+    if source is None or target is None:
+        return generated_xml
+    present = {c.get("id") for c in target}
+    for cell in source:
+        inner = cell if cell.tag == "mxCell" else cell.find("mxCell")
+        key = cell.get("id")
+        if inner is None or key in present or key in GENERATED or key.startswith("r-") \
+                or any(cell.get(a) is not None for a in ("resourceId", "relationId", "relationIndex", "summary")):
+            continue
+        if any(inner.get(a) is not None and inner.get(a) not in present for a in ("parent", "source", "target")):
+            continue
+        target.append(cell)
+        present.add(key)
+    return tostring(generated, encoding="unicode")

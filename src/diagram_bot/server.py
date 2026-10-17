@@ -22,9 +22,10 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .collector import collect, now
 from .demo import demo_snapshot
-from .drawio import generate_document, validate_document
+from .drawio import carry_annotations, generate_document, validate_document
 from .editor import VERSION, editor_path
-from .graph import build_graph
+from .graph import build_graph, upgrade_graph
+from .views import view_graph
 
 
 def data_path():
@@ -47,6 +48,17 @@ class CollectionRequest(BaseModel):
 class DocumentRequest(BaseModel):
     xml: str = Field(max_length=10 * 1024 * 1024)
     revision: int = Field(ge=0)
+
+
+class RevisionRequest(BaseModel):
+    revision: int = Field(ge=0)
+
+
+class RestoreRequest(RevisionRequest):
+    from_revision: int = Field(ge=0)
+
+
+HISTORY = 20
 
 
 def create_app(directory=None, editor_directory=None):
@@ -112,11 +124,40 @@ def create_app(directory=None, editor_directory=None):
         path = snapshots / f"{identifier}.json"
         if not path.is_file():
             raise HTTPException(404, "스냅샷을 찾을 수 없습니다.")
-        return json.loads(path.read_text(encoding="utf-8"))
+        snapshot = json.loads(path.read_text(encoding="utf-8"))
+        upgrade_graph(snapshot["graph"])
+        return snapshot
 
-    def doc_path(identifier, vpc, references):
-        key = hashlib.sha256(f"{identifier}|{vpc}|{references}".encode()).hexdigest()
-        return documents / f"{key}.json"
+    def doc_path(identifier, scope):
+        view, vpc, resource, references = scope
+        # Detail views keep the pre-view key so documents saved by earlier versions stay attached.
+        key = (f"{identifier}|{vpc}|{references}" if view == "detail"
+               else f"{identifier}|{view}|{vpc}|{resource}|{references}")
+        return documents / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
+
+    def read_json(path, default=None):
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
+
+    def view_scope(snapshot, view, vpc, resource, references):
+        try:
+            selection = view_graph(snapshot["graph"], view, vpc, resource, references)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        v = selection["view"]
+        return (v["kind"], v["vpc"], v["resource"], v["references"]), selection
+
+    def describe(document, selection, history):
+        return {**document, "view": selection["view"], "counts": selection["counts"], "visible": selection["nodes"],
+                "history": [{k: h[k] for k in ("revision", "saved_at", "reason")} for h in history]}
+
+    def archive(path, saved, reason):
+        """Keep superseded revisions so an explicit relayout or overwrite never loses an edit."""
+        history_path = path.with_suffix(".history.json")
+        history = read_json(history_path, [])
+        if saved.get("xml"):
+            history = (history + [{"revision": saved["revision"], "saved_at": saved.get("saved_at"), "reason": reason, "xml": saved["xml"]}])[-HISTORY:]
+            atomic_json(history_path, history)
+        return history
 
     @app.get("/", response_class=HTMLResponse)
     def home():
@@ -150,37 +191,76 @@ def create_app(directory=None, editor_directory=None):
             raise HTTPException(422, f"스냅샷 형식을 확인하세요: {exc}") from exc
 
     @app.get("/api/snapshots/{identifier}/document")
-    def read_document(identifier: str, vpc: str | None = None, references: bool = False, reset: bool = False):
+    def read_document(identifier: str, view: str | None = None, vpc: str | None = None, resource: str | None = None,
+                      references: bool = False, reset: bool = False):
         snapshot = get_snapshot(identifier)
-        path = doc_path(identifier, vpc, references)
-        saved = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+        scope, selection = view_scope(snapshot, view, vpc, resource, references)
+        path = doc_path(identifier, scope)
+        saved = read_json(path)
+        history = read_json(path.with_suffix(".history.json"), [])
         if saved and not reset:
-            return saved
-        try:
-            xml = generate_document(snapshot, vpc, references)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        return {"xml": xml, "revision": saved["revision"] if saved else 0, "saved_at": None}
+            return describe(saved, selection, history)
+        xml = generate_document(snapshot, scope[1], scope[3], scope[0], scope[2])
+        return describe({"xml": xml, "revision": saved["revision"] if saved else 0, "saved_at": None}, selection, history)
 
     @app.put("/api/snapshots/{identifier}/document")
-    def save_document(identifier: str, document: DocumentRequest, vpc: str | None = None, references: bool = False):
+    def save_document(identifier: str, document: DocumentRequest, view: str | None = None, vpc: str | None = None,
+                      resource: str | None = None, references: bool = False):
         snapshot = get_snapshot(identifier)
-        if vpc and not any(n["kind"] == "vpc" and n["resource_id"] == vpc for n in snapshot["graph"]["nodes"]):
-            raise HTTPException(422, "선택한 VPC가 스냅샷에 없습니다.")
+        scope, selection = view_scope(snapshot, view, vpc, resource, references)
         try:
             validate_document(document.xml)
         except Exception as exc:
             raise HTTPException(422, "유효한 압축 해제 draw.io XML이 아닙니다.") from exc
-        path = doc_path(identifier, vpc, references)
+        path = doc_path(identifier, scope)
         with mutex:
-            saved = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"revision": 0}
+            saved = read_json(path, {"revision": 0})
             if saved["revision"] != document.revision:
                 raise HTTPException(409, "다른 창에서 편집본을 저장했습니다. 새로고침 후 다시 편집하세요.")
             if saved.get("xml") == document.xml:
-                return saved
-            saved = {"xml": document.xml, "revision": document.revision+1, "saved_at": now()}
+                return describe(saved, selection, read_json(path.with_suffix(".history.json"), []))
+            history = archive(path, saved, "편집 저장")
+            saved = {"xml": document.xml, "revision": document.revision + 1, "saved_at": now()}
             atomic_json(path, saved)
-        return saved
+        return describe(saved, selection, history)
+
+    @app.post("/api/snapshots/{identifier}/document/relayout")
+    def relayout_document(identifier: str, request: RevisionRequest, view: str | None = None, vpc: str | None = None,
+                          resource: str | None = None, references: bool = False):
+        """Explicit automatic layout: archive the current edit, regenerate, keep user-added notes."""
+        snapshot = get_snapshot(identifier)
+        scope, selection = view_scope(snapshot, view, vpc, resource, references)
+        path = doc_path(identifier, scope)
+        xml = generate_document(snapshot, scope[1], scope[3], scope[0], scope[2])
+        with mutex:
+            saved = read_json(path, {"revision": 0})
+            if saved["revision"] != request.revision:
+                raise HTTPException(409, "다른 창에서 편집본을 저장했습니다. 새로고침 후 다시 편집하세요.")
+            if saved.get("xml"):
+                xml = carry_annotations(saved["xml"], xml)
+            history = archive(path, saved, "자동 재배치 전")
+            saved = {"xml": xml, "revision": saved["revision"] + 1, "saved_at": now()}
+            atomic_json(path, saved)
+        return describe(saved, selection, history)
+
+    @app.post("/api/snapshots/{identifier}/document/restore")
+    def restore_document(identifier: str, request: RestoreRequest, view: str | None = None, vpc: str | None = None,
+                         resource: str | None = None, references: bool = False):
+        snapshot = get_snapshot(identifier)
+        scope, selection = view_scope(snapshot, view, vpc, resource, references)
+        path = doc_path(identifier, scope)
+        with mutex:
+            saved = read_json(path, {"revision": 0})
+            if saved["revision"] != request.revision:
+                raise HTTPException(409, "다른 창에서 편집본을 저장했습니다. 새로고침 후 다시 편집하세요.")
+            history = read_json(path.with_suffix(".history.json"), [])
+            source = next((h for h in history if h["revision"] == request.from_revision), None)
+            if not source:
+                raise HTTPException(404, "보관된 편집본을 찾을 수 없습니다.")
+            history = archive(path, saved, f"v{source['revision']} 복원 전")
+            saved = {"xml": source["xml"], "revision": saved["revision"] + 1, "saved_at": now()}
+            atomic_json(path, saved)
+        return describe(saved, selection, history)
 
     @app.post("/api/collections", status_code=202)
     def start_collection(params: CollectionRequest):
