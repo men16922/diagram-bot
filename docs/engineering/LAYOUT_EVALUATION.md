@@ -58,3 +58,28 @@ routes, no shared segment between unrelated routes, identical output on rerun, f
 (test limit 5 s). This is a synthetic measurement, not a large-environment support claim.
 Rendered draw.io output of the sample was reviewed visually; the 100-resource view is
 structurally correct but dense (≈170 drawn relations), so readability at that size is limited.
+
+## Visual conventions (AWS Architecture Icons)
+
+Diagrams follow the AWS Architecture Icons conventions (2023+ group styles) as shipped in
+draw.io 32.4.1's `aws4` library (`js/diagramly/sidebar/Sidebar-AWS4.js`, "AWS / Groups"):
+
+| Element | Style used |
+| --- | --- |
+| AWS Cloud (account) | `group_aws_cloud_alt`, solid #232F3E |
+| Region | `group_region`, dashed #00A4A6 |
+| VPC | `group_vpc2`, solid #8C4FFF |
+| Availability Zone | dashed #147EBA, no icon |
+| Public subnet | `group_security_group` lock, #7AA116 on #F2F6E8 |
+| Private subnet | `group_security_group` lock, #00A4A6 on #E6F6F7 |
+| Corporate data center | `group_corporate_data_center`, #7D8998 (targets with AvailabilityZone=all) |
+| Resources | resource-level icons: `instance2` (EC2), `application_load_balancer`, `network_load_balancer`, `gateway_load_balancer`, `elastic_network_interface`, `volume` |
+
+Nesting follows the icon guide: AWS Cloud > Region > VPC > Availability Zone > subnet; one icon
+per instance per AZ (redundancy stays visible); subnet tiers (public, web, app, data) are aligned
+across AZ columns; CIDR ranges are labelled. Deliberate deviations: lines have no arrowheads
+because they are configuration relations, not traffic flow; target groups use the ELB tile
+(no official resource icon); "public" is MapPublicIpOnLaunch or a name/Tier tag because route
+tables are not collected, and the document states that basis. aws.amazon.com and
+docs.aws.amazon.com were not reachable from the build environment, so the official deck was
+consulted through search excerpts and the draw.io library, not read directly.

@@ -109,7 +109,8 @@ def layout_view(snapshot, graph, selection):
     incomplete = [f"{c['operation']}({c.get('error_code', c['status'])})" for c in snapshot["coverage"] if c["status"] != "complete"]
     status = "부분 조회: " + ", ".join(incomplete) if incomplete else "조회 완료"
     scope = (f"{status} · {meta['finished_at']}\n표시 {counts['visible']}개 / 수집 {counts['collected']}개 · 참조 {counts['references']}개"
-             f" · 숨김 {counts['hidden']}개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도")
+             f" · 숨김 {counts['hidden']}개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도"
+             f"\n퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)")
     canvas.add("scope", "1", 24, 48, 960, 42, "caption", scope, layout=f"{ENGINE}/{VERSION}",
                view=view["kind"], vpc=view["vpc"] or "", focus=view["resource"] or "",
                references="1" if view["references"] else "0")
@@ -130,8 +131,10 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
     card_w, card_h, gap = 320, 112, 24
     rows = -(-(len(vpcs) + 1) // columns)
     width = 32 + columns * (card_w + gap)
-    group = canvas.add("account", "1", 24, 112, width, VPC_HEADER + 24 + rows * (card_h + gap), "account",
-                       f"계정 {snapshot['metadata']['account_id']} · {snapshot['metadata']['region']} · VPC {len(vpcs)}개 · 요약 카드를 선택하면 상세 구성으로 이동")
+    meta = snapshot["metadata"]
+    cloud = canvas.add("cloud", "1", 24, 112, width + 40, 0, "cloud", f"AWS Cloud · 계정 {meta['account_id']}")
+    group = canvas.add("region", "cloud", 20, 44, width, VPC_HEADER + 24 + rows * (card_h + gap), "region",
+                       f"Region · {meta['region']} · VPC {len(vpcs)}개 · 요약 카드를 선택하면 상세 구성으로 이동")
     members = {}
     for key, vpc in vpc_of.items():
         members.setdefault(vpc, []).append(nodes[key])
@@ -157,6 +160,7 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
                    VPC_HEADER + 18 + (i // columns) * (card_h + gap), card_w, card_h, "summary", label,
                    resource=resource, empty=empty)
     group["h"] = VPC_HEADER + 18 + -(-len(cards) // columns) * (card_h + gap)
+    cloud["h"] = group["y"] + group["h"] + 20
 
 
 def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
@@ -169,7 +173,11 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     vpcs = sorted((nodes[k] for k in visible if nodes[k]["kind"] == "vpc"), key=lambda n: (n["name"], n["id"]))
     lanes = {}  # per VPC routing geometry, absolute coordinates
     placed = {}
-    cursor = 112
+    meta = snapshot["metadata"]
+    # AWS Architecture Icons nesting: AWS Cloud > Region > VPC > Availability Zone > subnet.
+    cloud = canvas.add("cloud", "1", 24, 112, 0, 0, "cloud", f"AWS Cloud · 계정 {meta['account_id']}")
+    region = canvas.add("region", "cloud", 20, 44, 0, 0, "region", f"Region · {meta['region']}")
+    cursor = 46
     tg_order = {}
 
     def resource(key, parent, x, y, side):
@@ -177,10 +185,9 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         width = SIDE_LABEL if side == "right" else BOTTOM_LABEL
         label = resource_label(n)
         label = "\n".join(fit_label(part, width, MAX_LINES if i == 0 else 1) for i, part in enumerate(label.split("\n")))
-        outside = n["kind"] == "registered_target" and n["attributes"].get("Target", {}).get("AvailabilityZone") == "all"
         shape = canvas.add(cell_id(key), parent, x, y, ICON, ICON, "resource", label, resource=key, kind=n["kind"],
                            reference=n["reference_only"], label_side=side, emphasis=key == focus, tooltip=n["name"],
-                           outside_vpc=outside)
+                           outside_vpc=outside_vpc(n), lb_type=n["attributes"].get("Type"))
         placed[key] = shape
         return shape
 
@@ -244,7 +251,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         width = max(720, az_width, band_width, bottom_width)
         vid = cell_id(vpc["id"])
         vpc_label = f"VPC  ·  {vpc['name']}  ·  {vpc['attributes'].get('CidrBlock', '')}"
-        group = canvas.add(vid, "1", 24, cursor, width, 0, "vpc", fit_label(vpc_label, width - 40, 1), resource=vpc["id"],
+        group = canvas.add(vid, "region", 20, cursor, width, 0, "vpc", fit_label(vpc_label, width - 60, 1), resource=vpc["id"],
                            emphasis=vpc["id"] == focus)
         y = VPC_HEADER + LANE_TOP + 6
         ox, oy = canvas.abs[vid]
@@ -266,43 +273,50 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
             text = "이 VPC에서 조회된 서브넷이 없습니다." if status == "complete" else "서브넷 조회가 완료되지 않아 배치를 확인할 수 없습니다."
             canvas.add(cell_id(vpc["id"] + "/empty"), vid, gutters[0], y, 420, 40, "caption", text)
             y += 56
+        metrics = {}
+        for sub in subnets:
+            kids, row_size = children[sub["id"]], per_row[sub["id"]]
+            rows = -(-len(kids) // row_size)
+            # Each route entering or leaving a row needs its own lane above that row.
+            busiest = max((sum(1 for e in drawn_edges for c in kids[r * row_size:(r + 1) * row_size]
+                               if c["id"] in (e["source"], e["target"]) and e["relation"] != "in_subnet")
+                           for r in range(rows)), default=0)
+            lane_top = max(LANE_TOP, 12 + 4 * busiest)
+            pitch = ROW - LANE_TOP + lane_top
+            metrics[sub["id"]] = (lane_top, pitch, SUBNET_HEADER + rows * pitch + 8 if rows else SUBNET_HEADER + 56)
+        # Same tier sits at the same height in every AZ column, as in AWS reference diagrams.
+        ranks = sorted({tier_rank(sub) for sub in subnets})
+        block = {r: max(sum(metrics[sub["id"]][2] + 16 for sub in az_subnets[az] if tier_rank(sub) == r) for az in azs) for r in ranks}
+        block_top, top = {}, AZ_HEADER + 10
+        for r in ranks:
+            block_top[r], top = top, top + block[r]
         x = 0
-        column_height = 0
         columns = []
         for index, az in enumerate(azs):
             geometry["gutters"].append((ox + x, ox + x + gutters[index]))
             x += gutters[index]
             az_id = cell_id(vpc["id"] + "/az/" + az)
-            az_group = canvas.add(az_id, vid, x, y, col_width[az], 0, "az", az)
-            columns.append(az_group)
-            sy = AZ_HEADER + 10
-            for s in az_subnets[az]:
-                rows = -(-len(children[s["id"]]) // per_row[s["id"]])
-                # Each route entering or leaving a row needs its own lane above that row.
-                busiest = max((sum(1 for e in drawn_edges for c in children[s["id"]][r * per_row[s["id"]]:(r + 1) * per_row[s["id"]]]
-                                   if c["id"] in (e["source"], e["target"]) and e["relation"] != "in_subnet")
-                               for r in range(rows)), default=0)
-                lane_top = max(LANE_TOP, 12 + 4 * busiest)
-                pitch = ROW - LANE_TOP + lane_top
-                sh = SUBNET_HEADER + rows * pitch + 8 if rows else SUBNET_HEADER + 56
-                sid = cell_id(s["id"])
-                subnet_at[s["id"]] = (sid, index)
-                canvas.add(sid, az_id, 16, sy, per_row[s["id"]] * SLOT + 40, sh, "subnet",
-                           fit_label(f"{s['name']}\n{s['attributes'].get('CidrBlock', '')}", per_row[s["id"]] * SLOT, 1, 10),
-                           resource=s["id"], emphasis=s["id"] == focus)
-                for i, n in enumerate(children[s["id"]]):
-                    row, slot = divmod(i, per_row[s["id"]])
+            columns.append(canvas.add(az_id, vid, x, y, col_width[az], top, "az", az))
+            offsets = dict(block_top)
+            for sub in az_subnets[az]:
+                lane_top, pitch, sh = metrics[sub["id"]]
+                sy = offsets[tier_rank(sub)]
+                offsets[tier_rank(sub)] += sh + 16
+                sid = cell_id(sub["id"])
+                subnet_at[sub["id"]] = (sid, index)
+                canvas.add(sid, az_id, 16, sy, per_row[sub["id"]] * SLOT + 40, sh, "subnet",
+                           fit_label(f"{sub['name']}\n{sub['attributes'].get('CidrBlock', '')}", per_row[sub["id"]] * SLOT - 20, 1, 11),
+                           resource=sub["id"], emphasis=sub["id"] == focus, public=tier_rank(sub) == 0)
+                for i, n in enumerate(children[sub["id"]]):
+                    row, slot = divmod(i, per_row[sub["id"]])
                     shape = resource(n["id"], sid, 20 + slot * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + row * pitch + lane_top, "bottom")
                     shape.update(column=index, lane_top=lane_top)
-                if not children[s["id"]]:
-                    canvas.add(cell_id(s["id"] + "/empty"), sid, 20, SUBNET_HEADER + 14, per_row[s["id"]] * SLOT, 30, "caption",
+                if not children[sub["id"]]:
+                    canvas.add(cell_id(sub["id"] + "/empty"), sid, 20, SUBNET_HEADER + 14, per_row[sub["id"]] * SLOT, 30, "caption",
                                "선택 리소스와 직접 관계된 인스턴스 없음" if focus else "조회된 인스턴스 없음")
-                sy += sh + 16
-            column_height = max(column_height, sy)
             x += col_width[az]
+        column_height = top
         geometry["gutters"].append((ox + width - gutters[last], ox + width))
-        for az_group in columns:
-            az_group["h"] = column_height
         y += column_height + 24
         if unplaced:
             band = canvas.add(cell_id(vpc["id"] + "/unplaced"), vid, gutters[0], y, width - gutters[0] - gutters[last],
@@ -315,26 +329,35 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         cursor += y + 36
     others = sorted((nodes[k] for k in visible if k not in placed and nodes[k]["kind"] not in {"vpc", "subnet"}),
                     key=lambda n: (KIND_ORDER.get(n["kind"], 9), n["name"], n["id"]))
-    if others:
-        # One row: routes enter from the lane above it, so a second row would put routes through labels.
-        width = max([s["w"] for s in canvas.shapes if s["role"] == "vpc"] + [5 * SLOT + 60, len(others) * SLOT + 60])
-        per_row = max(1, int((width - 60) // SLOT))
-        right = [n for n in others if refs_votes.get(n["id"]) and sum(refs_votes[n["id"]]) * 2 > len(refs_votes[n["id"]])]
-        left = [n for n in others if n not in right]
+    width = max([sh["w"] for sh in canvas.shapes if sh["role"] == "vpc"] + [5 * SLOT + 60])
+
+    def place_box(key, role, label, parent, x, y, items, min_width):
+        """One row: routes enter from the lane above it, so a second row would put routes through labels."""
+        box_width = max(min_width, len(items) * SLOT + 60)
+        per_row = max(1, int((box_width - 60) // SLOT))
+        right = [n for n in items if refs_votes.get(n["id"]) and sum(refs_votes[n["id"]]) * 2 > len(refs_votes[n["id"]])]
+        left = [n for n in items if n not in right]
         # Targets reached from the right margin sit at the right end, so their routes stay short.
-        if len(left) + len(right) <= per_row:
-            slots = [(n, 0, i) for i, n in enumerate(left)] + [(n, 0, per_row - len(right) + i) for i, n in enumerate(right)]
-        else:
-            ordered = left + right
-            slots = [(n, i // per_row, i % per_row) for i, n in enumerate(ordered)]
-        rows = max(row for _, row, _ in slots) + 1
-        ids = {n["id"] for n in others}
+        slots = [(n, i) for i, n in enumerate(left)] + [(n, per_row - len(right) + i) for i, n in enumerate(right)]
+        ids = {n["id"] for n in items}
         lane_top = max(LANE_TOP, 12 + 4 * sum(1 for e in drawn_edges if e["target"] in ids or e["source"] in ids))
-        box = canvas.add("references", "1", 24, cursor, width, SUBNET_HEADER + rows * (ROW - LANE_TOP + lane_top) + 8, "references",
-                         "배치 미확인 / VPC 외 리소스 · 점선은 참조만 확인됨")
-        for n, row, slot in slots:
-            resource(n["id"], box["id"], 30 + slot * SLOT + (SLOT - ICON) / 2,
-                     SUBNET_HEADER + row * (ROW - LANE_TOP + lane_top) + lane_top, "bottom")["lane_top"] = lane_top
+        box = canvas.add(key, parent, x, y, box_width, SUBNET_HEADER + ROW - LANE_TOP + lane_top + 8, role, label)
+        for n, slot in slots:
+            resource(n["id"], key, 30 + slot * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + lane_top, "bottom")["lane_top"] = lane_top
+        return box
+
+    inside = [n for n in others if not outside_vpc(n)]
+    if inside:
+        cursor += place_box("references", "references", "배치 미확인 · VPC 밖 또는 참조만 확인된 리소스 (점선 = 참조)",
+                            "region", 20, cursor, inside, width)["h"] + 36
+    region["w"] = max([sh["x"] + sh["w"] for sh in canvas.shapes if sh["parent"] == "region"] + [400]) + 20
+    region["h"] = cursor
+    cloud["w"], cloud["h"] = region["x"] + region["w"] + 20, region["y"] + region["h"] + 20
+    remote = [n for n in others if outside_vpc(n)]
+    if remote:
+        # Beside the AWS Cloud: routes leave the VPC's right margin above the load balancer row.
+        place_box("onprem", "onprem", "Corporate data center · AvailabilityZone=all 로 등록된 VPC 밖 대상", "1",
+                  cloud["x"] + cloud["w"] + 48, cloud["y"], remote, 520)
     route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at)
 
 
@@ -363,10 +386,10 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at):
         target = placed[e["target"]]
         tx, ty = position(e["target"])
         same = vpc_of.get(e["target"]) == vpc_of.get(e["source"]) and "column" in target
-        outside = target["parent"] == "references"
+        outside = target["parent"] in OUTSIDE_BOXES
         spec = {"edge": e, "geometry": geometry, "depth": ty, "far": tx}
         if e["relation"] == "registered_target" and (same or outside):
-            g = target["column"] if same else (geometry["last"] if target_on_right(canvas, target, geometry) else 0)
+            g = target["column"] if same else (geometry["last"] if target["parent"] == "onprem" or target_on_right(canvas, target, geometry) else 0)
             specs[e["id"]] = {**spec, "kind": "bus", "gutter": g, "group": ("bus", e["source"])}
         elif e["relation"] in AUXILIARY and outside and "column" in placed[e["source"]]:
             specs[e["id"]] = {**spec, "kind": "aux", "gutter": placed[e["source"]]["column"], "group": ("aux", e["id"])}
@@ -398,7 +421,9 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at):
                 if "leg_of" in member:
                     member["leg_of"]["leg_x"] = x
                 else:
-                    member["x"], member["turn_left"] = x, turn_left
+                    # Routes to the box beside the cloud leave the right margin towards the right.
+                    member["x"], member["turn_left"] = x, turn_left and placed[member["edge"]["target"]]["parent"] != "onprem" \
+                        if member["edge"]["target"] in placed else turn_left
     # Entry points per target, then lanes per icon row.
     entering = {}
     for spec in specs.values():
@@ -466,6 +491,14 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at):
         entry = edge_entry(e, path, constraints, label)
         entry["label_offset"] = (-16 if spec["entry"] < 0.5 else 18, -9)
         canvas.edges.append(entry)
+
+
+OUTSIDE_BOXES = {"references", "onprem"}
+
+
+def outside_vpc(node):
+    """Target registered with AvailabilityZone=all: an address outside the VPC (e.g. on premises)."""
+    return node["kind"] == "registered_target" and node["attributes"].get("Target", {}).get("AvailabilityZone") == "all"
 
 
 def target_on_right(canvas, target, geometry):

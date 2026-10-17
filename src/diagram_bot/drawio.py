@@ -8,33 +8,46 @@ from .layout import cell_id, layout_view
 from .views import view_graph
 
 __all__ = ["carry_annotations", "cell_id", "generate_document", "layout_document", "validate_document"]
-GENERATED = {"0", "1", "heading", "scope", "account", "references"}
+GENERATED = {"0", "1", "heading", "scope", "cloud", "region", "references", "onprem"}
 
 RELATIONS = {
     "associated_load_balancer": "LB 연결", "registered_target": "대상 등록",
     "in_subnet": "서브넷 배치", "uses_security_group": "SG 연결",
     "attached_interface": "ENI 장착", "attached_volume": "EBS 장착",
 }
+# Resource-level icons from the AWS Architecture Icons set (draw.io aws4 library).
+RESOURCE_ICONS = {
+    "ec2": ("instance2", "#ED7100"),
+    "application": ("application_load_balancer", "#8C4FFF"),
+    "network": ("network_load_balancer", "#8C4FFF"),
+    "gateway": ("gateway_load_balancer", "#8C4FFF"),
+    "network_interface": ("elastic_network_interface", "#8C4FFF"),
+    "volume": ("volume", "#7AA116"),
+}
+# Square resource-icon tiles for things without a resource-level icon.
 ICONS = {
-    "ec2": ("ec2", "#ED7100"),
     "load_balancer": ("elastic_load_balancing", "#8C4FFF"),
     "target_group": ("elastic_load_balancing", "#6D5DB3"),
     "security_group": ("group_security_group", "#DD344C"),
-    "network_interface": ("elastic_network_interface", "#8C4FFF"),
-    "volume": ("elastic_block_store", "#7AA116"),
 }
-COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#24364B;"
-GROUP = COMMON + "swimlane;startSize=38;horizontal=1;rounded=1;arcSize=10;collapsible=0;whiteSpace=wrap;fillColor=#F1F7FC;swimlaneFillColor=#FFFFFF;strokeColor=#A7BFD4;fontStyle=1;align=left;spacingLeft=16;"
+COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
+# Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.
+AWS_GROUP = (COMMON + "outlineConnect=0;gradientColor=none;whiteSpace=wrap;fontStyle=1;container=1;pointerEvents=0;"
+             "collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;verticalAlign=top;align=left;spacingLeft=30;")
+PLAIN_GROUP = COMMON + "whiteSpace=wrap;container=1;collapsible=0;recursiveResize=0;verticalAlign=top;fontStyle=0;"
 STYLES = {
     "title": COMMON + "text;align=left;fontSize=19;fontStyle=1;strokeColor=none;fillColor=none;",
-    "caption": COMMON + "text;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=10;fontColor=#62748A;strokeColor=none;fillColor=none;",
-    "account": GROUP + "fillColor=#EEF2FA;strokeColor=#9BAACB;",
-    "summary": COMMON + "rounded=1;arcSize=6;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=16;spacingTop=12;fillColor=#FFFFFF;strokeColor=#4875EF;strokeWidth=1.5;fontSize=12;",
-    "vpc": GROUP,
-    "az": GROUP + "startSize=32;dashed=1;fillColor=#F4F3FA;strokeColor=#CCC4E2;",
-    "subnet": GROUP + "startSize=46;fillColor=#EAF6F2;strokeColor=#8BBCA9;fontSize=10;",
-    "unplaced": GROUP + "startSize=46;dashed=1;fillColor=#FFF6E7;strokeColor=#D5B47A;fontSize=10;",
-    "references": GROUP + "startSize=46;dashed=1;fillColor=#FFF6E7;strokeColor=#D5B47A;",
+    "caption": COMMON + "text;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=10;fontColor=#5A6C86;strokeColor=none;fillColor=none;",
+    "cloud": AWS_GROUP + "grIcon=mxgraph.aws4.group_aws_cloud_alt;strokeColor=#232F3E;fillColor=none;fontColor=#232F3E;dashed=0;",
+    "region": AWS_GROUP + "grIcon=mxgraph.aws4.group_region;strokeColor=#00A4A6;fillColor=none;fontColor=#147EBA;dashed=1;",
+    "summary": AWS_GROUP + "grIcon=mxgraph.aws4.group_vpc2;strokeColor=#8C4FFF;fillColor=#FFFFFF;fontStyle=0;spacingTop=4;dashed=0;",
+    "vpc": AWS_GROUP + "grIcon=mxgraph.aws4.group_vpc2;strokeColor=#8C4FFF;fillColor=none;fontColor=#8C4FFF;dashed=0;",
+    "az": PLAIN_GROUP + "fillColor=none;strokeColor=#147EBA;dashed=1;fontColor=#147EBA;align=center;spacingTop=6;",
+    "public_subnet": AWS_GROUP + "grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#7AA116;fillColor=#F2F6E8;fontColor=#248814;dashed=0;fontSize=11;",
+    "private_subnet": AWS_GROUP + "grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#00A4A6;fillColor=#E6F6F7;fontColor=#147EBA;dashed=0;fontSize=11;",
+    "unplaced": PLAIN_GROUP + "fillColor=none;strokeColor=#5A6C86;dashed=1;fontColor=#5A6C86;align=left;spacingLeft=12;spacingTop=6;fontSize=11;",
+    "references": PLAIN_GROUP + "fillColor=none;strokeColor=#5A6C86;dashed=1;fontColor=#5A6C86;align=left;spacingLeft=12;spacingTop=6;",
+    "onprem": AWS_GROUP + "grIcon=mxgraph.aws4.group_corporate_data_center;strokeColor=#7D8998;fillColor=none;fontColor=#5A6C86;dashed=0;",
 }
 EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;fontFamily=Arial;fontSize=9;fontColor=#536A82;strokeColor=#7C91A8;strokeWidth=1.5;endArrow=none;labelBackgroundColor=#FFFFFF;"
 
@@ -52,6 +65,7 @@ def validate_document(xml):
 
 
 def resource_style(shape):
+    icon = RESOURCE_ICONS.get(shape.get("lb_type") if shape.get("kind") == "load_balancer" else shape.get("kind"))
     shape_name, color = ICONS.get(shape.get("kind"), ("", "#687B90"))
     style = COMMON + "whiteSpace=wrap;"
     if shape.get("label_side") == "right":
@@ -61,6 +75,8 @@ def resource_style(shape):
     if shape.get("outside_vpc"):
         # Target registered with AvailabilityZone=all: an address outside the VPC (e.g. on premises).
         style += "shape=mxgraph.aws4.traditional_server;fillColor=#232F3D;strokeColor=none;gradientColor=none;"
+    elif icon:
+        style += f"shape=mxgraph.aws4.{icon[0]};fillColor={icon[1]};strokeColor=none;gradientColor=none;outlineConnect=0;"
     elif shape_name:
         style += f"shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.{shape_name};fillColor={color};strokeColor=#FFFFFF;gradientColor=none;"
     else:
@@ -87,7 +103,10 @@ def page(file, layout, name):
                 attrs[attr] = str(shape[key])
         if shape["role"] == "summary":
             attrs["summary"] = "1"
-        style = resource_style(shape) if shape["role"] == "resource" else STYLES[shape["role"]]
+        role = ("public_subnet" if shape.get("public") else "private_subnet") if shape["role"] == "subnet" else shape["role"]
+        style = resource_style(shape) if shape["role"] == "resource" else STYLES[role]
+        if shape["role"] == "summary" and not shape.get("resource"):
+            style = STYLES["references"] + "fontColor=#232F3E;spacingTop=12;spacingLeft=16;"
         if shape.get("empty"):
             style += "dashed=1;strokeColor=#9AA8BC;fontColor=#62748A;"
         if shape.get("emphasis") and shape["role"] != "resource":

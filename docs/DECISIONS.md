@@ -13,6 +13,8 @@ Last Updated: 2026-10-17
   never change an ID. Legacy edges are upgraded in stored order.
 - Layout: deterministic Python `diagram-bot-layered/2`; ELK layered rejected (AZ columns not
   preserved, JS runtime needed for CLI parity). Evidence: docs/engineering/LAYOUT_EVALUATION.md.
+- Visual style follows AWS Architecture Icons group/resource conventions via draw.io aws4 shapes;
+  lines stay arrowless (configuration, not traffic). Details: docs/engineering/LAYOUT_EVALUATION.md.
 - Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
 - Automatic layout only on first generation or explicit relayout; superseded edits are archived
   and user-added notes carried over.

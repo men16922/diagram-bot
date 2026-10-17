@@ -2,6 +2,16 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — AWS Architecture Icons styling (user request: 더 AWS best practice 형태로)
+
+- Groups: AWS Cloud > Region > VPC > AZ > public/private subnet with official aws4 group styles;
+  resource-level icons for EC2/ALB/NLB/GWLB/ENI/EBS; tiers aligned across AZ columns;
+  AvailabilityZone=all targets in a Corporate data center group beside the cloud.
+- Sources: AWS Architecture Icons deck excerpts (search) and draw.io aws4 library; AWS domains
+  are blocked from this environment, so official pages were not read directly.
+- Fixed: on-premises routes crossing the reference box (box moved beside the cloud).
+- Verified: 47 tests, browser acceptance, all sample views rendered and reviewed.
+
 ## 2026-10-17 — AWS best-practice samples (user request)
 
 - samples.py: three-tier (3 AZ, public + internal ALB), microservices (one ALB, four target groups,
