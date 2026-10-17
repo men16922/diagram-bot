@@ -14,7 +14,9 @@ ENGINE, VERSION = "diagram-bot-layered", 2
 ICON, LINE, MAX_LINES = 52, 15, 3
 BOTTOM_LABEL, SIDE_LABEL = 140, 200
 SLOT, SIDE_SLOT = 150, 290
-ROW = 24 + ICON + 8 + MAX_LINES * LINE + 8
+LANE_TOP = 36  # space above an icon row for up to LANES entering routes
+LANES = (LANE_TOP - 8) // 4
+ROW = LANE_TOP + ICON + 8 + MAX_LINES * LINE + 8
 SUBNET_HEADER, AZ_HEADER, VPC_HEADER = 46, 32, 38
 KIND_ORDER = {"load_balancer": 0, "target_group": 1, "ec2": 2, "registered_target": 3,
               "security_group": 4, "network_interface": 5, "volume": 6}
@@ -169,6 +171,8 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         placed[key] = shape
         return shape
 
+    subnet_at = {}  # subnet -> (cell, AZ column) for placement routes
+    refs_votes = {}  # target outside every VPC -> gutter sides of the target groups feeding it
     for vpc in vpcs:
         members = sorted((nodes[k] for k in visible if vpc_of.get(k) == vpc["id"]), key=lambda n: (n["name"], n["id"]))
         lbs = [n for n in members if n["kind"] == "load_balancer"]
@@ -191,72 +195,98 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         unplaced = sorted((n for n in members if n["kind"] not in {"subnet", "load_balancer", "target_group"}
                            and subnet_of.get(n["id"]) not in children), key=barycenter)
         azs = sorted({s["attributes"].get("AvailabilityZone", "AZ 미확인") for s in subnets})
-        gutter = max(28, 12 + 6 * len(tgs))
+        last = len(azs)  # gutter i is left of AZ column i; gutter `last` is the VPC's right margin
+        column = {c["id"]: i for i, az in enumerate(azs) for s in subnets
+                  if s["attributes"].get("AvailabilityZone", "AZ 미확인") == az for c in children[s["id"]]}
+        column.update({n["id"]: 0 for n in unplaced})
+        # Target groups in the right half send outside-VPC targets down the right margin.
+        side = {t["id"]: last if len(tgs) > 1 and tg_index[t["id"]] >= len(tgs) / 2 else 0 for t in tgs}
+        demand = [set() for _ in range(last + 1)]
+        placements = []
+        for e in drawn_edges:
+            if e["relation"] == "registered_target" and e["source"] in tg_index and vpc_of.get(e["target"]) in (None, vpc["id"]):
+                g = column.get(e["target"], side[e["source"]])
+                demand[g].add(e["source"])
+                if e["target"] not in column:
+                    # The final side depends on where the target lands in the reference box.
+                    demand[0].add(e["source"])
+                    demand[last].add(e["source"])
+                    refs_votes.setdefault(e["target"], []).append(g == last and last > 0)
+            elif e["relation"] in AUXILIARY and vpc_of.get(e["source"]) == vpc["id"]:
+                demand[column.get(e["source"], 0)].add(e["id"])
+            elif e["relation"] == "in_subnet" and e["source"] in lb_index and e["target"] in children:
+                placements.append(e["id"])
+                demand[0].add(e["id"])
+                demand[azs.index(nodes[e["target"]]["attributes"].get("AvailabilityZone", "AZ 미확인"))].add(e["id"])
+        gutters = [max(28, 16 + 8 * len(d)) for d in demand]
         per_row = {s["id"]: 2 if len(children[s["id"]]) <= 4 else 3 for s in subnets}
         az_subnets = {az: sorted((s for s in subnets if s["attributes"].get("AvailabilityZone", "AZ 미확인") == az),
                                  key=lambda s: (s["name"], s["id"])) for az in azs}
         col_width = {az: max((per_row[s["id"]] * SLOT + 40 for s in az_subnets[az]), default=SLOT * 2 + 40) + 32 for az in azs}
-        az_width = gutter + sum(col_width[az] + gutter for az in azs)
-        band_width = max(len(lbs), len(tgs)) * SIDE_SLOT + 2 * gutter
-        bottom_width = len(unplaced) * SLOT + 2 * gutter + 40
+        az_width = sum(gutters[:last]) + sum(col_width.values()) + 24 + gutters[last]
+        band_width = max(len(lbs), len(tgs)) * SIDE_SLOT + 2 * max(gutters)
+        bottom_width = len(unplaced) * SLOT + gutters[0] + gutters[last] + 40
         width = max(720, az_width, band_width, bottom_width)
         vid = cell_id(vpc["id"])
         vpc_label = f"VPC  ·  {vpc['name']}  ·  {vpc['attributes'].get('CidrBlock', '')}"
         group = canvas.add(vid, "1", 24, cursor, width, 0, "vpc", fit_label(vpc_label, width - 40, 1), resource=vpc["id"],
                            emphasis=vpc["id"] == focus)
-        y = VPC_HEADER + 22
+        y = VPC_HEADER + LANE_TOP + 6
         ox, oy = canvas.abs[vid]
-        geometry = {"vpc_x": ox, "col0": ox + 6}
+        geometry = {"last": last, "lb_mid": {}, "gutters": []}
         for band in (lbs, tgs):
             if not band:
                 continue
             start = (width - len(band) * SIDE_SLOT) / 2 + 24
             for i, n in enumerate(band):
-                resource(n["id"], vid, start + i * SIDE_SLOT, y, "right")["gutter"] = ox + 6
-            geometry["lb_bottom" if band is lbs else "tg_top"] = oy + y + (ICON if band is lbs else 0)
+                resource(n["id"], vid, start + i * SIDE_SLOT, y, "right")["column"] = 0
+                if band is lbs:
+                    geometry["lb_mid"][n["id"]] = oy + y + ICON + 8 + 6 * (i % 4)
             y += ICON + 34
         geometry["channel"] = oy + y - 6
-        y += 6 * len(tgs) + 10
+        geometry["placements"] = {key: oy + y - 6 + 7 * (len(tgs) + i) for i, key in enumerate(placements)}
+        y += 7 * (len(tgs) + len(placements)) + 10
         if not subnets:
             status = next((c["status"] for c in snapshot["coverage"] if c["operation"] == "describe_subnets"), "unavailable")
             text = "이 VPC에서 조회된 서브넷이 없습니다." if status == "complete" else "서브넷 조회가 완료되지 않아 배치를 확인할 수 없습니다."
-            canvas.add(cell_id(vpc["id"] + "/empty"), vid, gutter, y, 420, 40, "caption", text)
+            canvas.add(cell_id(vpc["id"] + "/empty"), vid, gutters[0], y, 420, 40, "caption", text)
             y += 56
-        x = gutter
+        x = 0
         column_height = 0
         columns = []
-        for az in azs:
+        for index, az in enumerate(azs):
+            geometry["gutters"].append((ox + x, ox + x + gutters[index]))
+            x += gutters[index]
             az_id = cell_id(vpc["id"] + "/az/" + az)
             az_group = canvas.add(az_id, vid, x, y, col_width[az], 0, "az", az)
             columns.append(az_group)
-            geometry.setdefault("gutters", {})[az] = ox + x - gutter + 4
             sy = AZ_HEADER + 10
             for s in az_subnets[az]:
                 rows = -(-len(children[s["id"]]) // per_row[s["id"]])
                 sh = SUBNET_HEADER + rows * ROW + 8 if rows else SUBNET_HEADER + 56
                 sid = cell_id(s["id"])
+                subnet_at[s["id"]] = (sid, index)
                 canvas.add(sid, az_id, 16, sy, per_row[s["id"]] * SLOT + 40, sh, "subnet",
                            fit_label(f"{s['name']}\n{s['attributes'].get('CidrBlock', '')}", per_row[s["id"]] * SLOT, 1, 10),
                            resource=s["id"], emphasis=s["id"] == focus)
                 for i, n in enumerate(children[s["id"]]):
-                    row, column = divmod(i, per_row[s["id"]])
-                    shape = resource(n["id"], sid, 20 + column * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + row * ROW + 24, "bottom")
-                    shape["gutter"] = geometry["gutters"][az]
+                    row, slot = divmod(i, per_row[s["id"]])
+                    resource(n["id"], sid, 20 + slot * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + row * ROW + LANE_TOP, "bottom")["column"] = index
                 if not children[s["id"]]:
                     canvas.add(cell_id(s["id"] + "/empty"), sid, 20, SUBNET_HEADER + 14, per_row[s["id"]] * SLOT, 30, "caption",
                                "선택 리소스와 직접 관계된 인스턴스 없음" if focus else "조회된 인스턴스 없음")
                 sy += sh + 16
             column_height = max(column_height, sy)
-            x += col_width[az] + gutter
+            x += col_width[az]
+        geometry["gutters"].append((ox + width - gutters[last], ox + width))
         for az_group in columns:
             az_group["h"] = column_height
         y += column_height + 24
         if unplaced:
-            band = canvas.add(cell_id(vpc["id"] + "/unplaced"), vid, gutter, y, width - 2 * gutter, SUBNET_HEADER + ROW, "unplaced",
-                              "서브넷 미확인 · VPC 소속만 확인된 리소스")
+            band = canvas.add(cell_id(vpc["id"] + "/unplaced"), vid, gutters[0], y, width - gutters[0] - gutters[last],
+                              SUBNET_HEADER + ROW, "unplaced", "서브넷 미확인 · VPC 소속만 확인된 리소스")
             for i, n in enumerate(unplaced):
-                shape = resource(n["id"], band["id"], 20 + i * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + 24, "bottom")
-                shape["gutter"] = geometry["col0"]
+                resource(n["id"], band["id"], 20 + i * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + LANE_TOP, "bottom")["column"] = 0
             y += band["h"] + 24
         group["h"] = y
         lanes[vpc["id"]] = geometry
@@ -266,66 +296,158 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     if others:
         width = max([s["w"] for s in canvas.shapes if s["role"] == "vpc"] + [5 * SLOT + 60])
         per_row = max(1, int((width - 60) // SLOT))
-        rows = -(-len(others) // per_row)
+        right = [n for n in others if refs_votes.get(n["id"]) and sum(refs_votes[n["id"]]) * 2 > len(refs_votes[n["id"]])]
+        left = [n for n in others if n not in right]
+        # Targets reached from the right margin sit at the right end, so their routes stay short.
+        if len(left) + len(right) <= per_row:
+            slots = [(n, 0, i) for i, n in enumerate(left)] + [(n, 0, per_row - len(right) + i) for i, n in enumerate(right)]
+        else:
+            ordered = left + right
+            slots = [(n, i // per_row, i % per_row) for i, n in enumerate(ordered)]
+        rows = max(row for _, row, _ in slots) + 1
         box = canvas.add("references", "1", 24, cursor, width, SUBNET_HEADER + rows * ROW + 8, "references",
                          "배치 미확인 / VPC 외 리소스 · 점선은 참조만 확인됨")
-        for i, n in enumerate(others):
-            row, column = divmod(i, per_row)
-            resource(n["id"], box["id"], 30 + column * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + row * ROW + 24, "bottom")
-    route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order)
+        for n, row, slot in slots:
+            resource(n["id"], box["id"], 30 + slot * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + row * ROW + LANE_TOP, "bottom")
+    route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at)
 
 
-def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order):
-    """Explicit orthogonal routes through channels, gutters and the lanes above icon rows."""
-    incoming, outgoing, side = {}, {}, {}
-    for e in drawn_edges:
-        incoming.setdefault(e["target"], []).append(e)
-        outgoing.setdefault(e["source"], []).append(e)
+def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at):
+    """Explicit orthogonal routes. Only edges sharing a source (a bus) or a target may share a segment.
+
+    Each target group drops one trunk to its own channel row; every gutter gives each source group
+    its own vertical slot (deeper turns further out); every icon row gives each entering edge its
+    own lane, the edge going further sitting higher, so parallel routes never coincide.
+    """
     position = lambda key: canvas.abs[placed[key]["id"]]
-    order = lambda key: (position(key), key) if key in placed else ((0, 0), key)
+    shapes = {shape["id"]: shape for shape in canvas.shapes}
+    specs, plain = {}, []
     for e in sorted(drawn_edges, key=lambda e: e["id"]):
-        entry = {"id": cell_id("edge/" + e["id"]), "relation_id": e["id"], "relation": e["relation"],
-                 "source": cell_id(e["source"]), "target": cell_id(e["target"]), "evidence": e["evidence"],
-                 "points": [], "constraints": "", "label": "", "label_at": 0.85,
-                 "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer"}}
         geometry = lanes.get(vpc_of.get(e["source"]))
-        both = e["source"] in placed and e["target"] in placed
-        if both:
-            peers = sorted(incoming[e["target"]], key=lambda x: (tg_order.get(x["source"], 99), order(x["source"]), x["id"]))
-            entry_x = (peers.index(e) + 1) / (len(peers) + 1)
-            sx, sy = position(e["source"])
-            tx, ty = position(e["target"])
-        if both and e["relation"] == "registered_target" and geometry and "channel" in geometry:
-            k = tg_order.get(e["source"], 0)
-            same_pair = sorted((x for x in peers if x["source"] == e["source"]), key=lambda x: (x["qualifiers"].get("port") or 0, x["id"]))
-            j = same_pair.index(e)
-            siblings = sorted(outgoing[e["source"]], key=lambda x: (order(x["target"]), x["id"]))
-            exit_x = (siblings.index(e) + 1) / (len(siblings) + 1)
-            gutter = placed[e["target"]].get("gutter") if vpc_of.get(e["target"]) == vpc_of.get(e["source"]) else None
-            gutter = (gutter if gutter is not None else geometry["col0"]) + 6 * ((k + j) % 4)
-            channel = geometry["channel"] + 6 * k
-            lane = ty - 8 - 4 * ((k + j) % 4)
-            entry["constraints"] = f"exitX={exit_x:.3f};exitY=1;entryX={entry_x:.3f};entryY=0;"
-            entry["points"] = [(sx + exit_x * ICON, channel), (gutter, channel), (gutter, lane), (tx + entry_x * ICON, lane)]
-            if len(same_pair) > 1 and e["qualifiers"].get("port") is not None:
-                entry["label"], entry["label_at"] = f":{e['qualifiers']['port']}", 0.85 - 0.25 * j
-        elif both and e["relation"] == "associated_load_balancer" and geometry and "lb_bottom" in geometry \
+        if e["relation"] == "in_subnet" and geometry and e["source"] in placed and e["id"] in geometry["placements"] \
+                and e["target"] in subnet_at:
+            cell, g = subnet_at[e["target"]]
+            x, y = canvas.abs[cell]
+            specs[e["id"]] = {"edge": e, "kind": "place", "geometry": geometry, "gutter": g, "group": ("place", e["id"]),
+                              "depth": y, "far": x, "subnet": (x, y, shapes[cell]["h"])}
+            continue
+        if not (geometry and e["source"] in placed and e["target"] in placed):
+            plain.append(e)
+            continue
+        target = placed[e["target"]]
+        tx, ty = position(e["target"])
+        same = vpc_of.get(e["target"]) == vpc_of.get(e["source"]) and "column" in target
+        outside = target["parent"] == "references"
+        spec = {"edge": e, "geometry": geometry, "depth": ty, "far": tx}
+        if e["relation"] == "registered_target" and (same or outside):
+            g = target["column"] if same else (geometry["last"] if target_on_right(canvas, target, geometry) else 0)
+            specs[e["id"]] = {**spec, "kind": "bus", "gutter": g, "group": ("bus", e["source"])}
+        elif e["relation"] in AUXILIARY and outside and "column" in placed[e["source"]]:
+            specs[e["id"]] = {**spec, "kind": "aux", "gutter": placed[e["source"]]["column"], "group": ("aux", e["id"])}
+        elif e["relation"] == "associated_load_balancer" and e["target"] in geometry["lb_mid"] \
                 and placed[e["target"]]["parent"] == placed[e["source"]]["parent"]:
-            middle = (geometry["lb_bottom"] + geometry["tg_top"]) / 2
-            entry["constraints"] = f"exitX=0.5;exitY=0;entryX={entry_x:.3f};entryY=1;"
-            entry["points"] = [(sx + ICON / 2, middle), (tx + entry_x * ICON, middle)]
-        elif both and entry["auxiliary"] and placed[e["target"]]["parent"] == "references" \
-                and placed[e["source"]]["parent"] != "references" and placed[e["source"]].get("gutter") is not None:
-            # Leave from the left side, rise to the lane above the source row, then use the gutter.
-            i = side.setdefault(e["source"], sorted((x for x in outgoing[e["source"]] if x["relation"] in AUXILIARY),
-                                                    key=lambda x: x["id"])).index(e)
-            n = len(side[e["source"]])
-            exit_y = (i + 1) / (n + 1)
-            gutter = placed[e["source"]]["gutter"] + 20 - 3 * (i % 4)
-            above = sy - 14 - 3 * (i % 3)
-            lane = ty - 8 - 3 * (peers.index(e) % 5)
-            entry["constraints"] = f"exitX=0;exitY={exit_y:.3f};entryX={entry_x:.3f};entryY=0;"
-            entry["points"] = [(sx - 10 - 3 * i, sy + exit_y * ICON), (sx - 10 - 3 * i, above), (gutter, above), (gutter, lane), (tx + entry_x * ICON, lane)]
+            specs[e["id"]] = {**spec, "kind": "lb"}
         else:
-            entry["label"] = {"in_subnet": "서브넷 배치"}.get(e["relation"], "")
+            plain.append(e)
+    # Gutter slots per (VPC, gutter, source group). Placement routes also descend the left margin
+    # from the lane above their load balancer to the channel; that leg is a shallow slot in gutter 0.
+    groups = {}
+    for spec in specs.values():
+        if spec["kind"] == "lb":
+            continue
+        groups.setdefault((id(spec["geometry"]), spec["gutter"]), {}).setdefault(spec["group"], []).append(spec)
+        if spec["kind"] == "place":
+            channel = spec["geometry"]["placements"][spec["edge"]["id"]]
+            leg = {"geometry": spec["geometry"], "depth": channel, "far": position(spec["edge"]["source"])[0], "leg_of": spec}
+            groups.setdefault((id(spec["geometry"]), 0), {}).setdefault(("leg", spec["edge"]["id"]), []).append(leg)
+    for (_, g), members in groups.items():
+        geometry = next(iter(members.values()))[0]["geometry"]
+        left, right = geometry["gutters"][g]
+        turn_left = g == geometry["last"] and g > 0 or len(geometry["gutters"]) == 1
+        ordered = sorted(members.items(), key=lambda item: (-max(m["depth"] for m in item[1]),
+                                                            max(m["far"] for m in item[1]) * (-1 if turn_left else 1), item[0]))
+        for i, (_, group) in enumerate(ordered):
+            for member in group:
+                x = right - 8 - 8 * i if turn_left else left + 8 + 8 * i
+                if "leg_of" in member:
+                    member["leg_of"]["leg_x"] = x
+                else:
+                    member["x"], member["turn_left"] = x, turn_left
+    # Entry points per target, then lanes per icon row.
+    entering = {}
+    for spec in specs.values():
+        if spec["kind"] in ("bus", "aux"):
+            entering.setdefault(spec["edge"]["target"], []).append(spec)
+    for members in entering.values():
+        members.sort(key=lambda s: (s["x"] if not s["turn_left"] else -s["x"], s["edge"]["id"]))
+        for i, spec in enumerate(members):
+            fraction = (i + 1) / (len(members) + 1)
+            spec["entry"] = 1 - fraction if spec["turn_left"] else fraction
+    rows, leaving = {}, {}
+    for spec in specs.values():
+        if spec["kind"] in ("bus", "aux"):
+            tx, ty = position(spec["edge"]["target"])
+            spec["end"] = tx + spec["entry"] * ICON
+            rows.setdefault((placed[spec["edge"]["target"]]["parent"], ty), []).append(("in", spec, spec["end"], False))
+        if spec["kind"] in ("aux", "place"):
+            leaving.setdefault((spec["kind"], spec["edge"]["source"]), []).append(spec)
+    for (kind, source), members in leaving.items():
+        members.sort(key=lambda s: s["edge"]["id"])
+        sx, sy = position(source)
+        for i, spec in enumerate(members):
+            spec["exit"] = (i + 1) / (len(members) + 1)
+            # Reference routes leave from the left side; placement routes from the top.
+            spec["stub"] = sx - 14 - 6 * i if kind == "aux" else sx + spec["exit"] * ICON
+            rows.setdefault((placed[source]["parent"], sy), []).append(("out", spec, spec["stub"], False))
+    for (_, top), members in rows.items():
+        members.sort(key=lambda m: (m[1].get("turn_left", False) and m[0] == "in",
+                                    m[2] if m[1].get("turn_left") and m[0] == "in" else -m[2], m[1]["edge"]["id"]))
+        for i, (direction, spec, _, _) in enumerate(members):
+            spec["lane_in" if direction == "in" else "lane_out"] = top - LANE_TOP + 4 + 4 * (i % LANES)
+    for e in plain:
+        canvas.edges.append(edge_entry(e, [], "", {"in_subnet": "서브넷 배치"}.get(e["relation"], "")))
+    for spec in sorted(specs.values(), key=lambda s: s["edge"]["id"]):
+        e, geometry = spec["edge"], spec["geometry"]
+        sx, sy = position(e["source"])
+        if spec["kind"] == "place":
+            x, y, h = spec["subnet"]
+            channel = geometry["placements"][e["id"]]
+            entry_y = y + SUBNET_HEADER / 2
+            path = [(spec["stub"], sy), (spec["stub"], spec["lane_out"]), (spec["leg_x"], spec["lane_out"]), (spec["leg_x"], channel),
+                    (spec["x"], channel), (spec["x"], entry_y), (x, entry_y)]
+            canvas.edges.append(edge_entry(e, path, f"exitX={spec['exit']:.3f};exitY=0;entryX=0;entryY={SUBNET_HEADER / 2 / h:.3f};"))
+            continue
+        tx, ty = position(e["target"])
+        if spec["kind"] == "lb":
+            middle = geometry["lb_mid"][e["target"]]
+            path = [(sx + ICON / 2, sy), (sx + ICON / 2, middle), (tx + ICON / 2, middle), (tx + ICON / 2, ty + ICON)]
+            canvas.edges.append(edge_entry(e, path, "exitX=0.5;exitY=0;entryX=0.5;entryY=1;"))
+            continue
+        end = spec["end"]
+        if spec["kind"] == "bus":
+            channel = geometry["channel"] + 7 * tg_order.get(e["source"], 0)
+            path = [(sx + ICON / 2, sy + ICON), (sx + ICON / 2, channel), (spec["x"], channel), (spec["x"], spec["lane_in"]),
+                    (end, spec["lane_in"]), (end, ty)]
+            constraints = f"exitX=0.5;exitY=1;entryX={spec['entry']:.3f};entryY=0;"
+        else:
+            exit_y = sy + spec["exit"] * ICON
+            path = [(sx, exit_y), (spec["stub"], exit_y), (spec["stub"], spec["lane_out"]), (spec["x"], spec["lane_out"]),
+                    (spec["x"], spec["lane_in"]), (end, spec["lane_in"]), (end, ty)]
+            constraints = f"exitX=0;exitY={spec['exit']:.3f};entryX={spec['entry']:.3f};entryY=0;"
+        ports = [x for x in entering[e["target"]] if x["edge"]["source"] == e["source"]]
+        label = f":{e['qualifiers']['port']}" if len(ports) > 1 and e["qualifiers"].get("port") is not None else ""
+        entry = edge_entry(e, path, constraints, label)
+        entry["label_offset"] = (-16 if spec["entry"] < 0.5 else 18, -9)
         canvas.edges.append(entry)
+
+
+def target_on_right(canvas, target, geometry):
+    """Outside-VPC targets placed in the right half of the reference box use the right margin."""
+    return geometry["last"] > 0 and canvas.abs[target["id"]][0] > (geometry["gutters"][0][0] + geometry["gutters"][-1][1]) / 2
+
+
+def edge_entry(e, path, constraints, label=""):
+    return {"id": cell_id("edge/" + e["id"]), "relation_id": e["id"], "relation": e["relation"],
+            "source": cell_id(e["source"]), "target": cell_id(e["target"]), "evidence": e["evidence"],
+            "points": path[1:-1], "path": path, "constraints": constraints, "label": label,
+            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer"}}

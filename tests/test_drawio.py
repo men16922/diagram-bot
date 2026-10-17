@@ -53,8 +53,9 @@ def assert_readable(layout):
     for edge in layout["edges"]:
         if not edge["points"]:
             continue
-        points = edge["points"]
+        points = edge["path"]
         for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            assert abs(x1 - x2) < 0.01 or abs(y1 - y2) < 0.01, ("not orthogonal", edge["relation"])
             segment = (min(x1, x2), min(y1, y2), max(x1, x2) + 0.01, max(y1, y2) + 0.01)
             for shape in resources:
                 if shape["id"] in (edge["source"], edge["target"]):
@@ -65,11 +66,33 @@ def assert_readable(layout):
                 assert not overlap(segment, (label[0] + 2, label[1] + 2, label[0] + label[2] - 2, label[1] + label[3] - 2)), (edge["relation"], shape["label"])
 
 
+def segments(edge):
+    for (x1, y1), (x2, y2) in zip(edge["path"], edge["path"][1:]):
+        if abs(y1 - y2) < 0.01:
+            yield "h", y1, min(x1, x2), max(x1, x2)
+        else:
+            yield "v", x1, min(y1, y2), max(y1, y2)
+
+
+def assert_no_shared_segments(layout):
+    """Two routes may share a segment only when they share a source (a bus) or a target."""
+    routed = [e for e in layout["edges"] if e["points"]]
+    for i, a in enumerate(routed):
+        for b in routed[i + 1:]:
+            if a["source"] == b["source"] or a["target"] == b["target"]:
+                continue
+            for axis, c, lo, hi in segments(a):
+                for axis2, c2, lo2, hi2 in segments(b):
+                    if axis == axis2 and abs(c - c2) < 1 and min(hi, hi2) - max(lo, lo2) > 1:
+                        raise AssertionError((a["relation"], b["relation"], axis, c))
+
+
 @pytest.mark.parametrize("view,vpc,resource,references", VIEWS)
 def test_views_are_readable_and_reproducible(view, vpc, resource, references):
     snapshot = demo_snapshot()
     layout = layout_document(snapshot, view, vpc, resource, references)
     assert_readable(layout)
+    assert_no_shared_segments(layout)
     assert layout_document(snapshot, view, vpc, resource, references)["shapes"] == layout["shapes"]
     xml = generate_document(snapshot, vpc, references, view, resource)
     assert xml == generate_document(snapshot, vpc, references, view, resource)
@@ -155,7 +178,9 @@ def test_hundred_resource_layout_is_readable_and_fast():
     elapsed = time.perf_counter() - started
     assert elapsed < 5, elapsed
     for vpc in ("vpc-scale-0", "vpc-scale-1"):
-        assert_readable(layout_document(snapshot, "detail", vpc, None, True))
+        layout = layout_document(snapshot, "detail", vpc, None, True)
+        assert_readable(layout)
+        assert_no_shared_segments(layout)
 
 
 @pytest.mark.parametrize("xml", [

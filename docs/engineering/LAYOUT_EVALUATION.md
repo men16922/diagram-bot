@@ -40,15 +40,20 @@ Findings that ruled it out for this scope:
   container outside the VPC.
 - Ordering is fixed: LB by name; target groups by LB barycenter; instances by target-group
   barycenter, then name/ID. Same input and options produce identical coordinates.
-- Routes are explicit: target-group edges use the channel, the gutter left of the target's AZ
-  column and the lane above the target's row; SG/ENI/EBS reference edges leave from the icon's
-  left side and use the same gutters. Parallel registrations of one instance on several ports
-  are offset and labelled with the port.
+- Routes are explicit and never share a segment unless they share a source (a target-group
+  bus) or a target. Each target group drops one trunk to its own channel row; each gutter gives
+  every source group its own vertical slot (deeper turns further out, 8 px apart); each icon row
+  gives every entering route its own lane (the route going further sits higher, 4 px apart), so
+  parallel routes do not coincide and most crossings are avoided. Outside-VPC targets reached
+  from right-half target groups sit at the right of the reference box and use the right margin.
+  SG/ENI/EBS reference routes leave from the icon's left side; ALB/NLB subnet placement routes
+  (focus view) go over the load balancer row, down the left margin and into the subnet header.
+  Registrations of one instance on several ports get separate lanes and port labels at the entry.
 - Labels are truncated to three wrapped lines (full name in the tooltip and inspector).
 
 Verified by `tests/test_drawio.py`: no sibling overlap (icons plus estimated label boxes), no
-child outside its container, no routed segment through another icon or its label, identical
-output on rerun, for all views of the sample and both VPCs of the 100-resource fixture.
+child outside its container, no routed segment through another icon or its label, orthogonal
+routes, no shared segment between unrelated routes, identical output on rerun, for all views of the sample and both VPCs of the 100-resource fixture.
 100-resource fixture, all pages (overview + 2 detail): about 0.02 s on the development container
 (test limit 5 s). This is a synthetic measurement, not a large-environment support claim.
 Rendered draw.io output of the sample was reviewed visually; the 100-resource view is

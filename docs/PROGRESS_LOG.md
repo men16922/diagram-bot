@@ -2,6 +2,14 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — Edge overlap cleanup (user request: 선 겹침 정리)
+
+- Router rewrite: per-source buses, per-group gutter slots, per-edge row lanes, right-margin
+  routes for right-side outside targets, explicit ALB/NLB placement routes in focus view.
+- Measured before: 6 shared segments (sample with references), 24 (100-resource view); after: 0.
+- New test asserts orthogonal routes and no shared segment between unrelated routes
+  (mutation-checked); `make check` 42 passed; browser acceptance passed; renders reviewed.
+
 ## 2026-10-17 — Topology plan P1–P5 implemented (cloud session)
 
 - Installed overnight-harness v1.8.0 (Claude marketplace); `make overnight-where` resolves it.

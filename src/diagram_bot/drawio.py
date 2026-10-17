@@ -101,7 +101,10 @@ def page(file, layout, name):
                                           "relation": RELATIONS.get(edge["relation"], edge["relation"]), "evidence": edge["evidence"]})
         style = edge["constraints"] + EDGE + ("dashed=1;strokeColor=#A0AEC0;" if edge.get("auxiliary") else "")
         cell = SubElement(obj, "mxCell", {"edge": "1", "parent": "1", "source": edge["source"], "target": edge["target"], "style": style})
-        geometry = SubElement(cell, "mxGeometry", {"relative": "1", "as": "geometry", **({"x": f"{edge['label_at']:g}"} if edge["label"] and edge["points"] else {})})
+        labelled = edge["label"] and edge.get("label_offset")
+        geometry = SubElement(cell, "mxGeometry", {"relative": "1", "as": "geometry", **({"x": "1"} if labelled else {})})
+        if labelled:
+            SubElement(geometry, "mxPoint", {"x": f"{edge['label_offset'][0]:g}", "y": f"{edge['label_offset'][1]:g}", "as": "offset"})
         if edge["points"]:
             points = SubElement(geometry, "Array", {"as": "points"})
             for x, y in edge["points"]:
