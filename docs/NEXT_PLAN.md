@@ -21,9 +21,9 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 - [x] [manual] Live check with real workloads — done 2026-10-17 on a temporary CloudFormation stack
   (VPC, ALB, ASG × 2 t3.micro, RDS), created and deleted with the user's approval (STATUS.md).
 - [x] [manual] Cross-account role collection — done 2026-10-17 with the repo's role template (temporary stack).
-- [ ] [manual] SSO collection from the app (`SSO로 로그인`, device code; implemented and tested offline 2026-10-17).
-  Done: owner approves the device code, CloudOpsReadOnly collection completes and matches the key-based one.
-  Paused by the owner ("SSO 말고 다른것부터").
+- [x] [manual] SSO collection from the app — done 2026-10-17: device code approved (owner signed in, agent confirmed the
+  code and allowed access at the owner's request), account and CloudOpsReadOnly auto-selected, collection complete with
+  the same 47 resources / node IDs as the key-based collection; audited as `via: sso:CloudOpsReadOnly`.
 - [x] [manual] Visual review of docs/images/*.png and examples/demo/edited-topology.png — done 2026-10-17 by the agent
   (model review of all 8 screenshots + the edited PNG; presenter judgment still welcome). Grouping (Cloud > Region >
   VPC > AZ > tiered subnets), icons, HA labels and the overview cards read correctly. Concrete issues found:

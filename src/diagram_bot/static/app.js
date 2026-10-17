@@ -296,9 +296,12 @@ async function ssoPoll(){
   try{const view=await api(`/api/sso/login/${state.sso.id}`);state.sso={...state.sso,...view};
     if(view.status==='pending'){$('sso-status').textContent='승인을 기다리는 중…';state.ssoTimer=setTimeout(ssoPoll,view.interval*1000);return;}
     if(view.status==='authorized'){
+      // Roles load before the selection is shown, so a collection never starts without a role.
+      $('sso-status').textContent='계정·역할 목록을 불러오는 중…';
       $('sso-account').replaceChildren(...view.accounts.map(a=>new Option(`${a.name} (${a.id})`,a.id)));
-      $('sso-signed-in').textContent=`SSO 로그인됨 · 계정 ${view.accounts.length}개`;ssoView('select');
-      if(view.accounts.length)await ssoRoles();else $('sso-signed-in').textContent='SSO 로그인됨 · 할당된 계정이 없습니다';return;}
+      if(view.accounts.length)await ssoRoles();
+      $('sso-signed-in').textContent=view.accounts.length?`SSO 로그인됨 · 계정 ${view.accounts.length}개`:'SSO 로그인됨 · 할당된 계정이 없습니다';
+      ssoView('select');return;}
     $('sso-status').textContent={expired:'코드가 만료됐습니다. 다시 로그인하세요.',denied:'승인이 거부됐습니다.',failed:'SSO 로그인에 실패했습니다.'}[view.status]||view.status;
     setTimeout(()=>ssoView('form'),2500);
   }catch(error){$('sso-status').textContent=error.message;setTimeout(()=>ssoView('form'),2500);}
@@ -333,6 +336,7 @@ $('collection-form').onsubmit=async event=>{
   event.preventDefault();$('start-collection').disabled=true;$('collection-progress').textContent='AWS 인증과 계정을 확인하고 있습니다…';
   try{
     const sso=state.sso?.status==='authorized'?{sso_login:state.sso.id,sso_role:$('sso-role').value||null}:{};
+    if(sso.sso_login&&!sso.sso_role)throw new Error('SSO 역할을 선택하세요. 이 계정에 할당된 역할이 없다면 Identity Center 관리자에게 요청하세요.');
     let job=await api('/api/collections',{method:'POST',body:JSON.stringify({profile:sso.sso_login?null:($('aws-profile').value||null),region:$('aws-region').value,expected_account:$('aws-account').value,role_arn:$('aws-role').value||null,external_id:$('aws-external-id').value||null,...sso})});
     while(['queued','running'].includes(job.status)){$('collection-progress').textContent='AWS 설정을 수집하고 있습니다. 잠시 기다려 주세요.';await new Promise(resolve=>setTimeout(resolve,1500));job=await api(`/api/collections/${job.id}`);}
     if(job.status==='failed')throw new Error(job.error);

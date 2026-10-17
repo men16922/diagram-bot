@@ -13,6 +13,7 @@ Last Updated: 2026-10-17
   gained a VPC scope after the model missed an ALB when searching by VPC name.
 - Cross-account role path verified live with the repo template (temporary, deleted); terminated instances no longer
   drawn or inventoried.
+- In-app IAM Identity Center sign-in (device code) verified live end to end; role-selection race fixed.
 - docs/DRAWIO.md (libraries, layout algorithm, routing, editor bridge, exports). Verified: `make check` 106 tests,
   live chat in Chromium (design, advice, collection) and CLI chat.
 
