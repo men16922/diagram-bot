@@ -42,6 +42,11 @@ def main():
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.on('request', lambda req: external.append(req.url) if req.url.startswith(('http:', 'https:')) and urlparse(req.url).netloc != urlparse(args.url).netloc else None)
         ready = lambda: expect(page.locator('#save-button')).to_be_enabled(timeout=60000)
+
+        def shot(name):
+            # Clicking canvas items scrolls the page; capture from the top so the fixed header sits where users see it.
+            page.evaluate('window.scrollTo(0, 0)')
+            page.screenshot(path=str(args.output / name), full_page=True)
         page.goto(args.url)
         ready()
         frame = page.frame_locator('#editor')
@@ -53,7 +58,7 @@ def main():
         expect(page.locator('#view-scope')).to_contain_text('수집 20개')
         frame.get_by_text(starts('VPC · 주문 서비스 운영 네트워크')).click()
         expect(detail).to_contain_text('vpc-demo')
-        page.screenshot(path=str(args.output / 'overview.png'), full_page=True)
+        shot('overview.png')
         detail.get_by_role('button', name='상세 구성 보기').click()
         ready()
         expect(page.locator('#view-detail')).to_have_class('view-button active')
@@ -75,14 +80,14 @@ def main():
         frame.get_by_text(named('web-c')).click()
         expect(detail).to_contain_text('subnet-app-c')
         expect(detail).to_contain_text('DescribeInstances.SubnetId')
-        page.screenshot(path=str(args.output / 'workspace.png'), full_page=True)
+        shot('workspace.png')
         detail.get_by_role('button', name='선택 리소스 보기').click()
         ready()
         expect(page.locator('#view-focus')).to_have_class('view-button active')
         expect(page.locator('#view-scope')).to_contain_text('표시 5개')
         expect(frame.get_by_text(starts('demo-api'))).to_be_visible()
         expect(frame.get_by_text(named('web-a'))).to_have_count(0)
-        page.screenshot(path=str(args.output / 'focus.png'), full_page=True)
+        shot('focus.png')
         detail.get_by_role('button', name='상세 구성으로 돌아가기').click()
         ready()
 
@@ -180,7 +185,7 @@ def main():
         findings_csv = (args.output / 'findings.csv').read_text(encoding='utf-8-sig')
         assert findings_csv.startswith('"severity",') and '높음' in findings_csv and 'SEC-SG-OPEN' in findings_csv
         page.locator('#export-dialog [aria-label="닫기"]').click()
-        page.screenshot(path=str(args.output / 'workspace-edited.png'), full_page=True)
+        shot('workspace-edited.png')
 
         # 7. Explicit relayout keeps the note and archives the moved layout; restore brings it back.
         page.locator('#reset-button').click()
@@ -203,7 +208,7 @@ def main():
         expect(detail).to_contain_text('demo-web-sg')
         page.locator('#severity-filter').select_option('low')
         expect(page.locator('#review-rows')).to_contain_text('ec2:DescribeInstances')
-        page.screenshot(path=str(args.output / 'review.png'), full_page=True)
+        shot('review.png')
         page.locator('#diagram-tab').click()
 
         # 8. Infrastructure sample: Auto Scaling frame, RDS and route-classified subnets.
@@ -224,7 +229,7 @@ def main():
         expect(detail).to_contain_text('Multi-AZ 대기')
         frame.get_by_text(starts('public-a')).click()
         expect(detail).to_contain_text('퍼블릭 · 0.0.0.0/0 → IGW')
-        page.screenshot(path=str(args.output / 'infrastructure.png'), full_page=True)
+        shot('infrastructure.png')
         page.locator('#snapshot-select').select_option('sample-eks-platform')
         ready()
         page.locator('[data-vpc="vpc-0a1b2c3d4e5f60006"]').click()
@@ -235,7 +240,7 @@ def main():
         expect(detail).to_contain_text('writer')
         frame.get_by_text(starts('platform-events')).first.click()
         expect(detail).to_contain_text('MSK 클러스터')
-        page.screenshot(path=str(args.output / 'eks-platform.png'), full_page=True)
+        shot('eks-platform.png')
         # 9. Data platform: ECS service frame, OpenSearch per-AZ nodes, read replica, then the TGW VPNs from the analytics VPC.
         page.locator('#snapshot-select').select_option('sample-data-platform')
         ready()
@@ -245,7 +250,7 @@ def main():
         expect(detail).to_contain_text('Transit Gateway')
         frame.get_by_text(starts('corp-dc-cgw-2')).click()
         expect(detail).to_contain_text('198.51.100.20')
-        page.screenshot(path=str(args.output / 'network-overview.png'), full_page=True)
+        shot('network-overview.png')
         page.locator('[data-vpc="vpc-0a1b2c3d4e5f60007"]').click()
         ready()
         frame.get_by_text(starts('ECS service · data-api')).click()
@@ -255,7 +260,7 @@ def main():
         expect(detail).to_contain_text('data 2 · master 1 · standby')
         frame.get_by_text(starts('catalog-db-ro')).click()
         expect(detail).to_contain_text('읽기 복제본 원본')
-        page.screenshot(path=str(args.output / 'data-platform.png'), full_page=True)
+        shot('data-platform.png')
         page.locator('[data-vpc="vpc-0a1b2c3d4e5f60008"]').click()
         ready()
         # Both VPCs reach on premises through the Transit Gateway: two customer gateways, each with a two-tunnel VPN.
@@ -276,7 +281,7 @@ def main():
         expect(detail).to_contain_text('com.amazonaws.ap-northeast-2.bedrock-runtime')
         frame.get_by_text(starts('EKS node group · gpu-inference')).click()
         expect(detail).to_contain_text('EKS 노드 그룹')
-        page.screenshot(path=str(args.output / 'ai-platform.png'), full_page=True)
+        shot('ai-platform.png')
         page.locator('#review-tab').click()
         expect(page.locator('#review-rows')).to_contain_text('학습 노드 그룹이 한 AZ에만 있음')
         page.locator('#diagram-tab').click()
@@ -294,12 +299,12 @@ def main():
         expect(detail).to_contain_text('FSx file system')
         frame.get_by_text(starts('hp-slurm')).click()
         expect(detail).to_contain_text('SageMaker HyperPod cluster')
-        page.screenshot(path=str(args.output / 'gpu-training.png'), full_page=True)
+        shot('gpu-training.png')
         page.locator('#snapshot-select').select_option('sample-genai-rag')
         ready()
         frame.get_by_text(starts('rag-reranker')).click()
         expect(detail).to_contain_text('SageMaker endpoint')
-        page.screenshot(path=str(args.output / 'genai-rag.png'), full_page=True)
+        shot('genai-rag.png')
 
         # 9d. Multi-account: account frames around VPC cards meeting at the Network account's shared Transit Gateway,
         # then two account snapshots imported and merged through the 계정 통합 보기 dialog.
@@ -309,7 +314,7 @@ def main():
         expect(frame.get_by_text(starts('AWS 계정 · 222222222222'))).to_be_visible()
         frame.get_by_text(starts('org-tgw')).click()
         expect(detail).to_contain_text('111111111111')
-        page.screenshot(path=str(args.output / 'multi-account.png'), full_page=True)
+        shot('multi-account.png')
         from diagram_bot.samples import SAMPLES
         for i, part in enumerate(SAMPLES['multi-account']()['parts'][1:]):
             (args.output / f'account-{i}.json').write_text(json.dumps(part), encoding='utf-8')
@@ -341,7 +346,7 @@ def main():
         page.locator('#compare-select').select_option('demo')
         expect(page.locator('#changes-summary')).to_contain_text('설정 변경 1')
         expect(page.locator('#changes-rows')).to_contain_text('InstanceType: t3.small → t3.large')
-        page.screenshot(path=str(args.output / 'changes.png'), full_page=True)
+        shot('changes.png')
         assert not errors, errors
         assert not external, external
         browser.close()

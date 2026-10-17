@@ -2,6 +2,17 @@
 
 Last Updated: 2026-10-18
 
+## 2026-10-18 — AWS console-style UI, overview at a glance (owner: 전체 구성이 늘 같다; Gemini처럼 우측 채팅; 로그인→프로필; AWS 스타일)
+
+- Overview VPC cards now show services per tier (public / private / isolated) with icons and counts; isolated subnets count
+  as their own tier; the unplaced card ignores references and drawn hubs.
+- UI: dark top navigation (region, AI assistant, sign-in profile), white side navigation, breadcrumbs, page header,
+  Cloudscape-like containers/buttons/tabs. Sign-in (SSO or profile/default chain via GET /api/identity, STS) shows
+  `role @ account`; the profile menu holds collection and sign-out. AI assistant docks on the right and reflows content.
+- Fixed: the page scrolled 85 px when draw.io focused its iframe on load.
+- Verified: `make check` 167 tests; verify_demo 30 checks; verify_team (profile-menu sign-out) ok; live sign-in with
+  the `.env` keys showed the IAM user @ account.
+
 ## 2026-10-18 — Multi-account view, live check of the AI calls (goal: 잔여 작업 완료시까지)
 
 - Multi-account: `combine.py` merges account × region snapshots; `merge_graphs` makes a RAM-shared Transit Gateway or a

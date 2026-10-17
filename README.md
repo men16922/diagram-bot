@@ -30,6 +30,7 @@ diagram-bot serve
 
 ## 시연 버전에서 할 수 있는 것
 
+- **AWS 콘솔과 같은 화면 구성:** 상단 내비게이션(리전, AI 어시스턴트, 로그인·프로필 메뉴), 좌측 내비게이션(수집 이력, 전체 구성·VPC, 도구), 경로 표시와 페이지 헤더, 오른쪽에 붙는 AI 어시스턴트 패널.
 - **AI/GPU 워크로드 (Well-Architected Generative AI·ML·HPC 렌즈):** GPU·Trainium·Inferentia 노드의 EFA 인터페이스·Capacity Block·용량 예약·클러스터 배치 그룹,
   FSx for Lustre, SageMaker 실시간 엔드포인트·HyperPod, Bedrock·SageMaker 인터페이스 엔드포인트를 수집해 그리고, AI/ML 검토 규칙 17개로 점검합니다
   (인터넷에 열린 Jupyter·Ray·MLflow·vLLM 포트, GPU 노드 퍼블릭 노출, 여러 AZ에 걸친 EFA 학습, 단일 AZ 추론, EFA 보안 그룹, Spot EFA, 배치 그룹 누락,
@@ -59,7 +60,7 @@ aws sso login --profile my-sso-profile
 diagram-bot serve
 ```
 
-화면의 **AWS에서 새로 수집**에서 프로파일, 예상 계정 ID, 리전을 지정합니다. 프로파일을 지정하지 않으면 boto3의 기본 인증 체인을 사용합니다. 기존 `AWS_CONFIG_FILE`·`AWS_PROFILE`·`credential_process`도 SDK가 처리합니다. STS의 실제 계정 ID와 예상 계정 ID가 다르면 리소스를 수집하지 않습니다. 브라우저에서 SSO 로그인을 대신 수행하지는 않습니다.
+화면 우측 상단 **로그인**(AWS 콘솔의 계정 메뉴와 같은 위치)에서 IAM Identity Center(SSO, device code)나 이 기기의 프로파일·기본 인증 체인으로 로그인하면 `역할 @ 계정`이 표시됩니다. 같은 메뉴의 **AWS 리소스 수집**에서 예상 계정 ID와 리전을 지정합니다. 로그인하지 않으면 boto3의 기본 인증 체인을 사용합니다. 기존 `AWS_CONFIG_FILE`·`AWS_PROFILE`·`credential_process`도 SDK가 처리합니다. STS의 실제 계정 ID와 예상 계정 ID가 다르면 리소스를 수집하지 않습니다. SSO 토큰과 자격 증명은 서버 메모리에만 두고 저장하지 않습니다.
 
 수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 읽기 API(EC2·ELBv2·RDS·Auto Scaling·EKS·ECS·MSK·ElastiCache·OpenSearch·EFS·Redshift·Lambda·FSx·SageMaker)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
 
@@ -110,7 +111,7 @@ SDK 페이지네이션·재시도·타임아웃을 적용합니다. `partial`은
 
 ```bash
 pip install -e '.[agent]'                       # strands-agents
-diagram-bot serve --env-file .env               # 앱 왼쪽 아래 「채팅으로 설계」
+diagram-bot serve --env-file .env               # 앱 상단 「AI 어시스턴트」 (오른쪽에 붙는 패널)
 diagram-bot chat --env-file .env                # 터미널 대화형
 diagram-bot chat --env-file .env -m "서울 리전에 3 AZ 3계층 웹 서비스를 설계하고 검토해줘"
 ```

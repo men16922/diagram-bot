@@ -42,7 +42,8 @@ function setControls() {
   $('save-state').textContent=state.loading?'불러오는 중':state.busy?'처리 중':state.dirty?'저장하지 않은 편집':state.revision?`저장됨 · v${state.revision}`:'자동 생성 구성도';
 }
 function sendDocument() {
-  state.loading=true;setControls();$('editor-overlay').hidden=false;
+  // draw.io focuses itself when a document loads and the browser would scroll the page to the iframe; keep the user's place.
+  state.scrollY=window.scrollY;state.loading=true;setControls();$('editor-overlay').hidden=false;
   post({action:'load',xml:state.xml,autosave:1,title:'Diagram Bot',saveAndExit:0,noSaveBtn:1,noExitBtn:1,fit:1,maxFitScale:1,border:24});
   clearTimeout(editorTimer);
   editorTimer=setTimeout(()=>{state.loading=false;state.ready=false;setControls();$('editor-message').textContent='편집기 응답이 지연되고 있습니다. 새로고침하거나 setup-editor 설치를 확인하세요.';},30000);
@@ -61,9 +62,10 @@ window.addEventListener('message', event=>{
   let message;try{message=typeof event.data==='string'?JSON.parse(event.data):event.data;}catch{return;}
   if(!message)return;
   if(message.event==='configure')post({action:'configure',config:{defaultFonts:['Arial','Helvetica','sans-serif'],defaultLibraries:'general',defaultCompressed:false}});
-  if(message.event==='init'){state.ready=true;if(state.xml)sendDocument();}
+  if(message.event==='init'){state.ready=true;window.scrollTo(0,0);if(state.xml)sendDocument();}
   if(message.event==='load'){
     clearTimeout(editorTimer);state.loading=false;state.dirty=false;$('editor-overlay').hidden=true;setControls();
+    requestAnimationFrame(()=>window.scrollTo(0,state.scrollY||0));
     post({action:'diagramBotOverview'});
   }
   if(message.event==='autosave'&&!state.loading){state.dirty=true;setControls();}
