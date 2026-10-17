@@ -33,3 +33,7 @@ index.html
 !examples/demo/inventory.csv
 !examples/demo/review.md
 !examples/demo/index.html
+scripts/overnight/logs/
+scripts/overnight/STOP
+scripts/overnight/DONE
+docs/test/history/*-overnight-review-checklist.md

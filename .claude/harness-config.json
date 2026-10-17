@@ -1,0 +1,33 @@
+{
+  "$comment": "Per-repo harness config. Copied to .claude/harness-config.json by /harness-init for historical compatibility across engines. The plugin skills (sync/checkpoint/tidy-docs/overnight-report/overnight-seed) read this to learn your doc filenames, gate command, engine, and line budgets. Edit these to match your repo; skills fall back to these same defaults if the file is absent. Optional: add \"harness_root\": \"/abs/path/to/plugin\" to pin a specific overnight-harness install (else the Makefile auto-resolves the highest installed version; a versioned cache path pinned here goes stale on upgrade, and harness-init --check warns). Optional: \"doc_budget_cmd\" (a command that fails when an entry doc is over budget, used by /checkpoint and /ship) and \"ship\": {\"hold_back\": [paths /ship never stages]}.",
+  "project_name": "diagram-bot",
+  "docs": {
+    "brief": "docs/AGENT_BRIEF.md",
+    "status": "docs/STATUS.md",
+    "plan": "docs/NEXT_PLAN.md",
+    "log": "docs/PROGRESS_LOG.md",
+    "completed": "docs/COMPLETED_SUMMARY.md",
+    "decisions": "docs/DECISIONS.md",
+    "lessons": "docs/LESSONS.md"
+  },
+  "archive_dir": "docs/archive",
+  "gate": "make check",
+  "ship": {
+    "hold_back": []
+  },
+  "smoke": "make smoke-local",
+  "budgets": {
+    "brief": 60,
+    "status": 120,
+    "plan": 120,
+    "log": 120,
+    "lessons": 40
+  },
+  "engine": "codex",
+  "engine_choices": [
+    "claude",
+    "codex",
+    "opencode",
+    "agy"
+  ]
+}
