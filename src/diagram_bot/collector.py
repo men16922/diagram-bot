@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import boto3
 from botocore.config import Config
@@ -7,7 +7,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 
 def now():
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 OPERATIONS = [
@@ -132,7 +132,7 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(listing, by_service))
     raw, coverage = {}, []
-    for (service, operation, key, name), rows, log in zip(OPERATIONS, rows_of, logs):
+    for (*_, name), rows, log in zip(OPERATIONS, rows_of, logs, strict=True):
         raw[name] = [i for reservation in rows for i in reservation.get("Instances", [])] if name == "instances" else rows
         log[0]["items"] = len(raw[name])
         coverage += log

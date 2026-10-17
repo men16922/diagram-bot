@@ -22,8 +22,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T07:48:29.205800+00:00",
-    "finished_at": "2026-10-17T07:48:29.205800+00:00",
+    "started_at": "2026-10-17T08:12:43.176490+00:00",
+    "finished_at": "2026-10-17T08:12:43.176490+00:00",
     "status": "partial",
     "demo": true,
     "scope": [
@@ -36,7 +36,7 @@
     ],
     "limitations": [
       "실제 AWS 조회가 아닌 샘플 데이터입니다.",
-      "보안 그룹·ENI·EBS는 참조만 표시합니다.",
+      "ENI·EBS는 참조만 표시하고 보안 그룹 규칙은 검토 결과에만 사용합니다.",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -76,6 +76,13 @@
       "operation": "describe_target_groups",
       "status": "complete",
       "items": 3,
+      "pages": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "items": 2,
       "pages": 1
     },
     {
@@ -305,7 +312,11 @@
             "Key": "Environment",
             "Value": "staging"
           }
-        ]
+        ],
+        "PublicIpAddress": "203.0.113.45",
+        "MetadataOptions": {
+          "HttpTokens": "optional"
+        }
       }
     ],
     "load_balancers": [
@@ -452,6 +463,53 @@
             "TargetHealth": {
               "State": "healthy"
             }
+          }
+        ]
+      }
+    ],
+    "security_groups": [
+      {
+        "GroupId": "sg-alb",
+        "GroupName": "demo-alb-sg",
+        "VpcId": "vpc-demo",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-web",
+        "GroupName": "demo-web-sg",
+        "VpcId": "vpc-demo",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-alb"
+              }
+            ]
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0",
+                "Description": "temporary"
+              }
+            ]
           }
         ]
       }
@@ -607,7 +665,11 @@
               "Key": "Environment",
               "Value": "staging"
             }
-          ]
+          ],
+          "PublicIpAddress": "203.0.113.45",
+          "MetadataOptions": {
+            "HttpTokens": "optional"
+          }
         },
         "reference_only": false,
         "source": "DescribeInstances"
@@ -705,23 +767,66 @@
         "id": "111122223333/ap-northeast-2/security_group/sg-alb",
         "resource_id": "sg-alb",
         "kind": "security_group",
-        "name": "sg-alb",
+        "name": "demo-alb-sg",
         "account": "111122223333",
         "region": "ap-northeast-2",
-        "attributes": {},
-        "reference_only": true,
-        "source": null
+        "attributes": {
+          "GroupId": "sg-alb",
+          "GroupName": "demo-alb-sg",
+          "VpcId": "vpc-demo",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 443,
+              "ToPort": 443,
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
       },
       {
         "id": "111122223333/ap-northeast-2/security_group/sg-web",
         "resource_id": "sg-web",
         "kind": "security_group",
-        "name": "sg-web",
+        "name": "demo-web-sg",
         "account": "111122223333",
         "region": "ap-northeast-2",
-        "attributes": {},
-        "reference_only": true,
-        "source": null
+        "attributes": {
+          "GroupId": "sg-web",
+          "GroupName": "demo-web-sg",
+          "VpcId": "vpc-demo",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 443,
+              "ToPort": 443,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-alb"
+                }
+              ]
+            },
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 22,
+              "ToPort": 22,
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0",
+                  "Description": "temporary"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-a",

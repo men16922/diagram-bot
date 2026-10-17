@@ -34,6 +34,11 @@ Last Updated: 2026-10-17
 - ECS services with placed tasks are frames like Auto Scaling groups; services without collected
   tasks sit in the attachment row. VPC peering appears in both collected VPCs; VPN connections run
   from the VGW/TGW to customer gateways in the data center box beside the AWS Cloud.
+- Architecture review reports only what API fields decide; a missing input yields no finding plus
+  an OPS-COVERAGE row, never a guess. Reference samples must stay free of high/medium findings.
+- Change review compares configuration, not observations (health, running counts, telemetry).
+- Cross-account sessions always carry the ReadOnlyAccess session policy; the server stays
+  loopback-only (no unauthenticated network exposure option).
 - Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
 - Automatic layout only on first generation or explicit relayout; superseded edits are archived
   and user-added notes carried over.

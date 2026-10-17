@@ -107,7 +107,7 @@ def test_legacy_snapshot_and_detail_document_stay_usable(client, tmp_path):
     for edge in legacy['graph']['edges']:
         del edge['id'], edge['qualifiers']
     (data / 'snapshots' / 'legacy.json').write_text(json.dumps(legacy), encoding='utf-8')
-    key = hashlib.sha256('legacy|vpc-demo|False'.encode()).hexdigest()
+    key = hashlib.sha256(b'legacy|vpc-demo|False').hexdigest()
     old_xml = client.get('/api/snapshots/demo/document?vpc=vpc-demo').json()['xml'].replace('web-a', 'legacy web-a')
     (data / 'documents' / f'{key}.json').write_text(json.dumps({'xml': old_xml, 'revision': 4, 'saved_at': 'x'}), encoding='utf-8')
     upgraded = client.get('/api/snapshots/legacy').json()

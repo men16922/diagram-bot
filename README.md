@@ -1,6 +1,8 @@
 # Diagram Bot — AWS 구성도 워크스페이스
 
-AWS 설정을 읽어 **편집 가능한 draw.io 구성도**를 자동 생성하는 로컬 웹 앱입니다. VPC 환경을 탐색하고, 리소스의 속성과 API 관계 근거를 확인하고, 편집본을 **`.drawio`·PNG**로 다운로드할 수 있습니다. AWS 인증 없이 바로 시연할 수 있는 샘플이 포함되어 있습니다.
+AWS 설정을 읽기 전용으로 수집해 **편집 가능한 인프라 아키텍처 구성도(draw.io)**, **아키텍처 검토 결과**, **변경 비교**를 만드는 로컬 웹 앱·CLI입니다. VPC 환경을 탐색하고, 리소스의 속성과 API 관계 근거를 확인하고, 편집본을 **`.drawio`·PNG**로 내려받을 수 있습니다. 여러 계정·리전을 읽기 전용 역할로 수집하고, 검토·드리프트 결과를 CI 종료 코드로 받을 수 있습니다. AWS 인증 없이 바로 시연할 수 있는 샘플이 포함되어 있습니다.
+
+[운영 안내](docs/OPERATIONS.md) · [보안 정책](SECURITY.md) · [변경 내역](CHANGELOG.md)
 
 ![Diagram Bot AWS 워크스페이스](docs/images/workspace.png)
 
@@ -30,6 +32,8 @@ diagram-bot serve
 - **인프라 아키텍처 표기:** AWS Cloud > Region > VPC > AZ > 서브넷(라우팅으로 퍼블릭·프라이빗·격리 구분)에 Internet/NAT Gateway, VPC 엔드포인트, Transit Gateway 연결, VPC 피어링, Site-to-Site VPN(VGW/TGW → 고객 게이트웨이, 터널 상태), EKS(컨트롤 플레인·노드 그룹), ECS 서비스·Fargate 태스크, MSK 브로커, OpenSearch 노드, ElastiCache, RDS·Aurora·DocumentDB·Neptune, EFS 마운트 타깃, Redshift, VPC Lambda, AZ를 가로지르는 Auto Scaling 그룹·ECS 서비스 프레임을 AWS Architecture Icons 스타일로 그립니다.
 - **고가용성 표기:** 각 리소스가 어느 AZ·서브넷에서 어떤 역할인지 라벨에 표시합니다. RDS primary/standby/read replica, Multi-AZ DB 클러스터 readable standby, Aurora·DocumentDB writer/reader, ElastiCache 샤드별 primary/replica, OpenSearch AZ별 data·master 노드 수와 standby AZ, MSK AZ별 브로커 ID, Redshift Multi-AZ primary/secondary, EFS Regional/One Zone, Auto Scaling·EKS 노드 그룹 min/desired/max, ECS 실행/원하는 태스크 수.
 - **결정적 자동 배치:** 로드밸런서 → 대상 그룹 → AZ 열·서브넷 순서의 계층 배치. 연결선은 채널과 AZ 사이 통로로만 지나가 다른 도형을 가로지르지 않습니다. 같은 입력은 항상 같은 좌표를 만듭니다([배치 엔진 평가](docs/engineering/LAYOUT_EVALUATION.md)).
+- **아키텍처 검토:** 단일 AZ 구성, reader·replica 없는 데이터 계층, 다른 AZ NAT 의존, 꺼진 장애 조치, 퍼블릭 DB, 암호화 누락, IMDSv1, 인터넷에 열린 관리·DB 포트 등을 심각도·근거 API 필드·권장 조치와 함께 보여 줍니다(`검토 결과` 탭, `review.md`, `diagram-bot review --fail-on high`).
+- **변경 비교:** 두 수집 시점 사이의 리소스 추가·삭제, 설정 변경, 관계 변경(`변경 비교` 탭, `diagram-bot diff --fail-on-change`). 헬스·실행 수 같은 상태 값은 비교하지 않습니다.
 - 선택한 리소스의 속성·태그·관계와 API 근거, 포트·AZ 한정자, 구성도에서 직접 관계 강조.
 - 실제 draw.io 도형 이동·스타일 수정·메모 편집. 편집본은 보기별로 저장되며, 덮어쓴 버전은 이력에 보관됩니다.
 - `자동 배치 다시 실행`은 이전 편집본을 보관하고 메모를 유지합니다. `이전 편집본 복원` 지원.
@@ -79,11 +83,13 @@ diagram-bot serve
 | Redshift (Multi-AZ primary/secondary) | redshift DescribeClusters.AvailabilityZone·MultiAZSecondary, DescribeClusterSubnetGroups |
 | VPC 피어링 | DescribeVpcPeeringConnections, 라우팅 테이블의 VpcPeeringConnectionId 경로 |
 | Site-to-Site VPN | DescribeVpnGateways·DescribeVpnConnections(VgwTelemetry)·DescribeCustomerGateways |
+| 보안 그룹 규칙 | DescribeSecurityGroups.IpPermissions (검토 결과·속성 패널) |
+| 교차 계정 수집 | sts:AssumeRole (+ ReadOnlyAccess 세션 정책), GetCallerIdentity로 계정 확인 |
 | IP 대상의 서브넷 | 대상 그룹 VPC 안에서 IP를 포함하는 서브넷 CIDR이 하나이고 AZ가 일치할 때만 |
 
-ALB는 여러 서브넷에 걸쳐도 VPC 수준에 한 번만 그리며, 서브넷 연결은 속성 패널과 선택 리소스 보기에서 확인합니다. 대상 그룹은 논리 자원으로 서브넷 밖에 둡니다. 관계 ID는 출발·대상·관계 종류와 포트·AZ로 정해지므로 조회 순서나 상태가 바뀌어도 유지됩니다. SG·ENI·EBS는 **참조만** 표시하며 상세 조회하지 않습니다. IP·Lambda 대상은 별도 등록 대상으로 남기고 EC2와 추측으로 합치지 않습니다. IP 대상은 서브넷 CIDR·AZ가 하나로 일치할 때만 서브넷에 두고, ECS 서비스가 그 대상 그룹을 지정하고 태스크 ENI IP가 같을 때만 태스크로 표시합니다. 그래프 관계에는 API 근거와 `inferred: false`가 기록됩니다. 보안 그룹 허용 규칙과 실제 통신을 혼동하지 않습니다.
+ALB는 여러 서브넷에 걸쳐도 VPC 수준에 한 번만 그리며, 서브넷 연결은 속성 패널과 선택 리소스 보기에서 확인합니다. 대상 그룹은 논리 자원으로 서브넷 밖에 둡니다. 관계 ID는 출발·대상·관계 종류와 포트·AZ로 정해지므로 조회 순서나 상태가 바뀌어도 유지됩니다. ENI·EBS는 **참조만** 표시합니다. 보안 그룹은 규칙을 조회해 검토와 속성 패널에 쓰지만 구성도에는 참조 선택 시에만 그립니다. IP·Lambda 대상은 별도 등록 대상으로 남기고 EC2와 추측으로 합치지 않습니다. IP 대상은 서브넷 CIDR·AZ가 하나로 일치할 때만 서브넷에 두고, ECS 서비스가 그 대상 그룹을 지정하고 태스크 ENI IP가 같을 때만 태스크로 표시합니다. 그래프 관계에는 API 근거와 `inferred: false`가 기록됩니다. 보안 그룹 허용 규칙과 실제 통신을 혼동하지 않습니다.
 
-SDK 페이지네이션·재시도·타임아웃을 적용합니다. `partial`은 일부 페이지 실패, `unavailable`은 한 페이지도 조회하지 못한 상태이며 리소스가 없다는 뜻이 아닙니다. 앞서 조회한 데이터는 보존합니다. 수집 시작·종료 시각과 범위를 기록하며 순차 API 조회이므로 원자적 스냅샷은 아닙니다.
+SDK 페이지네이션·재시도·타임아웃을 적용합니다. `partial`은 일부 페이지 실패, `unavailable`은 한 페이지도 조회하지 못한 상태이며 리소스가 없다는 뜻이 아닙니다. 앞서 조회한 데이터는 보존합니다. 수집 시작·종료 시각과 범위를 기록합니다. 서비스별로 병렬 조회하며 adaptive 재시도를 씁니다. 여러 API를 조회한 결과이므로 원자적 스냅샷은 아닙니다.
 
 ## 로컬 데이터와 CLI 보고서
 
@@ -93,11 +99,16 @@ SDK 페이지네이션·재시도·타임아웃을 적용합니다. `partial`은
 
 ```bash
 diagram-bot demo --output reports/demo
-diagram-bot demo --sample three-tier --output reports/three-tier   # three-tier | microservices | nlb-alb | environments | hybrid
+diagram-bot demo --sample three-tier --output reports/three-tier   # three-tier | microservices | nlb-alb | environments | hybrid | eks-platform | data-platform
 diagram-bot collect --profile my-sso-profile --region ap-northeast-2 \
   --expected-account 123456789012 --output reports/current
 diagram-bot render reports/current/snapshot.json --output reports/rerendered
+diagram-bot review reports/current/snapshot.json --fail-on high          # 높음 결과가 있으면 종료 코드 3
+diagram-bot diff reports/previous/snapshot.json reports/current/snapshot.json --fail-on-change   # 변경이 있으면 4
+# 여러 계정·리전: --role-arn을 여러 번, --region a,b (역할 세션은 ReadOnlyAccess로 제한)
 ```
+
+여러 계정 배포용 읽기 전용 역할 템플릿과 운영 절차는 [운영 안내](docs/OPERATIONS.md)에 있습니다.
 
 | CLI 산출물 | 내용 |
 | --- | --- |
@@ -105,9 +116,9 @@ diagram-bot render reports/current/snapshot.json --output reports/rerendered
 | `index.html` | 서버 없이 여는 조회용 HTML·속성·필터·SVG 다운로드 |
 | `snapshot.json` | 원본 응답·그래프·API별 조회 상태·수집 시각 |
 | `inventory.csv` | 동일 스냅샷의 리소스 내역·참조 여부·속성 |
-| `review.md` | 조회 결과와 검토 항목, 자동 적합성 판정은 아님 |
+| `review.md` | 조회 결과, 아키텍처 검토 결과(심각도·근거·권장 조치), 해석 범위 |
 
-**PNG 다운로드는 `serve` 웹 앱에서 제공합니다.** CLI의 HTML 뷰어와 draw.io 편집기는 별도 화면입니다. 부분 수집이어도 보고서를 생성하며 `collect` 종료 코드는 정상 0, 부분 조회 2, 인증·계정 불일치·파일 오류 1입니다. 실제 수집 데이터는 `reports/` 등 Git 추적 제외 경로에 보관하세요.
+**PNG 다운로드는 `serve` 웹 앱에서 제공합니다.** CLI의 HTML 뷰어와 draw.io 편집기는 별도 화면입니다. 부분 수집이어도 보고서를 생성하며 `collect` 종료 코드는 정상 0, 부분 조회 2, 인증·계정 불일치·파일 오류 1입니다(여러 대상이면 가장 나쁜 결과). 실제 수집 데이터는 `reports/` 등 Git 추적 제외 경로에 보관하세요.
 
 ## 검증과 현재 한계
 
@@ -121,6 +132,6 @@ python -m playwright install chromium
 python scripts/verify_demo.py
 ```
 
-자동 테스트 **51개**와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
+자동 테스트 **73개**와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
 
 현재는 **단일 사용자 로컬 시연 버전**입니다. 다중 사용자 인증·동시 편집, 수집 작업의 재시작 복구, 예약 수집, 변경 비교, 리스너 규칙·보안 그룹 규칙·Direct Connect·실제 트래픽 분석, 대규모 계정 성능 검증은 포함하지 않습니다. 이 환경에는 AWS 인증이 없어 실제 계정의 권한·접속·SSO 갱신은 검증하지 못했으며, 수집 로직은 모의 AWS 응답으로 검증했습니다.

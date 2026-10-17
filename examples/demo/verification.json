@@ -42,6 +42,7 @@
     "infrastructure sample: ASG frame, RDS standby, route-classified subnet",
     "EKS sample: node group frame, Aurora writer, MSK brokers",
     "data platform: ECS service frame, OpenSearch standby AZ, read replica, VPN customer gateway",
-    "snapshot import"
+    "snapshot import",
+    "change review between snapshots"
   ]
 }

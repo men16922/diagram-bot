@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "diagram-bot"
-version = "0.3.0"
-description = "AWS configuration inventory and evidence-based topology"
+version = "0.4.0"
+description = "AWS infrastructure architecture diagrams, architecture review and change review from read-only API evidence"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["boto3>=1.35,<2", "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "defusedxml>=0.7,<1"]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<10", "httpx>=0.27,<1"]
+test = ["pytest>=8,<10", "httpx>=0.27,<1", "ruff>=0.6,<1"]
 browser = ["playwright>=1.50,<2", "pillow>=11,<13"]
 
 [project.scripts]
@@ -19,6 +19,22 @@ diagram-bot = "diagram_bot.cli:main"
 
 [tool.setuptools.package-data]
 diagram_bot = ["viewer.html", "static/*"]
+
+[tool.ruff]
+line-length = 200
+target-version = "py311"
+extend-exclude = ["scripts/experiments", "scripts/overnight"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "S", "UP"]
+# E731: short lambdas are the house style for local helpers. B023: closures are called within the
+# same iteration. B905: zipped sequences are built together. S101: pytest assertions.
+ignore = ["E731", "B023", "B905", "S101"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test and verification scripts run local, trusted files and fixed commands.
+"tests/*" = ["S", "B017"]
+"scripts/*" = ["S"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

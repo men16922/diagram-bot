@@ -4,12 +4,17 @@ Last Updated: 2026-10-17
 
 ## Active Plan
 
+- 2026-10-17 goal "엔터프라이즈 상용 제품 수준": v0.4.0 adds architecture review (findings + CLI gate),
+  snapshot change review (drift gate), cross-account read-only role and multi-region/multi-account
+  collection, parallel collection, scale tests, lint in the gate, CHANGELOG/SECURITY/OPERATIONS docs
+  and a CloudFormation read-only role template.
+
 - AWS topology refinement plan (docs/TOPOLOGY_PLAN.md): P1–P5 implemented and verified on the
   synthetic sample. Merged to main (fast-forward) on 2026-10-17 at the user's request.
 - Remaining work is manual only: live SSO collection check and human visual review
   (docs/NEXT_PLAN.md). No [auto] backlog is approved.
 
-## Current Baseline (v0.3)
+## Current Baseline (v0.4.0)
 
 - Collection: direct SSO/SDK, read-only EC2/ELBv2/RDS/Auto Scaling/EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/
   Lambda calls plus VPC peering and Site-to-Site VPN, incl. internet and
@@ -39,11 +44,11 @@ Last Updated: 2026-10-17
 
 ## Verification (2026-10-17, this container)
 
-- `make check`: 51 pytest cases + five-artifact CLI round trip passed.
+- `make check`: ruff lint + 73 pytest cases + five-artifact CLI round trip passed.
 - Layout tests: no sibling overlap (icons + label boxes), nothing outside its container, no
   routed segment through another icon/label, identical rerun — all sample views and both VPCs
   of a 100-resource fixture. 100-resource layout of all pages ≈0.02 s (limit 5 s).
-- Browser (`scripts/verify_demo.py`, Chromium, draw.io 32.4.1): 26 checks incl. overview →
+- Browser (`scripts/verify_demo.py`, Chromium, draw.io 32.4.1): 27 checks incl. overview →
   detail → focus, ALB relations/evidence, relation highlight, native keyboard move + note,
   save/reload, `.drawio` with moved geometry, PNG 1×/2×/3× and transparent, relayout keeps
   the note, restore, JSON/CSV, import. No page errors, no external requests.
@@ -64,7 +69,8 @@ Last Updated: 2026-10-17
   collect` stopped with exit 1 and wrote no report (expected failure path). Needs a valid
   read-only key or SSO profile for the intended account.
 - 100-resource views are structurally correct but dense; no large-environment claim.
-- No shared-user hosting, scheduled collection, snapshot diff, listener rules or Direct Connect.
+- No shared-user hosting/authentication, built-in scheduler (use cron/CI with `review`/`diff` exit codes),
+  listener rules, NACLs or Direct Connect. No project LICENSE file yet (owner decision).
   EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN calls are verified on stubs only;
   ElastiCache Serverless, MSK Serverless, EKS Fargate profiles and Aurora Global Database are not drawn.
 - Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.

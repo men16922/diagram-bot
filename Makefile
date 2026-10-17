@@ -5,8 +5,11 @@ export AWS_EC2_METADATA_DISABLED := true
 export AWS_CONFIG_FILE := /dev/null
 export AWS_SHARED_CREDENTIALS_FILE := /dev/null
 
-.PHONY: check test smoke-local
-check: test smoke-local
+.PHONY: check lint test smoke-local
+check: lint test smoke-local
+
+lint:
+	$(PYTHON) -m ruff check src tests scripts
 
 test:
 	$(PYTHON) -m pytest -q

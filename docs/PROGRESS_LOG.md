@@ -2,6 +2,20 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — Enterprise readiness (goal: 엔터프라이즈 상용 제품 수준까지 작업·검증)
+
+- Architecture review (`findings.py`): 27 deterministic reliability/security/operations rules from
+  API fields only; security group rules collected; review tab, review.md section, `review --fail-on`.
+- Change review (`diff.py`): resources/settings/relations between snapshots, volatile state ignored;
+  comparison tab, API, `diff --fail-on-change`.
+- Collector: AssumeRole with ExternalId capped by the ReadOnlyAccess session policy; CLI over
+  several roles × regions; per-service parallel calls with adaptive retries; mtime caches in server.
+- Quality: ruff in `make check` and CI, CI runs review/diff CLIs, scale tests (300 instances in one
+  VPC readable; 2,500-resource account < 20 s), CloudFormation role template kept equal to the
+  policy by test, version 0.4.0, CHANGELOG, SECURITY, OPERATIONS.
+- Verified: `make check` (lint + 73 tests + CLI round trip); browser acceptance 27 checks incl.
+  review tab and snapshot comparison, no page errors or external requests.
+
 ## 2026-10-17 — More services and HA detail (user request: OpenSearch 등, primary/standby·Multi-AZ·replica)
 
 - Collector: OpenSearch (ListDomainNames, DescribeDomains, DescribeDomainNodes), ECS (clusters,
@@ -14,7 +28,7 @@ Last Updated: 2026-10-17
 - Layout: four-line labels with HA role and size, ECS service frames, VPN routes to the data
   center box, overview cards listing every collected kind, frame captions with capacity.
 - Samples: new data-platform (two VPCs); three-tier read replica; microservices ECS services;
-  hybrid VPN over TGW. Verified: 51 tests, browser acceptance 26 checks.
+  hybrid VPN over TGW. Verified: 51 tests, browser acceptance 26 checks (v0.3 round).
 
 ## 2026-10-17 — Common services (user request: EKS·MSK·RDS·ElastiCache·NAT 등)
 

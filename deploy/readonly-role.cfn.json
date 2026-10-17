@@ -1,0 +1,129 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Diagram Bot read-only collection role. Deploy to each member account (e.g. with a StackSet); the collector assumes it with an External ID.",
+  "Parameters": {
+    "CollectorPrincipalArn": {
+      "Type": "String",
+      "Description": "IAM role or user ARN in the collector account that may assume this role",
+      "AllowedPattern": "^arn:aws[a-z-]*:iam::\\d{12}:(role|user)/.+$"
+    },
+    "ExternalId": {
+      "Type": "String",
+      "NoEcho": true,
+      "MinLength": 8,
+      "Description": "Shared secret passed as --external-id"
+    },
+    "RoleName": {
+      "Type": "String",
+      "Default": "DiagramBotReadOnly"
+    }
+  },
+  "Resources": {
+    "CollectionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Ref": "RoleName"
+        },
+        "MaxSessionDuration": 3600,
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Ref": "CollectorPrincipalArn"
+                }
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": {
+                    "Ref": "ExternalId"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "DiagramBotDescribeOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "autoscaling:DescribeAutoScalingGroups",
+                    "ec2:DescribeCustomerGateways",
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeInternetGateways",
+                    "ec2:DescribeNatGateways",
+                    "ec2:DescribeRouteTables",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeTransitGatewayVpcAttachments",
+                    "ec2:DescribeTransitGateways",
+                    "ec2:DescribeVpcEndpoints",
+                    "ec2:DescribeVpcPeeringConnections",
+                    "ec2:DescribeVpcs",
+                    "ec2:DescribeVpnConnections",
+                    "ec2:DescribeVpnGateways",
+                    "ecs:DescribeServices",
+                    "ecs:DescribeTasks",
+                    "ecs:ListClusters",
+                    "ecs:ListServices",
+                    "ecs:ListTasks",
+                    "eks:DescribeCluster",
+                    "eks:DescribeNodegroup",
+                    "eks:ListClusters",
+                    "eks:ListNodegroups",
+                    "elasticache:DescribeCacheClusters",
+                    "elasticache:DescribeCacheSubnetGroups",
+                    "elasticache:DescribeReplicationGroups",
+                    "elasticfilesystem:DescribeFileSystems",
+                    "elasticfilesystem:DescribeMountTargets",
+                    "elasticloadbalancing:DescribeLoadBalancers",
+                    "elasticloadbalancing:DescribeTargetGroups",
+                    "elasticloadbalancing:DescribeTargetHealth",
+                    "es:DescribeDomainNodes",
+                    "es:DescribeDomains",
+                    "es:ListDomainNames",
+                    "kafka:ListClustersV2",
+                    "kafka:ListNodes",
+                    "lambda:ListFunctions",
+                    "rds:DescribeDBClusters",
+                    "rds:DescribeDBInstances",
+                    "redshift:DescribeClusterSubnetGroups",
+                    "redshift:DescribeClusters",
+                    "sts:GetCallerIdentity"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Purpose",
+            "Value": "diagram-bot read-only collection"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "RoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CollectionRole",
+          "Arn"
+        ]
+      },
+      "Description": "Pass as --role-arn"
+    }
+  }
+}

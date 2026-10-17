@@ -199,3 +199,19 @@ def test_cli_collects_every_role_and_region(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr("sys.argv", ["diagram-bot", "collect", "--region", "ap-northeast-2", "--output", str(tmp_path / "x")])
     with pytest.raises(SystemExit):
         cli.main()
+
+
+def test_deploy_template_grants_exactly_the_collector_actions():
+    import json
+    from pathlib import Path
+
+    from diagram_bot.collector import OPERATIONS, permission
+    root = Path(__file__).resolve().parents[1]
+    policy = set(json.loads((root / "readonly-policy.json").read_text())["Statement"][0]["Action"])
+    template = json.loads((root / "deploy/readonly-role.cfn.json").read_text())
+    role = template["Resources"]["CollectionRole"]["Properties"]
+    granted = set(role["Policies"][0]["PolicyDocument"]["Statement"][0]["Action"])
+    assert granted == policy | {"sts:GetCallerIdentity"}
+    assert {permission(service, operation) for service, operation, *_ in OPERATIONS} <= policy
+    assert all(a.split(":")[1].startswith(("Describe", "List", "Get")) for a in granted)
+    assert "sts:ExternalId" in json.dumps(role["AssumeRolePolicyDocument"])

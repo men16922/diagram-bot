@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T07:47:10.008928+00:00 ~ 2026-10-17T07:47:10.008928+00:00
+- 수집 구간: 2026-10-17T08:12:07.783302+00:00 ~ 2026-10-17T08:12:07.783302+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -36,8 +36,15 @@
 - ec2 / describe_vpc_peering_connections: complete, 0개, 오류 없음; 범위 {}
 - ec2 / describe_vpn_gateways: complete, 0개, 오류 없음; 범위 {}
 - ec2 / describe_vpn_connections: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_security_groups: complete, 5개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-web-https/0000000000000001"}
 - elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-app-http/0000000000000002"}
+
+## 아키텍처 검토 결과
+
+높음 0 · 중간 0 · 낮음 0 — 수집된 설정만으로 판정했으며 실제 트래픽·애플리케이션 수준 이중화는 별도 확인이 필요합니다.
+
+- 해당 항목 없음
 
 ## 해석 범위
 

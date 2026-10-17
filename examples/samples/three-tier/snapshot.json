@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T07:47:10.008928+00:00",
-    "finished_at": "2026-10-17T07:47:10.008928+00:00",
+    "started_at": "2026-10-17T08:12:07.783302+00:00",
+    "finished_at": "2026-10-17T08:12:07.783302+00:00",
     "status": "complete",
     "demo": true,
     "sample": "three-tier",
@@ -246,6 +246,13 @@
       "status": "complete",
       "pages": 1,
       "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 5
     },
     {
       "service": "elbv2",
@@ -1292,7 +1299,144 @@
     "vpc_peering_connections": [],
     "vpn_gateways": [],
     "vpn_connections": [],
-    "customer_gateways": []
+    "customer_gateways": [],
+    "security_groups": [
+      {
+        "GroupId": "sg-public-alb",
+        "GroupName": "prod-public-alb",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-web",
+        "GroupName": "prod-web",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-public-alb"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-internal-alb",
+        "GroupName": "prod-internal-alb",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-web"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-app",
+        "GroupName": "prod-app",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-internal-alb"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-prod-db",
+        "GroupName": "prod-db",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-app"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      }
+    ]
   },
   "graph": {
     "nodes": [
@@ -2228,45 +2372,186 @@
         "id": "111122223333/ap-northeast-2/security_group/sg-app",
         "resource_id": "sg-app",
         "kind": "security_group",
-        "name": "sg-app",
+        "name": "prod-app",
         "account": "111122223333",
         "region": "ap-northeast-2",
-        "attributes": {},
-        "reference_only": true,
-        "source": null
+        "attributes": {
+          "GroupId": "sg-app",
+          "GroupName": "prod-app",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 8080,
+              "ToPort": 8080,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-internal-alb"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
       },
       {
         "id": "111122223333/ap-northeast-2/security_group/sg-internal-alb",
         "resource_id": "sg-internal-alb",
         "kind": "security_group",
-        "name": "sg-internal-alb",
+        "name": "prod-internal-alb",
         "account": "111122223333",
         "region": "ap-northeast-2",
-        "attributes": {},
-        "reference_only": true,
-        "source": null
+        "attributes": {
+          "GroupId": "sg-internal-alb",
+          "GroupName": "prod-internal-alb",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 8080,
+              "ToPort": 8080,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-web"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-prod-db",
+        "resource_id": "sg-prod-db",
+        "kind": "security_group",
+        "name": "prod-db",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-prod-db",
+          "GroupName": "prod-db",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 3306,
+              "ToPort": 3306,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-app"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
       },
       {
         "id": "111122223333/ap-northeast-2/security_group/sg-public-alb",
         "resource_id": "sg-public-alb",
         "kind": "security_group",
-        "name": "sg-public-alb",
+        "name": "prod-public-alb",
         "account": "111122223333",
         "region": "ap-northeast-2",
-        "attributes": {},
-        "reference_only": true,
-        "source": null
+        "attributes": {
+          "GroupId": "sg-public-alb",
+          "GroupName": "prod-public-alb",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 443,
+              "ToPort": 443,
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
       },
       {
         "id": "111122223333/ap-northeast-2/security_group/sg-web",
         "resource_id": "sg-web",
         "kind": "security_group",
-        "name": "sg-web",
+        "name": "prod-web",
         "account": "111122223333",
         "region": "ap-northeast-2",
-        "attributes": {},
-        "reference_only": true,
-        "source": null
+        "attributes": {
+          "GroupId": "sg-web",
+          "GroupName": "prod-web",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 443,
+              "ToPort": 443,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-public-alb"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-app-a",

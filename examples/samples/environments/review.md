@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T07:47:10.576626+00:00 ~ 2026-10-17T07:47:10.576626+00:00
+- 수집 구간: 2026-10-17T08:12:08.307086+00:00 ~ 2026-10-17T08:12:08.307086+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -36,8 +36,17 @@
 - ec2 / describe_vpc_peering_connections: complete, 0개, 오류 없음; 범위 {}
 - ec2 / describe_vpn_gateways: complete, 0개, 오류 없음; 범위 {}
 - ec2 / describe_vpn_connections: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_security_groups: complete, 0개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001"}
 - elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002"}
+
+## 아키텍처 검토 결과
+
+높음 0 · 중간 0 · 낮음 1 — 수집된 설정만으로 판정했으며 실제 트래픽·애플리케이션 수준 이중화는 별도 확인이 필요합니다.
+
+| 심각도 | 영역 | 규칙 | 리소스 | 내용 | 근거 | 권장 조치 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 낮음 | 안정성 | REL-NAT-CROSS-AZ | staging-private-b | 다른 AZ의 NAT 게이트웨이에 의존하는 프라이빗 서브넷 | 라우팅 테이블 0.0.0.0/0 → nat-staging-a (ap-northeast-2a), 연결 서브넷 AZ ['ap-northeast-2b'] | AZ마다 NAT 게이트웨이를 두면 한 AZ 장애가 다른 AZ의 외부 통신을 끊지 않습니다 (비용과 절충). |
 
 ## 해석 범위
 

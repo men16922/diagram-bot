@@ -1,5 +1,6 @@
 import argparse
 import json
+from importlib import metadata
 import sys
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from .report import write_report
 
 def main():
     parser = argparse.ArgumentParser(description="AWS 현행 구성도·리소스 내역 자동 생성")
+    parser.add_argument("--version", action="version", version=f"diagram-bot {app_version()}")
     commands = parser.add_subparsers(dest="command", required=True)
     live = commands.add_parser("collect", help="기존 SSO/SDK 인증 경로로 읽기 전용 조회")
     live.add_argument("--profile", help="AWS SSO 프로파일; 생략하면 표준 SDK 인증 체인")
@@ -90,6 +92,13 @@ def main():
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"실패: {exc}", file=sys.stderr)
         return 1
+
+
+def app_version():
+    try:
+        return metadata.version("diagram-bot")
+    except metadata.PackageNotFoundError:
+        return "dev"
 
 
 def collect_all(parser, args):

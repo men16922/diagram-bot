@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -25,6 +25,7 @@ from .demo import demo_snapshot
 from .samples import SAMPLES
 from .drawio import carry_annotations, generate_document, validate_document
 from .editor import VERSION, editor_path
+from .cli import app_version
 from .diff import diff
 from .findings import review, summary
 from .graph import build_graph, upgrade_graph
@@ -185,7 +186,8 @@ def create_app(directory=None, editor_directory=None):
             profiles = boto3.Session().available_profiles
         except BotoCoreError:
             profiles = []
-        return {"token": token, "editor_ready": (editor / "js/app.min.js").is_file(), "editor_version": VERSION, "profiles": profiles}
+        return {"token": token, "editor_ready": (editor / "js/app.min.js").is_file(), "editor_version": VERSION, "profiles": profiles,
+                "version": app_version()}
 
     @app.get("/api/snapshots")
     def list_snapshots():
