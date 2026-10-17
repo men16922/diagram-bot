@@ -383,6 +383,53 @@ def main():
             stacked = page.evaluate("getComputedStyle(document.querySelector('.side-nav')).position") == 'static'
             assert stacked == (viewport <= 980), (viewport, stacked)
         page.set_viewport_size({'width': 1600, 'height': 1100})
+
+        # 12. SSO sign-in through the profile menu against a stand-in Identity Center API (the live device-code flow was
+        # verified on 2026-10-17): device code, approval, roles, `role @ account (SSO)`, then the collection request
+        # carries the SSO session and role. The collection itself is intercepted, never sent to AWS.
+        polls, collected = [], []
+        def fake_sso(route):
+            url, method = route.request.url, route.request.method
+            if url.endswith('/api/sso/defaults'):
+                return route.fulfill(json=[{'name': 'corp', 'start_url': 'https://d-0000000000.awsapps.com/start', 'region': 'us-east-1'}])
+            if url.endswith('/api/sso/login') and method == 'POST':
+                return route.fulfill(json={'id': 'check', 'user_code': 'WXYZ-1234', 'interval': 1, 'status': 'pending',
+                                           'verification_uri_complete': 'https://device.sso.us-east-1.amazonaws.com/?user_code=WXYZ-1234'})
+            if '/roles' in url:
+                return route.fulfill(json={'roles': ['AdministratorAccess', 'CloudOpsReadOnly']})
+            if url.endswith('/logout'):
+                return route.fulfill(json={'signed_out': True})
+            polls.append(url)
+            return route.fulfill(json={'status': 'pending', 'interval': 1} if len(polls) == 1 else
+                                 {'status': 'authorized', 'interval': 1, 'accounts': [{'id': '444455556666', 'name': 'prod'}]})
+        def fake_collection(route):
+            collected.append(json.loads(route.request.post_data or '{}'))
+            route.fulfill(status=422, json={'detail': '검증용: 수집 요청을 가로챘습니다.'})
+        page.route('**/api/sso/**', fake_sso)
+        page.route('**/api/collections', fake_collection)
+        page.locator('#profile-button').click()
+        page.locator('#signin-button').click()
+        page.locator('#sso-start-url').fill('https://d-0000000000.awsapps.com/start')  # defaults were read when step 11 opened the dialog
+        page.locator('#sso-login').click()
+        expect(page.locator('#sso-code')).to_have_text('WXYZ-1234')
+        expect(page.locator('#sso-role')).to_have_value('CloudOpsReadOnly', timeout=15000)  # read-only role preselected
+        page.locator('#sso-use').click()
+        expect(page.locator('#profile-label')).to_have_text('CloudOpsReadOnly @ 444455556666 (SSO)')
+        page.locator('#profile-button').click()
+        expect(page.locator('#profile-detail')).to_contain_text('IAM Identity Center(SSO)')
+        page.locator('#collection-button').click()
+        expect(page.locator('#collection-identity')).to_contain_text('CloudOpsReadOnly @ 444455556666')
+        expect(page.locator('#aws-account')).to_have_value('444455556666')
+        page.locator('#start-collection').click()
+        expect(page.locator('#collection-progress')).to_contain_text('가로챘습니다')
+        assert collected and collected[0]['sso_login'] == 'check' and collected[0]['sso_role'] == 'CloudOpsReadOnly' \
+            and collected[0]['expected_account'] == '444455556666' and collected[0]['profile'] is None, collected
+        page.locator('#close-collection').click()
+        page.locator('#profile-button').click()
+        page.locator('#profile-signout').click()
+        expect(page.locator('#profile-label')).to_have_text('로그인')
+        page.unroute('**/api/sso/**')
+        page.unroute('**/api/collections')
         assert not errors, errors
         assert not external, external
         browser.close()
@@ -401,7 +448,8 @@ def main():
                          'GPU training: EFA, Capacity Block, placement group, FSx for Lustre, HyperPod; GenAI RAG: SageMaker endpoint',
                          'multi-account: account frames, shared TGW, combine dialog',
                          'snapshot import', 'change review between snapshots',
-                         'console shell: profile menu, sign-in dialog, docked assistant reflow, no overflow at 1280/980/640']}
+                         'console shell: profile menu, sign-in dialog, docked assistant reflow, no overflow at 1280/980/640',
+                         'SSO sign-in via profile menu (stand-in Identity Center): role @ account, collection carries SSO role']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 

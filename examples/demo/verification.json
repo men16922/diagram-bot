@@ -47,6 +47,7 @@
     "multi-account: account frames, shared TGW, combine dialog",
     "snapshot import",
     "change review between snapshots",
-    "console shell: profile menu, sign-in dialog, docked assistant reflow, no overflow at 1280/980/640"
+    "console shell: profile menu, sign-in dialog, docked assistant reflow, no overflow at 1280/980/640",
+    "SSO sign-in via profile menu (stand-in Identity Center): role @ account, collection carries SSO role"
   ]
 }
