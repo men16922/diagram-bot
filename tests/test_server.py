@@ -119,8 +119,8 @@ def test_legacy_snapshot_and_detail_document_stay_usable(client, tmp_path):
 
 @pytest.mark.parametrize('fail', [False, True])
 def test_background_collection_result_and_failure(client, monkeypatch, fail):
-    def collect(region, profile, expected):
-        assert (region, profile, expected) == ('ap-northeast-2', 'demo-sso', '111122223333')
+    def collect(region, profile, expected, role_arn=None, external_id=None):
+        assert (region, profile, expected, role_arn, external_id) == ('ap-northeast-2', 'demo-sso', '111122223333', None, None)
         if fail:
             raise ValueError('Account mismatch')
         return demo_snapshot()
@@ -152,3 +152,9 @@ def test_diff_endpoint(client):
     result = client.get(f'/api/snapshots/{imported}/diff/sample-three-tier').json()
     assert result['comparable'] and not any(result['summary'].values())
     assert client.get('/api/snapshots/demo/diff/missing').status_code == 404
+
+
+def test_collection_request_validates_role_arn(client):
+    bad = client.post('/api/collections', json={'region': 'ap-northeast-2', 'expected_account': '111122223333',
+                                                'role_arn': 'arn:aws:iam::1:user/admin'})
+    assert bad.status_code == 422

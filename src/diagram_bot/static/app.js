@@ -293,7 +293,7 @@ $('import-file').onchange=async()=>{
 $('collection-form').onsubmit=async event=>{
   event.preventDefault();$('start-collection').disabled=true;$('collection-progress').textContent='AWS 인증과 계정을 확인하고 있습니다…';
   try{
-    let job=await api('/api/collections',{method:'POST',body:JSON.stringify({profile:$('aws-profile').value||null,region:$('aws-region').value,expected_account:$('aws-account').value})});
+    let job=await api('/api/collections',{method:'POST',body:JSON.stringify({profile:$('aws-profile').value||null,region:$('aws-region').value,expected_account:$('aws-account').value,role_arn:$('aws-role').value||null,external_id:$('aws-external-id').value||null})});
     while(['queued','running'].includes(job.status)){$('collection-progress').textContent='AWS 설정을 수집하고 있습니다. 잠시 기다려 주세요.';await new Promise(resolve=>setTimeout(resolve,1500));job=await api(`/api/collections/${job.id}`);}
     if(job.status==='failed')throw new Error(job.error);
     await refreshSnapshots(job.snapshot_id);await loadSnapshot(job.snapshot_id);$('collection-dialog').close();toast(job.status==='partial'?'부분 수집을 완료했습니다. 조회 상태를 확인하세요.':'AWS 수집을 완료했습니다.');

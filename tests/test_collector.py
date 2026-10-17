@@ -160,3 +160,42 @@ def test_target_health_error_is_scoped_to_group():
         rows, coverage = query(elb, "describe_target_health", "TargetHealthDescriptions", {"TargetGroupArn": arn})
         assert rows == [] and coverage["status"] == "unavailable"
         assert coverage["parameters"]["TargetGroupArn"] == arn
+
+
+def test_assume_role_caps_session_to_read_only_and_checks_the_assumed_account(monkeypatch):
+    base, assumed = Session(), Session()
+    monkeypatch.setattr("diagram_bot.collector.boto3.Session", lambda **kwargs: assumed)
+    role = "arn:aws:iam::444455556666:role/DiagramBotReadOnly"
+    with Stubber(base.clients["sts"]) as stub, Stubber(assumed.clients["sts"]) as assumed_stub:
+        stub.add_response("assume_role", {"Credentials": {"AccessKeyId": "AKIAEXAMPLE000000000", "SecretAccessKey": "s" * 40,
+                                                          "SessionToken": "t" * 40, "Expiration": "2026-01-01T00:00:00Z"}},
+                          {"RoleArn": role, "RoleSessionName": "diagram-bot-readonly", "DurationSeconds": 3600, "ExternalId": "ext-123",
+                           "PolicyArns": [{"arn": "arn:aws:iam::aws:policy/ReadOnlyAccess"}]})
+        assumed_stub.add_response("get_caller_identity", {"Account": "444455556666", "Arn": "arn:aws:sts::444455556666:assumed-role/x/y",
+                                                          "UserId": "x"}, {})
+        with pytest.raises(ValueError, match="현재 인증 444455556666"):
+            collect("ap-northeast-2", expected_account="111122223333", session=base, role_arn=role, external_id="ext-123")
+        stub.assert_no_pending_responses()
+
+
+def test_cli_collects_every_role_and_region(monkeypatch, tmp_path, capsys):
+    from diagram_bot import cli
+    from diagram_bot.demo import demo_snapshot
+    calls = []
+
+    def fake(region, profile, expected, role_arn=None, external_id=None):
+        calls.append((region, expected, role_arn))
+        if region == "us-east-1" and expected == "444455556666":
+            raise ValueError("계정 불일치")
+        return demo_snapshot()
+    monkeypatch.setattr(cli, "collect", fake)
+    monkeypatch.setattr("sys.argv", ["diagram-bot", "collect", "--region", "ap-northeast-2,us-east-1",
+                                     "--role-arn", "arn:aws:iam::111122223333:role/R", "--role-arn", "arn:aws:iam::444455556666:role/R",
+                                     "--output", str(tmp_path)])
+    assert cli.main() == 1  # one target failed; the others still produced reports
+    assert [c[:2] for c in calls] == [("ap-northeast-2", "111122223333"), ("us-east-1", "111122223333"),
+                                      ("ap-northeast-2", "444455556666"), ("us-east-1", "444455556666")]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["111122223333-ap-northeast-2", "111122223333-us-east-1", "444455556666-ap-northeast-2"]
+    monkeypatch.setattr("sys.argv", ["diagram-bot", "collect", "--region", "ap-northeast-2", "--output", str(tmp_path / "x")])
+    with pytest.raises(SystemExit):
+        cli.main()

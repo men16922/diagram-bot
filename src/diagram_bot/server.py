@@ -46,6 +46,8 @@ class CollectionRequest(BaseModel):
     profile: str | None = Field(default=None, max_length=128)
     region: str = Field(pattern=r"^[a-z]{2}(?:-[a-z0-9]+)+-\d+$", max_length=50)
     expected_account: str = Field(pattern=r"^\d{12}$")
+    role_arn: str | None = Field(default=None, max_length=2048, pattern=r"^arn:aws[a-z-]*:iam::\d{12}:role/[\w+=,.@/-]+$")
+    external_id: str | None = Field(default=None, min_length=2, max_length=1224, pattern=r"^[\w+=,.@:/-]+$")
 
 
 class DocumentRequest(BaseModel):
@@ -124,15 +126,23 @@ def create_app(directory=None, editor_directory=None):
             response.headers["X-Frame-Options"] = "DENY"
         return response
 
+    cache, summaries = {}, {}  # parsed snapshots (a few) and list rows, keyed by file modification time
+
     def get_snapshot(identifier):
         if not re.fullmatch(r"[a-zA-Z0-9-]{1,64}", identifier):
             raise HTTPException(404, "스냅샷을 찾을 수 없습니다.")
         path = snapshots / f"{identifier}.json"
         if not path.is_file():
             raise HTTPException(404, "스냅샷을 찾을 수 없습니다.")
-        snapshot = json.loads(path.read_text(encoding="utf-8"))
-        upgrade_graph(snapshot["graph"])
-        return snapshot
+        key = (identifier, path.stat().st_mtime_ns)
+        if key not in cache:
+            snapshot = json.loads(path.read_text(encoding="utf-8"))
+            upgrade_graph(snapshot["graph"])
+            with mutex:
+                for old in [k for k in cache if k[0] == identifier] + list(cache)[:max(0, len(cache) - 7)]:
+                    cache.pop(old, None)
+                cache[key] = snapshot
+        return cache[key]
 
     def doc_path(identifier, scope):
         view, vpc, resource, references = scope
@@ -181,8 +191,11 @@ def create_app(directory=None, editor_directory=None):
     def list_snapshots():
         result = []
         for path in snapshots.glob("*.json"):
-            snapshot = json.loads(path.read_text(encoding="utf-8"))
-            result.append({"id": path.stem, "metadata": snapshot["metadata"], "resource_count": len(snapshot["graph"]["nodes"])})
+            key = (path.stem, path.stat().st_mtime_ns)
+            if key not in summaries:
+                snapshot = json.loads(path.read_text(encoding="utf-8"))
+                summaries[key] = {"id": path.stem, "metadata": snapshot["metadata"], "resource_count": len(snapshot["graph"]["nodes"])}
+            result.append(summaries[key])
         return sorted(result, key=lambda row: row["metadata"]["finished_at"], reverse=True)
 
     @app.get("/api/snapshots/{identifier}")
@@ -290,7 +303,8 @@ def create_app(directory=None, editor_directory=None):
         def work():
             jobs[identifier]["status"] = "running"
             try:
-                snapshot = collect(params.region, params.profile, params.expected_account)
+                snapshot = collect(params.region, params.profile, params.expected_account,
+                                   role_arn=params.role_arn, external_id=params.external_id)
                 jobs[identifier].update(status=snapshot["metadata"]["status"], snapshot_id=save_snapshot(snapshot))
             except (BotoCoreError, ClientError) as exc:
                 code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__

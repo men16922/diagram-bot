@@ -19,9 +19,12 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     live = commands.add_parser("collect", help="기존 SSO/SDK 인증 경로로 읽기 전용 조회")
     live.add_argument("--profile", help="AWS SSO 프로파일; 생략하면 표준 SDK 인증 체인")
-    live.add_argument("--region", required=True)
-    live.add_argument("--expected-account", required=True, help="조회할 12자리 AWS 계정 ID")
-    live.add_argument("--output", required=True)
+    live.add_argument("--region", required=True, action="append", help="리전 (여러 번 또는 쉼표로 여러 리전)")
+    live.add_argument("--expected-account", help="조회할 12자리 AWS 계정 ID (역할 ARN이 없으면 필수)")
+    live.add_argument("--role-arn", action="append", default=[],
+                      help="다른 계정에서 맡을 역할 ARN (여러 번 지정 가능, ReadOnlyAccess 세션 정책으로 제한)")
+    live.add_argument("--external-id", help="역할 신뢰 정책의 External ID")
+    live.add_argument("--output", required=True, help="출력 디렉터리 (대상이 여럿이면 <계정>-<리전> 하위 디렉터리)")
     render = commands.add_parser("render", help="저장된 snapshot.json으로 보고서 재생성")
     render.add_argument("snapshot")
     render.add_argument("--output", required=True)
@@ -69,10 +72,8 @@ def main():
             threshold = SEVERITIES.index(args.fail_on) if args.fail_on else -1
             return 3 if any(SEVERITIES.index(f["severity"]) <= threshold for f in findings) else 0
         if args.command == "collect":
-            if len(args.expected_account) != 12 or not args.expected_account.isdigit():
-                parser.error("--expected-account는 12자리 AWS 계정 ID여야 합니다.")
-            snapshot = collect(args.region, args.profile, args.expected_account)
-        elif args.command == "demo":
+            return collect_all(parser, args)
+        if args.command == "demo":
             snapshot = SAMPLES[args.sample]() if args.sample else demo_snapshot()
         else:
             snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
@@ -81,7 +82,7 @@ def main():
         path = write_report(snapshot, args.output)
         print(f"보고서: {path.resolve()}")
         print(f"수집 상태: {snapshot['metadata']['status']}")
-        return 2 if args.command == "collect" and snapshot["metadata"]["status"] != "complete" else 0
+        return 0
     except (BotoCoreError, ClientError) as exc:
         code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
         print(f"인증 또는 AWS 조회 시작 실패: {code}. 기존 SSO 로그인·프로파일·접속 경로를 확인하세요.", file=sys.stderr)
@@ -89,6 +90,35 @@ def main():
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"실패: {exc}", file=sys.stderr)
         return 1
+
+
+def collect_all(parser, args):
+    """Every (role, region) target; one report directory each. Exit 1 if any target failed, 2 if any was partial."""
+    regions = [r.strip() for value in args.region for r in value.split(",") if r.strip()]
+    if not args.role_arn and not (args.expected_account and len(args.expected_account) == 12 and args.expected_account.isdigit()):
+        parser.error("--expected-account는 12자리 AWS 계정 ID여야 합니다 (--role-arn을 쓰면 역할의 계정으로 확인).")
+    targets = [(role, role.split(":")[4], region) for role in args.role_arn for region in regions] or \
+              [(None, args.expected_account, region) for region in regions]
+    single = len(targets) == 1
+    worst = 0
+    for role, account, region in targets:
+        label = f"{account}/{region}"
+        try:
+            snapshot = collect(region, args.profile, account, role_arn=role, external_id=args.external_id)
+        except (BotoCoreError, ClientError) as exc:
+            code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
+            print(f"{label}: 인증 또는 AWS 조회 시작 실패 ({code}). 프로파일·역할 신뢰 정책·접속 경로를 확인하세요.", file=sys.stderr)
+            worst = 1
+            continue
+        except ValueError as exc:
+            print(f"{label}: {exc}", file=sys.stderr)
+            worst = 1
+            continue
+        path = write_report(snapshot, args.output if single else Path(args.output) / f"{account}-{region}")
+        print(f"{label}: 보고서 {path.resolve()} · 수집 상태 {snapshot['metadata']['status']}")
+        if snapshot["metadata"]["status"] != "complete" and worst == 0:
+            worst = 2
+    return worst
 
 
 if __name__ == "__main__":

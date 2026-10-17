@@ -220,6 +220,23 @@ def test_hundred_resource_layout_is_readable_and_fast():
         assert_no_shared_segments(layout)
 
 
+def test_large_vpc_and_account_scale():
+    """300 instances and 18 target groups in one VPC stay readable; a 2,500-resource account renders in seconds."""
+    dense = scale_snapshot(vpcs=1, instances_per_subnet=100, load_balancers=6, groups_per_lb=3)
+    started = time.perf_counter()
+    layout = layout_document(dense, "detail", "vpc-scale-0")
+    assert time.perf_counter() - started < 5
+    assert_readable(layout)
+    assert_no_shared_segments(layout)
+    account = scale_snapshot(vpcs=50)
+    graph = build_graph(account)
+    assert len(graph["nodes"]) == 2500
+    started = time.perf_counter()
+    root = validate_document(generate_document(account))
+    assert time.perf_counter() - started < 20
+    assert len(root.findall("diagram")) == 51
+
+
 @pytest.mark.parametrize("xml", [
     "<html/>", "<mxfile><diagram>compressed</diagram></mxfile>",
     '<!DOCTYPE mxGraphModel [<!ENTITY x SYSTEM "file:///etc/passwd">]><mxGraphModel>&x;</mxGraphModel>',

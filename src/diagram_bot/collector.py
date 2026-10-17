@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import boto3
@@ -81,74 +82,121 @@ def query(client, operation, key, params=None):
     return rows, coverage
 
 
-def collect(region, profile=None, expected_account=None, session=None):
+def assume(session, role_arn, external_id, region, config):
+    """Cross-account collection: temporary credentials for the role, capped by the ReadOnlyAccess session policy
+    so that even a broader role can only read during this session."""
+    partition = role_arn.split(":")[1]
+    params = {"RoleArn": role_arn, "RoleSessionName": "diagram-bot-readonly", "DurationSeconds": 3600,
+              "PolicyArns": [{"arn": f"arn:{partition}:iam::aws:policy/ReadOnlyAccess"}]}
+    if external_id:
+        params["ExternalId"] = external_id
+    credentials = session.client("sts", region_name=region, config=config).assume_role(**params)["Credentials"]
+    return boto3.Session(aws_access_key_id=credentials["AccessKeyId"], aws_secret_access_key=credentials["SecretAccessKey"],
+                         aws_session_token=credentials["SessionToken"], region_name=region)
+
+
+def collect(region, profile=None, expected_account=None, session=None, role_arn=None, external_id=None, workers=8):
     session = session or boto3.Session(profile_name=profile, region_name=region)
-    config = Config(retries={"mode": "standard", "total_max_attempts": 4},
-                    connect_timeout=10, read_timeout=30)
+    # Adaptive retries back off client-side when an account is throttled during large collections.
+    config = Config(retries={"mode": "adaptive", "total_max_attempts": 8}, connect_timeout=10, read_timeout=30,
+                    max_pool_connections=16)
     started = now()
+    if role_arn:
+        session = assume(session, role_arn, external_id, region, config)
     identity = session.client("sts", region_name=region, config=config).get_caller_identity()
     account = identity["Account"]
     if expected_account and account != expected_account:
         raise ValueError(f"계정 불일치: 요청 {expected_account}, 현재 인증 {account}")
     clients = {service: session.client(service, region_name=region, config=config)
                for service in sorted({service for service, *_ in OPERATIONS})}
-    raw, coverage = {}, []
-    for service, operation, key, name in OPERATIONS:
-        rows, result = query(clients[service], operation, key)
-        result.update(service=service, permission=permission(service, operation))
-        coverage.append(result)
-        raw[name] = ([i for reservation in rows for i in reservation.get("Instances", [])]
-                     if name == "instances" else rows)
-        result["items"] = len(raw[name])
-    raw["target_health"] = []
-    for group in raw["target_groups"]:
-        arn = group["TargetGroupArn"]
-        rows, result = query(clients["elbv2"], "describe_target_health",
-                             "TargetHealthDescriptions", {"TargetGroupArn": arn})
-        result.update(service="elbv2", permission=permission("elbv2", "describe_target_health"))
-        coverage.append(result)
-        raw["target_health"].append({"TargetGroupArn": arn, "Descriptions": rows})
-    def call(service, operation, key, params):
+
+    def call(log, service, operation, key, params=None):
         rows, result = query(clients[service], operation, key, params)
         result.update(service=service, permission=permission(service, operation))
-        coverage.append(result)
+        log.append(result)
         return rows
+
+    # Phase 1: one thread per service, its calls in order (per-service throttling stays as before);
+    # services run concurrently. Coverage keeps the OPERATIONS order regardless of completion order.
+    by_service = {}
+    for index, (service, *_rest) in enumerate(OPERATIONS):
+        by_service.setdefault(service, []).append(index)
+    logs = [[] for _ in OPERATIONS]
+    rows_of = [None] * len(OPERATIONS)
+
+    def listing(service):
+        for index in by_service[service]:
+            _, operation, key, _ = OPERATIONS[index]
+            rows_of[index] = call(logs[index], service, operation, key)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(listing, by_service))
+    raw, coverage = {}, []
+    for (service, operation, key, name), rows, log in zip(OPERATIONS, rows_of, logs):
+        raw[name] = [i for reservation in rows for i in reservation.get("Instances", [])] if name == "instances" else rows
+        log[0]["items"] = len(raw[name])
+        coverage += log
 
     def batches(items, size):
         return [items[i:i + size] for i in range(0, len(items), size)]
 
-    raw["eks_clusters"] = []
-    for name in raw.pop("eks_cluster_names"):
-        cluster = call("eks", "describe_cluster", "cluster", {"name": name})
-        groups = call("eks", "list_nodegroups", "nodegroups", {"clusterName": name})
-        if cluster:
-            raw["eks_clusters"].append({**cluster[0], "nodegroups": [g for group in groups for g in call(
-                "eks", "describe_nodegroup", "nodegroup", {"clusterName": name, "nodegroupName": group})]})
-    # Per-resource detail: which AZ each broker, search node and task actually runs in.
-    raw["msk_nodes"] = [{**node, "ClusterArn": cluster["ClusterArn"]} for cluster in raw["msk_clusters"]
-                        if cluster.get("ClusterType", "PROVISIONED") == "PROVISIONED"
-                        for node in call("kafka", "list_nodes", "NodeInfoList", {"ClusterArn": cluster["ClusterArn"]})]
-    names = [d["DomainName"] for d in raw.pop("opensearch_domain_names")]
-    raw["opensearch_domains"] = [d for batch in batches(names, 5)
-                                 for d in call("opensearch", "describe_domains", "DomainStatusList", {"DomainNames": batch})]
-    raw["opensearch_nodes"] = [{**node, "DomainName": domain["DomainName"]} for domain in raw["opensearch_domains"]
-                               if (domain.get("VPCOptions") or {}).get("SubnetIds")
-                               for node in call("opensearch", "describe_domain_nodes", "DomainNodesStatusList", {"DomainName": domain["DomainName"]})]
-    raw["ecs_services"], raw["ecs_tasks"] = [], []
-    for cluster in raw.pop("ecs_cluster_arns"):
-        arns = call("ecs", "list_services", "serviceArns", {"cluster": cluster})
-        raw["ecs_services"] += [s for batch in batches(arns, 10)
-                                for s in call("ecs", "describe_services", "services", {"cluster": cluster, "services": batch})]
-        tasks = call("ecs", "list_tasks", "taskArns", {"cluster": cluster, "desiredStatus": "RUNNING"})
-        raw["ecs_tasks"] += [t for batch in batches(tasks, 100) for t in call("ecs", "describe_tasks", "tasks", {"cluster": cluster, "tasks": batch})]
-    raw["efs_mount_targets"] = [m for fs in raw["efs_file_systems"]
-                                for m in call("efs", "describe_mount_targets", "MountTargets", {"FileSystemId": fs["FileSystemId"]})]
+    # Phase 2: per-resource detail, again one thread per service.
+    def target_health(log):
+        return {"target_health": [{"TargetGroupArn": g["TargetGroupArn"], "Descriptions": call(
+            log, "elbv2", "describe_target_health", "TargetHealthDescriptions", {"TargetGroupArn": g["TargetGroupArn"]})}
+            for g in raw["target_groups"]]}
+
+    def eks(log):
+        clusters = []
+        for name in raw["eks_cluster_names"]:
+            cluster = call(log, "eks", "describe_cluster", "cluster", {"name": name})
+            groups = call(log, "eks", "list_nodegroups", "nodegroups", {"clusterName": name})
+            if cluster:
+                clusters.append({**cluster[0], "nodegroups": [g for group in groups for g in call(
+                    log, "eks", "describe_nodegroup", "nodegroup", {"clusterName": name, "nodegroupName": group})]})
+        return {"eks_clusters": clusters}
+
+    def msk(log):
+        # Which subnet each broker runs in.
+        return {"msk_nodes": [{**node, "ClusterArn": c["ClusterArn"]} for c in raw["msk_clusters"]
+                              if c.get("ClusterType", "PROVISIONED") == "PROVISIONED"
+                              for node in call(log, "kafka", "list_nodes", "NodeInfoList", {"ClusterArn": c["ClusterArn"]})]}
+
+    def opensearch(log):
+        names = [d["DomainName"] for d in raw["opensearch_domain_names"]]
+        domains = [d for batch in batches(names, 5) for d in call(log, "opensearch", "describe_domains", "DomainStatusList", {"DomainNames": batch})]
+        nodes = [{**node, "DomainName": d["DomainName"]} for d in domains if (d.get("VPCOptions") or {}).get("SubnetIds")
+                 for node in call(log, "opensearch", "describe_domain_nodes", "DomainNodesStatusList", {"DomainName": d["DomainName"]})]
+        return {"opensearch_domains": domains, "opensearch_nodes": nodes}
+
+    def ecs(log):
+        services, tasks = [], []
+        for cluster in raw["ecs_cluster_arns"]:
+            arns = call(log, "ecs", "list_services", "serviceArns", {"cluster": cluster})
+            services += [s for batch in batches(arns, 10) for s in call(log, "ecs", "describe_services", "services", {"cluster": cluster, "services": batch})]
+            running = call(log, "ecs", "list_tasks", "taskArns", {"cluster": cluster, "desiredStatus": "RUNNING"})
+            tasks += [t for batch in batches(running, 100) for t in call(log, "ecs", "describe_tasks", "tasks", {"cluster": cluster, "tasks": batch})]
+        return {"ecs_services": services, "ecs_tasks": tasks}
+
+    def efs(log):
+        return {"efs_mount_targets": [m for fs in raw["efs_file_systems"]
+                                      for m in call(log, "efs", "describe_mount_targets", "MountTargets", {"FileSystemId": fs["FileSystemId"]})]}
+
+    details = (target_health, eks, msk, opensearch, ecs, efs)
+    detail_logs = [[] for _ in details]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        updates = list(pool.map(lambda pair: pair[0](pair[1]), zip(details, detail_logs)))
+    for update, log in zip(updates, detail_logs):
+        raw.update(update)
+        coverage += log
+    for name in ("eks_cluster_names", "opensearch_domain_names", "ecs_cluster_arns"):
+        raw.pop(name)
     if any(c["status"] != "complete" for c in coverage if c["operation"] == "describe_target_groups"):
         coverage.append({"service": "elbv2", "operation": "describe_target_health",
                          "parameters": {}, "status": "not_discovered",
                          "reason": "대상 그룹 조회가 불완전하여 미발견 그룹의 대상은 조회하지 못했습니다."})
     return {"schema_version": 1, "metadata": {
-        "account_id": account, "region": region, "profile": profile,
+        "account_id": account, "region": region, "profile": profile, "role_arn": role_arn,
         "partition": identity["Arn"].split(":")[1],
         "started_at": started, "finished_at": now(), "demo": False,
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
@@ -156,7 +204,7 @@ def collect(region, profile=None, expected_account=None, session=None):
                   "NatGateway", "RouteTable", "RDS", "Aurora", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment",
                   "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN", "SecurityGroupRules"],
         "limitations": ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
-                        "여러 API의 순차 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
+                        "여러 API의 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
                         "ENI·EBS는 EC2 응답의 참조만 표시합니다. 보안 그룹 규칙은 검토 결과와 속성 패널에만 쓰며 구성도에 선으로 그리지 않습니다.",
                         "리스너 규칙·NACL·Direct Connect·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
         "coverage": coverage, "raw": raw}
