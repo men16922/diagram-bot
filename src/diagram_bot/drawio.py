@@ -158,7 +158,8 @@ def page(file, layout, name):
             continue
         obj = SubElement(root, "object", {"id": edge["id"], "label": edge["label"], "relationId": edge["relation_id"],
                                           "relation": RELATIONS.get(edge["relation"], edge["relation"]), "evidence": edge["evidence"]})
-        style = edge["constraints"] + EDGE + ("dashed=1;strokeColor=#A0AEC0;" if edge.get("auxiliary") else "")
+        style = edge["constraints"] + EDGE + ("dashed=1;strokeColor=#A0AEC0;" if edge.get("auxiliary") else "") \
+            + (f"strokeColor={edge['stroke']};" if edge.get("stroke") else "")
         cell = SubElement(obj, "mxCell", {"edge": "1", "parent": "1", "source": edge["source"], "target": edge["target"], "style": style})
         labelled = edge["label"] and edge.get("label_offset")
         geometry = SubElement(cell, "mxGeometry", {"relative": "1", "as": "geometry", **({"x": "1"} if labelled else {})})

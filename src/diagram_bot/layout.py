@@ -716,7 +716,8 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
             channel = geometry["channel"] + 7 * tg_order.get(e["target"], 0)
             side_y = y + spec["entry"] * h
             path = [(x, side_y), (spec["x"], side_y), (spec["x"], channel), (gx + ICON / 2, channel), (gx + ICON / 2, gy + ICON)]
-            canvas.edges.append(edge_entry(e, path, f"exitX=0;exitY={spec['entry']:.3f};entryX=0.5;entryY=1;"))
+            canvas.edges.append({**edge_entry(e, path, f"exitX=0;exitY={spec['entry']:.3f};entryX=0.5;entryY=1;"),
+                                 "stroke": tg_stroke(tg_order, e["target"])})
             continue
         sx, sy = position(e["source"])
         if spec["kind"] == "remote":
@@ -754,10 +755,19 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
         label = f":{e['qualifiers']['port']}" if len(ports) > 1 and e["qualifiers"].get("port") is not None else ""
         entry = edge_entry(e, path, constraints, label)
         entry["label_offset"] = (-16 if spec["entry"] < 0.5 else 18, -9)
+        if spec["kind"] == "bus":
+            entry["stroke"] = tg_stroke(tg_order, e["source"])
         canvas.edges.append(entry)
 
 
 OUTSIDE_BOXES = {"references", "onprem"}
+# Registration routes of different target groups share gutters 8 px apart; one colour per target
+# group (in channel order) tells them apart. Chosen to stay clear of the subnet, VPC and ASG colours.
+TG_STROKES = ("#1F5FAD", "#B4387A", "#8A6D00", "#2E7D32", "#7A4E2D")
+
+
+def tg_stroke(tg_order, tg):
+    return TG_STROKES[tg_order[tg] % len(TG_STROKES)] if tg in tg_order else None
 
 
 def outside_vpc(node):
