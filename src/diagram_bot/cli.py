@@ -7,6 +7,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from .collector import collect
 from .demo import demo_snapshot
+from .diff import diff, markdown as diff_markdown
 from .findings import SEVERITIES, markdown, review, summary
 from .graph import build_graph
 from .samples import SAMPLES
@@ -31,6 +32,11 @@ def main():
     check.add_argument("snapshot")
     check.add_argument("--format", choices=("markdown", "json"), default="markdown")
     check.add_argument("--fail-on", choices=SEVERITIES, help="이 심각도 이상 결과가 있으면 종료 코드 3")
+    compare = commands.add_parser("diff", help="두 snapshot.json의 리소스·설정·관계 변경 비교")
+    compare.add_argument("before")
+    compare.add_argument("after")
+    compare.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    compare.add_argument("--fail-on-change", action="store_true", help="변경이 있으면 종료 코드 4 (드리프트 감지용)")
     setup = commands.add_parser("setup-editor", help="고정 버전 draw.io 편집기 설치 (최초 한 번)")
     setup.add_argument("--archive", help="오프라인 설치용 공식 draw.war 경로")
     serve = commands.add_parser("serve", help="draw.io 기반 로컬 시연 앱 실행")
@@ -48,6 +54,11 @@ def main():
             print(f"Diagram Bot: http://127.0.0.1:{args.port}", flush=True)
             uvicorn.run(create_app(args.data_dir), host="127.0.0.1", port=args.port)
             return 0
+        if args.command == "diff":
+            load = lambda path: json.loads(Path(path).read_text(encoding="utf-8"))
+            result = diff(load(args.before), load(args.after))
+            print(json.dumps(result, ensure_ascii=False, indent=2) if args.format == "json" else diff_markdown(result))
+            return 4 if args.fail_on_change and any(result["summary"].values()) else 0
         if args.command == "review":
             snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
             findings = review(build_graph(snapshot), snapshot.get("coverage", []))

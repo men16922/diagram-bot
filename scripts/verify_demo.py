@@ -249,6 +249,19 @@ def main():
         expect(page.locator('#snapshot-select option')).to_have_count(options + 1)
         ready()
         expect(page.locator('#save-state')).to_have_text('자동 생성 구성도')
+        # 10. Change review: an imported snapshot with one changed setting compared with the original.
+        changed = json.loads((args.output / 'snapshot.json').read_text(encoding='utf-8'))
+        next(i for i in changed['raw']['instances'] if i['InstanceId'] == 'i-demo-a')['InstanceType'] = 't3.large'
+        changed.pop('graph', None)
+        (args.output / 'changed-snapshot.json').write_text(json.dumps(changed, ensure_ascii=False), encoding='utf-8')
+        page.locator('#import-file').set_input_files(args.output / 'changed-snapshot.json')
+        expect(page.locator('#snapshot-select option')).to_have_count(options + 2)
+        ready()
+        page.locator('#changes-tab').click()
+        page.locator('#compare-select').select_option('demo')
+        expect(page.locator('#changes-summary')).to_contain_text('설정 변경 1')
+        expect(page.locator('#changes-rows')).to_contain_text('InstanceType: t3.small → t3.large')
+        page.screenshot(path=str(args.output / 'changes.png'), full_page=True)
         assert not errors, errors
         assert not external, external
         browser.close()
@@ -263,7 +276,7 @@ def main():
                          'infrastructure sample: ASG frame, RDS standby, route-classified subnet',
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
                          'data platform: ECS service frame, OpenSearch standby AZ, read replica, VPN customer gateway',
-                         'snapshot import']}
+                         'snapshot import', 'change review between snapshots']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 

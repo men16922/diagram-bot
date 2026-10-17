@@ -8,6 +8,7 @@ const viewNames = {overview:'전체 구성',detail:'상세 구성',focus:'선택
 const state = {token:null,snapshot:null,snapshotId:null,view:'overview',vpc:null,focus:null,references:false,revision:0,xml:null,history:[],visible:null,counts:null,ready:false,loading:true,dirty:false,busy:false,mode:'diagram',selected:null};
 const pending = new Map();
 let editorTimer, toastTimer, pngWaiter = null;
+const emptyDetail=document.querySelector('#detail-body .empty-detail');
 function el(tag, text, className) { const element=document.createElement(tag); if(text!==undefined)element.textContent=text; if(className)element.className=className; return element; }
 function toast(message, error=false) { $('toast').textContent=message; $('toast').className=error?'error':''; $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true,error?8500:4000); }
 async function api(path, options={}) {
@@ -78,9 +79,10 @@ window.addEventListener('message', event=>{
     if(message.data?.startsWith('data:image/png;base64,'))task.resolve(message.data);else task.reject(new Error('PNG를 생성하지 못했습니다. 해상도를 낮춰 다시 시도하세요.'));
   }
 });
+function snapshotLabel(item){const m=item.metadata;return m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.account_id} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;}
 async function refreshSnapshots(preferred) {
-  const items=await api('/api/snapshots');$('snapshot-select').replaceChildren();
-  for(const item of items){const m=item.metadata;const label=m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;const option=new Option(label,item.id);$('snapshot-select').append(option);}
+  const items=await api('/api/snapshots');state.snapshots=items;$('snapshot-select').replaceChildren();
+  for(const item of items)$('snapshot-select').append(new Option(snapshotLabel(item),item.id));
   $('snapshot-select').value=preferred||items[0]?.id;
   return $('snapshot-select').value;
 }
@@ -90,7 +92,10 @@ async function loadSnapshot(id) {
   state.review=await api(`/api/snapshots/${id}/findings`);renderReview();
   state.view='overview';state.vpc=state.snapshot.graph.nodes.find(n=>n.kind==='vpc')?.resource_id||null;state.focus=null;state.selected=null;
   $('snapshot-select').value=id;
+  // A selection from the previous snapshot must not linger in the inspector.
+  $('detail-body').replaceChildren(emptyDetail.cloneNode(true));
   renderSummary();await loadView();
+  if(state.mode==='changes')await renderChanges();
 }
 function renderSummary() {
   const {metadata:m,graph}=state.snapshot;
@@ -184,6 +189,24 @@ function renderReview() {
     button.onclick=()=>{if(f.resource&&node(f.resource))showResource(f.resource);};item.append(button);return item;}));
   $('review-empty').hidden=rows.length>0;
 }
+async function renderChanges() {
+  const others=state.snapshots.filter(s=>s.id!==state.snapshotId),select=$('compare-select'),previous=select.value;
+  select.replaceChildren(...others.map(s=>new Option(snapshotLabel(s),s.id)));
+  const sameScope=others.find(s=>s.metadata.account_id===state.snapshot.metadata.account_id&&s.metadata.region===state.snapshot.metadata.region&&s.metadata.finished_at<state.snapshot.metadata.finished_at);
+  select.value=others.some(s=>s.id===previous)?previous:(sameScope||others[0])?.id||'';
+  if(!select.value){$('changes-rows').replaceChildren();$('changes-summary').replaceChildren();$('changes-empty').hidden=false;return;}
+  const result=await api(`/api/snapshots/${state.snapshotId}/diff/${select.value}`),s=result.summary;
+  $('changes-summary').replaceChildren(el('span',`추가 ${s.added}`,'sev-low'),el('span',`삭제 ${s.removed}`,'sev-high'),el('span',`설정 변경 ${s.changed}`,'sev-medium'),el('span',`관계 +${s.relations_added} / −${s.relations_removed}`,'sev-low'));
+  $('changes-note').textContent=(result.comparable?'':'계정 또는 리전이 달라 모든 리소스가 추가·삭제로 보입니다. ')+(result.before.status!=='complete'||result.after.status!=='complete'?'부분 조회 스냅샷이 있어 삭제로 보이는 항목은 권한 문제일 수 있습니다. ':'')+'상태 값(헬스, 실행 수 등)은 비교하지 않습니다.';
+  const row=(chip,cls,title,detail,id)=>{const item=el('li'),button=el('button',undefined,'finding'),top=el('div',undefined,'finding-top');top.append(el('span',chip,'chip '+cls),el('span',title));button.append(top);if(detail)button.append(el('small',detail));button.onclick=()=>{if(id&&node(id))showResource(id);};item.append(button);return item;};
+  $('changes-rows').replaceChildren(
+    ...result.added.map(n=>row('추가','sev-low',`${names[n.kind]||n.kind} · ${n.name}`,n.resource_id,n.id)),
+    ...result.removed.map(n=>row('삭제','sev-high',`${names[n.kind]||n.kind} · ${n.name}`,n.resource_id)),
+    ...result.changed.map(n=>row('변경','sev-medium',`${names[n.kind]||n.kind} · ${n.name}`,n.fields.map(f=>`${f.field}: ${f.before} → ${f.after}`).join('  ·  '),n.id)),
+    ...result.relations_added.map(r=>row('관계 +','sev-low',`${r.source} — ${relationNames[r.relation]||r.relation} → ${r.target}`,r.evidence)),
+    ...result.relations_removed.map(r=>row('관계 −','sev-high',`${r.source} — ${relationNames[r.relation]||r.relation} → ${r.target}`,r.evidence)));
+  $('changes-empty').hidden=Object.values(s).some(Boolean);
+}
 function relationsOf(id) {return state.snapshot.graph.edges.filter(e=>(e.source===id||e.target===id)&&e.relation!=='in_vpc');}
 function actionButton(label, handler) {const button=el('button',label,'button');button.onclick=()=>Promise.resolve().then(handler).catch(error=>toast(error.message,true));return button;}
 function showResource(id, select=true) {
@@ -257,7 +280,9 @@ bind('restore-button',()=>{const last=state.history.at(-1);return replaceDocumen
 bind('download-drawio',downloadDiagram);bind('download-png',downloadPng);
 bind('download-json',()=>download('snapshot.json',JSON.stringify(state.snapshot,null,2),'application/json'));bind('download-csv',downloadCsv);
 bind('import-button',()=>$('import-file').click());
-for(const mode of ['diagram','inventory','review'])bind(mode+'-tab',()=>{state.mode=mode;$('canvas-area').hidden=mode!=='diagram';$('inventory').hidden=mode!=='inventory';$('review').hidden=mode!=='review';for(const tab of ['diagram','inventory','review'])$(tab+'-tab').classList.toggle('active',mode===tab);renderInventory();});
+const modes=['diagram','inventory','review','changes'];
+for(const mode of modes)bind(mode+'-tab',async()=>{state.mode=mode;$('canvas-area').hidden=mode!=='diagram';for(const panel of modes.slice(1))$(panel).hidden=mode!==panel;for(const tab of modes)$(tab+'-tab').classList.toggle('active',mode===tab);renderInventory();if(mode==='changes')await renderChanges();});
+$('compare-select').onchange=()=>renderChanges().catch(e=>toast(e.message,true));
 $('severity-filter').onchange=renderReview;
 $('search').oninput=renderInventory;$('kind-filter').onchange=renderInventory;
 $('snapshot-select').onchange=()=>loadSnapshot($('snapshot-select').value).catch(e=>toast(e.message,true));

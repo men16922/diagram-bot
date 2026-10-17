@@ -25,6 +25,7 @@ from .demo import demo_snapshot
 from .samples import SAMPLES
 from .drawio import carry_annotations, generate_document, validate_document
 from .editor import VERSION, editor_path
+from .diff import diff
 from .findings import review, summary
 from .graph import build_graph, upgrade_graph
 from .views import view_graph
@@ -193,6 +194,11 @@ def create_app(directory=None, editor_directory=None):
         snapshot = get_snapshot(identifier)
         findings = review(snapshot["graph"], snapshot["coverage"])
         return {"summary": summary(findings), "findings": findings}
+
+    @app.get("/api/snapshots/{identifier}/diff/{other}")
+    def compare_snapshots(identifier: str, other: str):
+        """Changes from `other` (before) to `identifier` (after)."""
+        return diff(get_snapshot(other), get_snapshot(identifier))
 
     @app.post("/api/snapshots", status_code=201)
     def import_snapshot(snapshot: dict):

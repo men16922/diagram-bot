@@ -145,3 +145,10 @@ def test_findings_endpoint(client):
     assert result['summary']['high'] == 1
     assert result['findings'][0]['rule'] == 'SEC-SG-OPEN' and result['findings'][0]['resource'].endswith('/security_group/sg-web')
     assert client.get('/api/snapshots/sample-three-tier/findings').json()['findings'] == []
+
+
+def test_diff_endpoint(client):
+    imported = client.post('/api/snapshots', json=SAMPLES['three-tier']()).json()['id']
+    result = client.get(f'/api/snapshots/{imported}/diff/sample-three-tier').json()
+    assert result['comparable'] and not any(result['summary'].values())
+    assert client.get('/api/snapshots/demo/diff/missing').status_code == 404
