@@ -53,7 +53,10 @@ Last Updated: 2026-10-17
 
 ## Open Limits
 
-- Live AWS credentials, permissions, networking and SSO refresh remain unverified.
+- Live AWS collection remains unverified. 2026-10-17 attempt from the cloud container: STS is
+  reachable but the container's environment keys return `InvalidClientTokenId`; `diagram-bot
+  collect` stopped with exit 1 and wrote no report (expected failure path). Needs a valid
+  read-only key or SSO profile for the intended account.
 - 100-resource views are structurally correct but dense; no large-environment claim.
 - No shared-user hosting, scheduled collection, snapshot diff, RDS/EKS or listener rules.
 - Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.

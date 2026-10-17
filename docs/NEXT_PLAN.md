@@ -19,6 +19,8 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 - [ ] [manual] Validate AWS collection with the intended SSO profile/account (one account, one
   region). Done: account/region recorded, main resources and relations matched against the
   console/API, coverage and any access failures recorded in STATUS.md.
+  Blocked in cloud sessions until valid read-only credentials are configured for the environment
+  (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, plus `AWS_SESSION_TOKEN` if temporary).
 - [ ] [manual] Human visual review of docs/images/*.png and examples/demo/edited-topology.png.
   Done: groups/edges judged readable by the presenter, or concrete layout issues listed here.
 - [ ] [manual] Review and merge branch `claude/harness-plugin-install-yirqt3` into main.
