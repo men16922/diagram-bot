@@ -32,6 +32,7 @@ from .cli import app_version
 from .diff import diff
 from .findings import review, summary
 from .graph import build_graph, upgrade_graph
+from .sso import SsoError, SsoLogins, discover_start_url
 from .views import view_graph
 
 
@@ -52,6 +53,13 @@ class CollectionRequest(BaseModel):
     expected_account: str = Field(pattern=r"^\d{12}$")
     role_arn: str | None = Field(default=None, max_length=2048, pattern=r"^arn:aws[a-z-]*:iam::\d{12}:role/[\w+=,.@/-]+$")
     external_id: str | None = Field(default=None, min_length=2, max_length=1224, pattern=r"^[\w+=,.@:/-]+$")
+    sso_login: str | None = Field(default=None, max_length=64, pattern=r"^[\w-]+$")
+    sso_role: str | None = Field(default=None, max_length=64, pattern=r"^[\w+=,.@-]+$")
+
+
+class SsoStartRequest(BaseModel):
+    start_url: str = Field(min_length=10, max_length=512)
+    region: str = Field(pattern=r"^[a-z]{2}(?:-[a-z0-9]+)+-\d+$", max_length=50)
 
 
 class DocumentRequest(BaseModel):
@@ -102,7 +110,8 @@ def default_chat(workspace, model):
     return Chat(workspace, model)
 
 
-def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False, oidc=None, chat_factory=default_chat):
+def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False, oidc=None, chat_factory=default_chat,
+               sso=None):
     """users: accounts for team mode (None = single local user). secure: served over TLS (Secure cookie, HSTS).
     chat_factory(workspace, model) builds the design/collection chat agent (replaced in tests)."""
     directory = Path(directory or data_path())
@@ -117,6 +126,8 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
     executor = ThreadPoolExecutor(max_workers=1)
     jobs = {}
     auth = Authenticator(users or {}) if users or oidc else None
+    sso = sso or SsoLogins()
+    sso_choice = {}  # user -> (login id, account, role) of their last SSO collection; the chat agent collects with it
     audit = AuditLog(directory / "audit.log")
 
     def save_snapshot(snapshot, identifier=None):
@@ -381,8 +392,13 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         with mutex:
             current = chats.get(user)
             if not current or current["model"] != model:
+                def session_for(region):
+                    # After an SSO collection the agent reads with the same Identity Center role; otherwise the SDK chain.
+                    choice = sso_choice.get(user)
+                    return sso.session(choice[0], user, choice[1], choice[2], region) if choice else boto3.Session(region_name=region)
                 try:
-                    workspace = Workspace(publish, allow_collection=can_collect)
+                    workspace = Workspace(publish, session_factory=session_for, allow_collection=can_collect,
+                                          default_account=lambda: (sso_choice.get(user) or (None, None))[1] or os.environ.get("AWS_ACCOUNT_ID"))
                     current = chats[user] = {"chat": chat_factory(workspace, model), "model": model}
                 except ImportError as exc:
                     raise HTTPException(503, "채팅 에이전트를 쓰려면 pip install -e '.[agent]'로 strands-agents를 설치하세요.") from exc
@@ -491,7 +507,13 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         def work():
             jobs[identifier]["status"] = "running"
             try:
-                snapshot = collect(params.region, params.profile, params.expected_account,
+                session = None
+                if params.sso_login:
+                    if not params.sso_role:
+                        raise ValueError("SSO 역할을 선택하세요.")
+                    session = sso.session(params.sso_login, user, params.expected_account, params.sso_role, params.region)
+                    sso_choice[user] = (params.sso_login, params.expected_account, params.sso_role)
+                snapshot = collect(params.region, None if session else params.profile, params.expected_account, session=session,
                                    role_arn=params.role_arn, external_id=params.external_id)
                 jobs[identifier].update(status=snapshot["metadata"]["status"], snapshot_id=save_snapshot(snapshot))
             except (BotoCoreError, ClientError) as exc:
@@ -503,10 +525,71 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
                 jobs[identifier].update(status="failed", error="수집을 완료하지 못했습니다. 마지막 스냅샷은 보존됩니다.")
             jobs[identifier]["finished_at"] = now()
             audit.write(user, "collection", target=f"{params.role_arn or params.expected_account}/{params.region}",
-                        result=jobs[identifier]["status"], snapshot=jobs[identifier].get("snapshot_id"))
+                        result=jobs[identifier]["status"], snapshot=jobs[identifier].get("snapshot_id"),
+                        via=f"sso:{params.sso_role}" if params.sso_login else "sdk")
 
         executor.submit(work)
         return jobs[identifier]
+
+    sso_defaults = {}
+
+    @app.get("/api/sso/defaults")
+    def sso_start_defaults():
+        """Start URLs from ~/.aws/config sso-sessions/profiles, else discovered from the app's own credentials."""
+        if "rows" not in sso_defaults:
+            import botocore.session
+            rows = []
+            try:
+                config = botocore.session.Session().full_config
+                for name, item in config.get("sso_sessions", {}).items():
+                    if item.get("sso_start_url"):
+                        rows.append({"name": name, "start_url": item["sso_start_url"], "region": item.get("sso_region", "us-east-1")})
+                for name, item in config.get("profiles", {}).items():
+                    if item.get("sso_start_url") and not any(r["start_url"] == item["sso_start_url"] for r in rows):
+                        rows.append({"name": name, "start_url": item["sso_start_url"], "region": item.get("sso_region", "us-east-1")})
+            except BotoCoreError:
+                pass
+            if not rows and (found := discover_start_url()):
+                rows.append({"name": "Identity Center", **found})
+            sso_defaults["rows"] = rows
+        return sso_defaults["rows"]
+
+    @app.post("/api/sso/login")
+    def sso_login(params: SsoStartRequest, request: Request):
+        try:
+            result = sso.start(params.start_url, params.region, request.state.user)
+        except SsoError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        audit.write(request.state.user, "sso login started", target=params.start_url)
+        return result
+
+    @app.get("/api/sso/login/{identifier}")
+    def sso_status(identifier: str, request: Request):
+        try:
+            view = sso.poll(identifier, request.state.user)
+        except SsoError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except (BotoCoreError, ClientError) as exc:
+            raise HTTPException(502, f"SSO 계정 목록을 받지 못했습니다({type(exc).__name__}).") from exc
+        if view.pop("changed", False):
+            audit.write(request.state.user, f"sso login {view['status']}")
+        return view
+
+    @app.get("/api/sso/login/{identifier}/roles")
+    def sso_roles(identifier: str, account_id: str, request: Request):
+        try:
+            return {"roles": sso.roles(identifier, request.state.user, account_id)}
+        except SsoError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (BotoCoreError, ClientError) as exc:
+            raise HTTPException(502, f"SSO 역할 목록을 받지 못했습니다({type(exc).__name__}).") from exc
+
+    @app.post("/api/sso/login/{identifier}/logout")
+    def sso_logout(identifier: str, request: Request):
+        with mutex:
+            if sso_choice.get(request.state.user, (None,))[0] == identifier:
+                sso_choice.pop(request.state.user)
+        return {"logged_out": sso.logout(identifier, request.state.user)}
 
     @app.get("/api/collections/{identifier}")
     def collection_status(identifier: str):

@@ -122,7 +122,7 @@ def allowed(role, method, path):
     """viewer: read; editor: edit documents and import snapshots; admin: also start AWS collection."""
     if method in ("GET", "HEAD") or path in ("/api/logout",):
         return True
-    if path.startswith("/api/collections"):
+    if path.startswith(("/api/collections", "/api/sso")):
         return role == "admin"
     return role in ("editor", "admin")
 

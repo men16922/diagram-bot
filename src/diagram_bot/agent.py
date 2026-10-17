@@ -46,8 +46,10 @@ def available_models():
 class Workspace:
     """State shared by one conversation's tools: the current design, the last collection and where snapshots go."""
 
-    def __init__(self, save, session_factory=None, region=None, allow_collection=True):
+    def __init__(self, save, session_factory=None, region=None, allow_collection=True, default_account=None):
         self.save, self.allow_collection = save, allow_collection
+        # Expected account for collections: AWS_ACCOUNT_ID (e.g. from --env-file) guards against the wrong account.
+        self.default_account = default_account or (lambda: os.environ.get("AWS_ACCOUNT_ID"))
         self.session_factory = session_factory or (lambda region: boto3.Session(region_name=region))
         self.region = region or os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
         self.design = Design(region=self.region)
@@ -72,8 +74,7 @@ class Workspace:
         if not self.allow_collection:
             raise PermissionError("AWS 수집은 admin 역할만 할 수 있습니다. 설계 도구는 계속 쓸 수 있습니다.")
         region = region or self.region
-        # AWS_ACCOUNT_ID (e.g. from --env-file) guards against collecting the wrong account.
-        expected = expected_account or os.environ.get("AWS_ACCOUNT_ID") or None
+        expected = expected_account or self.default_account() or None
         snapshot = collect(region, session=self.session_factory(region), expected_account=expected)
         graph = build_graph(snapshot)
         snapshot["graph"] = graph

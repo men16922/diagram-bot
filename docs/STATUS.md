@@ -64,15 +64,16 @@ Last Updated: 2026-10-17
   metadata records the role; a wrong External ID is refused (AccessDenied, exit 1).
 - Found and fixed: terminated EC2 instances (still listed ~1 h after the test stack's deletion) were drawn as
   unplaced resources and inventoried; they are now skipped like deleted VPN connections.
-- SSO: Identity Center is active with a `CloudOpsReadOnly` permission set on this account; device-code login was
-  started and needs the owner's approval in the browser.
-- GPT-6: other regions answer "Your account is currently being verified" — the account is still in AWS's new-account
-  verification, the likely cause of the us-east-1 "not available" denial.
+- SSO: in-app device-code sign-in (`sso.py`, `/api/sso/*`, collection dialog) implemented; start URL auto-discovered
+  from Identity Center; device code shown in the live app. Approval + SSO collection paused by the owner.
+- GPT-6: other regions briefly answered "Your account is currently being verified"; once that cleared (Nova works in
+  us-east-2/us-west-2), GPT-6 Luna was still "not available for this account" in every region. Not a timing issue:
+  the account needs AWS (Sales/Support) to enable OpenAI models.
 
 ## Chat Agent Verification (2026-10-17, local macOS, owner's test account)
 
 - Offline: designer steps/errors, 7 standards, tool schemas, scripted-model chat incl. GPT-6 denial → Nova fallback,
-  moto collection tool, chat API + audit, `.env` loader, design layout readability (`make check`, 107 tests).
+  moto collection tool, chat API + audit, `.env` loader, design layout readability (`make check`, 118 tests).
 - Live Bedrock us-east-1 in Chromium: 3-AZ three-tier design (10 tool calls, 8 snapshots, review high 0), advice turn
   without tools, live collection + SG review via chat (6 high, matches CLI). CLI `chat -m` with an EKS standard.
 - GPT-6 Luna: agreement AVAILABLE but every API (Converse, Chat Completions, Responses) returns "not available for
@@ -92,7 +93,7 @@ Last Updated: 2026-10-17
 
 ## Verification (2026-10-17, this container)
 
-- `make check`: ruff lint + 107 pytest cases (incl. moto AWS-emulator end-to-end collection and team mode) + five-artifact CLI round trip passed.
+- `make check`: ruff lint + 118 pytest cases (incl. moto AWS-emulator end-to-end collection and team mode) + five-artifact CLI round trip passed.
 - Team mode (`scripts/verify_team.py`, Chromium): TLS server on 0.0.0.0, refusal without credentials, login/throttle, viewer/admin roles, cookie flags, logout, OIDC SSO through a loopback test provider, audit log.
 - Layout tests: no sibling overlap (icons + label boxes), nothing outside its container, no
   routed segment through another icon/label, identical rerun — all sample views and both VPCs

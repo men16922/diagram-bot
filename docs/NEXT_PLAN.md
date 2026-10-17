@@ -21,13 +21,14 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 - [x] [manual] Live check with real workloads — done 2026-10-17 on a temporary CloudFormation stack
   (VPC, ALB, ASG × 2 t3.micro, RDS), created and deleted with the user's approval (STATUS.md).
 - [x] [manual] Cross-account role collection — done 2026-10-17 with the repo's role template (temporary stack).
-- [ ] [manual] SSO profile collection. Done: `collect --profile <sso>` (CloudOpsReadOnly) completes and matches the
-  key-based collection. Needs the owner to approve the Identity Center device login.
+- [ ] [manual] SSO collection from the app (`SSO로 로그인`, device code; implemented and tested offline 2026-10-17).
+  Done: owner approves the device code, CloudOpsReadOnly collection completes and matches the key-based one.
+  Paused by the owner ("SSO 말고 다른것부터").
 - [ ] [manual] Human visual review of docs/images/*.png and examples/demo/edited-topology.png.
   Done: groups/edges judged readable by the presenter, or concrete layout issues listed here.
 
 - [ ] [manual] GPT-6 Luna access: agreement accepted 2026-10-17 but invocations are still denied for this account
-  (other regions report "account is currently being verified").
+  in every region, also after the account's new-account verification cleared — ask AWS Sales/Support to enable it.
   Done: `diagram-bot chat -m "hi"` answers with "OpenAI GPT-6 Luna" (no fallback label), or AWS confirms ineligibility.
 
 ## Candidate Follow-ups (not approved)

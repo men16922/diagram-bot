@@ -278,7 +278,39 @@ bind('view-focus',()=>switchView('focus',{focus:state.selected}));
 bind('save-button',()=>saveDocument());
 bind('export-button',()=>{$('export-dialog').showModal();});
 bind('coverage-button',()=>{$('coverage-dialog').showModal();});
-bind('collection-button',()=>{$('collection-dialog').showModal();});
+bind('collection-button',async()=>{$('collection-dialog').showModal();
+  if(!state.ssoDefaults){state.ssoDefaults=await api('/api/sso/defaults').catch(()=>[]);
+    $('sso-start-urls').replaceChildren(...state.ssoDefaults.map(d=>new Option(d.name,d.start_url)));
+    if(state.ssoDefaults[0]&&!$('sso-start-url').value){$('sso-start-url').value=state.ssoDefaults[0].start_url;$('sso-region').value=state.ssoDefaults[0].region;}}});
+// IAM Identity Center sign-in with the device code grant: the server keeps every secret, the page shows the code and link.
+function ssoView(mode){$('sso-form').hidden=mode!=='form';$('sso-device').hidden=mode!=='device';$('sso-select').hidden=mode!=='select';
+  $('aws-profile').disabled=mode==='select';$('aws-account').readOnly=mode==='select';}
+async function ssoRoles(){
+  const account=$('sso-account').value;$('aws-account').value=account;$('sso-role').replaceChildren();
+  const {roles}=await api(`/api/sso/login/${state.sso.id}/roles?account_id=${encodeURIComponent(account)}`);
+  $('sso-role').append(...roles.map(r=>new Option(r,r)));
+  const readOnly=roles.find(r=>/read.?only/i.test(r));if(readOnly)$('sso-role').value=readOnly;
+}
+async function ssoPoll(){
+  if(!state.sso||state.sso.status!=='pending')return;
+  try{const view=await api(`/api/sso/login/${state.sso.id}`);state.sso={...state.sso,...view};
+    if(view.status==='pending'){$('sso-status').textContent='승인을 기다리는 중…';state.ssoTimer=setTimeout(ssoPoll,view.interval*1000);return;}
+    if(view.status==='authorized'){
+      $('sso-account').replaceChildren(...view.accounts.map(a=>new Option(`${a.name} (${a.id})`,a.id)));
+      $('sso-signed-in').textContent=`SSO 로그인됨 · 계정 ${view.accounts.length}개`;ssoView('select');
+      if(view.accounts.length)await ssoRoles();else $('sso-signed-in').textContent='SSO 로그인됨 · 할당된 계정이 없습니다';return;}
+    $('sso-status').textContent={expired:'코드가 만료됐습니다. 다시 로그인하세요.',denied:'승인이 거부됐습니다.',failed:'SSO 로그인에 실패했습니다.'}[view.status]||view.status;
+    setTimeout(()=>ssoView('form'),2500);
+  }catch(error){$('sso-status').textContent=error.message;setTimeout(()=>ssoView('form'),2500);}
+}
+bind('sso-login',async()=>{
+  clearTimeout(state.ssoTimer);
+  const flow=await api('/api/sso/login',{method:'POST',body:JSON.stringify({start_url:$('sso-start-url').value.trim(),region:$('sso-region').value.trim()})});
+  state.sso=flow;$('sso-code').textContent=flow.user_code;$('sso-link').href=flow.verification_uri_complete;$('sso-status').textContent='승인을 기다리는 중…';
+  ssoView('device');state.ssoTimer=setTimeout(ssoPoll,flow.interval*1000);
+});
+$('sso-account').onchange=()=>ssoRoles().catch(error=>toast(error.message,true));
+bind('sso-logout',async()=>{if(state.sso)await api(`/api/sso/login/${state.sso.id}/logout`,{method:'POST'});state.sso=null;$('aws-account').value='';ssoView('form');});
 bind('close-collection',()=>{$('collection-dialog').close();});
 bind('note-button',()=>post({action:'diagramBotNote'}));
 bind('reset-button',()=>replaceDocument('/relayout',{},'자동 배치를 다시 실행했습니다. 이전 편집본은 보관되고 메모는 유지됩니다.'));
@@ -300,7 +332,8 @@ $('import-file').onchange=async()=>{
 $('collection-form').onsubmit=async event=>{
   event.preventDefault();$('start-collection').disabled=true;$('collection-progress').textContent='AWS 인증과 계정을 확인하고 있습니다…';
   try{
-    let job=await api('/api/collections',{method:'POST',body:JSON.stringify({profile:$('aws-profile').value||null,region:$('aws-region').value,expected_account:$('aws-account').value,role_arn:$('aws-role').value||null,external_id:$('aws-external-id').value||null})});
+    const sso=state.sso?.status==='authorized'?{sso_login:state.sso.id,sso_role:$('sso-role').value||null}:{};
+    let job=await api('/api/collections',{method:'POST',body:JSON.stringify({profile:sso.sso_login?null:($('aws-profile').value||null),region:$('aws-region').value,expected_account:$('aws-account').value,role_arn:$('aws-role').value||null,external_id:$('aws-external-id').value||null,...sso})});
     while(['queued','running'].includes(job.status)){$('collection-progress').textContent='AWS 설정을 수집하고 있습니다. 잠시 기다려 주세요.';await new Promise(resolve=>setTimeout(resolve,1500));job=await api(`/api/collections/${job.id}`);}
     if(job.status==='failed')throw new Error(job.error);
     await refreshSnapshots(job.snapshot_id);await loadSnapshot(job.snapshot_id);$('collection-dialog').close();toast(job.status==='partial'?'부분 수집을 완료했습니다. 조회 상태를 확인하세요.':'AWS 수집을 완료했습니다.');
