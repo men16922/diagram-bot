@@ -7,6 +7,7 @@ from diagram_bot.demo import ALB, demo_snapshot
 from diagram_bot.drawio import cell_id, generate_document, layout_document, validate_document
 from diagram_bot.editor import install_editor
 from diagram_bot.graph import build_graph
+from diagram_bot.layout import fit_label
 from diagram_bot.samples import SAMPLES
 from fixtures import full_design, scale_snapshot
 
@@ -275,3 +276,11 @@ def test_chat_design_is_readable():
             layout = layout_document(snapshot, "focus", None, node["id"], True)
             assert_readable(layout)
             assert_no_shared_segments(layout)
+
+
+def test_truncated_label_ends_at_a_word():
+    """A cut name ends on a whole word before the ellipsis, so it cannot run into the type line below."""
+    name = "주문 정산 야간 배치 처리 서버 (월말 대사 작업 전용 인스턴스)"
+    assert fit_label(name, 140, 3) == "주문 정산 야간 배치 처리 서버 (월말 대사 작업 전용…"
+    assert fit_label("platform-orders-api-writer-primary-cluster", 140, 1).endswith("…")
+    assert fit_label("short name", 140, 1) == "short name"

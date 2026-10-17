@@ -47,6 +47,11 @@ def fit_label(text, width, lines=MAX_LINES, size=12):
         if text_width(out + c + "…", size) > budget:
             break
         out += c
+    # Cut at a word break when one is near, so a half word next to the ellipsis does not read
+    # as running into the type line below ("…전용 인스…" over "m6i.large").
+    space = out.rfind(" ")
+    if space >= len(out) * 0.6:
+        out = out[:space].rstrip(" (·-")
     return out + "…"
 
 

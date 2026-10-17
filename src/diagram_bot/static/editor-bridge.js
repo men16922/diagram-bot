@@ -6,6 +6,20 @@ Draw.loadPlugin(function (ui) {
   const send = data => parent.postMessage(JSON.stringify(data), location.origin);
   const cells = () => Object.values(graph.getModel().cells);
   const isRelation = cell => cell?.getAttribute && (cell.getAttribute('relationId') != null || cell.getAttribute('relationIndex') != null);
+  // Fitting a tall three-AZ diagram into the window shrinks its labels below legibility (30-40 %);
+  // below this floor the view fits the diagram's width instead and opens at its top-left corner.
+  const READABLE_SCALE = 0.6, BORDER = 24;
+  const readableFit = function () {
+    ui.fitDiagramOrPages();
+    const scale = graph.view.scale;
+    if (scale >= READABLE_SCALE) return;
+    const width = graph.getGraphBounds().width / scale;
+    graph.zoomTo(Math.min(1, Math.max(READABLE_SCALE, (graph.container.clientWidth - 2 * BORDER) / width)));
+    const bounds = graph.getGraphBounds();
+    graph.container.scrollLeft = bounds.x - BORDER;
+    graph.container.scrollTop = bounds.y - BORDER;
+  };
+  window.diagramBotGraph = graph;  // read by scripts/verify_demo.py
   graph.getSelectionModel().addListener(mxEvent.CHANGE, function () {
     // Multi-selection is used for relation highlighting; only a single cell drives the inspector.
     if (graph.getSelectionCount() > 1) return;
@@ -29,7 +43,7 @@ Draw.loadPlugin(function (ui) {
         if (ui.sidebarWindow) ui.sidebarWindow.window.setVisible(false);
         if (ui.formatWindow) ui.formatWindow.window.setVisible(false);
         ui.setFitWindowEnabled(false);
-        ui.fitDiagramOrPages();
+        readableFit();
       } else if (message.action === 'diagramBotDocument') {
         graph.stopEditing(false);
         const xml = ui.getFileData(true, false, false, null, true, false, null, false, null, true);

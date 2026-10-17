@@ -58,6 +58,8 @@ def main():
         ready()
         expect(page.locator('#view-detail')).to_have_class('view-button active')
         expect(page.locator('#environment-title')).to_have_text('주문 서비스 운영 네트워크')
+        start_scale = page.evaluate("() => document.getElementById('editor').contentWindow.diagramBotGraph.view.scale")
+        assert start_scale >= 0.6, f'detail view opens at an illegible zoom: {start_scale:.2f}'
 
         # 2. ALB: target groups, registered targets and API evidence.
         frame.get_by_text(starts('demo-alb')).click()
