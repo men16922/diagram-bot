@@ -11,6 +11,7 @@
 - **감사 로그:** 로그인·로그아웃·모든 변경 요청·수집 결과를 `audit.log`(JSON Lines)에 남기고 admin은 `GET /api/audit`로 봅니다. 로컬 모드도 기록합니다.
 - AWS API 에뮬레이터(moto) 통합 테스트: 실제 boto3 직렬화로 20여 종 리소스를 만들고 병렬 수집·그래프·검토·보고서까지 확인합니다.
 - `scripts/verify_team.py`: TLS 서버·로그인·역할·감사 로그 브라우저 검증(CI 포함).
+- Apache License 2.0(`LICENSE`, `NOTICE`, 패키지 메타데이터).
 
 ### Fixed
 - 한 API가 예상하지 못한 예외를 내도 그 API만 `조회 불가`로 기록하고 나머지 서비스 수집을 계속합니다.

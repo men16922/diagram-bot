@@ -137,3 +137,7 @@ python scripts/verify_demo.py
 자동 테스트 **82개**(AWS API 에뮬레이터 통합 테스트·팀 모드 포함)와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
 
 SSO(OIDC/SAML) 직접 연동(인증 프록시로 연결), 동시 편집 병합, 수집 작업의 재시작 복구, 내장 예약 수집(cron·CI에서 `collect`·`review`·`diff` 종료 코드 사용), 리스너 규칙·NACL·Direct Connect·실제 트래픽 분석은 포함하지 않습니다. 실제 AWS 계정에서의 권한·접속·SSO 갱신은 이 개발 환경에 자격 증명이 없어 검증하지 못했습니다. 수집 로직은 API별 모의 응답 테스트와 AWS API 에뮬레이터(moto)에 구성한 환경 전체를 수집하는 통합 테스트로 검증했습니다.
+
+## 라이선스
+
+[Apache License 2.0](LICENSE). 고지는 [NOTICE](NOTICE)에 있습니다. `setup-editor`로 설치하는 draw.io와 AWS Architecture Icons 도형의 조건은 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 보세요.

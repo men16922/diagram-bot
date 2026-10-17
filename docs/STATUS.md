@@ -72,7 +72,7 @@ Last Updated: 2026-10-17
   read-only key or SSO profile for the intended account.
 - 100-resource views are structurally correct but dense; no large-environment claim.
 - Team mode provides accounts/roles/TLS/audit; no direct SSO (use an auth proxy), no built-in scheduler (use cron/CI with `review`/`diff` exit codes),
-  listener rules, NACLs or Direct Connect. No project LICENSE file yet (owner decision).
+  listener rules, NACLs or Direct Connect. Licensed Apache-2.0 (owner decision, 2026-10-17).
   EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN calls are verified on stubs only;
   ElastiCache Serverless, MSK Serverless, EKS Fargate profiles and Aurora Global Database are not drawn.
 - Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.
