@@ -37,6 +37,8 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 - [x] docs/ARCHITECTURE.md: AWS sources, per-sample verdicts and a ranked change list.
 - [ ] Apply the change list (docs/ARCHITECTURE.md §4) — awaiting the owner's choice of items. Top: Redshift Multi-AZ
   subnet group (MUST), data-platform peering+VGW → TGW hub, second CGW/VPN in hybrid, missing `ecr.api`/SSM endpoints.
+- [ ] AI/GPU (docs/ARCHITECTURE.md §5, Generative AI / ML / HPC lenses): A1 new `ai-platform` sample, A2 accelerated
+  instance and Bedrock icons, A3 GPU review rules (training spans AZs, single-AZ inference, EFA SG) — awaiting approval.
 
 ## Candidate Follow-ups (not approved)
 

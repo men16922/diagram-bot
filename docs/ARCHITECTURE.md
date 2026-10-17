@@ -164,7 +164,108 @@ Multi-VPC 백서(VPC peering, VPN).
 수집 범위 확장 후보(별도 승인 필요): CloudFront·WAF(엣지), Elastic IP(NLB 고정 IP), TGW 라우팅 테이블(환경 격리),
 Direct Connect, 다중 계정 구성도(계정 그룹).
 
-## 5. 출처
+AI/GPU 워크로드 관련 변경안(신규 `ai-platform` 사례, GPU 아이콘, 검토 규칙)은 5.6절에 따로 둔다.
+
+## 5. AI/GPU 워크로드 (Well-Architected)
+
+기준 렌즈: **Generative AI Lens**(2025-11-19, Bedrock·SageMaker AI·Amazon Q 대상, 6개 기둥 × 수명 주기),
+**Machine Learning Lens**(2025-11-19, BP ID가 `MLSEC04-BP01` 형식으로 바뀌어 예전 `mlsec-08.html` 링크는 쓰지 않음),
+GPU 클러스터의 AZ 판단에는 **HPC Lens**. 강도는 각 렌즈의 "Level of risk exposed if not established"(HIGH/MEDIUM)를 따르고,
+플랫폼의 물리적 제약은 MUST로 적는다.
+
+### 5.1 구성도에 드러나는 모범 사례
+
+| BP | 위험도 | 구성도 요소 | 요지 |
+| --- | --- | --- | --- |
+| GENSEC01-BP02 FM과 앱 사이 사설 통신 | HIGH | `bedrock-runtime`·SageMaker 인터페이스 엔드포인트, 프라이빗 서브넷, 사설 경로의 벡터 저장소 | 사설 통신이 없으면 엔드포인트를 공용 인터넷으로 호출하게 됨. RAG의 벡터 DB 접근도 사설 경로로 |
+| GENSEC01-BP01 FM 엔드포인트 최소 권한 | HIGH | 엔드포인트 정책, VPC 조건 | 특정 VPC에서 온 요청만 허용하는 조건 고려 |
+| GENSEC01-BP03 FM에서 데이터 저장소로의 최소 권한 | HIGH | VPC 안의 벡터 저장소, 보안 그룹 | 벡터 저장소를 보안 VPC에 두고 SG로 노드·데이터 소스 간 통신 제한 |
+| GENSEC01-BP04 접근 모니터링 | HIGH | `logs` 엔드포인트 (설정은 문구) | Bedrock 모델 호출 로깅은 기본 꺼짐, `bedrock-runtime` 경유 호출만 기록 |
+| GENSEC02-BP01 Guardrails | HIGH | 문구 | 자체 호스팅 모델에도 SDK로 적용 가능 |
+| GENREL02-BP01 이중화된 네트워크 연결 | MEDIUM | 2 AZ 이상, 다중 AZ 엔드포인트, 다중 AZ 벡터 DB, TGW | 앱·벡터 DB·에이전트를 최소 두 AZ에 |
+| GENREL01-BP01 처리량을 사용률에 맞춤 | MEDIUM | 로드 밸런서 뒤 ASG / 노드 그룹 | 자체 호스팅 엔드포인트는 LB 뒤 Auto Scaling, Bedrock은 Provisioned Throughput 또는 교차 리전 추론(둘은 함께 쓸 수 없음) |
+| GENREL05-BP01 추론 부하 분산 | MEDIUM | 다중 AZ 추론, 오토 스케일링 | 다중 AZ 추론 엔드포인트 + 오토 스케일링 |
+| GENREL06-BP01 분산 학습 내결함성 | HIGH | 체크포인트 저장소(FSx for Lustre·S3, 문구) | 노드 장애·Spot 중단을 체크포인트로 복구 |
+| MLSEC03-BP02 안전한 데이터·모델링 환경 | HIGH | 인터넷 경로 없는 VPC, PrivateLink, 사설 ECR | "ML 환경의 무제한 인터넷 접근"이 안티 패턴 |
+| MLSEC04-BP01 거버넌스 환경 | HIGH | 문구(개발·학습·운영 계정 분리) | SG·NACL과 PrivateLink |
+| MLREL05-BP01 모델 엔드포인트 자동 확장 | HIGH | ASG·노드 그룹 min/max | — |
+| MLCOST06-BP03 엔드포인트 사용량 모니터링·적정 규모 | HIGH | 서로 다른 AZ의 서브넷 2개 이상, FSx와 학습 노드는 같은 AZ | — |
+| MLPERF04-BP01 학습·추론 인스턴스 최적화 | MEDIUM | 학습·추론 노드 그룹 분리 | 학습과 추론에 같은 인스턴스 유형을 쓰는 것이 안티 패턴 |
+| MLSUS05-BP02 효율적인 실리콘 · GENSUS01-BP01 | MEDIUM | 인스턴스 유형(Inf2·Trn2), ASG min 0 | 자체 호스팅 모델은 미사용 시 0까지 축소 |
+
+### 5.2 GPU 인프라의 물리적 제약 — AZ 긴장 관계
+
+- **EFA 트래픽은 AZ·VPC를 넘을 수 없고 라우팅되지 않는다** (EC2 EFA, MUST). 강결합 학습 노드는 한 AZ에 둔다.
+- **클러스터 배치 그룹은 여러 AZ에 걸칠 수 없다.** 한 인스턴스 유형·한 번의 시작 요청, 그룹 안 ODCR 권장.
+- **Capacity Blocks는 배치 그룹을 지원하지 않는다.** 대신 EC2 UltraCluster 안에 자동으로 가깝게 배치된다.
+  학습 노드 그룹은 배치 그룹과 Capacity Block 중 **하나만** 쓴다. Capacity Block은 오토 스케일링을 지원하지 않는다.
+- **HPCREL01-BP02**: 강결합 워크로드는 단일 AZ·배치 그룹에 두고, FSx for Lustre·S3의 중앙 데이터와 IaC로 다른 AZ에서
+  다시 띄워 복구한다. 공유 스토리지는 같은 AZ에(HPCREL01-BP01).
+- **EFA 보안 그룹**: 모든 EFA 인스턴스가 같은 SG를 쓰고 자기 자신을 참조하는 전체 허용 규칙이 있어야 한다. 없으면
+  EFA 트래픽이 "조용히" 실패한다(EKS AI/ML Networking, HyperPod 사전 조건). 아웃바운드 0.0.0.0/0은 피한다.
+- **IP 계획**: EKS에서 P5 한 대가 81개 IP를 쓰고 서브넷 CIDR은 나중에 바꿀 수 없다(HyperPod). /19 서브넷, IPv6 또는
+  `100.64.0.0/10` 보조 CIDR + 접두사 위임 권장(EKS IP 최적화). 대형 GPU 노드의 warm ENI가 서브넷 IP를 고갈시킬 수 있다.
+- **Spot**: ML Lens는 관리형 Spot 학습으로 최대 90% 절감을 권하지만, EFA 동일 AZ 배치는 "상관된 중단 위험"이 있어
+  EKS 가이드는 RI·ODCR·Savings Plans·Capacity Blocks를 권한다. 소규모·비강결합 학습에만 Spot.
+
+**정리**: 추론·데이터·엔드포인트는 3 AZ(GENREL02-BP01, MLCOST06-BP03), 강결합 학습은 의도적으로 단일 AZ(EFA 제약,
+HPCREL01-BP02). 학습의 복구 수단은 다중 AZ 배치가 아니라 체크포인트(FSx/S3)와 다른 AZ 재시작이다.
+
+### 5.3 EKS AI/ML 모범 사례 (EKS Best Practices Guide — AI/ML)
+
+- 컴퓨팅: P·Trn은 Capacity Blocks, G는 ODCR. 예약 용량은 관리형 노드 그룹, 변동 수요는 Karpenter. GPU 노드 taint,
+  Node Monitoring Agent + Node Auto Repair. Bottlerocket 가속 AMI에는 NVIDIA device plugin 포함(AL2023 가속 AMI는 미포함).
+  추론 확장은 요청 수·토큰 처리량 기반 KEDA.
+- 스토리지: 다중 노드 학습·서빙은 S3 연동 FSx for Lustre(같은 AZ, GPU가 여러 AZ면 AZ마다 하나), 여러 AZ에서 모델을
+  공유하는 실시간 추론은 EFS, 단일 인스턴스는 Mountpoint for S3. S3는 SSE-KMS + Bucket Key.
+- 사설 클러스터 필수 엔드포인트: `ec2` · `ecr.api` · `ecr.dkr` · `s3` · `elasticloadbalancing` · `logs` · `sts`(IRSA) ·
+  `eks-auth`(Pod Identity) · `eks` · `oidc-eks`. 엔드포인트 SG는 노드 서브넷 CIDR 또는 노드 SG에서 443 허용.
+- 참조 구현: AWS Solutions Guidance *Scalable Model Inference and Agentic AI on Amazon EKS*(공식) — 3 AZ와 AZ별 VPC
+  엔드포인트, 애드온용 관리형 노드 그룹 + GPU·Graviton·Inferentia용 Karpenter, WAF 뒤 ELB, RAG용 OpenSearch.
+  *AI on EKS*(awslabs)는 AWS 팀 프로젝트지만 공식 문서는 아니다.
+
+### 5.4 Bedrock·SageMaker 네트워크
+
+- Bedrock 인터페이스 엔드포인트: `bedrock`(제어) · `bedrock-runtime` · `bedrock-agent` · `bedrock-agent-runtime`
+  (+ `bedrock-mantle`, FIPS 변형). 기본 엔드포인트 정책은 전체 허용이라 `InvokeModel`·`InvokeModelWithResponseStream`으로 제한.
+- 교차 리전 추론은 AWS 네트워크 안에서만 이동. 지리 프로필은 데이터가 해당 지리권에 머문다. 글로벌 프로필은 SCP 조정 필요.
+- **Knowledge Bases는 VPC 안의 OpenSearch 도메인(관리형)을 지원하지 않는다**(공용 접근 필요). 사설 RAG 저장소는
+  OpenSearch Serverless(인터페이스 엔드포인트 `aoss-data`) 또는 Aurora PostgreSQL(pgvector, 같은 계정).
+  VPC 안 OpenSearch 도메인은 자체 구현 RAG에서만 쓴다.
+- SageMaker: `sagemaker.api` · `sagemaker.runtime`. 런타임 엔드포인트는 클라이언트가 있는 AZ마다 있어야 사설 DNS가 동작.
+- HyperPod(EKS 오케스트레이션): EKS와 같은 VPC의 프라이빗 서브넷, 기본은 단일 AZ(다중 AZ는 인스턴스 그룹을 AZ별로 분리),
+  인터넷이 없으면 S3 엔드포인트 필수, FSx는 노드와 같은 AZ.
+
+### 5.5 신규 사례 제안: `ai-platform`
+
+수집 가능한 요소만으로 그릴 수 있는 사설 AI 플랫폼. 근거는 괄호 안.
+
+| 요소 | 구성 | 근거 |
+| --- | --- | --- |
+| VPC | 10.80.0.0/16, IGW·NAT 없음, 사내·공용 망은 TGW attachment로 진입 | MLSEC03-BP02, GENSEC01-BP02 |
+| 서브넷 | `app-a/b/c` /19(노드·엔드포인트), `data-a/b/c` /24(Aurora·EFS), `train-a` /20 **AZ a만** | EKS IP 최적화, HyperPod IP 계획 |
+| 라우팅 | 계층별 라우팅 테이블, TGW 경로, S3 게이트웨이 엔드포인트 | EKS 사설 클러스터, HyperPod |
+| 인터페이스 엔드포인트 (3 AZ) | `bedrock-runtime`, `bedrock-agent-runtime`, `sagemaker.runtime`(선택), `ecr.api`, `ecr.dkr`, `sts`, `eks`, `eks-auth`, `ec2`, `elasticloadbalancing`, `logs`, `ssm` | GENSEC01-BP02, GENREL02-BP01, EKS 사설 클러스터 |
+| EKS | 비공개 엔드포인트. 노드 그룹 `system`(m7g.large, 3 AZ), `gpu-inference`(g6e.2xlarge, min 2, 3 AZ, taint), `gpu-train`(p5.48xlarge, `train-a`만, min 0) | Solutions Guidance, MLCOST06-BP03, GENREL05-BP01, EFA 제약 |
+| EFA SG | `sg-train-efa`: 자기 참조 전체 허용, 0.0.0.0/0 아웃바운드 없음 | EKS AI/ML Networking, HyperPod |
+| 진입 | 내부 ALB(3 AZ) → 추론 파드 IP 대상 | GENREL01-BP01, MLREL05-BP01 |
+| 벡터 저장소 | Aurora PostgreSQL(pgvector) writer + 다른 AZ reader, 노드 SG만 허용 | GENSEC01-BP03, GENREL02-BP01, Bedrock KB 지원 |
+| 모델 캐시 | EFS, 3 AZ 마운트 타깃 | EKS AI/ML Storage |
+
+문구로만 남길 것(수집 안 함): 학습 배치(클러스터 배치 그룹 **또는** Capacity Block), EFA 인터페이스, FSx for Lustre(AZ a,
+S3 연동, 체크포인트), S3 버킷(모델·데이터셋·호출 로그, SSE-KMS, `aws:SourceVpce`), Bedrock 호출 로깅·Guardrails·엔드포인트
+정책·교차 리전 추론 또는 Provisioned Throughput, HyperPod, Karpenter·KEDA·device plugin(Karpenter 노드는 ASG 없는 EC2로 보임),
+공개 진입 변형의 WAF·CloudFront·API Gateway.
+
+### 5.6 AI/GPU 변경안 (승인 대기)
+
+| 순위 | 변경 | 비고 |
+| --- | --- | --- |
+| A1 | `ai-platform` 샘플·표준 설계 추가 (5.5절) | 샘플 빌더가 지원하는 요소만 사용. 채팅 에이전트 표준 설계 8번째 |
+| A2 | 가속 인스턴스 아이콘: p·g·trn·inf·dl 계열 EC2를 AWS 아이콘(`p4d_instance`, `trainium_instance` 등)으로, `bedrock*` 엔드포인트에 Bedrock 아이콘 | 고정판 draw.io 32.4.1 AWS4 라이브러리에 아이콘이 있음을 확인 |
+| A3 | 검토 규칙: 학습 노드 그룹(p·trn 계열)이 여러 AZ에 걸치면 경고(EFA), 추론 GPU 노드 그룹이 한 AZ뿐이면 경고(GENREL02-BP01), EFA SG에 자기 참조 규칙이 없으면 경고, GPU 노드 VPC에 `bedrock-runtime` 엔드포인트 없이 NAT만 있으면 정보 | 모두 수집한 API 필드(인스턴스 유형·서브넷·SG 규칙·엔드포인트)만으로 판정 가능 |
+
+## 6. 출처
 
 모두 2026-10-18에 내용을 확인한 페이지다(† 표시는 AWS가 "historical"로 표시).
 
@@ -209,3 +310,35 @@ Direct Connect, 다중 계정 구성도(계정 그룹).
   [DocumentDB replication](https://docs.aws.amazon.com/documentdb/latest/developerguide/replication.html) ·
   [EFS mount targets](https://docs.aws.amazon.com/efs/latest/ug/accessing-fs.html)
 - 표기: [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/) (release 24 PPTx 지침)
+- AI/ML 렌즈: [Generative AI Lens](https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html)
+  ([GENSEC01-BP02](https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/gensec01-bp02.html),
+  [GENSEC01-BP03](https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/gensec01-bp03.html),
+  [GENSEC01-BP04](https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/gensec01-bp04.html),
+  [GENREL01-BP01](https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/genrel01-bp01.html),
+  [GENREL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/genrel02-bp01.html),
+  [GENREL06-BP01](https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/genrel06-bp01.html)) ·
+  [Machine Learning Lens](https://docs.aws.amazon.com/wellarchitected/latest/machine-learning-lens/machine-learning-lens.html)
+  ([MLSEC03-BP02](https://docs.aws.amazon.com/wellarchitected/latest/machine-learning-lens/mlsec03-bp02.html),
+  [MLSEC04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/machine-learning-lens/mlsec04-bp01.html),
+  [MLCOST06-BP03](https://docs.aws.amazon.com/wellarchitected/latest/machine-learning-lens/mlcost06-bp03.html),
+  [MLPERF04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/machine-learning-lens/mlperf04-bp01.html)) ·
+  [HPC Lens — tightly coupled](https://docs.aws.amazon.com/wellarchitected/latest/high-performance-computing-lens/tightly-coupled-scenarios.html)
+- GPU 인프라: [EFA](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa.html) ·
+  [Placement strategies](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/placement-strategies.html) ·
+  [Capacity Blocks for ML](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-capacity-blocks.html) ·
+  [HyperPod prerequisites](https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod-prerequisites.html)
+- EKS AI/ML: [AI/ML 개요](https://docs.aws.amazon.com/eks/latest/best-practices/aiml.html) ·
+  [Networking](https://docs.aws.amazon.com/eks/latest/best-practices/aiml-networking.html) ·
+  [Compute](https://docs.aws.amazon.com/eks/latest/best-practices/aiml-compute.html) ·
+  [Storage](https://docs.aws.amazon.com/eks/latest/best-practices/aiml-storage.html) ·
+  [IP 최적화](https://docs.aws.amazon.com/eks/latest/best-practices/ip-opt.html) ·
+  [Guidance: Scalable Model Inference and Agentic AI on EKS](https://docs.aws.amazon.com/solutions/scalable-model-inference-and-agentic-ai-on-amazon-eks/) ·
+  [AI on EKS](https://awslabs.github.io/ai-on-eks/) (awslabs, 비공식)
+- Bedrock·SageMaker: [Bedrock interface endpoints](https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html) ·
+  [Bedrock VPC 사용](https://docs.aws.amazon.com/bedrock/latest/userguide/usingVPC.html) ·
+  [Knowledge Base 설정](https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base-setup.html) ·
+  [Cross-Region inference](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html) ·
+  [Model invocation logging](https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html) ·
+  [OpenSearch Serverless VPC endpoints](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-vpc.html) ·
+  [SageMaker interface endpoints](https://docs.aws.amazon.com/sagemaker/latest/dg/interface-vpc-endpoint.html) ·
+  [RAG options (Prescriptive Guidance)](https://docs.aws.amazon.com/prescriptive-guidance/latest/retrieval-augmented-generation-options/introduction.html)
