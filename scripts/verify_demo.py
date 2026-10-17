@@ -172,6 +172,11 @@ def main():
             page.locator('#download-csv').click()
         event.value.save_as(args.output / 'inventory.csv')
         assert 'i-demo-a' in (args.output / 'inventory.csv').read_text(encoding='utf-8-sig')
+        with page.expect_download() as event:
+            page.locator('#download-findings').click()
+        event.value.save_as(args.output / 'findings.csv')
+        findings_csv = (args.output / 'findings.csv').read_text(encoding='utf-8-sig')
+        assert findings_csv.startswith('"severity",') and '높음' in findings_csv and 'SEC-SG-OPEN' in findings_csv
         page.locator('#export-dialog [aria-label="닫기"]').click()
         page.screenshot(path=str(args.output / 'workspace-edited.png'), full_page=True)
 
@@ -272,7 +277,7 @@ def main():
                          'coverage + IAM permission', 'reference-only target', 'inventory search/type', 'VPC switch',
                          'SG/ENI/EBS references', 'native keyboard move', 'native note edit', 'save/reload',
                          'drawio XML download with moved geometry', 'PNG 2x white', 'PNG 1x transparent', 'PNG 3x',
-                         'JSON/CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
+                         'JSON/CSV/review CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
                          'infrastructure sample: ASG frame, RDS standby, route-classified subnet',
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
                          'data platform: ECS service frame, OpenSearch standby AZ, read replica, VPN customer gateway',

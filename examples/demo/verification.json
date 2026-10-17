@@ -36,7 +36,7 @@
     "PNG 2x white",
     "PNG 1x transparent",
     "PNG 3x",
-    "JSON/CSV exports",
+    "JSON/CSV/review CSV exports",
     "relayout keeps note + archives edit",
     "restore archived edit",
     "infrastructure sample: ASG frame, RDS standby, route-classified subnet",

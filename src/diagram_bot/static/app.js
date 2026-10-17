@@ -279,9 +279,10 @@ bind('reset-button',()=>replaceDocument('/relayout',{},'자동 배치를 다시 
 bind('restore-button',()=>{const last=state.history.at(-1);return replaceDocument('/restore',{from_revision:last.revision},`보관된 v${last.revision} 편집본을 복원했습니다.`);});
 bind('download-drawio',downloadDiagram);bind('download-png',downloadPng);
 bind('download-json',()=>download('snapshot.json',JSON.stringify(state.snapshot,null,2),'application/json'));bind('download-csv',downloadCsv);
+bind('download-findings',()=>{const fields=['severity','pillar','rule','resource_name','resource','title','evidence','recommendation'];const rows=[fields,...(state.review?.findings||[]).map(f=>fields.map(k=>k==='severity'?severityNames[f[k]]:k==='pillar'?pillarNames[f[k]]:f[k]))];download(`diagram-bot-review-${state.snapshot.metadata.account_id}-${state.snapshot.metadata.region}.csv`,'\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');});
 bind('import-button',()=>$('import-file').click());
 const modes=['diagram','inventory','review','changes'];
-for(const mode of modes)bind(mode+'-tab',async()=>{state.mode=mode;$('canvas-area').hidden=mode!=='diagram';for(const panel of modes.slice(1))$(panel).hidden=mode!==panel;for(const tab of modes)$(tab+'-tab').classList.toggle('active',mode===tab);renderInventory();if(mode==='changes')await renderChanges();});
+for(const mode of modes)bind(mode+'-tab',async()=>{state.mode=mode;$('canvas-area').hidden=mode!=='diagram';for(const panel of modes.slice(1))$(panel).hidden=mode!==panel;for(const tab of modes){$(tab+'-tab').classList.toggle('active',mode===tab);$(tab+'-tab').setAttribute('aria-selected',String(mode===tab));}renderInventory();if(mode==='changes')await renderChanges();});
 $('compare-select').onchange=()=>renderChanges().catch(e=>toast(e.message,true));
 $('severity-filter').onchange=renderReview;
 $('search').oninput=renderInventory;$('kind-filter').onchange=renderInventory;

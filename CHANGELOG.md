@@ -8,7 +8,7 @@
 - **아키텍처 검토:** 수집한 설정만으로 안정성·보안 항목을 판정합니다(단일 AZ 로드밸런서·대상·Auto Scaling·RDS, reader 없는 DB 클러스터,
   ElastiCache 자동 장애 조치, 다른 AZ NAT 의존, OpenSearch 영역 인식·전용 마스터, MSK·Redshift·EFS 가용성, VPN 터널, ECS 실행 수,
   퍼블릭 DB, 저장·전송 암호화, IMDSv1, 퍼블릭 IP, 인터넷에 열린 관리·데이터 포트, 공개 EKS 엔드포인트, 수집 누락).
-  앱의 `검토 결과` 탭, `review.md`, `diagram-bot review --fail-on <심각도>`(CI 게이트, 종료 코드 3).
+  앱의 `검토 결과` 탭과 검토 결과 CSV 내보내기, `review.md`, `diagram-bot review --fail-on <심각도>`(CI 게이트, 종료 코드 3).
 - **변경 비교:** 두 스냅샷 사이의 리소스 추가·삭제, 설정 변경, 관계 변경. 상태 값(헬스·실행 수 등)은 제외합니다.
   앱의 `변경 비교` 탭, `GET /api/snapshots/{after}/diff/{before}`, `diagram-bot diff --fail-on-change`(드리프트 감지, 종료 코드 4).
 - **교차 계정 수집:** `--role-arn`·`--external-id`(앱 수집 대화상자에도 있음). 맡은 역할 세션은 ReadOnlyAccess 세션 정책으로 제한됩니다.
