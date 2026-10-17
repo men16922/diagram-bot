@@ -22,8 +22,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T05:06:22.262034+00:00",
-    "finished_at": "2026-10-17T05:06:22.262034+00:00",
+    "started_at": "2026-10-17T05:18:27.650130+00:00",
+    "finished_at": "2026-10-17T05:18:27.650130+00:00",
     "status": "complete",
     "demo": true,
     "sample": "nlb-alb",
@@ -40,11 +40,16 @@
       "EC2",
       "ELBv2",
       "TargetGroup",
-      "RegisteredTarget"
+      "RegisteredTarget",
+      "InternetGateway",
+      "NatGateway",
+      "RouteTable",
+      "RDS",
+      "AutoScalingGroup"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "RDS·NAT Gateway·라우팅·보안 그룹 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -83,6 +88,41 @@
       "status": "complete",
       "pages": 1,
       "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_internet_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_nat_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_route_tables",
+      "status": "complete",
+      "pages": 1,
+      "items": 4
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "autoscaling",
+      "operation": "describe_auto_scaling_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
     },
     {
       "service": "elbv2",
@@ -499,10 +539,283 @@
           }
         ]
       }
+    ],
+    "internet_gateways": [
+      {
+        "InternetGatewayId": "igw-partner",
+        "Attachments": [
+          {
+            "VpcId": "vpc-0a1b2c3d4e5f60003",
+            "State": "available"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-igw"
+          }
+        ]
+      }
+    ],
+    "nat_gateways": [
+      {
+        "NatGatewayId": "nat-partner-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "SubnetId": "subnet-gw-pub-a",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-nat-a"
+          }
+        ]
+      },
+      {
+        "NatGatewayId": "nat-partner-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "SubnetId": "subnet-gw-pub-c",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-nat-c"
+          }
+        ]
+      }
+    ],
+    "route_tables": [
+      {
+        "RouteTableId": "rtb-partner-public",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.30.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "GatewayId": "igw-partner",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-partner-public-0",
+            "SubnetId": "subnet-gw-pub-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-partner-public-1",
+            "SubnetId": "subnet-gw-pub-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-public"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-partner-private-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.30.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-partner-a",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-partner-private-a-0",
+            "SubnetId": "subnet-gw-app-a"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-private-a"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-partner-private-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.30.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-partner-c",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-partner-private-c-0",
+            "SubnetId": "subnet-gw-app-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-private-c"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-partner-main",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.30.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-partner-main-main",
+            "Main": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-isolated"
+          }
+        ]
+      }
+    ],
+    "db_instances": [],
+    "auto_scaling_groups": [
+      {
+        "AutoScalingGroupName": "partner-api-asg",
+        "MinSize": 2,
+        "MaxSize": 6,
+        "DesiredCapacity": 2,
+        "VPCZoneIdentifier": "subnet-gw-app-a,subnet-gw-app-c",
+        "TargetGroupARNs": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001"
+        ],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-apia0000000000001",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-apic0000000000001",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
+          }
+        ]
+      },
+      {
+        "AutoScalingGroupName": "mqtt-broker-asg",
+        "MinSize": 2,
+        "MaxSize": 6,
+        "DesiredCapacity": 2,
+        "VPCZoneIdentifier": "subnet-gw-app-a,subnet-gw-app-c",
+        "TargetGroupARNs": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003"
+        ],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-mqtta000000000001",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-mqttc000000000001",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
+          }
+        ]
+      }
     ]
   },
   "graph": {
     "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/mqtt-broker-asg",
+        "resource_id": "mqtt-broker-asg",
+        "kind": "auto_scaling_group",
+        "name": "mqtt-broker-asg",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "mqtt-broker-asg",
+          "MinSize": 2,
+          "MaxSize": 6,
+          "DesiredCapacity": 2,
+          "VPCZoneIdentifier": "subnet-gw-app-a,subnet-gw-app-c",
+          "TargetGroupARNs": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003"
+          ],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-mqtta000000000001",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-mqttc000000000001",
+              "AvailabilityZone": "ap-northeast-2c",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/partner-api-asg",
+        "resource_id": "partner-api-asg",
+        "kind": "auto_scaling_group",
+        "name": "partner-api-asg",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "partner-api-asg",
+          "MinSize": 2,
+          "MaxSize": 6,
+          "DesiredCapacity": 2,
+          "VPCZoneIdentifier": "subnet-gw-app-a,subnet-gw-app-c",
+          "TargetGroupARNs": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001"
+          ],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-apia0000000000001",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-apic0000000000001",
+              "AvailabilityZone": "ap-northeast-2c",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
       {
         "id": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
         "resource_id": "i-apia0000000000001",
@@ -700,6 +1013,31 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/internet_gateway/igw-partner",
+        "resource_id": "igw-partner",
+        "kind": "internet_gateway",
+        "name": "partner-igw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InternetGatewayId": "igw-partner",
+          "Attachments": [
+            {
+              "VpcId": "vpc-0a1b2c3d4e5f60003",
+              "State": "available"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-igw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInternetGateways"
+      },
+      {
         "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
         "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
         "kind": "load_balancer",
@@ -758,6 +1096,52 @@
         "source": "DescribeLoadBalancers"
       },
       {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-partner-a",
+        "resource_id": "nat-partner-a",
+        "kind": "nat_gateway",
+        "name": "partner-nat-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-partner-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "SubnetId": "subnet-gw-pub-a",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-nat-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-partner-c",
+        "resource_id": "nat-partner-c",
+        "kind": "nat_gateway",
+        "name": "partner-nat-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-partner-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "SubnetId": "subnet-gw-pub-c",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-nat-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
         "id": "111122223333/ap-northeast-2/network_interface/eni-apia0000000000001",
         "resource_id": "eni-apia0000000000001",
         "kind": "network_interface",
@@ -800,6 +1184,157 @@
         "attributes": {},
         "reference_only": true,
         "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-partner-main",
+        "resource_id": "rtb-partner-main",
+        "kind": "route_table",
+        "name": "partner-isolated",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-partner-main",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.30.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-partner-main-main",
+              "Main": true
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-isolated"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-partner-private-a",
+        "resource_id": "rtb-partner-private-a",
+        "kind": "route_table",
+        "name": "partner-private-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-partner-private-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.30.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-partner-a",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-partner-private-a-0",
+              "SubnetId": "subnet-gw-app-a"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-private-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-partner-private-c",
+        "resource_id": "rtb-partner-private-c",
+        "kind": "route_table",
+        "name": "partner-private-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-partner-private-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.30.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-partner-c",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-partner-private-c-0",
+              "SubnetId": "subnet-gw-app-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-private-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-partner-public",
+        "resource_id": "rtb-partner-public",
+        "kind": "route_table",
+        "name": "partner-public",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-partner-public",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.30.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "GatewayId": "igw-partner",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-partner-public-0",
+              "SubnetId": "subnet-gw-pub-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-partner-public-1",
+              "SubnetId": "subnet-gw-pub-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
       },
       {
         "id": "111122223333/ap-northeast-2/security_group/sg-mqtt",
@@ -859,7 +1394,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-partner-private-a"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-gw-app-c",
@@ -886,7 +1423,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-partner-private-c"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-a",
@@ -913,7 +1452,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-partner-public"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-c",
@@ -940,7 +1481,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-partner-public"
       },
       {
         "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
@@ -1078,6 +1621,94 @@
       }
     ],
     "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/mqtt-broker-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-mqtta000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-17fa18c47ab38763f599"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/mqtt-broker-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-mqttc000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-e03d366c8e4de1da2e72"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/mqtt-broker-asg",
+        "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "relation": "asg_target_group",
+        "evidence": "DescribeAutoScalingGroups.TargetGroupARNs[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f944cfd892e0cc5e0692"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/mqtt-broker-asg",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d49e7abf700c4b889997"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/partner-api-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-98dab1bc5abdfedef546"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/partner-api-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-apic0000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-c6842dbb05160b640621"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/partner-api-asg",
+        "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "relation": "asg_target_group",
+        "evidence": "DescribeAutoScalingGroups.TargetGroupARNs[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d7271df7aeb75ec5d819"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/partner-api-asg",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f39bcccd049b0fcfa919"
+      },
       {
         "source": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
         "target": "111122223333/ap-northeast-2/network_interface/eni-apia0000000000001",
@@ -1279,6 +1910,16 @@
         "id": "rel-ba044e3660f07431c6a5"
       },
       {
+        "source": "111122223333/ap-northeast-2/internet_gateway/igw-partner",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeInternetGateways.Attachments[].VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1853b4189d7615b8948e"
+      },
+      {
         "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
         "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",
         "relation": "in_subnet",
@@ -1363,6 +2004,168 @@
         "details": {},
         "inferred": false,
         "id": "rel-ce1a017736f7493057bf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-partner-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-52eed6cb10ccf87003b8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-partner-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-98d2ec75fb72a6be5dd8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-partner-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a544a2b7c2698aa1dec7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-partner-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f711a3e7e4e1eacff858"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-main",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ccd2e4b00f6447138a30"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-private-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9399819d4b5864bd0503"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-private-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cb7959a4ef65ceeb9294"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-private-a",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-partner-a",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-aab02b5cf3f8256e7e6b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-private-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a5d09dc5bdc30d6be0f0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-private-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-058b6892e9c98660561d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-private-c",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-partner-c",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-952d8d78158f9f4455c6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8d64d33ea78d6dbe3030"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f77255288c840ff5efc6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-public",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ae4badf0aab730ed89a1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-partner-public",
+        "target": "111122223333/ap-northeast-2/internet_gateway/igw-partner",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-883823ac5d4247bc1452"
       },
       {
         "source": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",

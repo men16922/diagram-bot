@@ -23,6 +23,10 @@ RESOURCE_ICONS = {
     "gateway": ("gateway_load_balancer", "#8C4FFF"),
     "network_interface": ("elastic_network_interface", "#8C4FFF"),
     "volume": ("volume", "#7AA116"),
+    "internet_gateway": ("internet_gateway", "#8C4FFF"),
+    "nat_gateway": ("nat_gateway", "#8C4FFF"),
+    "db_instance": ("rds_instance", "#C925D1"),
+    "db_standby": ("rds_instance_alt", "#C925D1"),
 }
 # Square resource-icon tiles for things without a resource-level icon.
 ICONS = {
@@ -47,6 +51,10 @@ STYLES = {
     "private_subnet": AWS_GROUP + "grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#00A4A6;fillColor=#E6F6F7;fontColor=#147EBA;dashed=0;fontSize=11;",
     "unplaced": PLAIN_GROUP + "fillColor=none;strokeColor=#5A6C86;dashed=1;fontColor=#5A6C86;align=left;spacingLeft=12;spacingTop=6;fontSize=11;",
     "references": PLAIN_GROUP + "fillColor=none;strokeColor=#5A6C86;dashed=1;fontColor=#5A6C86;align=left;spacingLeft=12;spacingTop=6;",
+    # Auto Scaling group overlays AZ columns (not a container), dashed orange as in the icon set.
+    "asg": (COMMON + "outlineConnect=0;gradientColor=none;whiteSpace=wrap;container=0;pointerEvents=0;shape=mxgraph.aws4.groupCenter;"
+            "grIcon=mxgraph.aws4.group_auto_scaling_group;grStroke=1;strokeColor=#D86613;fillColor=none;fontColor=#D86613;"
+            "dashed=1;align=left;spacingLeft=12;verticalAlign=bottom;spacingBottom=4;fontSize=11;"),
     "onprem": AWS_GROUP + "grIcon=mxgraph.aws4.group_corporate_data_center;strokeColor=#7D8998;fillColor=none;fontColor=#5A6C86;dashed=0;",
 }
 EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;fontFamily=Arial;fontSize=9;fontColor=#536A82;strokeColor=#7C91A8;strokeWidth=1.5;endArrow=none;labelBackgroundColor=#FFFFFF;"

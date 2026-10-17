@@ -54,7 +54,7 @@ def test_elbv2_marker_pagination():
 
 class Session:
     def __init__(self):
-        self.clients = {name: client(name) for name in ("sts", "ec2", "elbv2")}
+        self.clients = {name: client(name) for name in ("sts", "ec2", "elbv2", "rds", "autoscaling")}
 
     def client(self, name, **kwargs):
         return self.clients[name]
@@ -83,11 +83,19 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         stubs["ec2"].add_response("describe_instances", {"Reservations": [{"Instances": [{"InstanceId": "i-a"}, {"InstanceId": "i-b"}]}]}, {})
         stubs["elbv2"].add_response("describe_load_balancers", {"LoadBalancers": []}, {})
         stubs["elbv2"].add_client_error("describe_target_groups", "AccessDenied", expected_params={})
+        stubs["ec2"].add_response("describe_internet_gateways", {"InternetGateways": [{"InternetGatewayId": "igw-a"}]}, {})
+        stubs["ec2"].add_response("describe_nat_gateways", {"NatGateways": []}, {})
+        stubs["ec2"].add_response("describe_route_tables", {"RouteTables": []}, {})
+        stubs["rds"].add_client_error("describe_db_instances", "AccessDenied", expected_params={})
+        stubs["autoscaling"].add_response("describe_auto_scaling_groups", {"AutoScalingGroups": []}, {})
         result = collect("ap-northeast-2", expected_account="111122223333", session=session)
         assert result["metadata"]["status"] == "partial"
         assert result["raw"]["instances"] == [{"InstanceId": "i-a"}, {"InstanceId": "i-b"}]
         assert next(c for c in result["coverage"] if c["operation"] == "describe_instances")["items"] == 2
         assert result["coverage"][-1]["status"] == "not_discovered"
+        assert result["raw"]["internet_gateways"] == [{"InternetGatewayId": "igw-a"}]
+        rds = next(c for c in result["coverage"] if c["operation"] == "describe_db_instances")
+        assert rds["status"] == "unavailable" and rds["permission"] == "rds:DescribeDBInstances"
         for stub in stubs.values():
             stub.assert_no_pending_responses()
 

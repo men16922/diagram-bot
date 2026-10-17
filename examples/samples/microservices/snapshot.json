@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T05:06:22.012876+00:00",
-    "finished_at": "2026-10-17T05:06:22.012876+00:00",
+    "started_at": "2026-10-17T05:18:27.483399+00:00",
+    "finished_at": "2026-10-17T05:18:27.483399+00:00",
     "status": "complete",
     "demo": true,
     "sample": "microservices",
@@ -14,7 +14,8 @@
       "ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)",
       "컨테이너(awsvpc) 서비스는 IP 대상 유형으로 등록",
       "서비스마다 전용 포트·헬스 체크 경로",
-      "두 AZ 이상에 각 서비스 대상을 분산"
+      "두 AZ 이상에 각 서비스 대상을 분산하고 서비스별 Auto Scaling 그룹",
+      "서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ"
     ],
     "scope": [
       "VPC",
@@ -22,11 +23,16 @@
       "EC2",
       "ELBv2",
       "TargetGroup",
-      "RegisteredTarget"
+      "RegisteredTarget",
+      "InternetGateway",
+      "NatGateway",
+      "RouteTable",
+      "RDS",
+      "AutoScalingGroup"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "RDS·NAT Gateway·라우팅·보안 그룹 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -43,7 +49,7 @@
       "operation": "describe_subnets",
       "status": "complete",
       "pages": 1,
-      "items": 4
+      "items": 6
     },
     {
       "service": "ec2",
@@ -65,6 +71,41 @@
       "status": "complete",
       "pages": 1,
       "items": 4
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_internet_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_nat_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_route_tables",
+      "status": "complete",
+      "pages": 1,
+      "items": 4
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "autoscaling",
+      "operation": "describe_auto_scaling_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
     },
     {
       "service": "elbv2",
@@ -190,6 +231,40 @@
           {
             "Key": "Tier",
             "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-ms-data-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.20.20.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-ms-data-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.20.21.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
           }
         ]
       }
@@ -521,10 +596,368 @@
           }
         ]
       }
+    ],
+    "internet_gateways": [
+      {
+        "InternetGatewayId": "igw-commerce",
+        "Attachments": [
+          {
+            "VpcId": "vpc-0a1b2c3d4e5f60002",
+            "State": "available"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-igw"
+          }
+        ]
+      }
+    ],
+    "nat_gateways": [
+      {
+        "NatGatewayId": "nat-commerce-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "SubnetId": "subnet-ms-pub-a",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-nat-a"
+          }
+        ]
+      },
+      {
+        "NatGatewayId": "nat-commerce-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "SubnetId": "subnet-ms-pub-b",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-nat-b"
+          }
+        ]
+      }
+    ],
+    "route_tables": [
+      {
+        "RouteTableId": "rtb-commerce-public",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.20.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "GatewayId": "igw-commerce",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-commerce-public-0",
+            "SubnetId": "subnet-ms-pub-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-commerce-public-1",
+            "SubnetId": "subnet-ms-pub-b"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-public"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-commerce-private-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.20.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-commerce-a",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-commerce-private-a-0",
+            "SubnetId": "subnet-ms-app-a"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-private-a"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-commerce-private-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.20.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-commerce-b",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-commerce-private-b-0",
+            "SubnetId": "subnet-ms-app-b"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-private-b"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-commerce-main",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.20.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-commerce-main-main",
+            "Main": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-isolated"
+          }
+        ]
+      }
+    ],
+    "db_instances": [
+      {
+        "DBInstanceIdentifier": "commerce-db",
+        "DBInstanceArn": "arn:aws:rds:ap-northeast-2:111122223333:db:commerce-db",
+        "Engine": "postgres",
+        "DBInstanceClass": "db.r6g.xlarge",
+        "AvailabilityZone": "ap-northeast-2a",
+        "MultiAZ": true,
+        "SecondaryAvailabilityZone": "ap-northeast-2b",
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "commerce-db-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-ms-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-ms-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "auto_scaling_groups": [
+      {
+        "AutoScalingGroupName": "catalog-asg",
+        "MinSize": 2,
+        "MaxSize": 6,
+        "DesiredCapacity": 2,
+        "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b",
+        "TargetGroupARNs": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001"
+        ],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-cataloga00000001",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-catalogb00000001",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          }
+        ]
+      },
+      {
+        "AutoScalingGroupName": "orders-asg",
+        "MinSize": 2,
+        "MaxSize": 6,
+        "DesiredCapacity": 2,
+        "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b",
+        "TargetGroupARNs": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002"
+        ],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-ordersa000000001",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-ordersb000000001",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          }
+        ]
+      }
     ]
   },
   "graph": {
     "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/catalog-asg",
+        "resource_id": "catalog-asg",
+        "kind": "auto_scaling_group",
+        "name": "catalog-asg",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "catalog-asg",
+          "MinSize": 2,
+          "MaxSize": 6,
+          "DesiredCapacity": 2,
+          "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b",
+          "TargetGroupARNs": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001"
+          ],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-cataloga00000001",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-catalogb00000001",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/orders-asg",
+        "resource_id": "orders-asg",
+        "kind": "auto_scaling_group",
+        "name": "orders-asg",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "orders-asg",
+          "MinSize": 2,
+          "MaxSize": 6,
+          "DesiredCapacity": 2,
+          "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b",
+          "TargetGroupARNs": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002"
+          ],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-ordersa000000001",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-ordersb000000001",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/commerce-db",
+        "resource_id": "commerce-db",
+        "kind": "db_instance",
+        "name": "commerce-db",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "commerce-db",
+          "DBInstanceArn": "arn:aws:rds:ap-northeast-2:111122223333:db:commerce-db",
+          "Engine": "postgres",
+          "DBInstanceClass": "db.r6g.xlarge",
+          "AvailabilityZone": "ap-northeast-2a",
+          "MultiAZ": true,
+          "SecondaryAvailabilityZone": "ap-northeast-2b",
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "commerce-db-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60002",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-ms-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-ms-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_standby/commerce-db#standby",
+        "resource_id": "commerce-db#standby",
+        "kind": "db_standby",
+        "name": "commerce-db (standby)",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "commerce-db (standby)",
+          "AvailabilityZone": "ap-northeast-2b",
+          "Engine": "postgres",
+          "DBInstanceClass": "db.r6g.xlarge"
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances.SecondaryAvailabilityZone"
+      },
       {
         "id": "111122223333/ap-northeast-2/ec2/i-cataloga00000001",
         "resource_id": "i-cataloga00000001",
@@ -722,6 +1155,31 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/internet_gateway/igw-commerce",
+        "resource_id": "igw-commerce",
+        "kind": "internet_gateway",
+        "name": "commerce-igw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InternetGatewayId": "igw-commerce",
+          "Attachments": [
+            {
+              "VpcId": "vpc-0a1b2c3d4e5f60002",
+              "State": "available"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-igw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInternetGateways"
+      },
+      {
         "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/commerce-alb/0000000000000001",
         "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/commerce-alb/0000000000000001",
         "kind": "load_balancer",
@@ -750,6 +1208,52 @@
         },
         "reference_only": false,
         "source": "DescribeLoadBalancers"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-a",
+        "resource_id": "nat-commerce-a",
+        "kind": "nat_gateway",
+        "name": "commerce-nat-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-commerce-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "SubnetId": "subnet-ms-pub-a",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-nat-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-b",
+        "resource_id": "nat-commerce-b",
+        "kind": "nat_gateway",
+        "name": "commerce-nat-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-commerce-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "SubnetId": "subnet-ms-pub-b",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-nat-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
       },
       {
         "id": "111122223333/ap-northeast-2/network_interface/eni-cataloga00000001",
@@ -880,6 +1384,157 @@
         "source": "DescribeTargetHealth"
       },
       {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-commerce-main",
+        "resource_id": "rtb-commerce-main",
+        "kind": "route_table",
+        "name": "commerce-isolated",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-commerce-main",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.20.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-commerce-main-main",
+              "Main": true
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-isolated"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-a",
+        "resource_id": "rtb-commerce-private-a",
+        "kind": "route_table",
+        "name": "commerce-private-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-commerce-private-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.20.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-commerce-a",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-commerce-private-a-0",
+              "SubnetId": "subnet-ms-app-a"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-private-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-b",
+        "resource_id": "rtb-commerce-private-b",
+        "kind": "route_table",
+        "name": "commerce-private-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-commerce-private-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.20.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-commerce-b",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-commerce-private-b-0",
+              "SubnetId": "subnet-ms-app-b"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-private-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
+        "resource_id": "rtb-commerce-public",
+        "kind": "route_table",
+        "name": "commerce-public",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-commerce-public",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.20.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "GatewayId": "igw-commerce",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-commerce-public-0",
+              "SubnetId": "subnet-ms-pub-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-commerce-public-1",
+              "SubnetId": "subnet-ms-pub-b"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
         "id": "111122223333/ap-northeast-2/security_group/sg-commerce-alb",
         "resource_id": "sg-commerce-alb",
         "kind": "security_group",
@@ -926,7 +1581,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-commerce-private-a"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-ms-app-b",
@@ -953,7 +1610,67 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-commerce-private-b"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ms-data-a",
+        "resource_id": "subnet-ms-data-a",
+        "kind": "subnet",
+        "name": "data-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ms-data-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.20.20.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-commerce-main"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ms-data-b",
+        "resource_id": "subnet-ms-data-b",
+        "kind": "subnet",
+        "name": "data-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ms-data-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.20.21.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-commerce-main"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-a",
@@ -980,7 +1697,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-commerce-public"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-b",
@@ -1007,7 +1726,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-commerce-public"
       },
       {
         "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/cart-svc-ecs/0000000000000003",
@@ -1167,6 +1888,148 @@
       }
     ],
     "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/catalog-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-cataloga00000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-164dc8c8ed218c2b0d21"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/catalog-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-catalogb00000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-721c79d855090a4ce4b2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/catalog-asg",
+        "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001",
+        "relation": "asg_target_group",
+        "evidence": "DescribeAutoScalingGroups.TargetGroupARNs[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-611c54acb870a2dcd0ad"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/catalog-asg",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-53659775248212a7a2e8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/orders-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-ordersa000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-560c4de40e21c60c427d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/orders-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-ordersb000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-e33ec75391ef3a386910"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/orders-asg",
+        "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002",
+        "relation": "asg_target_group",
+        "evidence": "DescribeAutoScalingGroups.TargetGroupARNs[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-422271f6cf9f5da44657"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/orders-asg",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-790c29460ff8287ec0b0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/commerce-db",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-data-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-186ec272afae2f36113d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/commerce-db",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-82802a3dbd0739da0749"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_standby/commerce-db#standby",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-data-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.SecondaryAvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-dc278e829bc295ca9983"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_standby/commerce-db#standby",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5a498e446211ea68a3b0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_standby/commerce-db#standby",
+        "target": "111122223333/ap-northeast-2/db_instance/commerce-db",
+        "relation": "standby_of",
+        "evidence": "DescribeDBInstances.MultiAZ + SecondaryAvailabilityZone",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d67efc764a222601a648"
+      },
       {
         "source": "111122223333/ap-northeast-2/ec2/i-cataloga00000001",
         "target": "111122223333/ap-northeast-2/network_interface/eni-cataloga00000001",
@@ -1368,6 +2231,16 @@
         "id": "rel-cf158b805b00f5cbafb7"
       },
       {
+        "source": "111122223333/ap-northeast-2/internet_gateway/igw-commerce",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeInternetGateways.Attachments[].VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-318c2ca40c998a115baa"
+      },
+      {
         "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/commerce-alb/0000000000000001",
         "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-a",
         "relation": "in_subnet",
@@ -1416,6 +2289,192 @@
         "id": "rel-ae54acf1de06bba3666e"
       },
       {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9cb8ac7f51eb0c34398d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9e385013bdbc88464c66"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7051caeb9b7d41b375a1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4b401f3f95aa321478bf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-data-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-0192d9dc748b689a6f0c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-data-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-3909ae3ce997a476bbe2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-main",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7d25d72fa2f5813778a8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c514e048ba98525f72c2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-51d4177585786b7defb1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-a",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-a",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-019e61bf33fdfa9852a0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-88fb138162de638aa7e2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-42b9ae7c4b77e209d8ee"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-b",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-b",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-0eabb497496454df14d4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2b2b982bd1fa8b8dc4ef"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2d2e23440fe8545b0b95"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1f21c60ce12a553e4c86"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
+        "target": "111122223333/ap-northeast-2/internet_gateway/igw-commerce",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-af493f168376c81128b5"
+      },
+      {
         "source": "111122223333/ap-northeast-2/subnet/subnet-ms-app-a",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
         "relation": "in_vpc",
@@ -1434,6 +2493,26 @@
         "details": {},
         "inferred": false,
         "id": "rel-ee6a4c6907f77b01d5f4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ms-data-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-de000c432ae635494e8d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ms-data-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a027a37f254dff7cb2ad"
       },
       {
         "source": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-a",

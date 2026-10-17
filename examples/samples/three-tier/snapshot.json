@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T05:06:21.672034+00:00",
-    "finished_at": "2026-10-17T05:06:21.672034+00:00",
+    "started_at": "2026-10-17T05:18:27.291179+00:00",
+    "finished_at": "2026-10-17T05:18:27.291179+00:00",
     "status": "complete",
     "demo": true,
     "sample": "three-tier",
@@ -14,7 +14,9 @@
       "세 AZ에 같은 구성을 배치해 AZ 장애를 견딤 (Reliability)",
       "인터넷용 ALB만 퍼블릭 서브넷, 웹·앱·데이터는 프라이빗 서브넷 (Security)",
       "웹 계층과 앱 계층 사이에 내부 ALB를 두어 계층별 확장·격리",
-      "데이터 서브넷은 별도 계층으로 예약 (RDS는 수집 범위 밖)"
+      "AZ마다 NAT 게이트웨이를 두어 프라이빗 서브넷의 외부 통신이 AZ 장애에 묶이지 않음",
+      "웹·앱 계층은 Auto Scaling 그룹(ELB 헬스 체크)으로 AZ에 분산",
+      "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개)"
     ],
     "scope": [
       "VPC",
@@ -22,11 +24,16 @@
       "EC2",
       "ELBv2",
       "TargetGroup",
-      "RegisteredTarget"
+      "RegisteredTarget",
+      "InternetGateway",
+      "NatGateway",
+      "RouteTable",
+      "RDS",
+      "AutoScalingGroup"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "RDS·NAT Gateway·라우팅·보안 그룹 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -62,6 +69,41 @@
     {
       "service": "elbv2",
       "operation": "describe_target_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_internet_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_nat_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_route_tables",
+      "status": "complete",
+      "pages": 1,
+      "items": 5
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "autoscaling",
+      "operation": "describe_auto_scaling_groups",
       "status": "complete",
       "pages": 1,
       "items": 2
@@ -687,10 +729,457 @@
           }
         ]
       }
+    ],
+    "internet_gateways": [
+      {
+        "InternetGatewayId": "igw-prod",
+        "Attachments": [
+          {
+            "VpcId": "vpc-0a1b2c3d4e5f60001",
+            "State": "available"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-igw"
+          }
+        ]
+      }
+    ],
+    "nat_gateways": [
+      {
+        "NatGatewayId": "nat-prod-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "SubnetId": "subnet-pub-a",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-nat-a"
+          }
+        ]
+      },
+      {
+        "NatGatewayId": "nat-prod-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "SubnetId": "subnet-pub-b",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-nat-b"
+          }
+        ]
+      },
+      {
+        "NatGatewayId": "nat-prod-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "SubnetId": "subnet-pub-c",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-nat-c"
+          }
+        ]
+      }
+    ],
+    "route_tables": [
+      {
+        "RouteTableId": "rtb-prod-public",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.10.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "GatewayId": "igw-prod",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-public-0",
+            "SubnetId": "subnet-pub-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-public-1",
+            "SubnetId": "subnet-pub-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-public-2",
+            "SubnetId": "subnet-pub-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-public"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-prod-private-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.10.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-prod-a",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-private-a-0",
+            "SubnetId": "subnet-web-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-private-a-1",
+            "SubnetId": "subnet-app-a"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-private-a"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-prod-private-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.10.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-prod-b",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-private-b-0",
+            "SubnetId": "subnet-web-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-private-b-1",
+            "SubnetId": "subnet-app-b"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-private-b"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-prod-private-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.10.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-prod-c",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-private-c-0",
+            "SubnetId": "subnet-web-c"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-private-c-1",
+            "SubnetId": "subnet-app-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-private-c"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-prod-main",
+        "VpcId": "vpc-0a1b2c3d4e5f60001",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.10.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-prod-main-main",
+            "Main": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-isolated"
+          }
+        ]
+      }
+    ],
+    "db_instances": [
+      {
+        "DBInstanceIdentifier": "prod-orders-db",
+        "DBInstanceArn": "arn:aws:rds:ap-northeast-2:111122223333:db:prod-orders-db",
+        "Engine": "mysql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2a",
+        "MultiAZ": true,
+        "SecondaryAvailabilityZone": "ap-northeast-2b",
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "prod-orders-db-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "auto_scaling_groups": [
+      {
+        "AutoScalingGroupName": "prod-web-asg",
+        "MinSize": 3,
+        "MaxSize": 9,
+        "DesiredCapacity": 3,
+        "VPCZoneIdentifier": "subnet-web-a,subnet-web-b,subnet-web-c",
+        "TargetGroupARNs": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-web-https/0000000000000001"
+        ],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-weba000000000001",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-webb000000000001",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-webc000000000001",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
+          }
+        ]
+      },
+      {
+        "AutoScalingGroupName": "prod-app-asg",
+        "MinSize": 3,
+        "MaxSize": 12,
+        "DesiredCapacity": 3,
+        "VPCZoneIdentifier": "subnet-app-a,subnet-app-b,subnet-app-c",
+        "TargetGroupARNs": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-app-http/0000000000000002"
+        ],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-appa000000000001",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-appb000000000001",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-appc000000000001",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
+          }
+        ]
+      }
     ]
   },
   "graph": {
     "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/prod-app-asg",
+        "resource_id": "prod-app-asg",
+        "kind": "auto_scaling_group",
+        "name": "prod-app-asg",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "prod-app-asg",
+          "MinSize": 3,
+          "MaxSize": 12,
+          "DesiredCapacity": 3,
+          "VPCZoneIdentifier": "subnet-app-a,subnet-app-b,subnet-app-c",
+          "TargetGroupARNs": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-app-http/0000000000000002"
+          ],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-appa000000000001",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-appb000000000001",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-appc000000000001",
+              "AvailabilityZone": "ap-northeast-2c",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/prod-web-asg",
+        "resource_id": "prod-web-asg",
+        "kind": "auto_scaling_group",
+        "name": "prod-web-asg",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "prod-web-asg",
+          "MinSize": 3,
+          "MaxSize": 9,
+          "DesiredCapacity": 3,
+          "VPCZoneIdentifier": "subnet-web-a,subnet-web-b,subnet-web-c",
+          "TargetGroupARNs": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-web-https/0000000000000001"
+          ],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-weba000000000001",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-webb000000000001",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-webc000000000001",
+              "AvailabilityZone": "ap-northeast-2c",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/prod-orders-db",
+        "resource_id": "prod-orders-db",
+        "kind": "db_instance",
+        "name": "prod-orders-db",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "prod-orders-db",
+          "DBInstanceArn": "arn:aws:rds:ap-northeast-2:111122223333:db:prod-orders-db",
+          "Engine": "mysql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2a",
+          "MultiAZ": true,
+          "SecondaryAvailabilityZone": "ap-northeast-2b",
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "prod-orders-db-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60001",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_standby/prod-orders-db#standby",
+        "resource_id": "prod-orders-db#standby",
+        "kind": "db_standby",
+        "name": "prod-orders-db (standby)",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "prod-orders-db (standby)",
+          "AvailabilityZone": "ap-northeast-2b",
+          "Engine": "mysql",
+          "DBInstanceClass": "db.r6g.large"
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances.SecondaryAvailabilityZone"
+      },
       {
         "id": "111122223333/ap-northeast-2/ec2/i-appa000000000001",
         "resource_id": "i-appa000000000001",
@@ -986,6 +1475,31 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/internet_gateway/igw-prod",
+        "resource_id": "igw-prod",
+        "kind": "internet_gateway",
+        "name": "prod-igw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InternetGatewayId": "igw-prod",
+          "Attachments": [
+            {
+              "VpcId": "vpc-0a1b2c3d4e5f60001",
+              "State": "available"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-igw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInternetGateways"
+      },
+      {
         "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-internal-alb/0000000000000002",
         "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-internal-alb/0000000000000002",
         "kind": "load_balancer",
@@ -1054,6 +1568,75 @@
         "source": "DescribeLoadBalancers"
       },
       {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
+        "resource_id": "nat-prod-a",
+        "kind": "nat_gateway",
+        "name": "prod-nat-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-prod-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "SubnetId": "subnet-pub-a",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-nat-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
+        "resource_id": "nat-prod-b",
+        "kind": "nat_gateway",
+        "name": "prod-nat-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-prod-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "SubnetId": "subnet-pub-b",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-nat-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
+        "resource_id": "nat-prod-c",
+        "kind": "nat_gateway",
+        "name": "prod-nat-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-prod-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "SubnetId": "subnet-pub-c",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-nat-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
         "id": "111122223333/ap-northeast-2/network_interface/eni-appa000000000001",
         "resource_id": "eni-appa000000000001",
         "kind": "network_interface",
@@ -1118,6 +1701,211 @@
         "attributes": {},
         "reference_only": true,
         "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-main",
+        "resource_id": "rtb-prod-main",
+        "kind": "route_table",
+        "name": "prod-isolated",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-prod-main",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.10.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-main-main",
+              "Main": true
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-isolated"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
+        "resource_id": "rtb-prod-private-a",
+        "kind": "route_table",
+        "name": "prod-private-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-prod-private-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.10.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-prod-a",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-private-a-0",
+              "SubnetId": "subnet-web-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-private-a-1",
+              "SubnetId": "subnet-app-a"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-private-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
+        "resource_id": "rtb-prod-private-b",
+        "kind": "route_table",
+        "name": "prod-private-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-prod-private-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.10.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-prod-b",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-private-b-0",
+              "SubnetId": "subnet-web-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-private-b-1",
+              "SubnetId": "subnet-app-b"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-private-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
+        "resource_id": "rtb-prod-private-c",
+        "kind": "route_table",
+        "name": "prod-private-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-prod-private-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.10.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-prod-c",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-private-c-0",
+              "SubnetId": "subnet-web-c"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-private-c-1",
+              "SubnetId": "subnet-app-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-private-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-public",
+        "resource_id": "rtb-prod-public",
+        "kind": "route_table",
+        "name": "prod-public",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-prod-public",
+          "VpcId": "vpc-0a1b2c3d4e5f60001",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.10.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "GatewayId": "igw-prod",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-public-0",
+              "SubnetId": "subnet-pub-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-public-1",
+              "SubnetId": "subnet-pub-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-prod-public-2",
+              "SubnetId": "subnet-pub-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
       },
       {
         "id": "111122223333/ap-northeast-2/security_group/sg-app",
@@ -1188,7 +1976,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-prod-private-a"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-app-b",
@@ -1215,7 +2005,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-prod-private-b"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-app-c",
@@ -1242,7 +2034,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-prod-private-c"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-data-a",
@@ -1269,7 +2063,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-prod-main"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-data-b",
@@ -1296,7 +2092,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-prod-main"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-data-c",
@@ -1323,7 +2121,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-prod-main"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-pub-a",
@@ -1350,7 +2150,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-prod-public"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-pub-b",
@@ -1377,7 +2179,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-prod-public"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-pub-c",
@@ -1404,7 +2208,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-prod-public"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-web-a",
@@ -1431,7 +2237,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-prod-private-a"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-web-b",
@@ -1458,7 +2266,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-prod-private-b"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-web-c",
@@ -1485,7 +2295,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-prod-private-c"
       },
       {
         "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-app-http/0000000000000002",
@@ -1623,6 +2435,172 @@
       }
     ],
     "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-app-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-appa000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-4aff610a239743bbd302"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-app-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-appb000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-23b9ba3938b45f28d10c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-app-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-appc000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-d392e1119ed646107cf0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-app-asg",
+        "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-app-http/0000000000000002",
+        "relation": "asg_target_group",
+        "evidence": "DescribeAutoScalingGroups.TargetGroupARNs[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e4a67076555bdd6ccb50"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-app-asg",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8895a5e9ff701ce70fb5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-web-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-weba000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-23df881b8e564e42bbd5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-web-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-webb000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-37a71f66d68f9d334aab"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-web-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-webc000000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-aeb5c184b562050bf9c9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-web-asg",
+        "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-web-https/0000000000000001",
+        "relation": "asg_target_group",
+        "evidence": "DescribeAutoScalingGroups.TargetGroupARNs[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7f758daa87cb3adc4659"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/prod-web-asg",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8e3ce9d28b0a687f8bef"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/prod-orders-db",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-data-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-dc714575ff8f14f892db"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/prod-orders-db",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ca47faa6d3d29c55f9bd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_standby/prod-orders-db#standby",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-data-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.SecondaryAvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-200dd6cc3dc9b90918e8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_standby/prod-orders-db#standby",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fcfb786b31be92bbcc81"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_standby/prod-orders-db#standby",
+        "target": "111122223333/ap-northeast-2/db_instance/prod-orders-db",
+        "relation": "standby_of",
+        "evidence": "DescribeDBInstances.MultiAZ + SecondaryAvailabilityZone",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-02702b65b2f829a8c11c"
+      },
       {
         "source": "111122223333/ap-northeast-2/ec2/i-appa000000000001",
         "target": "111122223333/ap-northeast-2/network_interface/eni-appa000000000001",
@@ -1924,6 +2902,16 @@
         "id": "rel-b62dee95c4458c2f6fa8"
       },
       {
+        "source": "111122223333/ap-northeast-2/internet_gateway/igw-prod",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeInternetGateways.Attachments[].VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a8031ad83e0502dfc476"
+      },
+      {
         "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-internal-alb/0000000000000002",
         "target": "111122223333/ap-northeast-2/subnet/subnet-app-a",
         "relation": "in_subnet",
@@ -2046,6 +3034,298 @@
         "details": {},
         "inferred": false,
         "id": "rel-58002e081e2b908dd88f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-47e894aa0a801ac94096"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-154e46f3981eb6f4344e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pub-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a7d0119f74de730ddd57"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1f6ccf1bfc7ef6f78fac"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b68776bb7bd09061751a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-bb9517ecc9e6b7ef83a1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-data-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-b938dee31f5faed077ed"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-data-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-d399feb2c8804ff2963a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-data-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-9536eed90a9afc6de5b6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-main",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d5917b029ecb3bf13cfd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8d2365e55a87f4d43d03"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-web-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-244fa73870d70b0ca28d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ca2811541e30252da599"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-3bee7d576eb1b3f1cd8c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-da2af25f171d18ef1b1e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-web-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-31c54d9b11a9dcc41942"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-564c6f3358fa8274e502"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-96e9d8efbd169c8dd41a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b3234560f4499f5fc767"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-web-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-63a33de6784522cde8db"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5703ea2ead67f6894f47"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-aac8dbc40153eb0a282d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pub-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7a50d04318d942b31a14"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pub-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4b0e6ec9acdd30e2198d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pub-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2b422e1417541445509a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-public",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60001",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-56eed6ed971138b6188f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-public",
+        "target": "111122223333/ap-northeast-2/internet_gateway/igw-prod",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-c357f3cea6e0f4197c45"
       },
       {
         "source": "111122223333/ap-northeast-2/subnet/subnet-app-a",

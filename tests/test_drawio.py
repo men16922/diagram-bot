@@ -35,6 +35,7 @@ def overlap(a, b):
 def assert_readable(layout):
     """No sibling overlap, nothing clipped by its container, and no route through an icon or label."""
     shapes = {s["id"]: s for s in layout["shapes"]}
+    assert len(shapes) == len(layout["shapes"]), "duplicate cell IDs"
     area = boxes(layout)
     for shape in layout["shapes"]:
         if shape["parent"] != "1":
@@ -47,6 +48,8 @@ def assert_readable(layout):
     for shape in layout["shapes"]:
         siblings.setdefault(shape["parent"], []).append(shape["id"])
     for members in siblings.values():
+        # Auto Scaling group frames deliberately overlay AZ columns, as in AWS diagrams.
+        members = [m for m in members if shapes[m]["role"] != "asg"]
         for i, a in enumerate(members):
             for b in members[i + 1:]:
                 assert not overlap(area[a], area[b]), (shapes[a]["label"], shapes[b]["label"])

@@ -15,6 +15,10 @@ Last Updated: 2026-10-17
   preserved, JS runtime needed for CLI parity). Evidence: docs/engineering/LAYOUT_EVALUATION.md.
 - Visual style follows AWS Architecture Icons group/resource conventions via draw.io aws4 shapes;
   lines stay arrowless (configuration, not traffic). Details: docs/engineering/LAYOUT_EVALUATION.md.
+- Collection includes internet gateways, NAT gateways, route tables, RDS instances and Auto Scaling
+  groups (read-only). Subnet type comes from the route table's 0.0.0.0/0 route; RDS placement only
+  when exactly one subnet-group subnet matches the AZ; a target group attached to a framed Auto
+  Scaling group is drawn as one edge instead of per-instance registrations.
 - Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
 - Automatic layout only on first generation or explicit relayout; superseded edits are archived
   and user-added notes carried over.

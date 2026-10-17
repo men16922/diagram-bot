@@ -22,8 +22,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T05:06:22.919328+00:00",
-    "finished_at": "2026-10-17T05:06:22.919328+00:00",
+    "started_at": "2026-10-17T05:18:27.999085+00:00",
+    "finished_at": "2026-10-17T05:18:27.999085+00:00",
     "status": "complete",
     "demo": true,
     "sample": "hybrid",
@@ -40,11 +40,16 @@
       "EC2",
       "ELBv2",
       "TargetGroup",
-      "RegisteredTarget"
+      "RegisteredTarget",
+      "InternetGateway",
+      "NatGateway",
+      "RouteTable",
+      "RDS",
+      "AutoScalingGroup"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "RDS·NAT Gateway·라우팅·보안 그룹 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -83,6 +88,41 @@
       "status": "complete",
       "pages": 1,
       "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_internet_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_nat_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_route_tables",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "autoscaling",
+      "operation": "describe_auto_scaling_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
     },
     {
       "service": "elbv2",
@@ -335,10 +375,96 @@
           }
         ]
       }
+    ],
+    "internet_gateways": [],
+    "nat_gateways": [],
+    "route_tables": [
+      {
+        "RouteTableId": "rtb-hybrid-main",
+        "VpcId": "vpc-0a1b2c3d4e5f60005",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.50.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-hybrid-main-main",
+            "Main": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "hybrid-isolated"
+          }
+        ]
+      }
+    ],
+    "db_instances": [],
+    "auto_scaling_groups": [
+      {
+        "AutoScalingGroupName": "erp-cloud-asg",
+        "MinSize": 2,
+        "MaxSize": 6,
+        "DesiredCapacity": 2,
+        "VPCZoneIdentifier": "subnet-hy-app-a,subnet-hy-app-b",
+        "TargetGroupARNs": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/erp-cloud/0000000000000001"
+        ],
+        "HealthCheckType": "ELB",
+        "Instances": [
+          {
+            "InstanceId": "i-erpa0000000000005",
+            "AvailabilityZone": "ap-northeast-2a",
+            "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-erpb0000000000005",
+            "AvailabilityZone": "ap-northeast-2b",
+            "LifecycleState": "InService"
+          }
+        ]
+      }
     ]
   },
   "graph": {
     "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/auto_scaling_group/erp-cloud-asg",
+        "resource_id": "erp-cloud-asg",
+        "kind": "auto_scaling_group",
+        "name": "erp-cloud-asg",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AutoScalingGroupName": "erp-cloud-asg",
+          "MinSize": 2,
+          "MaxSize": 6,
+          "DesiredCapacity": 2,
+          "VPCZoneIdentifier": "subnet-hy-app-a,subnet-hy-app-b",
+          "TargetGroupARNs": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/erp-cloud/0000000000000001"
+          ],
+          "HealthCheckType": "ELB",
+          "Instances": [
+            {
+              "InstanceId": "i-erpa0000000000005",
+              "AvailabilityZone": "ap-northeast-2a",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-erpb0000000000005",
+              "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeAutoScalingGroups"
+      },
       {
         "id": "111122223333/ap-northeast-2/ec2/i-erpa0000000000005",
         "resource_id": "i-erpa0000000000005",
@@ -532,6 +658,39 @@
         "source": "DescribeTargetHealth"
       },
       {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-hybrid-main",
+        "resource_id": "rtb-hybrid-main",
+        "kind": "route_table",
+        "name": "hybrid-isolated",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-hybrid-main",
+          "VpcId": "vpc-0a1b2c3d4e5f60005",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.50.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-hybrid-main-main",
+              "Main": true
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "hybrid-isolated"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
         "id": "111122223333/ap-northeast-2/security_group/sg-erp",
         "resource_id": "sg-erp",
         "kind": "security_group",
@@ -578,7 +737,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-hybrid-main"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-hy-app-b",
@@ -605,7 +766,9 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeSubnets"
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-hybrid-main"
       },
       {
         "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/erp-cloud/0000000000000001",
@@ -699,6 +862,50 @@
       }
     ],
     "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/erp-cloud-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-erpa0000000000005",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-fc562a2e029cc478491c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/erp-cloud-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-erpb0000000000005",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-43decff4286a3c89ad45"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/erp-cloud-asg",
+        "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/erp-cloud/0000000000000001",
+        "relation": "asg_target_group",
+        "evidence": "DescribeAutoScalingGroups.TargetGroupARNs[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-908605057228125f8088"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/erp-cloud-asg",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60005",
+        "relation": "in_vpc",
+        "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-94ea0bf155827960eb15"
+      },
       {
         "source": "111122223333/ap-northeast-2/ec2/i-erpa0000000000005",
         "target": "111122223333/ap-northeast-2/network_interface/eni-erpa0000000000005",
@@ -846,6 +1053,40 @@
         "details": {},
         "inferred": false,
         "id": "rel-84fb3128655802591b2c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-hybrid-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-hy-app-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-217fb7ef89e3a583405e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-hybrid-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-hy-app-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-c90340fc4b8766aa736c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-hybrid-main",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60005",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cae8295e0d2fe05c7563"
       },
       {
         "source": "111122223333/ap-northeast-2/subnet/subnet-hy-app-a",

@@ -27,6 +27,7 @@ diagram-bot serve
 ## 시연 버전에서 할 수 있는 것
 
 - **세 가지 보기:** 계정·리전·VPC 요약 카드의 `전체 구성`, 한 VPC의 AZ·서브넷·EC2·ALB·대상 그룹을 그린 `상세 구성`, 선택 리소스와 직접 관계·필요한 상위 경계만 그린 `선택 리소스`. 각 보기는 표시/수집/참조/숨김 수와 부분 조회 여부를 함께 보여줍니다.
+- **인프라 아키텍처 표기:** AWS Cloud > Region > VPC > AZ > 서브넷(라우팅으로 퍼블릭·프라이빗·격리 구분)에 Internet/NAT Gateway, RDS 기본·대기, AZ를 가로지르는 Auto Scaling 그룹 프레임을 AWS Architecture Icons 스타일로 그립니다.
 - **결정적 자동 배치:** 로드밸런서 → 대상 그룹 → AZ 열·서브넷 순서의 계층 배치. 연결선은 채널과 AZ 사이 통로로만 지나가 다른 도형을 가로지르지 않습니다. 같은 입력은 항상 같은 좌표를 만듭니다([배치 엔진 평가](docs/engineering/LAYOUT_EVALUATION.md)).
 - 선택한 리소스의 속성·태그·관계와 API 근거, 포트·AZ 한정자, 구성도에서 직접 관계 강조.
 - 실제 draw.io 도형 이동·스타일 수정·메모 편집. 편집본은 보기별로 저장되며, 덮어쓴 버전은 이력에 보관됩니다.
@@ -47,7 +48,7 @@ diagram-bot serve
 
 화면의 **AWS에서 새로 수집**에서 프로파일, 예상 계정 ID, 리전을 지정합니다. 프로파일을 지정하지 않으면 boto3의 기본 인증 체인을 사용합니다. 기존 `AWS_CONFIG_FILE`·`AWS_PROFILE`·`credential_process`도 SDK가 처리합니다. STS의 실제 계정 ID와 예상 계정 ID가 다르면 리소스를 수집하지 않습니다. 브라우저에서 SSO 로그인을 대신 수행하지는 않습니다.
 
-수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 Describe API만 호출합니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
+수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 Describe API(EC2·ELBv2·RDS·Auto Scaling)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
 
 | 범위 | API 근거 |
 | --- | --- |
@@ -57,6 +58,10 @@ diagram-bot serve
 | ELBv2의 VPC·여러 서브넷·보안 그룹 | DescribeLoadBalancers |
 | 대상 그룹과 로드밸런서 | DescribeTargetGroups.LoadBalancerArns |
 | 등록 대상과 상태 | DescribeTargetHealth |
+| 인터넷 경로·NAT | DescribeInternetGateways.Attachments, DescribeNatGateways.SubnetId |
+| 서브넷 유형(퍼블릭/프라이빗/격리) | DescribeRouteTables의 연결·`0.0.0.0/0` 경로 (명시 연결 없으면 기본 테이블) |
+| RDS와 Multi-AZ 대기 | DescribeDBInstances의 AZ·SecondaryAvailabilityZone·DBSubnetGroup |
+| Auto Scaling 그룹 | DescribeAutoScalingGroups의 Instances·TargetGroupARNs |
 
 ALB는 여러 서브넷에 걸쳐도 VPC 수준에 한 번만 그리며, 서브넷 연결은 속성 패널과 선택 리소스 보기에서 확인합니다. 대상 그룹은 논리 자원으로 서브넷 밖에 둡니다. 관계 ID는 출발·대상·관계 종류와 포트·AZ로 정해지므로 조회 순서나 상태가 바뀌어도 유지됩니다. SG·ENI·EBS는 **참조만** 표시하며 상세 조회하지 않습니다. IP·Lambda 대상은 별도 등록 대상으로 남기고 EC2와 추측으로 합치지 않습니다. 그래프 관계에는 API 근거와 `inferred: false`가 기록됩니다. 보안 그룹 허용 규칙과 실제 통신을 혼동하지 않습니다.
 

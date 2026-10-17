@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T05:06:22.919328+00:00 ~ 2026-10-17T05:06:22.919328+00:00
+- 수집 구간: 2026-10-17T05:18:27.999085+00:00 ~ 2026-10-17T05:18:27.999085+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -13,13 +13,18 @@
 - ec2 / describe_instances: complete, 2개, 오류 없음; 범위 {}
 - elbv2 / describe_load_balancers: complete, 1개, 오류 없음; 범위 {}
 - elbv2 / describe_target_groups: complete, 2개, 오류 없음; 범위 {}
+- ec2 / describe_internet_gateways: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_nat_gateways: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_route_tables: complete, 1개, 오류 없음; 범위 {}
+- rds / describe_db_instances: complete, 0개, 오류 없음; 범위 {}
+- autoscaling / describe_auto_scaling_groups: complete, 1개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/erp-cloud/0000000000000001"}
 - elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/erp-onprem/0000000000000002"}
 
 ## 해석 범위
 
 - AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.
-- RDS·NAT Gateway·라우팅·보안 그룹 규칙은 수집 범위 밖이라 표시하지 않습니다.
+- 보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.
 - 설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다.
 
 ## 검토할 항목

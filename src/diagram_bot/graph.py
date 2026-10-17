@@ -9,7 +9,11 @@ QUALIFIERS = ("port", "availability_zone")
 
 def relation_id(edge):
     """Stable ID from endpoints, relation type and qualifiers; independent of array order."""
-    qualifiers = {k: edge.get("qualifiers", {}).get(k) for k in QUALIFIERS}
+    given = edge.get("qualifiers", {})
+    qualifiers = {k: given.get(k) for k in QUALIFIERS}
+    if given.get("destination") is not None:
+        # Route destinations only exist on routing edges; older IDs keep their original shape.
+        qualifiers["destination"] = given["destination"]
     key = json.dumps([edge["source"], edge["relation"], edge["target"], qualifiers], sort_keys=True, default=str)
     return "rel-" + hashlib.sha256(key.encode()).hexdigest()[:20]
 
@@ -37,7 +41,8 @@ def build_graph(snapshot):
             attrs = attrs or {}
             tags = {t["Key"]: t.get("Value", "") for t in attrs.get("Tags", [])}
             nodes[key] = {"id": key, "resource_id": resource_id, "kind": kind,
-                          "name": tags.get("Name") or attrs.get("LoadBalancerName") or attrs.get("TargetGroupName") or resource_id,
+                          "name": tags.get("Name") or attrs.get("LoadBalancerName") or attrs.get("TargetGroupName")
+                          or attrs.get("DBInstanceIdentifier") or attrs.get("AutoScalingGroupName") or resource_id,
                           "account": account, "region": region, "attributes": attrs,
                           "reference_only": reference, "source": source}
         return key
@@ -99,5 +104,92 @@ def build_graph(snapshot):
                 node(kind, rid, {**description, "TargetType": target_type}, "DescribeTargetHealth")
             link(key, kind, rid, "registered_target", "DescribeTargetHealth.Target.Id", description,
                  {"port": target.get("Port"), "availability_zone": target.get("AvailabilityZone")})
+    infrastructure(raw, prefix, nodes, node, link)
+    classify_subnets(raw, prefix, nodes, link)
     return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
             "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
+
+
+def infrastructure(raw, prefix, nodes, node, link):
+    """Internet path, egress, routing, data tier and scaling groups, joined only on API fields."""
+    subnet_vpc = {s["SubnetId"]: s.get("VpcId") for s in raw.get("subnets", [])}
+    for gateway in raw.get("internet_gateways", []):
+        key = node("internet_gateway", gateway["InternetGatewayId"], gateway, "DescribeInternetGateways")
+        for attachment in gateway.get("Attachments", []):
+            link(key, "vpc", attachment.get("VpcId"), "in_vpc", "DescribeInternetGateways.Attachments[].VpcId")
+    for gateway in raw.get("nat_gateways", []):
+        key = node("nat_gateway", gateway["NatGatewayId"], gateway, "DescribeNatGateways")
+        link(key, "vpc", gateway.get("VpcId"), "in_vpc", "DescribeNatGateways.VpcId")
+        link(key, "subnet", gateway.get("SubnetId"), "in_subnet", "DescribeNatGateways.SubnetId")
+    for table in raw.get("route_tables", []):
+        key = node("route_table", table["RouteTableId"], table, "DescribeRouteTables")
+        link(key, "vpc", table.get("VpcId"), "in_vpc", "DescribeRouteTables.VpcId")
+        for association in table.get("Associations", []):
+            link(key, "subnet", association.get("SubnetId"), "associated_subnet", "DescribeRouteTables.Associations[].SubnetId")
+        for route in table.get("Routes", []):
+            destination = route.get("DestinationCidrBlock") or route.get("DestinationIpv6CidrBlock") or route.get("DestinationPrefixListId")
+            target = route.get("NatGatewayId") or route.get("GatewayId")
+            kind = "nat_gateway" if route.get("NatGatewayId") else "internet_gateway" if str(target).startswith("igw-") else None
+            if kind:
+                field = "NatGatewayId" if kind == "nat_gateway" else "GatewayId"
+                link(key, kind, target, "routes_to", f"DescribeRouteTables.Routes[].{field}", {"state": route.get("State")},
+                     {"destination": destination})
+    for db in raw.get("db_instances", []):
+        identifier = db["DBInstanceIdentifier"]
+        key = node("db_instance", identifier, db, "DescribeDBInstances")
+        group = db.get("DBSubnetGroup") or {}
+        link(key, "vpc", group.get("VpcId"), "in_vpc", "DescribeDBInstances.DBSubnetGroup.VpcId")
+
+        def subnet_in(zone):
+            # The subnet group lists subnets per AZ; placement is only stated when one subnet matches.
+            matches = [s["SubnetIdentifier"] for s in group.get("Subnets", []) if (s.get("SubnetAvailabilityZone") or {}).get("Name") == zone]
+            return matches[0] if len(matches) == 1 else None
+
+        link(key, "subnet", subnet_in(db.get("AvailabilityZone")), "in_subnet",
+             "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]", {"availability_zone": db.get("AvailabilityZone")})
+        if db.get("MultiAZ") and db.get("SecondaryAvailabilityZone"):
+            standby = node("db_standby", identifier + "#standby",
+                           {"DBInstanceIdentifier": identifier + " (standby)", "AvailabilityZone": db["SecondaryAvailabilityZone"],
+                            "Engine": db.get("Engine"), "DBInstanceClass": db.get("DBInstanceClass")},
+                           "DescribeDBInstances.SecondaryAvailabilityZone")
+            link(standby, "db_instance", identifier, "standby_of", "DescribeDBInstances.MultiAZ + SecondaryAvailabilityZone")
+            link(standby, "vpc", group.get("VpcId"), "in_vpc", "DescribeDBInstances.DBSubnetGroup.VpcId")
+            link(standby, "subnet", subnet_in(db["SecondaryAvailabilityZone"]), "in_subnet",
+                 "DescribeDBInstances.SecondaryAvailabilityZone + DBSubnetGroup.Subnets[]",
+                 {"availability_zone": db["SecondaryAvailabilityZone"]})
+    for group in raw.get("auto_scaling_groups", []):
+        key = node("auto_scaling_group", group["AutoScalingGroupName"], group, "DescribeAutoScalingGroups")
+        vpcs = {subnet_vpc.get(s) for s in (group.get("VPCZoneIdentifier") or "").split(",") if s} - {None}
+        if len(vpcs) == 1:
+            link(key, "vpc", vpcs.pop(), "in_vpc", "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId")
+        for instance in group.get("Instances", []):
+            link(key, "ec2", instance.get("InstanceId"), "asg_member", "DescribeAutoScalingGroups.Instances[].InstanceId",
+                 {"availability_zone": instance.get("AvailabilityZone")})
+        for arn in group.get("TargetGroupARNs", []):
+            link(key, "target_group", arn, "asg_target_group", "DescribeAutoScalingGroups.TargetGroupARNs[]")
+
+
+def classify_subnets(raw, prefix, nodes, link):
+    """Subnet internet path from its route table: explicit association, else the VPC's main table."""
+    tables = raw.get("route_tables")
+    if not tables:
+        return
+    main = {t.get("VpcId"): t for t in tables if any(a.get("Main") for a in t.get("Associations", []))}
+    explicit = {a["SubnetId"]: t for t in tables for a in t.get("Associations", []) if a.get("SubnetId")}
+    for subnet in raw.get("subnets", []):
+        table = explicit.get(subnet["SubnetId"]) or main.get(subnet.get("VpcId"))
+        key = prefix + "subnet/" + subnet["SubnetId"]
+        if not table or key not in nodes:
+            continue
+        if subnet["SubnetId"] not in explicit:
+            link(prefix + "route_table/" + table["RouteTableId"], "subnet", subnet["SubnetId"], "associated_subnet",
+                 "DescribeRouteTables.Associations[].Main (implicit)", {"implicit": True})
+        default = [r for r in table.get("Routes", []) if r.get("DestinationCidrBlock") == "0.0.0.0/0" and r.get("State", "active") == "active"]
+        if any(str(r.get("GatewayId", "")).startswith("igw-") for r in default):
+            route_class = "public"
+        elif any(r.get("NatGatewayId") for r in default):
+            route_class = "nat"
+        else:
+            route_class = "isolated"
+        nodes[key]["route_class"] = route_class
+        nodes[key]["route_table"] = table["RouteTableId"]

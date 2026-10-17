@@ -39,6 +39,7 @@
     "JSON/CSV exports",
     "relayout keeps note + archives edit",
     "restore archived edit",
+    "infrastructure sample: ASG frame, RDS standby, route-classified subnet",
     "snapshot import"
   ]
 }

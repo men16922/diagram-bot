@@ -11,8 +11,10 @@ Last Updated: 2026-10-17
 
 ## Current Baseline (v0.3)
 
-- Collection: unchanged direct SSO/SDK + EC2/ELBv2 Describe calls; coverage rows now name the
-  IAM action needed when a call is denied or partial (UI dialog and review.md).
+- Collection: direct SSO/SDK, read-only EC2/ELBv2/RDS/Auto Scaling Describe calls incl. internet and
+  NAT gateways and route tables; coverage rows name the IAM action needed when denied or partial.
+- Diagrams: AWS Architecture Icons style (Cloud > Region > VPC > AZ > route-classified subnets),
+  IGW/NAT/RDS standby, Auto Scaling frames; samples in examples/samples (5 reference patterns).
 - Graph: relation IDs from source/relation/target + port/AZ qualifiers; independent of API
   array order and target health. Same instance on two ports = two relations. Legacy snapshots
   get IDs on read in their stored order, so saved `relationIndex` documents still resolve.

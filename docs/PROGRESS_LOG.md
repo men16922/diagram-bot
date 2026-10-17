@@ -2,6 +2,20 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — Infrastructure architecture (user request: 인프라 아키텍처 기반)
+
+- Collector: DescribeInternetGateways, DescribeNatGateways, DescribeRouteTables, rds
+  DescribeDBInstances, autoscaling DescribeAutoScalingGroups; readonly-policy.json updated.
+- Graph: attachment/placement/routing/standby/membership relations with API evidence; subnet
+  route class (public/nat/isolated) from explicit or main route table associations.
+- Layout: IGW in the entry row, NAT/RDS in their subnets, Auto Scaling frames across AZ columns
+  (one row per group inside a subnet), target group → Auto Scaling group edge replaces
+  per-instance registrations when the frame encloses only members.
+- Samples rebuilt with IGW, NAT per AZ (staging: one), route tables, RDS Multi-AZ, ASGs.
+- Fixed during review: ASG node duplicated into the reference box (new unique-ID check),
+  relation direction for TargetGroupARNs, misplaced route code, interleaved ASG frames.
+- Verified: 47 tests, browser acceptance incl. infrastructure sample, renders reviewed.
+
 ## 2026-10-17 — AWS Architecture Icons styling (user request: 더 AWS best practice 형태로)
 
 - Groups: AWS Cloud > Region > VPC > AZ > public/private subnet with official aws4 group styles;

@@ -183,6 +183,22 @@ def main():
         restored = page.evaluate("fetch('/api/snapshots/demo/document?view=detail&vpc=vpc-demo&references=false').then(r => r.json())")
         assert geometry(restored['xml'], '/ec2/i-demo-c') == moved
 
+        # 8. Infrastructure sample: Auto Scaling frame, RDS and route-classified subnets.
+        page.locator('#snapshot-select').select_option('sample-three-tier')
+        ready()
+        page.locator('[data-vpc="vpc-0a1b2c3d4e5f60001"]').click()
+        ready()
+        frame.get_by_text(starts('Auto Scaling group · prod-web-asg')).click()
+        expect(detail).to_contain_text('Auto Scaling group')
+        expect(detail).to_contain_text('3–9 (원하는 3)')
+        expect(detail).to_contain_text('DescribeAutoScalingGroups.TargetGroupARNs[]')
+        frame.get_by_text(starts('prod-orders-db')).first.click()
+        expect(detail).to_contain_text('mysql')
+        expect(detail).to_contain_text('Multi-AZ 대기')
+        frame.get_by_text(starts('public-a')).click()
+        expect(detail).to_contain_text('퍼블릭 · 0.0.0.0/0 → IGW')
+        page.screenshot(path=str(args.output / 'infrastructure.png'), full_page=True)
+
         options = page.locator('#snapshot-select option').count()
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
         expect(page.locator('#snapshot-select option')).to_have_count(options + 1)
@@ -198,7 +214,8 @@ def main():
                          'coverage + IAM permission', 'reference-only target', 'inventory search/type', 'VPC switch',
                          'SG/ENI/EBS references', 'native keyboard move', 'native note edit', 'save/reload',
                          'drawio XML download with moved geometry', 'PNG 2x white', 'PNG 1x transparent', 'PNG 3x',
-                         'JSON/CSV exports', 'relayout keeps note + archives edit', 'restore archived edit', 'snapshot import']}
+                         'JSON/CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
+                         'infrastructure sample: ASG frame, RDS standby, route-classified subnet', 'snapshot import']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 

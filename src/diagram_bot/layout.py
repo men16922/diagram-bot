@@ -69,16 +69,40 @@ class Canvas:
         return None
 
 
+ROUTES = {"public": "0.0.0.0/0 → IGW", "nat": "0.0.0.0/0 → NAT", "isolated": "인터넷 경로 없음"}
+
+
+def is_public(subnet):
+    """Route table decides when collected; otherwise MapPublicIpOnLaunch or the name/Tier tag."""
+    if subnet.get("route_class"):
+        return subnet["route_class"] == "public"
+    tags = {t["Key"]: t.get("Value", "") for t in subnet["attributes"].get("Tags", [])}
+    return bool(subnet["attributes"].get("MapPublicIpOnLaunch")) or "public" in (tags.get("Tier", "") + " " + subnet["name"]).lower()
+
+
 def tier_rank(subnet):
     """Order subnets the way architecture diagrams read: public, then web, app, data tiers."""
+    if is_public(subnet):
+        return 0
     tags = {t["Key"]: t.get("Value", "") for t in subnet["attributes"].get("Tags", [])}
     words = (tags.get("Tier", "") + " " + subnet["name"]).lower()
-    if subnet["attributes"].get("MapPublicIpOnLaunch") or "public" in words:
-        return 0
     for rank, names in enumerate((("web", "front"), ("app", "service", "private"), ("data", "db", "database")), 1):
         if any(name in words for name in names):
             return rank
-    return 2
+    return 3 if subnet.get("route_class") == "isolated" else 2
+
+
+def arrange(kids, size, asg_of, nodes):
+    """Slots inside a subnet: members of one Auto Scaling group share rows, each group starting a new row,
+    so a group's frame across AZ columns never encloses another group's instance."""
+    groups = {}
+    for kid in kids:
+        groups.setdefault(asg_of.get(kid["id"]), []).append(kid)
+    slots, row = [], 0
+    for key in sorted(groups, key=lambda g: (g is None, nodes[g]["name"] if g else "", g or "")):
+        slots += [(kid, row + i // size, i % size) for i, kid in enumerate(groups[key])]
+        row += -(-len(groups[key]) // size)
+    return slots, row
 
 
 def resource_label(node):
@@ -89,6 +113,13 @@ def resource_label(node):
     if node["kind"] == "load_balancer" and attrs.get("Type"):
         kind = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
         return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{kind} · {attrs.get('Scheme', '')}".rstrip(" ·")
+    if node["kind"] == "internet_gateway":
+        return f"{fit_label(node['name'], SIDE_LABEL, 2)}\nInternet gateway"
+    if node["kind"] == "nat_gateway":
+        return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\nNAT gateway"
+    if node["kind"] in ("db_instance", "db_standby"):
+        role = "standby" if node["kind"] == "db_standby" else ("primary" if attrs.get("MultiAZ") else attrs.get("DBInstanceClass", ""))
+        return f"{fit_label(attrs.get('DBInstanceIdentifier', node['name']).replace(' (standby)', ''), BOTTOM_LABEL, 1)}\n{attrs.get('Engine', '')}\n{role}"
     if node["kind"] == "target_group" and attrs.get("Protocol"):
         return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{attrs['Protocol']}:{attrs.get('Port', '')} · {attrs.get('TargetType', '')}"
     return node["name"]
@@ -110,7 +141,8 @@ def layout_view(snapshot, graph, selection):
     status = "부분 조회: " + ", ".join(incomplete) if incomplete else "조회 완료"
     scope = (f"{status} · {meta['finished_at']}\n표시 {counts['visible']}개 / 수집 {counts['collected']}개 · 참조 {counts['references']}개"
              f" · 숨김 {counts['hidden']}개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도"
-             f"\n퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)")
+             + ("\n서브넷 구분: 라우팅 테이블의 0.0.0.0/0 경로 (IGW = 퍼블릭, NAT = 프라이빗, 없음 = 격리)" if snapshot["raw"].get("route_tables")
+                else "\n퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)"))
     canvas.add("scope", "1", 24, 48, 960, 42, "caption", scope, layout=f"{ENGINE}/{VERSION}",
                view=view["kind"], vpc=view["vpc"] or "", focus=view["resource"] or "",
                references="1" if view["references"] else "0")
@@ -145,7 +177,8 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
         count = lambda kind: sum(1 for n in inside if n["kind"] == kind)
         azs = sorted({n["attributes"].get("AvailabilityZone") for n in inside if n["kind"] == "subnet"} - {None})
         label = (f"VPC · {fit_label(vpc['name'], 290, 1)}\n{vpc['attributes'].get('CidrBlock', '')} · {vpc['resource_id']}\n"
-                 f"Subnet {count('subnet')} · EC2 {count('ec2')} · LB {count('load_balancer')} · TG {count('target_group')}\n"
+                 f"Subnet {count('subnet')} · EC2 {count('ec2')} · LB {count('load_balancer')} · TG {count('target_group')}"
+                 f" · NAT {count('nat_gateway')} · RDS {count('db_instance')}\n"
                  f"AZ {', '.join(azs) if azs else '미확인'}")
         cards.append((label, vpc["id"], len(inside) == 0))
     outside = [n for n in nodes.values() if n["kind"] != "vpc" and n["id"] not in vpc_of]
@@ -173,6 +206,8 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     vpcs = sorted((nodes[k] for k in visible if nodes[k]["kind"] == "vpc"), key=lambda n: (n["name"], n["id"]))
     lanes = {}  # per VPC routing geometry, absolute coordinates
     placed = {}
+    suppressed = set()  # registrations drawn as one target group -> Auto Scaling group edge
+    frames_at = {}  # Auto Scaling group -> (frame cell, leftmost AZ column)
     meta = snapshot["metadata"]
     # AWS Architecture Icons nesting: AWS Cloud > Region > VPC > Availability Zone > subnet.
     cloud = canvas.add("cloud", "1", 24, 112, 0, 0, "cloud", f"AWS Cloud · 계정 {meta['account_id']}")
@@ -214,7 +249,10 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         barycenter = lambda n: (sum(registered.get(n["id"], [len(tgs)])) / len(registered.get(n["id"], [0])), n["name"], n["id"])
         subnets = [n for n in members if n["kind"] == "subnet"]
         children = {s["id"]: sorted((nodes[k] for k in visible if subnet_of.get(k) == s["id"]), key=barycenter) for s in subnets}
-        unplaced = sorted((n for n in members if n["kind"] not in {"subnet", "load_balancer", "target_group"}
+        gateways = [n for n in members if n["kind"] == "internet_gateway"]
+        asg_of = {e["target"]: e["source"] for e in graph["edges"] if e["relation"] == "asg_member"}
+        unplaced = sorted((n for n in members if n["kind"] not in {"subnet", "load_balancer", "target_group", "internet_gateway",
+                                                                   "auto_scaling_group", "route_table"}
                            and subnet_of.get(n["id"]) not in children), key=barycenter)
         azs = sorted({s["attributes"].get("AvailabilityZone", "AZ 미확인") for s in subnets})
         last = len(azs)  # gutter i is left of AZ column i; gutter `last` is the VPC's right margin
@@ -223,10 +261,22 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         column.update({n["id"]: 0 for n in unplaced})
         # Target groups in the right half send outside-VPC targets down the right margin.
         side = {t["id"]: last if len(tgs) > 1 and tg_index[t["id"]] >= len(tgs) / 2 else 0 for t in tgs}
+        # Auto Scaling groups are framed across AZ columns when their members share one tier row;
+        # a target group attached to a framed group then gets one edge instead of one per instance.
+        frames = {}
+        for asg in (n for n in members if n["kind"] == "auto_scaling_group"):
+            inside = sorted(e["target"] for e in graph["edges"] if e["source"] == asg["id"] and e["relation"] == "asg_member"
+                            and e["target"] in visible and subnet_of.get(e["target"]) in children)
+            if inside and len({tier_rank(nodes[subnet_of[m]]) for m in inside}) == 1:
+                frames[asg["id"]] = inside
+        # Gutters reserve room for both the registrations and the group edge; which one is drawn
+        # is decided once the frame is known to enclose only its own members.
         demand = [set() for _ in range(last + 1)]
         placements = []
         for e in drawn_edges:
-            if e["relation"] == "registered_target" and e["source"] in tg_index and vpc_of.get(e["target"]) in (None, vpc["id"]):
+            if e["relation"] == "asg_target_group" and e["source"] in frames:
+                demand[min(column[m] for m in frames[e["source"]])].add(e["target"])
+            elif e["relation"] == "registered_target" and e["source"] in tg_index and vpc_of.get(e["target"]) in (None, vpc["id"]):
                 g = column.get(e["target"], side[e["source"]])
                 demand[g].add(e["source"])
                 if e["target"] not in column:
@@ -246,7 +296,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                                  key=lambda s: (tier_rank(s), s["name"], s["id"])) for az in azs}
         col_width = {az: max((per_row[s["id"]] * SLOT + 40 for s in az_subnets[az]), default=SLOT * 2 + 40) + 32 for az in azs}
         az_width = sum(gutters[:last]) + sum(col_width.values()) + 24 + gutters[last]
-        band_width = max(len(lbs), len(tgs)) * SIDE_SLOT + 2 * max(gutters)
+        band_width = max(len(lbs) + len(gateways), len(tgs)) * SIDE_SLOT + 2 * max(gutters)
         bottom_width = len(unplaced) * SLOT + gutters[0] + gutters[last] + 40
         width = max(720, az_width, band_width, bottom_width)
         vid = cell_id(vpc["id"])
@@ -256,13 +306,14 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         y = VPC_HEADER + LANE_TOP + 6
         ox, oy = canvas.abs[vid]
         geometry = {"last": last, "lb_mid": {}, "gutters": []}
-        for band in (lbs, tgs):
+        # Internet gateways lead the entry row, before the load balancers they front.
+        for band in (gateways + lbs, tgs):
             if not band:
                 continue
             start = (width - len(band) * SIDE_SLOT) / 2 + 24
             for i, n in enumerate(band):
                 resource(n["id"], vid, start + i * SIDE_SLOT, y, "right")["column"] = 0
-                if band is lbs:
+                if n["kind"] == "load_balancer":
                     geometry["lb_mid"][n["id"]] = oy + y + ICON + 8 + 6 * (i % 4)
             y += ICON + 34
         geometry["channel"] = oy + y - 6
@@ -273,13 +324,12 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
             text = "이 VPC에서 조회된 서브넷이 없습니다." if status == "complete" else "서브넷 조회가 완료되지 않아 배치를 확인할 수 없습니다."
             canvas.add(cell_id(vpc["id"] + "/empty"), vid, gutters[0], y, 420, 40, "caption", text)
             y += 56
-        metrics = {}
+        metrics, arranged = {}, {}
         for sub in subnets:
-            kids, row_size = children[sub["id"]], per_row[sub["id"]]
-            rows = -(-len(kids) // row_size)
+            arranged[sub["id"]], rows = arrange(children[sub["id"]], per_row[sub["id"]], asg_of, nodes)
             # Each route entering or leaving a row needs its own lane above that row.
-            busiest = max((sum(1 for e in drawn_edges for c in kids[r * row_size:(r + 1) * row_size]
-                               if c["id"] in (e["source"], e["target"]) and e["relation"] != "in_subnet")
+            busiest = max((sum(1 for e in drawn_edges for c, row, _ in arranged[sub["id"]]
+                               if row == r and c["id"] in (e["source"], e["target"]) and e["relation"] != "in_subnet")
                            for r in range(rows)), default=0)
             lane_top = max(LANE_TOP, 12 + 4 * busiest)
             pitch = ROW - LANE_TOP + lane_top
@@ -305,10 +355,11 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                 sid = cell_id(sub["id"])
                 subnet_at[sub["id"]] = (sid, index)
                 canvas.add(sid, az_id, 16, sy, per_row[sub["id"]] * SLOT + 40, sh, "subnet",
-                           fit_label(f"{sub['name']}\n{sub['attributes'].get('CidrBlock', '')}", per_row[sub["id"]] * SLOT - 20, 1, 11),
-                           resource=sub["id"], emphasis=sub["id"] == focus, public=tier_rank(sub) == 0)
-                for i, n in enumerate(children[sub["id"]]):
-                    row, slot = divmod(i, per_row[sub["id"]])
+                           fit_label(sub["name"], per_row[sub["id"]] * SLOT - 20, 1, 11) + "\n" +
+                           fit_label(" · ".join(filter(None, (sub["attributes"].get("CidrBlock", ""), ROUTES.get(sub.get("route_class"))))),
+                                     per_row[sub["id"]] * SLOT - 20, 1, 11),
+                           resource=sub["id"], emphasis=sub["id"] == focus, public=is_public(sub))
+                for n, row, slot in arranged[sub["id"]]:
                     shape = resource(n["id"], sid, 20 + slot * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + row * pitch + lane_top, "bottom")
                     shape.update(column=index, lane_top=lane_top)
                 if not children[sub["id"]]:
@@ -316,6 +367,28 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                                "선택 리소스와 직접 관계된 인스턴스 없음" if focus else "조회된 인스턴스 없음")
             x += col_width[az]
         column_height = top
+        for asg_id, inside in frames.items():
+            boxes = [(canvas.abs[placed[m]["id"]], canvas.label_box(placed[m])) for m in inside]
+            left = min(min(icon[0], label[0]) for icon, label in boxes) - 10
+            right = max(max(icon[0] + ICON, label[0] + label[2]) for icon, label in boxes) + 10
+            top_y = min(icon[1] for icon, _ in boxes) - 18
+            bottom = max(label[1] + label[3] for _, label in boxes) + 24
+            strangers = [k for k, shape in placed.items() if k not in inside and shape["role"] == "resource"
+                         and left < canvas.abs[shape["id"]][0] + ICON and canvas.abs[shape["id"]][0] < right
+                         and top_y < canvas.abs[shape["id"]][1] + ICON and canvas.abs[shape["id"]][1] < bottom]
+            if strangers:
+                continue  # a frame would claim other resources; keep per-instance edges instead
+            frame = canvas.add(cell_id(asg_id), vid, left - ox, top_y - oy, right - left, bottom - top_y, "asg",
+                               f"Auto Scaling group · {nodes[asg_id]['name']}", resource=asg_id, emphasis=asg_id == focus)
+            frames_at[asg_id] = (frame["id"], min(column[m] for m in inside))
+        for e in drawn_edges:
+            # DescribeAutoScalingGroups.TargetGroupARNs: source is the group, target the target group.
+            if e["relation"] == "asg_target_group" and e["target"] in tg_index:
+                if e["source"] in frames_at:
+                    suppressed.update(r["id"] for r in drawn_edges if r["relation"] == "registered_target"
+                                      and r["source"] == e["target"] and r["target"] in frames[e["source"]])
+                else:
+                    suppressed.add(e["id"])
         geometry["gutters"].append((ox + width - gutters[last], ox + width))
         y += column_height + 24
         if unplaced:
@@ -327,7 +400,8 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         group["h"] = y
         lanes[vpc["id"]] = geometry
         cursor += y + 36
-    others = sorted((nodes[k] for k in visible if k not in placed and nodes[k]["kind"] not in {"vpc", "subnet"}),
+    # Auto Scaling groups are drawn only as frames around their members.
+    others = sorted((nodes[k] for k in visible if k not in placed and nodes[k]["kind"] not in {"vpc", "subnet", "auto_scaling_group"}),
                     key=lambda n: (KIND_ORDER.get(n["kind"], 9), n["name"], n["id"]))
     width = max([sh["w"] for sh in canvas.shapes if sh["role"] == "vpc"] + [5 * SLOT + 60])
 
@@ -358,10 +432,10 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         # Beside the AWS Cloud: routes leave the VPC's right margin above the load balancer row.
         place_box("onprem", "onprem", "Corporate data center · AvailabilityZone=all 로 등록된 VPC 밖 대상", "1",
                   cloud["x"] + cloud["w"] + 48, cloud["y"], remote, 520)
-    route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at)
+    route(canvas, [e for e in drawn_edges if e["id"] not in suppressed], vpc_of, placed, lanes, tg_order, subnet_at, frames_at)
 
 
-def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at):
+def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frames_at):
     """Explicit orthogonal routes. Only edges sharing a source (a bus) or a target may share a segment.
 
     Each target group drops one trunk to its own channel row; every gutter gives each source group
@@ -373,6 +447,14 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at):
     specs, plain = {}, []
     for e in sorted(drawn_edges, key=lambda e: e["id"]):
         geometry = lanes.get(vpc_of.get(e["source"]))
+        if e["relation"] == "asg_target_group" and e["target"] in placed and e["source"] in frames_at \
+                and lanes.get(vpc_of.get(e["target"])):
+            # Routed on the target group's trunk like its registrations; the cell runs group -> target group.
+            cell, g = frames_at[e["source"]]
+            x, y = canvas.abs[cell]
+            specs[e["id"]] = {"edge": e, "kind": "frame", "geometry": lanes[vpc_of[e["target"]]], "gutter": g,
+                              "group": ("bus", e["target"]), "depth": y, "far": x, "frame": (x, y, shapes[cell]["h"])}
+            continue
         if e["relation"] == "in_subnet" and geometry and e["source"] in placed and e["id"] in geometry["placements"] \
                 and e["target"] in subnet_at:
             cell, g = subnet_at[e["target"]]
@@ -456,10 +538,25 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at):
         lane_top = members[0][3].get("lane_top", LANE_TOP)
         for i, (direction, spec, _, _) in enumerate(members):
             spec["lane_in" if direction == "in" else "lane_out"] = top - lane_top + 4 + 4 * (i % ((lane_top - 8) // 4))
+    framed = {}
+    for spec in specs.values():
+        if spec["kind"] == "frame":
+            framed.setdefault(spec["edge"]["source"], []).append(spec)
+    for members in framed.values():
+        for i, spec in enumerate(sorted(members, key=lambda s: (s["x"], s["edge"]["id"]))):
+            spec["entry"] = (i + 1) / (len(members) + 1)
     for e in plain:
         canvas.edges.append(edge_entry(e, [], "", {"in_subnet": "서브넷 배치"}.get(e["relation"], "")))
     for spec in sorted(specs.values(), key=lambda s: s["edge"]["id"]):
         e, geometry = spec["edge"], spec["geometry"]
+        if spec["kind"] == "frame":
+            x, y, h = spec["frame"]
+            gx, gy = position(e["target"])
+            channel = geometry["channel"] + 7 * tg_order.get(e["target"], 0)
+            side_y = y + spec["entry"] * h
+            path = [(x, side_y), (spec["x"], side_y), (spec["x"], channel), (gx + ICON / 2, channel), (gx + ICON / 2, gy + ICON)]
+            canvas.edges.append(edge_entry(e, path, f"exitX=0;exitY={spec['entry']:.3f};entryX=0.5;entryY=1;"))
+            continue
         sx, sy = position(e["source"])
         if spec["kind"] == "place":
             x, y, h = spec["subnet"]
@@ -510,4 +607,4 @@ def edge_entry(e, path, constraints, label=""):
     return {"id": cell_id("edge/" + e["id"]), "relation_id": e["id"], "relation": e["relation"],
             "source": cell_id(e["source"]), "target": cell_id(e["target"]), "evidence": e["evidence"],
             "points": path[1:-1], "path": path, "constraints": constraints, "label": label,
-            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer"}}
+            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer", "asg_target_group"}}
