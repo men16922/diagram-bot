@@ -10,7 +10,10 @@ Last Updated: 2026-10-17
 - moto end-to-end test over real boto3 serialization (20+ resource types, AssumeRole via STS).
   It surfaced two real issues, both fixed: an unexpected exception from one API aborted the whole
   collection; the shared-segment check rejected a target group's own bus (frame + registration).
-- Verified: lint + 82 tests; `scripts/verify_team.py` in Chromium over TLS; CI runs both.
+- OIDC SSO (`oidc.py`): discovery, code + PKCE, state cookie, nonce/iss/aud/exp checks, userinfo
+  subject match, group→role mapping; unit tests with a PKCE-checking fake provider; Chromium run
+  through a loopback provider in `scripts/verify_team.py`.
+- Verified: lint + 90 tests; `scripts/verify_team.py` in Chromium over TLS; CI runs both.
 
 ## 2026-10-17 — Enterprise readiness (goal: 엔터프라이즈 상용 제품 수준까지 작업·검증)
 

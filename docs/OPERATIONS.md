@@ -85,7 +85,19 @@ diagram-bot serve --host 0.0.0.0 --port 8443 --data-dir /var/lib/diagram-bot \
 - 쿠키는 HttpOnly·Secure·SameSite=Strict이고 HSTS를 보냅니다. Host 헤더는 `--allowed-host`만 허용합니다.
 - **감사 로그:** `<data-dir>/audit.log`(JSON Lines)에 로그인 성공·실패·차단, 로그아웃, 모든 변경 요청(사용자·경로·대상·결과 코드·접속 주소), 수집 결과가 남습니다.
   admin은 `GET /api/audit?limit=200`으로 최근 항목을 볼 수 있습니다. 회사 로그 수집기로 이 파일을 전송하세요.
-- SSO(OIDC/SAML)가 필요하면 인증 프록시(예: ALB OIDC 인증, oauth2-proxy) 뒤에 두고, 프록시와 이 서버 사이도 TLS로 연결하세요. 앱 자체 계정은 그대로 역할 구분에 씁니다.
+- **SSO (OpenID Connect):** 회사 IdP(Okta, Microsoft Entra ID, Google Workspace, Keycloak, IAM Identity Center의 OIDC 앱 등)에
+  웹 애플리케이션을 등록하고 리다이렉트 URI를 `https://<호스트>:<포트>/auth/oidc/callback`으로 지정한 뒤 `--oidc-config oidc.json`으로 실행합니다.
+  로컬 계정(`--users`)과 함께 쓸 수도, SSO만 쓸 수도 있습니다.
+
+  ```json
+  {"issuer": "https://login.corp.example.com", "client_id": "diagram-bot", "client_secret_env": "DIAGRAM_BOT_OIDC_SECRET",
+   "redirect_uri": "https://diagrams.corp.example.com:8443/auth/oidc/callback", "scope": "openid email profile groups",
+   "role_claim": "groups", "role_map": {"cloud-architects": "admin", "platform-team": "editor", "auditors": "viewer"}}
+  ```
+
+  Authorization Code + PKCE(S256)로 로그인하고 state(브라우저 쿠키와 대조)·nonce·issuer·aud·만료를 확인합니다. 역할은 `role_claim`의 값을
+  `role_map`으로 바꾼 것 중 가장 높은 역할이며, 매핑된 그룹이 없으면 `default_role`이 없는 한 로그인을 거부합니다.
+  비밀값은 파일 대신 `client_secret_env`의 환경 변수로 넘기는 것을 권장합니다. SAML만 지원하는 IdP는 인증 프록시를 앞에 두세요.
 - 수집에 쓰는 AWS 자격 증명은 서버 프로세스의 SDK 인증 체인(인스턴스 역할 등)입니다. 사용자에게 AWS 키를 입력받지 않습니다.
 
 보고서만 공유하려면 `collect`/`render`로 만든 `index.html`(단일 파일 뷰어)과 `topology.drawio`를 사내 저장소에 올리는 방법도 있습니다.

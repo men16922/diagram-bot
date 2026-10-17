@@ -49,6 +49,7 @@ def main():
     serve.add_argument("--data-dir", help="스냅샷과 편집본 저장 디렉터리")
     serve.add_argument("--host", default="127.0.0.1", help="루프백이 아니면 --users·--certfile·--keyfile·--allowed-host 필수 (팀 모드)")
     serve.add_argument("--users", help="팀 모드 사용자 파일 (diagram-bot user add로 생성)")
+    serve.add_argument("--oidc-config", help="팀 모드 OpenID Connect(SSO) 설정 JSON")
     serve.add_argument("--certfile", help="TLS 인증서 (PEM)")
     serve.add_argument("--keyfile", help="TLS 개인 키 (PEM)")
     serve.add_argument("--allowed-host", action="append", default=[], help="접속에 쓰는 호스트 이름 (여러 번 지정 가능)")
@@ -112,15 +113,19 @@ def run_server(parser, args):
     from .auth import load_users
     from .server import create_app
     team = args.host not in LOOPBACK_HOSTS
-    if team and not (args.users and args.certfile and args.keyfile and args.allowed_host):
-        parser.error("루프백이 아닌 주소로 열려면 --users, --certfile, --keyfile, --allowed-host가 모두 필요합니다 (인증 없는 네트워크 노출 금지).")
+    if team and not ((args.users or args.oidc_config) and args.certfile and args.keyfile and args.allowed_host):
+        parser.error("루프백이 아닌 주소로 열려면 --users 또는 --oidc-config, 그리고 --certfile, --keyfile, --allowed-host가 모두 필요합니다 "
+                     "(인증 없는 네트워크 노출 금지).")
     if bool(args.certfile) != bool(args.keyfile):
         parser.error("--certfile과 --keyfile은 함께 지정하세요.")
+    from .oidc import OidcProvider, load_config
     users = load_users(args.users) if args.users else None
+    oidc = OidcProvider(load_config(args.oidc_config)) if args.oidc_config else None
     secure = bool(args.certfile)
-    app = create_app(args.data_dir, users=users, allowed_hosts=args.allowed_host, secure=secure)
+    app = create_app(args.data_dir, users=users, allowed_hosts=args.allowed_host, secure=secure, oidc=oidc)
     shown = args.allowed_host[0] if args.allowed_host else args.host
-    print(f"Diagram Bot: {'https' if secure else 'http'}://{shown}:{args.port}" + (f" · 팀 모드 사용자 {len(users)}명" if users else ""), flush=True)
+    print(f"Diagram Bot: {'https' if secure else 'http'}://{shown}:{args.port}" + (f" · 팀 모드 사용자 {len(users)}명" if users else "")
+          + (" · SSO" if oidc else ""), flush=True)
     uvicorn.run(app, host=args.host, port=args.port, ssl_certfile=args.certfile, ssl_keyfile=args.keyfile,
                 proxy_headers=False, server_header=False)
     return 0

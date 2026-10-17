@@ -98,6 +98,13 @@ class Authenticator:
             self.sessions[token] = {"name": name, "role": user["role"], "expires": time.monotonic() + SESSION_SECONDS}
             return token
 
+    def start_session(self, name, role):
+        """Session for an identity verified elsewhere (OpenID Connect)."""
+        token = secrets.token_urlsafe(32)
+        with self.lock:
+            self.sessions[token] = {"name": name, "role": role, "expires": time.monotonic() + SESSION_SECONDS}
+        return token
+
     def session(self, token):
         with self.lock:
             entry = self.sessions.get(token or "")

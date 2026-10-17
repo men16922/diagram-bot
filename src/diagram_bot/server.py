@@ -1,6 +1,7 @@
 """Workspace server. Loopback-only by default; team mode adds accounts, roles, TLS and an audit log.
 AWS credentials stay in the SDK process."""
 import hashlib
+import html
 import json
 import os
 import re
@@ -74,22 +75,24 @@ class RestoreRequest(RevisionRequest):
 HISTORY = 20
 
 
-COOKIE = "diagram_bot_session"
+COOKIE, OIDC_COOKIE = "diagram_bot_session", "diagram_bot_oidc"
+PUBLIC = {"/login", "/api/login", "/auth/oidc/start", "/auth/oidc/callback"}
 LOOPBACK = ["localhost", "127.0.0.1", "[::1]", "testserver"]
 LOGIN_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Diagram Bot 로그인</title><style>body{font-family:-apple-system,"Segoe UI","Noto Sans KR",Arial,sans-serif;background:#F3F5F8;display:grid;
 place-items:center;min-height:100vh;margin:0;color:#233247}form{background:#fff;border:1px solid #DFE6EF;border-radius:12px;padding:32px;width:320px}
 h1{font-size:20px;margin:0 0 20px}label{display:block;font-size:12px;color:#5A6C86;margin:14px 0 6px}input{width:100%;box-sizing:border-box;padding:10px;
 border:1px solid #DCE5F0;border-radius:6px;font-size:14px}button{margin-top:20px;width:100%;padding:11px;border:0;border-radius:6px;background:#4773DD;
-color:#fff;font-size:14px}p{color:#B4403F;font-size:12px;min-height:1em}</style></head><body><form id="f"><h1>Diagram Bot</h1>
-<label for="n">사용자</label><input id="n" autocomplete="username" required><label for="p">비밀번호</label>
-<input id="p" type="password" autocomplete="current-password" required><button>로그인</button><p id="e" role="alert"></p></form>
+color:#fff;font-size:14px}p{color:#B4403F;font-size:12px;min-height:1em}a.sso{display:block;text-align:center;padding:11px;border-radius:6px;
+background:#232F3E;color:#fff;text-decoration:none;font-size:14px;margin-bottom:8px}</style></head><body><form id="f"><h1>Diagram Bot</h1>__SSO__
+<div __LOCAL__><label for="n">사용자</label><input id="n" autocomplete="username" required><label for="p">비밀번호</label>
+<input id="p" type="password" autocomplete="current-password" required><button>로그인</button></div><p id="e" role="alert">__ERROR__</p></form>
 <script>document.getElementById('f').onsubmit=async e=>{e.preventDefault();const r=await fetch('/api/login',{method:'POST',
 headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('n').value,password:document.getElementById('p').value})});
 if(r.ok)location.href='/';else document.getElementById('e').textContent=(await r.json()).detail;};</script></body></html>"""
 
 
-def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False):
+def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False, oidc=None):
     """users: accounts for team mode (None = single local user). secure: served over TLS (Secure cookie, HSTS)."""
     directory = Path(directory or data_path())
     snapshots = directory / "snapshots"
@@ -102,7 +105,7 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
     mutex = threading.Lock()
     executor = ThreadPoolExecutor(max_workers=1)
     jobs = {}
-    auth = Authenticator(users) if users else None
+    auth = Authenticator(users or {}) if users or oidc else None
     audit = AuditLog(directory / "audit.log")
 
     def save_snapshot(snapshot, identifier=None):
@@ -137,7 +140,7 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         client = request.client.host if request.client else None
         request.state.user = "local"
         mutation = method in {"POST", "PUT", "DELETE", "PATCH"}
-        if auth and path not in ("/login", "/api/login"):
+        if auth and path not in PUBLIC:
             session = auth.session(request.cookies.get(COOKIE))
             if not session:
                 if path.startswith("/api/"):
@@ -230,7 +233,46 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
     def login_page():
         if not auth:
             return RedirectResponse("/", status_code=303)
-        return HTMLResponse(LOGIN_PAGE, headers={"X-Frame-Options": "DENY", "Cache-Control": "no-store"})
+        return login_html()
+
+    def login_html(error="", status=200):
+        page = (LOGIN_PAGE.replace("__SSO__", '<a class="sso" href="/auth/oidc/start">회사 계정(SSO)으로 로그인</a>' if oidc else "")
+                .replace("__LOCAL__", "" if auth.users else "hidden").replace("__ERROR__", html.escape(error)))
+        return HTMLResponse(page, status_code=status, headers={"X-Frame-Options": "DENY", "Cache-Control": "no-store"})
+
+    @app.get("/auth/oidc/start")
+    def oidc_start():
+        if not oidc:
+            raise HTTPException(404, "SSO가 설정되지 않았습니다.")
+        try:
+            url, state = oidc.start()
+        except (OSError, ValueError) as exc:
+            return login_html(f"SSO 제공자에 연결하지 못했습니다: {exc}", 502)
+        response = RedirectResponse(url, status_code=303)
+        # Lax: the provider sends the browser back with a top-level cross-site GET.
+        response.set_cookie(OIDC_COOKIE, state, max_age=600, httponly=True, secure=secure, samesite="lax", path="/auth/oidc")
+        return response
+
+    @app.get("/auth/oidc/callback")
+    def oidc_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+        client = request.client.host if request.client else None
+        if not oidc:
+            raise HTTPException(404, "SSO가 설정되지 않았습니다.")
+        try:
+            if error or not code:
+                raise ValueError(f"SSO 제공자가 로그인을 거부했습니다: {error or 'code 없음'}")
+            name, role, _ = oidc.finish(code, state, request.cookies.get(OIDC_COOKIE))
+        except (OSError, ValueError, KeyError) as exc:
+            audit.write(None, "login", result="failed", client=client, method="oidc", reason=str(exc)[:200])
+            return login_html(str(exc), 403)
+        token = auth.start_session(name, role)
+        audit.write(name, "login", result="ok", client=client, method="oidc", role=role)
+        # A same-site page load, so the Strict session cookie is sent on the next request.
+        response = HTMLResponse('<!doctype html><meta http-equiv="refresh" content="0;url=/"><a href="/">계속</a>',
+                                headers={"Cache-Control": "no-store"})
+        response.set_cookie(COOKIE, token, max_age=SESSION_SECONDS, httponly=True, secure=secure, samesite="strict", path="/")
+        response.delete_cookie(OIDC_COOKIE, path="/auth/oidc")
+        return response
 
     @app.post("/api/login")
     def login(credentials: LoginRequest, request: Request):

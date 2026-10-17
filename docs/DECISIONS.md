@@ -39,7 +39,8 @@ Last Updated: 2026-10-17
 - Change review compares configuration, not observations (health, running counts, telemetry).
 - Cross-account sessions always carry the ReadOnlyAccess session policy.
 - Network exposure only in team mode (users file + TLS + allowed hosts); there is no option to serve
-  unauthenticated on a non-loopback address. SSO is delegated to an authenticating proxy.
+  unauthenticated on a non-loopback address. SSO is built-in OpenID Connect (code + PKCE, claims
+  checked, ID token from the token endpoint over TLS); SAML goes through an authenticating proxy.
 - Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
 - Automatic layout only on first generation or explicit relayout; superseded edits are archived
   and user-added notes carried over.
