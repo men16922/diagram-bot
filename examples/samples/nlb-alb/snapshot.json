@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T07:25:41.662930+00:00",
-    "finished_at": "2026-10-17T07:25:41.662930+00:00",
+    "started_at": "2026-10-17T07:47:10.407901+00:00",
+    "finished_at": "2026-10-17T07:47:10.407901+00:00",
     "status": "complete",
     "demo": true,
     "sample": "nlb-alb",
@@ -33,11 +33,17 @@
       "EKS",
       "MSK",
       "ElastiCache",
-      "Lambda"
+      "Lambda",
+      "OpenSearch",
+      "ECS",
+      "EFS",
+      "Redshift",
+      "VpcPeering",
+      "VPN"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -157,6 +163,83 @@
     {
       "service": "eks",
       "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "kafka",
+      "operation": "list_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domains",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domain_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_services",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_tasks",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_mount_targets",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -811,8 +894,21 @@
     "replication_groups": [],
     "cache_subnet_groups": [],
     "msk_clusters": [],
+    "msk_nodes": [],
     "lambda_functions": [],
-    "eks_clusters": []
+    "eks_clusters": [],
+    "opensearch_domains": [],
+    "opensearch_nodes": [],
+    "ecs_services": [],
+    "ecs_tasks": [],
+    "efs_file_systems": [],
+    "efs_mount_targets": [],
+    "redshift_clusters": [],
+    "redshift_subnet_groups": [],
+    "vpc_peering_connections": [],
+    "vpn_gateways": [],
+    "vpn_connections": [],
+    "customer_gateways": []
   },
   "graph": {
     "nodes": [

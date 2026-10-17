@@ -7,12 +7,17 @@ CORE = {"associated_load_balancer", "registered_target"}
 AUXILIARY = {"uses_security_group", "attached_interface", "attached_volume"}
 AUXILIARY_KINDS = {"security_group", "network_interface", "volume"}
 # Regional resources reached from a VPC, drawn with the VPC's detail view.
-REGIONAL = {"attached_transit_gateway"}
+REGIONAL = {"attached_transit_gateway", "vpn_connection"}
 # Resources drawn inside the subnet that the API places them in.
-SUBNET_KINDS = {"ec2", "nat_gateway", "db_instance", "db_standby", "cache_node", "msk_broker"}
+SUBNET_KINDS = {"ec2", "nat_gateway", "db_instance", "db_standby", "cache_node", "msk_broker", "registered_target", "ecs_task",
+                "search_node", "efs_mount_target", "redshift_cluster"}
+# Groups framed around their members across AZ columns, and the relation to their target groups.
+GROUPS = {"auto_scaling_group": "asg_member", "ecs_service": "service_task"}
+GROUP_TARGETS = {"asg_target_group", "ecs_target_group"}
 # Known to the graph and the inspector but not drawn as shapes (routing is shown on subnets).
-# Logical groupings shown through their members (DB cluster, cache replication group, MSK cluster).
-UNDRAWN_KINDS = {"route_table", "db_cluster", "cache_replication_group", "msk_cluster"}
+# Logical groupings shown through their members (DB cluster, cache replication group, MSK cluster,
+# OpenSearch domain, EFS file system).
+UNDRAWN_KINDS = {"route_table", "db_cluster", "cache_replication_group", "msk_cluster", "opensearch_domain", "efs_file_system"}
 
 
 def containment(graph):
@@ -36,6 +41,8 @@ def view_graph(graph, view=None, vpc=None, resource=None, references=False):
         if not vpc_node:
             raise ValueError("선택한 VPC가 스냅샷에 없습니다.")
         visible = {vpc_node["id"]} | {k for k, v in vpc_of.items() if v == vpc_node["id"]}
+        # A peering between two collected VPCs is drawn in both VPCs' detail views.
+        visible |= {e["source"] for e in edges if e["relation"] == "peer_vpc" and e["target"] == vpc_node["id"]}
         # Registered targets and associated load balancers stay visible even if only referenced.
         for _ in range(2):
             visible |= {e["target"] for e in edges if e["relation"] in CORE | REGIONAL and e["source"] in visible}
@@ -43,19 +50,19 @@ def view_graph(graph, view=None, vpc=None, resource=None, references=False):
             visible |= {e["target"] for e in edges if e["relation"] in AUXILIARY and e["source"] in visible}
         # Target group -> Auto Scaling group is a candidate; the layout draws it instead of the per-instance
         # registrations when the group's members can be framed together.
-        drawn = [e for e in edges if e["relation"] in CORE | REGIONAL | {"asg_target_group"} | (AUXILIARY if references else set())]
+        drawn = [e for e in edges if e["relation"] in CORE | REGIONAL | GROUP_TARGETS | (AUXILIARY if references else set())]
     elif view == "focus":
         focus = next((n["id"] for n in nodes.values() if n["id"] == resource or n["resource_id"] == resource), None)
         if not focus:
             raise ValueError("선택한 리소스가 스냅샷에 없습니다.")
-        allowed = CORE | REGIONAL | {"in_subnet", "asg_target_group"} | (AUXILIARY if references or nodes[focus]["kind"] in AUXILIARY_KINDS else set())
+        allowed = CORE | REGIONAL | GROUP_TARGETS | {"in_subnet"} | (AUXILIARY if references or nodes[focus]["kind"] in AUXILIARY_KINDS else set())
         drawn = [e for e in edges if focus in (e["source"], e["target"]) and e["relation"] in allowed
                  and not (e["relation"] == "in_subnet" and nodes[e["source"]]["kind"] in SUBNET_KINDS and e["source"] != focus)]
         visible = {focus} | {e["source"] for e in drawn} | {e["target"] for e in drawn}
         if nodes[focus]["kind"] == "subnet":
             visible |= {k for k, v in subnet_of.items() if v == focus}
-        if nodes[focus]["kind"] == "auto_scaling_group":
-            visible |= {e["target"] for e in edges if e["source"] == focus and e["relation"] == "asg_member"}
+        if nodes[focus]["kind"] in GROUPS:
+            visible |= {e["target"] for e in edges if e["source"] == focus and e["relation"] == GROUPS[nodes[focus]["kind"]]}
         # Boundaries needed to read the placement of the visible resources.
         visible |= {vpc_of[k] for k in list(visible) if k in vpc_of}
         visible |= {subnet_of[k] for k in list(visible) if k in subnet_of}

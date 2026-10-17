@@ -60,7 +60,7 @@ python scripts/verify_demo.py   # 설치된 Chromium을 쓰려면 --chromium /pa
 
 ## 확인한 산출물
 
-- 앱 화면: [전체 구성](images/overview.png) · [상세 구성](images/workspace.png) · [선택 리소스](images/focus.png)
+- 앱 화면: [전체 구성](images/overview.png) · [상세 구성](images/workspace.png) · [선택 리소스](images/focus.png) · [데이터 플랫폼 샘플](images/data-platform.png)
 - [편집한 구성도 PNG](../examples/demo/edited-topology.png) · [동일 편집본 draw.io](../examples/demo/edited-topology.drawio)
 - [CLI 다중 페이지 draw.io](../examples/demo/topology.drawio) · [브라우저 검증 결과](../examples/demo/verification.json)
 - [배치 엔진 평가](engineering/LAYOUT_EVALUATION.md)

@@ -27,7 +27,24 @@
         "eks:ListClusters",
         "eks:DescribeCluster",
         "eks:ListNodegroups",
-        "eks:DescribeNodegroup"
+        "eks:DescribeNodegroup",
+        "kafka:ListNodes",
+        "es:ListDomainNames",
+        "es:DescribeDomains",
+        "es:DescribeDomainNodes",
+        "ecs:ListClusters",
+        "ecs:ListServices",
+        "ecs:DescribeServices",
+        "ecs:ListTasks",
+        "ecs:DescribeTasks",
+        "elasticfilesystem:DescribeFileSystems",
+        "elasticfilesystem:DescribeMountTargets",
+        "redshift:DescribeClusters",
+        "redshift:DescribeClusterSubnetGroups",
+        "ec2:DescribeVpcPeeringConnections",
+        "ec2:DescribeVpnGateways",
+        "ec2:DescribeVpnConnections",
+        "ec2:DescribeCustomerGateways"
       ],
       "Resource": "*"
     }

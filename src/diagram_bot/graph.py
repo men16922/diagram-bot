@@ -1,5 +1,6 @@
 """Deterministic joins. No traffic inference or IP-to-instance guessing."""
 import hashlib
+import ipaddress
 import json
 
 # Fields that distinguish two configured relations between the same resources. Health state and
@@ -41,9 +42,10 @@ def build_graph(snapshot):
             attrs = attrs or {}
             tags = {t["Key"]: t.get("Value", "") for t in attrs.get("Tags", [])}
             nodes[key] = {"id": key, "resource_id": resource_id, "kind": kind,
-                          "name": tags.get("Name") or attrs.get("LoadBalancerName") or attrs.get("TargetGroupName")
+                          "name": tags.get("Name") or attrs.get("DisplayName") or attrs.get("LoadBalancerName") or attrs.get("TargetGroupName")
                           or attrs.get("DBInstanceIdentifier") or attrs.get("AutoScalingGroupName") or attrs.get("FunctionName")
-                          or attrs.get("CacheClusterId") or attrs.get("ClusterName") or resource_id,
+                          or attrs.get("CacheClusterId") or attrs.get("ClusterName") or attrs.get("serviceName")
+                          or attrs.get("DomainName") or attrs.get("ClusterIdentifier") or resource_id,
                           "account": account, "region": region, "attributes": attrs,
                           "reference_only": reference, "source": source}
         return key
@@ -91,6 +93,7 @@ def build_graph(snapshot):
                 for lb in item.get("LoadBalancerArns", []):
                     link(key, "load_balancer", lb, "associated_load_balancer", api + ".LoadBalancerArns[]")
     groups = {x["TargetGroupArn"]: x for x in raw.get("target_groups", [])}
+    tasks = ecs_tasks(raw, node, link)
     for result in raw.get("target_health", []):
         arn = result["TargetGroupArn"]
         group = groups.get(arn, {})
@@ -100,14 +103,20 @@ def build_graph(snapshot):
             target_type = group.get("TargetType", "unknown")
             kind = {"instance": "ec2", "alb": "load_balancer"}.get(target_type, "registered_target")
             rid = target["Id"]
-            if kind == "registered_target":
+            if kind == "registered_target" and (arn, rid) in tasks:
+                # The ECS service registers its task's ENI address in the target group it names.
+                kind, rid = "ecs_task", tasks[(arn, rid)]
+            elif kind == "registered_target":
                 rid = f"{arn}#{rid}:{target.get('Port', '')}:{target.get('AvailabilityZone', '')}"
-                node(kind, rid, {**description, "TargetType": target_type}, "DescribeTargetHealth")
+                target_key = node(kind, rid, {**description, "TargetType": target_type}, "DescribeTargetHealth")
+                place_ip_target(raw, target_key, target, group.get("VpcId"), link)
             link(key, kind, rid, "registered_target", "DescribeTargetHealth.Target.Id", description,
                  {"port": target.get("Port"), "availability_zone": target.get("AvailabilityZone")})
     endpoints_and_transit(raw, node, link)
     infrastructure(raw, prefix, nodes, node, link)
     services(raw, prefix, nodes, node, link)
+    more_services(raw, prefix, nodes, node, link)
+    connectivity(raw, prefix, nodes, node, link)
     classify_subnets(raw, prefix, nodes, link)
     return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
             "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
@@ -136,8 +145,10 @@ def infrastructure(raw, prefix, nodes, node, link):
                 kind, field = "nat_gateway", "NatGatewayId"
             elif route.get("TransitGatewayId"):
                 kind, field = "transit_gateway", "TransitGatewayId"
-            elif gateway.startswith(("igw-", "vpce-")):
-                kind, field = ("internet_gateway" if gateway.startswith("igw-") else "vpc_endpoint"), "GatewayId"
+            elif route.get("VpcPeeringConnectionId"):
+                kind, field = "vpc_peering", "VpcPeeringConnectionId"
+            elif gateway.startswith(("igw-", "vpce-", "vgw-")):
+                kind, field = {"igw": "internet_gateway", "vpce": "vpc_endpoint", "vgw": "vpn_gateway"}[gateway.split("-")[0]], "GatewayId"
             else:
                 continue  # local and other targets carry no drawable relation
             link(key, kind, route[field], "routes_to", f"DescribeRouteTables.Routes[].{field}", {"state": route.get("State")},
@@ -155,6 +166,12 @@ def infrastructure(raw, prefix, nodes, node, link):
 
         link(key, "subnet", subnet_in(db.get("AvailabilityZone")), "in_subnet",
              "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]", {"availability_zone": db.get("AvailabilityZone")})
+        source = db.get("ReadReplicaSourceDBInstanceIdentifier")
+        if source:
+            # Same-region sources are identifiers; a cross-region source is an ARN in another region.
+            nodes[key]["db_role"] = "cross-region replica" if source.startswith("arn:") else "read replica"
+            if not source.startswith("arn:"):
+                link(key, "db_instance", source, "read_replica_of", "DescribeDBInstances.ReadReplicaSourceDBInstanceIdentifier")
         if db.get("MultiAZ") and db.get("SecondaryAvailabilityZone"):
             standby = node("db_standby", identifier + "#standby",
                            {"DBInstanceIdentifier": identifier + " (standby)", "AvailabilityZone": db["SecondaryAvailabilityZone"],
@@ -207,17 +224,22 @@ def services(raw, prefix, nodes, node, link):
         for member in cluster.get("DBClusterMembers", []):
             instance = prefix + "db_instance/" + member["DBInstanceIdentifier"]
             if instance in nodes:
-                nodes[instance]["db_role"] = "writer" if member.get("IsClusterWriter") else "reader"
+                # Aurora readers serve reads and fail over; a Multi-AZ DB cluster's readers are readable standbys.
+                aurora = str(cluster.get("Engine", "")).startswith("aurora") or cluster.get("Engine") in ("docdb", "neptune")
+                nodes[instance]["db_role"] = "writer" if member.get("IsClusterWriter") else ("reader" if aurora else "readable standby")
             link(key, "db_instance", member["DBInstanceIdentifier"], "cluster_member", "DescribeDBClusters.DBClusterMembers[]",
                  {"writer": member.get("IsClusterWriter")})
     groups = {g["CacheSubnetGroupName"]: g for g in raw.get("cache_subnet_groups", [])}
     roles = {m.get("CacheClusterId"): m.get("CurrentRole") for g in raw.get("replication_groups", [])
              for ng in g.get("NodeGroups", []) for m in ng.get("NodeGroupMembers", [])}
+    # Cluster mode enabled: one node group per shard.
+    shards = {m.get("CacheClusterId"): ng.get("NodeGroupId") for g in raw.get("replication_groups", []) if len(g.get("NodeGroups", [])) > 1
+              for ng in g["NodeGroups"] for m in ng.get("NodeGroupMembers", [])}
     for group in raw.get("replication_groups", []):
         node("cache_replication_group", group["ReplicationGroupId"], group, "DescribeReplicationGroups")
     for cache in raw.get("cache_clusters", []):
-        key = node("cache_node", cache["CacheClusterId"], {**cache, "CurrentRole": roles.get(cache["CacheClusterId"])},
-                   "DescribeCacheClusters")
+        key = node("cache_node", cache["CacheClusterId"], {**cache, "CurrentRole": roles.get(cache["CacheClusterId"]),
+                                                            "Shard": shards.get(cache["CacheClusterId"])}, "DescribeCacheClusters")
         subnet_group = groups.get(cache.get("CacheSubnetGroupName"), {})
         link(key, "vpc", subnet_group.get("VpcId"), "in_vpc", "DescribeCacheClusters.CacheSubnetGroupName → DescribeCacheSubnetGroups.VpcId")
         zone = cache.get("PreferredAvailabilityZone")
@@ -230,13 +252,20 @@ def services(raw, prefix, nodes, node, link):
         brokers = provisioned.get("BrokerNodeGroupInfo") or {}
         subnets = brokers.get("ClientSubnets", [])
         key = node("msk_cluster", cluster["ClusterArn"], cluster, "ListClustersV2")
+        listed = {}
+        for item in raw.get("msk_nodes", []):
+            info = item.get("BrokerNodeInfo") or {}
+            if item.get("ClusterArn") == cluster["ClusterArn"] and info.get("ClientSubnet"):
+                listed.setdefault(info["ClientSubnet"], []).append(info.get("BrokerId"))
         for subnet in subnets:
-            # MSK spreads brokers evenly across the client subnets (one per AZ).
-            per_subnet = provisioned.get("NumberOfBrokerNodes", 0) // max(1, len(subnets))
+            # ListNodes names each broker's subnet; without it MSK's even spread over client subnets is shown.
+            ids = listed.get(subnet)
+            per_subnet = len(ids) if listed else provisioned.get("NumberOfBrokerNodes", 0) // max(1, len(subnets))
             broker = node("msk_broker", cluster["ClusterArn"] + "#" + subnet,
                           {"ClusterName": cluster.get("ClusterName"), "Brokers": per_subnet, "InstanceType": brokers.get("InstanceType"),
+                           "BrokerIds": sorted(ids or []), "Estimated": not listed,
                            "KafkaVersion": (provisioned.get("CurrentBrokerSoftwareInfo") or {}).get("KafkaVersion")},
-                          "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
+                          "ListNodes.BrokerNodeInfo.ClientSubnet" if listed else "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
             link(broker, "vpc", subnet_vpc.get(subnet), "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
             link(broker, "subnet", subnet, "in_subnet", "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
             link(broker, "msk_cluster", cluster["ClusterArn"], "broker_of", "ListClustersV2.ClusterArn")
@@ -263,6 +292,171 @@ def services(raw, prefix, nodes, node, link):
                       "scaling": group.get("scalingConfig")})
 
 
+def subnet_index(raw):
+    return {s["SubnetId"]: s for s in raw.get("subnets", [])}
+
+
+def ecs_tasks(raw, node, link):
+    """ECS services and their awsvpc tasks. Returns (target group, task IP) -> task ARN for target registration."""
+    subnets = subnet_index(raw)
+    services = {(s.get("clusterArn"), s.get("serviceName")): s for s in raw.get("ecs_services", [])}
+    for service in services.values():
+        config = (service.get("networkConfiguration") or {}).get("awsvpcConfiguration") or {}
+        launch = service.get("launchType") or "/".join(c.get("capacityProvider", "") for c in service.get("capacityProviderStrategy", []))
+        key = node("ecs_service", service["serviceArn"], {**service, "LaunchSummary": launch}, "DescribeServices")
+        vpcs = {subnets.get(s, {}).get("VpcId") for s in config.get("subnets", [])} - {None}
+        if len(vpcs) == 1:
+            link(key, "vpc", vpcs.pop(), "in_vpc", "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[] → DescribeSubnets.VpcId")
+        for subnet in config.get("subnets", []):
+            link(key, "subnet", subnet, "service_subnet", "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[]")
+        for balancer in service.get("loadBalancers", []):
+            link(key, "target_group", balancer.get("targetGroupArn"), "ecs_target_group", "DescribeServices.loadBalancers[].targetGroupArn",
+                 {"container": balancer.get("containerName"), "port": balancer.get("containerPort")})
+    registered = {}
+    for task in raw.get("ecs_tasks", []):
+        details = {d.get("name"): d.get("value") for a in task.get("attachments", []) if a.get("type") == "ElasticNetworkInterface"
+                   for d in a.get("details", [])}
+        service = services.get((task.get("clusterArn"), str(task.get("group", "")).removeprefix("service:")))
+        if not details.get("subnetId"):
+            continue  # bridge/host networking: no task ENI to place
+        name = (service or {}).get("serviceName") or task.get("group", "task")
+        key = node("ecs_task", task["taskArn"], {**task, "DisplayName": f"{name}/{task['taskArn'].rsplit('/', 1)[-1][:8]}",
+                                                 "ServiceName": name, "PrivateIp": details.get("privateIPv4Address"),
+                                                 "SubnetId": details["subnetId"]}, "DescribeTasks")
+        link(key, "vpc", subnets.get(details["subnetId"], {}).get("VpcId"), "in_vpc", "DescribeTasks.attachments[].details.subnetId → DescribeSubnets.VpcId")
+        link(key, "subnet", details["subnetId"], "in_subnet", "DescribeTasks.attachments[].details.subnetId",
+             {"availability_zone": task.get("availabilityZone")}, {"availability_zone": task.get("availabilityZone")})
+        if service:
+            link(node("ecs_service", service["serviceArn"], reference=True), "ecs_task", task["taskArn"], "service_task", "DescribeTasks.group")
+            for balancer in service.get("loadBalancers", []):
+                if balancer.get("targetGroupArn") and details.get("privateIPv4Address"):
+                    registered[(balancer["targetGroupArn"], details["privateIPv4Address"])] = task["taskArn"]
+    return registered
+
+
+def place_ip_target(raw, key, target, vpc, link):
+    """An IP target in its target group's VPC sits in the subnet whose CIDR holds it (and whose AZ matches)."""
+    zone = target.get("AvailabilityZone")
+    if not vpc or zone == "all":
+        return  # AvailabilityZone=all: an address outside the VPC
+    try:
+        address = ipaddress.ip_address(target["Id"])
+    except ValueError:
+        return
+    matches = [s for s in raw.get("subnets", []) if s.get("VpcId") == vpc and s.get("CidrBlock")
+               and address in ipaddress.ip_network(s["CidrBlock"], strict=False) and zone in (None, s.get("AvailabilityZone"))]
+    if len(matches) == 1:
+        link(key, "vpc", vpc, "in_vpc", "DescribeTargetGroups.VpcId")
+        link(key, "subnet", matches[0]["SubnetId"], "in_subnet", "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock",
+             {"availability_zone": matches[0].get("AvailabilityZone")}, {"availability_zone": matches[0].get("AvailabilityZone")})
+
+
+def more_services(raw, prefix, nodes, node, link):
+    """OpenSearch, EFS and Redshift, placed per subnet/AZ from their own API fields."""
+    subnets = subnet_index(raw)
+    for domain in raw.get("opensearch_domains", []):
+        options = domain.get("VPCOptions") or {}
+        config = domain.get("ClusterConfig") or {}
+        key = node("opensearch_domain", domain["ARN"], domain, "DescribeDomains")
+        link(key, "vpc", options.get("VPCId"), "in_vpc", "DescribeDomains.VPCOptions.VPCId")
+        listed = [n for n in raw.get("opensearch_nodes", []) if n.get("DomainName") == domain["DomainName"]]
+        chosen = options.get("SubnetIds", [])
+        for subnet in chosen:
+            zone = subnets.get(subnet, {}).get("AvailabilityZone")
+            here = [n for n in listed if n.get("AvailabilityZone") == zone]
+            count = lambda kind: sum(1 for n in here if n.get("NodeType") == kind)
+            attrs = {"DomainName": domain["DomainName"], "EngineVersion": domain.get("EngineVersion"), "InstanceType": config.get("InstanceType"),
+                     "DedicatedMasterType": config.get("DedicatedMasterType"), "AvailabilityZone": zone, "Estimated": not listed,
+                     "MultiAZWithStandby": config.get("MultiAZWithStandbyEnabled"), "ZoneAwareness": config.get("ZoneAwarenessEnabled")}
+            if listed:
+                attrs.update(Data=count("Data"), Master=count("Master"), Warm=count("Ultrawarm") + count("Warm"),
+                             Standby=bool(here) and all(n.get("NodeStatus") == "StandBy" for n in here if n.get("NodeType") == "Data"))
+            else:
+                attrs.update(Data=config.get("InstanceCount", 0) // max(1, len(chosen)))
+            search = node("search_node", domain["ARN"] + "#" + subnet, {**attrs, "DisplayName": domain["DomainName"]},
+                          "DescribeDomainNodes.AvailabilityZone" if listed else "DescribeDomains.VPCOptions.SubnetIds[]")
+            link(search, "vpc", options.get("VPCId"), "in_vpc", "DescribeDomains.VPCOptions.VPCId")
+            link(search, "subnet", subnet, "in_subnet", "DescribeDomains.VPCOptions.SubnetIds[]", {"availability_zone": zone}, {"availability_zone": zone})
+            link(search, "opensearch_domain", domain["ARN"], "node_of", "DescribeDomains.ARN")
+    systems = {f["FileSystemId"]: f for f in raw.get("efs_file_systems", [])}
+    for system in systems.values():
+        node("efs_file_system", system["FileSystemId"], system, "DescribeFileSystems")
+    for target in raw.get("efs_mount_targets", []):
+        system = systems.get(target.get("FileSystemId"), {})
+        tags = {t["Key"]: t.get("Value", "") for t in system.get("Tags", [])}
+        key = node("efs_mount_target", target["MountTargetId"],
+                   {**target, "DisplayName": system.get("Name") or tags.get("Name") or target.get("FileSystemId"),
+                    "OneZone": bool(system.get("AvailabilityZoneName")), "ThroughputMode": system.get("ThroughputMode"),
+                    "PerformanceMode": system.get("PerformanceMode"), "Encrypted": system.get("Encrypted")}, "DescribeMountTargets")
+        link(key, "vpc", target.get("VpcId") or subnets.get(target.get("SubnetId"), {}).get("VpcId"), "in_vpc", "DescribeMountTargets.VpcId")
+        link(key, "subnet", target.get("SubnetId"), "in_subnet", "DescribeMountTargets.SubnetId",
+             {"availability_zone": target.get("AvailabilityZoneName")}, {"availability_zone": target.get("AvailabilityZoneName")})
+        link(key, "efs_file_system", target.get("FileSystemId"), "mount_target_of", "DescribeMountTargets.FileSystemId")
+    groups = {g["ClusterSubnetGroupName"]: g for g in raw.get("redshift_subnet_groups", [])}
+    for cluster in raw.get("redshift_clusters", []):
+        group = groups.get(cluster.get("ClusterSubnetGroupName"), {})
+
+        def subnet_in(zone):
+            matches = [s["SubnetIdentifier"] for s in group.get("Subnets", []) if (s.get("SubnetAvailabilityZone") or {}).get("Name") == zone]
+            return matches[0] if len(matches) == 1 else None
+
+        secondary = cluster.get("MultiAZSecondary") or {}
+        multi = str(cluster.get("MultiAZ", "")).lower() == "enabled"
+        for suffix, zone, role, nodes_in in (("", cluster.get("AvailabilityZone"), "primary" if multi else None, cluster.get("ClusterNodes", [])),
+                                             ("#secondary", secondary.get("AvailabilityZone"), "secondary", secondary.get("ClusterNodes", []))):
+            if not zone:
+                continue
+            attrs = {**cluster, "AvailabilityZone": zone, "Role": role, "NodesHere": len(nodes_in) or cluster.get("NumberOfNodes"),
+                     "DisplayName": cluster["ClusterIdentifier"]} if suffix else {**cluster, "Role": role, "NodesHere": len(nodes_in) or cluster.get("NumberOfNodes")}
+            key = node("redshift_cluster", cluster["ClusterIdentifier"] + suffix, attrs, "DescribeClusters" + (".MultiAZSecondary" if suffix else ""))
+            link(key, "vpc", cluster.get("VpcId"), "in_vpc", "DescribeClusters.VpcId")
+            link(key, "subnet", subnet_in(zone), "in_subnet", "DescribeClusters.AvailabilityZone + DescribeClusterSubnetGroups.Subnets[]",
+                 {"availability_zone": zone}, {"availability_zone": zone})
+            if suffix:
+                link(key, "redshift_cluster", cluster["ClusterIdentifier"], "standby_of", "DescribeClusters.MultiAZSecondary")
+
+
+def connectivity(raw, prefix, nodes, node, link):
+    """VPC peering, virtual private gateways and Site-to-Site VPN to customer gateways."""
+    local = {v["VpcId"] for v in raw.get("vpcs", [])}
+    for peering in raw.get("vpc_peering_connections", []):
+        sides = [(peering.get(side) or {}).get("VpcId") for side in ("RequesterVpcInfo", "AccepterVpcInfo")]
+        mine = [v for v in sides if v in local]
+        if not mine:
+            continue
+        key = node("vpc_peering", peering["VpcPeeringConnectionId"], peering, "DescribeVpcPeeringConnections")
+        link(key, "vpc", mine[0], "in_vpc", "DescribeVpcPeeringConnections.RequesterVpcInfo/AccepterVpcInfo.VpcId")
+        if len(mine) == 2:
+            # Both ends collected: the peering is drawn in each VPC's detail view.
+            link(key, "vpc", mine[1], "peer_vpc", "DescribeVpcPeeringConnections.AccepterVpcInfo.VpcId")
+    for gateway in raw.get("vpn_gateways", []):
+        key = node("vpn_gateway", gateway["VpnGatewayId"], gateway, "DescribeVpnGateways")
+        for attachment in gateway.get("VpcAttachments", []):
+            if attachment.get("State") == "attached":
+                link(key, "vpc", attachment.get("VpcId"), "in_vpc", "DescribeVpnGateways.VpcAttachments[].VpcId")
+    customers = {c["CustomerGatewayId"]: c for c in raw.get("customer_gateways", [])}
+    tunnels = {}
+    for connection in raw.get("vpn_connections", []):
+        if connection.get("State") in ("deleted", "deleting"):
+            continue
+        telemetry = connection.get("VgwTelemetry", [])
+        up = sum(1 for t in telemetry if t.get("Status") == "UP")
+        tunnels.setdefault(connection.get("CustomerGatewayId"), []).append(f"{up}/{len(telemetry)}")
+        customer = connection.get("CustomerGatewayId")
+        if customer and customer not in customers:
+            customers[customer] = {"CustomerGatewayId": customer}
+        hub = ("vpn_gateway", connection["VpnGatewayId"]) if connection.get("VpnGatewayId") else ("transit_gateway", connection.get("TransitGatewayId"))
+        if hub[1]:
+            source = node(hub[0], hub[1], reference=True)
+            link(source, "customer_gateway", customer, "vpn_connection", f"DescribeVpnConnections.{'VpnGatewayId' if hub[0] == 'vpn_gateway' else 'TransitGatewayId'} + CustomerGatewayId",
+                 {"VpnConnectionId": connection.get("VpnConnectionId"), "State": connection.get("State"), "Tunnels": f"{up}/{len(telemetry)} UP",
+                  "StaticRoutesOnly": (connection.get("Options") or {}).get("StaticRoutesOnly")},
+                 {"destination": connection.get("VpnConnectionId")})
+    for customer in customers.values():
+        node("customer_gateway", customer["CustomerGatewayId"], {**customer, "VpnTunnels": tunnels.get(customer["CustomerGatewayId"], [])},
+             "DescribeCustomerGateways", reference="IpAddress" not in customer)
+
+
 def classify_subnets(raw, prefix, nodes, link):
     """Subnet internet path from its route table: explicit association, else the VPC's main table."""
     tables = raw.get("route_tables")
@@ -285,6 +479,8 @@ def classify_subnets(raw, prefix, nodes, link):
             route_class = "nat"
         elif any(r.get("TransitGatewayId") for r in default):
             route_class = "tgw"
+        elif any(str(r.get("GatewayId", "")).startswith("vgw-") for r in default):
+            route_class = "vgw"
         else:
             route_class = "isolated"
         nodes[key]["route_class"] = route_class

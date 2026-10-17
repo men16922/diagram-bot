@@ -54,7 +54,8 @@ def test_elbv2_marker_pagination():
 
 class Session:
     def __init__(self):
-        self.clients = {name: client(name) for name in ("sts", "ec2", "elbv2", "rds", "autoscaling", "elasticache", "kafka", "lambda", "eks")}
+        self.clients = {name: client(name) for name in ("sts", "ec2", "elbv2", "rds", "autoscaling", "elasticache", "kafka", "lambda", "eks",
+                                                                  "opensearch", "ecs", "efs", "redshift")}
 
     def client(self, name, **kwargs):
         return self.clients[name]
@@ -98,10 +99,34 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         stubs["kafka"].add_response("list_clusters_v2", {"ClusterInfoList": []}, {})
         stubs["lambda"].add_response("list_functions", {"Functions": []}, {})
         stubs["eks"].add_response("list_clusters", {"clusters": ["platform"]}, {})
+        stubs["opensearch"].add_response("list_domain_names", {"DomainNames": [{"DomainName": "logs"}]}, {})
+        stubs["ecs"].add_response("list_clusters", {"clusterArns": ["arn:aws:ecs:ap-northeast-2:111122223333:cluster/apps"]}, {})
+        stubs["efs"].add_response("describe_file_systems", {"FileSystems": [{"FileSystemId": "fs-a", "OwnerId": "111122223333", "CreationToken": "t",
+                                                                               "CreationTime": "2026-01-01T00:00:00Z", "LifeCycleState": "available",
+                                                                               "NumberOfMountTargets": 1, "SizeInBytes": {"Value": 1},
+                                                                               "PerformanceMode": "generalPurpose", "Tags": []}]}, {})
+        stubs["redshift"].add_response("describe_clusters", {"Clusters": []}, {})
+        stubs["redshift"].add_response("describe_cluster_subnet_groups", {"ClusterSubnetGroups": []}, {})
+        stubs["ec2"].add_response("describe_vpc_peering_connections", {"VpcPeeringConnections": []}, {})
+        stubs["ec2"].add_client_error("describe_vpn_gateways", "UnauthorizedOperation", expected_params={})
+        stubs["ec2"].add_response("describe_vpn_connections", {"VpnConnections": []}, {})
+        stubs["ec2"].add_response("describe_customer_gateways", {"CustomerGateways": []}, {})
         stubs["eks"].add_response("describe_cluster", {"cluster": {"name": "platform", "resourcesVpcConfig": {"vpcId": "vpc-a", "subnetIds": ["subnet-a"]}}}, {"name": "platform"})
         stubs["eks"].add_response("list_nodegroups", {"nodegroups": ["general"]}, {"clusterName": "platform"})
         stubs["eks"].add_response("describe_nodegroup", {"nodegroup": {"nodegroupName": "general", "resources": {"autoScalingGroups": [{"name": "eks-general"}]}}},
                                   {"clusterName": "platform", "nodegroupName": "general"})
+        stubs["opensearch"].add_response("describe_domains", {"DomainStatusList": [{"DomainId": "1/logs", "DomainName": "logs", "ARN": "arn:aws:es:ap-northeast-2:111122223333:domain/logs",
+                                                                                     "ClusterConfig": {}, "VPCOptions": {"SubnetIds": ["subnet-a"]}}]},
+                                         {"DomainNames": ["logs"]})
+        stubs["opensearch"].add_response("describe_domain_nodes", {"DomainNodesStatusList": [{"NodeId": "node-00000001", "NodeType": "Data",
+                                                                                              "AvailabilityZone": "ap-northeast-2a"}]}, {"DomainName": "logs"})
+        cluster = "arn:aws:ecs:ap-northeast-2:111122223333:cluster/apps"
+        stubs["ecs"].add_response("list_services", {"serviceArns": ["svc-a"]}, {"cluster": cluster})
+        stubs["ecs"].add_response("describe_services", {"services": [{"serviceName": "web"}]}, {"cluster": cluster, "services": ["svc-a"]})
+        stubs["ecs"].add_response("list_tasks", {"taskArns": ["task-a"]}, {"cluster": cluster, "desiredStatus": "RUNNING"})
+        stubs["ecs"].add_client_error("describe_tasks", "AccessDeniedException", expected_params={"cluster": cluster, "tasks": ["task-a"]})
+        stubs["efs"].add_response("describe_mount_targets", {"MountTargets": [{"MountTargetId": "fsmt-0000000a", "FileSystemId": "fs-a", "SubnetId": "subnet-0000000a",
+                                                                               "LifeCycleState": "available"}]}, {"FileSystemId": "fs-a"})
         result = collect("ap-northeast-2", expected_account="111122223333", session=session)
         assert result["metadata"]["status"] == "partial"
         assert result["raw"]["instances"] == [{"InstanceId": "i-a"}, {"InstanceId": "i-b"}]
@@ -113,6 +138,15 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         eks = result["raw"]["eks_clusters"][0]
         assert eks["resourcesVpcConfig"]["vpcId"] == "vpc-a" and eks["nodegroups"][0]["nodegroupName"] == "general"
         assert "eks_cluster_names" not in result["raw"]
+        assert result["raw"]["opensearch_nodes"][0]["DomainName"] == "logs"
+        assert result["raw"]["ecs_services"] == [{"serviceName": "web"}] and result["raw"]["ecs_tasks"] == []
+        tasks = next(c for c in result["coverage"] if c["operation"] == "describe_tasks")
+        assert tasks["status"] == "unavailable" and tasks["permission"] == "ecs:DescribeTasks"
+        vpn = next(c for c in result["coverage"] if c["operation"] == "describe_vpn_gateways")
+        assert vpn["permission"] == "ec2:DescribeVpnGateways"
+        assert next(c for c in result["coverage"] if c["operation"] == "describe_mount_targets")["permission"] == "elasticfilesystem:DescribeMountTargets"
+        assert next(c for c in result["coverage"] if c["operation"] == "describe_domains")["permission"] == "es:DescribeDomains"
+        assert result["raw"]["efs_mount_targets"][0]["SubnetId"] == "subnet-0000000a"
         for stub in stubs.values():
             stub.assert_no_pending_responses()
 

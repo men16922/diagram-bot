@@ -8,18 +8,21 @@ subnet or an icon. Identical input and options always yield identical coordinate
 """
 import hashlib
 
-from .views import AUXILIARY, REGIONAL, containment
+from .views import AUXILIARY, GROUP_TARGETS, GROUPS, REGIONAL, containment
 
 ENGINE, VERSION = "diagram-bot-layered", 2
-ICON, LINE, MAX_LINES = 52, 15, 3
+ICON, LINE, MAX_LINES = 52, 15, 4
+SIDE_LINES = 3  # labels beside an icon stay within the icon row
 BOTTOM_LABEL, SIDE_LABEL = 140, 200
 SLOT, SIDE_SLOT = 150, 290
 LANE_TOP = 36  # space above an icon row for up to LANES entering routes
 ROW = LANE_TOP + ICON + 8 + MAX_LINES * LINE + 8
 SUBNET_HEADER, AZ_HEADER, VPC_HEADER = 46, 32, 38
 # The VPC's attachment row: edges to the internet, AWS services and other networks, and managed
-# services whose network interfaces span several subnets (EKS control plane, VPC Lambda).
-EDGE_KINDS = {"internet_gateway": 0, "vpc_endpoint": 1, "tgw_attachment": 2, "eks_cluster": 3, "lambda_function": 4}
+# services whose network interfaces span several subnets (EKS control plane, VPC Lambda, ECS services
+# whose tasks were not collected).
+EDGE_KINDS = {"internet_gateway": 0, "vpn_gateway": 1, "vpc_peering": 2, "tgw_attachment": 3, "vpc_endpoint": 4,
+              "eks_cluster": 5, "ecs_service": 6, "lambda_function": 7}
 KIND_ORDER = {"transit_gateway": -1, "load_balancer": 0, "target_group": 1, "ec2": 2, "registered_target": 3,
               "security_group": 4, "network_interface": 5, "volume": 6}
 
@@ -45,6 +48,15 @@ def fit_label(text, width, lines=MAX_LINES, size=12):
             break
         out += c
     return out + "…"
+
+
+def fit_name(text, width):
+    """One-line name: names ending in a number (node, shard, replica) keep their tail, others their start."""
+    if text_width(text) <= width * 0.95 or not text[-1:].isdigit():
+        return fit_label(text, width, 1)
+    keep = len(fit_label(text, width, 1)) - 1  # characters that fit beside the ellipsis
+    back = max(4, keep // 2)
+    return text[:keep - back] + "…" + text[-back:]
 
 
 def label_lines(text, width, size=12):
@@ -77,7 +89,8 @@ class Canvas:
         return None
 
 
-ROUTES = {"public": "0.0.0.0/0 → IGW", "nat": "0.0.0.0/0 → NAT", "tgw": "0.0.0.0/0 → TGW", "isolated": "인터넷 경로 없음"}
+ROUTES = {"public": "0.0.0.0/0 → IGW", "nat": "0.0.0.0/0 → NAT", "tgw": "0.0.0.0/0 → TGW", "vgw": "0.0.0.0/0 → VGW",
+          "isolated": "인터넷 경로 없음"}
 
 
 def is_public(subnet):
@@ -101,14 +114,19 @@ def tier_rank(subnet):
 
 
 def icon_variant(node):
-    """Icon choice within a kind: load balancer type, Aurora engines, cache engine."""
+    """Icon choice within a kind: load balancer type, database and cache engine, file system class."""
     attrs = node["attributes"]
     if node["kind"] == "load_balancer":
         return attrs.get("Type")
-    if node["kind"] == "db_instance" and str(attrs.get("Engine", "")).startswith("aurora"):
-        return "aurora"
+    if node["kind"] in ("db_instance", "db_standby"):
+        engine = str(attrs.get("Engine", ""))
+        return "aurora" if engine.startswith("aurora") else {"docdb": "documentdb", "neptune": "neptune"}.get(engine)
     if node["kind"] == "cache_node":
         return str(attrs.get("Engine", "redis"))
+    if node["kind"] == "efs_mount_target":
+        return "efs_one_zone" if attrs.get("OneZone") else "efs_standard"
+    if node["kind"] == "registered_target" and attrs.get("TargetType") == "ip" and not outside_vpc(node):
+        return "ip_target"
     return None
 
 
@@ -126,45 +144,87 @@ def arrange(kids, size, asg_of, nodes):
 
 
 ENGINES = {"aurora-postgresql": "Aurora PostgreSQL", "aurora-mysql": "Aurora MySQL", "postgres": "PostgreSQL", "mysql": "MySQL",
-           "mariadb": "MariaDB", "redis": "Redis", "valkey": "Valkey", "memcached": "Memcached"}
+           "mariadb": "MariaDB", "redis": "Redis", "valkey": "Valkey", "memcached": "Memcached", "docdb": "DocumentDB",
+           "neptune": "Neptune", "oracle-ee": "Oracle EE", "oracle-se2": "Oracle SE2", "sqlserver-ee": "SQL Server EE",
+           "sqlserver-se": "SQL Server SE", "sqlserver-ex": "SQL Server Express", "sqlserver-web": "SQL Server Web"}
 
 
 def resource_label(node):
-    attrs = node["attributes"]
-    if node["kind"] == "registered_target":
+    """Name first, then type and the high-availability role; full detail stays in the inspector."""
+    attrs, kind, name = node["attributes"], node["kind"], node["name"]
+    lines = lambda *parts: "\n".join(str(p) for p in parts if p not in (None, ""))
+    if kind == "registered_target":
         target = attrs.get("Target", {})
-        return f"{target.get('Id', node['name'])}:{target.get('Port', '')}"
-    if node["kind"] == "load_balancer" and attrs.get("Type"):
-        kind = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
-        return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{kind} · {attrs.get('Scheme', '')}".rstrip(" ·")
-    if node["kind"] == "internet_gateway":
-        return f"{fit_label(node['name'], SIDE_LABEL, 2)}\nInternet gateway"
-    if node["kind"] == "vpc_endpoint":
-        kind = attrs.get("VpcEndpointType", "")
-        where = f" · 서브넷 {len(attrs.get('SubnetIds', []))}개" if kind == "Interface" else ""
-        return f"{fit_label(attrs.get('ServiceShortName') or node['name'], SIDE_LABEL, 1)}\n{kind}{where}"
-    if node["kind"] == "tgw_attachment":
-        return f"{fit_label(node['name'], SIDE_LABEL, 1)}\nTGW attachment"
-    if node["kind"] == "transit_gateway":
-        return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\nTransit Gateway"
-    if node["kind"] == "nat_gateway":
-        return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\nNAT gateway"
-    if node["kind"] == "eks_cluster":
-        return f"{fit_label(node['name'], SIDE_LABEL, 1)}\nEKS {attrs.get('version', '')} control plane".replace("  ", " ")
-    if node["kind"] == "lambda_function":
-        return f"{fit_label(node['name'], SIDE_LABEL, 1)}\nLambda · 서브넷 {len((attrs.get('VpcConfig') or {}).get('SubnetIds', []))}개"
-    if node["kind"] == "msk_broker":
-        return f"{fit_label(attrs.get('ClusterName') or node['name'], BOTTOM_LABEL, 1)}\nMSK 브로커 {attrs.get('Brokers', '')}개"
-    if node["kind"] == "cache_node":
-        engine = ENGINES.get(attrs.get("Engine"), attrs.get("Engine", ""))
-        return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\n{engine}\n{attrs.get('CurrentRole') or attrs.get('CacheNodeType', '')}"
-    if node["kind"] in ("db_instance", "db_standby"):
-        role = node.get("db_role") or ("standby" if node["kind"] == "db_standby" else ("primary" if attrs.get("MultiAZ") else attrs.get("DBInstanceClass", "")))
-        engine = ENGINES.get(attrs.get("Engine"), attrs.get("Engine", ""))
-        return f"{fit_label(attrs.get('DBInstanceIdentifier', node['name']).replace(' (standby)', ''), BOTTOM_LABEL, 1)}\n{engine}\n{role}"
-    if node["kind"] == "target_group" and attrs.get("Protocol"):
-        return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{attrs['Protocol']}:{attrs.get('Port', '')} · {attrs.get('TargetType', '')}"
-    return node["name"]
+        return f"{target.get('Id', name)}:{target.get('Port', '')}"
+    if kind == "ec2":
+        return lines(name, " · ".join(filter(None, (attrs.get("InstanceType"), "spot" if attrs.get("InstanceLifecycle") == "spot" else None))))
+    if kind == "load_balancer" and attrs.get("Type"):
+        short = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
+        zones = len(attrs.get("AvailabilityZones", []))
+        return lines(name, f"{short} · {attrs.get('Scheme', '')}".rstrip(" ·"), f"AZ {zones}개" if zones else None)
+    if kind == "internet_gateway":
+        return lines(name, "Internet gateway")
+    if kind == "vpn_gateway":
+        return lines(name, "Virtual private gateway", f"ASN {attrs['AmazonSideAsn']}" if attrs.get("AmazonSideAsn") else None)
+    if kind == "vpc_peering":
+        cidr = lambda side: (attrs.get(side) or {}).get("CidrBlock", "?")
+        status = (attrs.get("Status") or {}).get("Code", "")
+        return lines(name, f"VPC peering · {status}".rstrip(" ·"), f"{cidr('RequesterVpcInfo')}↔{cidr('AccepterVpcInfo')}")
+    if kind == "customer_gateway":
+        tunnels = attrs.get("VpnTunnels") or []
+        return lines(name, "Customer gateway", attrs.get("IpAddress"), f"VPN 터널 {', '.join(tunnels)} UP" if tunnels else None)
+    if kind == "vpc_endpoint":
+        endpoint = attrs.get("VpcEndpointType", "")
+        where = f" · 서브넷 {len(attrs.get('SubnetIds', []))}개" if endpoint == "Interface" else ""
+        return lines(attrs.get("ServiceShortName") or name, f"{endpoint}{where}")
+    if kind == "tgw_attachment":
+        return lines(name, "TGW attachment")
+    if kind == "transit_gateway":
+        asn = (attrs.get("Options") or {}).get("AmazonSideAsn")
+        return lines(name, "Transit Gateway", f"ASN {asn}" if asn else None)
+    if kind == "nat_gateway":
+        address = next((a.get("PublicIp") for a in attrs.get("NatGatewayAddresses", []) if a.get("PublicIp")), None)
+        return lines(name, "NAT gateway", address or ("private NAT" if attrs.get("ConnectivityType") == "private" else None))
+    if kind == "eks_cluster":
+        config = attrs.get("resourcesVpcConfig") or {}
+        access = "+".join(a for a, on in (("public", config.get("endpointPublicAccess")), ("private", config.get("endpointPrivateAccess"))) if on)
+        return lines(name, f"EKS {attrs.get('version', '')} control plane".replace("  ", " "), f"endpoint {access}" if access else None)
+    if kind == "ecs_service":
+        return lines(name, f"ECS service · {attrs.get('LaunchSummary') or ''}".rstrip(" ·"),
+                     f"태스크 {attrs.get('runningCount', 0)}/{attrs.get('desiredCount', 0)}")
+    if kind == "ecs_task":
+        return lines(attrs.get("ServiceName") or name, f"{attrs.get('launchType') or 'ECS'} task", attrs.get("PrivateIp"))
+    if kind == "lambda_function":
+        return lines(name, f"Lambda · {attrs.get('Runtime', '')}".rstrip(" ·"), f"서브넷 {len((attrs.get('VpcConfig') or {}).get('SubnetIds', []))}개")
+    if kind == "msk_broker":
+        ids = attrs.get("BrokerIds") or []
+        return lines(attrs.get("ClusterName") or name, f"MSK 브로커 {attrs.get('Brokers', '')}개", attrs.get("InstanceType"),
+                     f"broker {', '.join(str(i) for i in ids)}" if ids else None)
+    if kind == "search_node":
+        engine, _, version = str(attrs.get("EngineVersion") or "OpenSearch").partition("_")
+        counts = " · ".join(f"{label} {attrs[key]}" for key, label in (("Data", "data"), ("Master", "master"), ("Warm", "warm")) if attrs.get(key))
+        state = "standby" if attrs.get("Standby") else ("active" if attrs.get("MultiAZWithStandby") else attrs.get("InstanceType"))
+        return lines(attrs.get("DomainName") or name, f"{engine} {version}".strip(), ("~" if attrs.get("Estimated") else "") + counts, state)
+    if kind == "efs_mount_target":
+        return lines(name, "EFS mount target", "One Zone" if attrs.get("OneZone") else "Regional", attrs.get("IpAddress"))
+    if kind == "redshift_cluster":
+        role = attrs.get("Role") or "single-AZ"
+        return lines(attrs.get("ClusterIdentifier") or name, "Redshift", f"{attrs.get('NodeType', '')} × {attrs.get('NodesHere', '')}", role)
+    if kind == "cache_node":
+        engine = f"{ENGINES.get(attrs.get('Engine'), attrs.get('Engine', ''))} {attrs.get('EngineVersion', '')}".strip()
+        role = attrs.get("CurrentRole")
+        if role and attrs.get("Shard"):
+            role = f"샤드 {int(attrs['Shard']) if str(attrs['Shard']).isdigit() else attrs['Shard']} · {role}"
+        return lines(name, engine, role, attrs.get("CacheNodeType"))
+    if kind in ("db_instance", "db_standby"):
+        replicas = attrs.get("ReadReplicaDBInstanceIdentifiers")
+        role = node.get("db_role") or ("standby" if kind == "db_standby" else ("primary" if attrs.get("MultiAZ") or replicas else "Single-AZ"))
+        size = "Serverless v2" if attrs.get("DBInstanceClass") == "db.serverless" else attrs.get("DBInstanceClass")
+        return lines(attrs.get("DBInstanceIdentifier", name).replace(" (standby)", ""), ENGINES.get(attrs.get("Engine"), attrs.get("Engine", "")),
+                     role, size)
+    if kind == "target_group" and attrs.get("Protocol"):
+        return lines(name, f"{attrs['Protocol']}:{attrs.get('Port', '')} · {attrs.get('TargetType', '')}")
+    return name
 
 
 def layout_view(snapshot, graph, selection):
@@ -183,7 +243,7 @@ def layout_view(snapshot, graph, selection):
     status = "부분 조회: " + ", ".join(incomplete) if incomplete else "조회 완료"
     scope = (f"{status} · {meta['finished_at']}\n표시 {counts['visible']}개 / 수집 {counts['collected']}개 · 참조 {counts['references']}개"
              f" · 숨김 {counts['hidden']}개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도"
-             + ("\n서브넷 구분: 라우팅 테이블의 0.0.0.0/0 경로 (IGW = 퍼블릭, NAT·TGW = 프라이빗, 없음 = 격리)" if snapshot["raw"].get("route_tables")
+             + ("\n서브넷 구분: 라우팅 테이블의 0.0.0.0/0 경로 (IGW = 퍼블릭, NAT·TGW·VGW = 프라이빗, 없음 = 격리)" if snapshot["raw"].get("route_tables")
                 else "\n퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)"))
     canvas.add("scope", "1", 24, 48, 960, 42, "caption", scope, layout=f"{ENGINE}/{VERSION}",
                view=view["kind"], vpc=view["vpc"] or "", focus=view["resource"] or "",
@@ -199,15 +259,20 @@ def layout_view(snapshot, graph, selection):
             "shapes": canvas.shapes, "edges": canvas.edges, "absolute": dict(canvas.abs), "labels": labels}
 
 
+SUMMARY = [("Subnet", "subnet"), ("EC2", "ec2"), ("LB", "load_balancer"), ("TG", "target_group"), ("NAT", "nat_gateway"),
+           ("DB", "db_instance"), ("Cache", "cache_node"), ("MSK", "msk_cluster"), ("OpenSearch", "opensearch_domain"),
+           ("EKS", "eks_cluster"), ("ECS", "ecs_service"), ("EFS", "efs_mount_target"), ("Redshift", "redshift_cluster"),
+           ("Lambda", "lambda_function"), ("Endpoint", "vpc_endpoint"), ("VPN", "vpn_gateway"), ("Peering", "vpc_peering")]
+
+
 def overview(canvas, snapshot, graph, nodes, vpc_of):
     vpcs = sorted((n for n in nodes.values() if n["kind"] == "vpc"), key=lambda n: (n["name"], n["id"]))
     columns = 3
-    card_w, card_h, gap = 320, 112, 24
-    rows = -(-(len(vpcs) + 1) // columns)
+    card_w, gap = 320, 24
     width = 32 + columns * (card_w + gap)
     meta = snapshot["metadata"]
     cloud = canvas.add("cloud", "1", 24, 112, width + 40, 0, "cloud", f"AWS Cloud · 계정 {meta['account_id']}")
-    group = canvas.add("region", "cloud", 20, 44, width, VPC_HEADER + 24 + rows * (card_h + gap), "region",
+    group = canvas.add("region", "cloud", 20, 44, width, 0, "region",
                        f"Region · {meta['region']} · VPC {len(vpcs)}개 · 요약 카드를 선택하면 상세 구성으로 이동")
     members = {}
     for key, vpc in vpc_of.items():
@@ -216,12 +281,20 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
     cards = []
     for vpc in vpcs:
         inside = members.get(vpc["id"], [])
-        count = lambda kind: sum(1 for n in inside if n["kind"] == kind)
+        # Distinct resources: an EFS file system by its mount targets, a Multi-AZ Redshift cluster once.
+        count = lambda kind: len({n["attributes"].get("FileSystemId") if kind == "efs_mount_target" else n["resource_id"].removesuffix("#secondary")
+                                  for n in inside if n["kind"] == kind})
         azs = sorted({n["attributes"].get("AvailabilityZone") for n in inside if n["kind"] == "subnet"} - {None})
+        # Every collected kind with a count, wrapped onto lines that fit the card.
+        counts = [f"{label} {count(kind)}" for label, kind in SUMMARY if count(kind) or label in ("Subnet", "EC2")]
+        rows = []
+        for item in counts:
+            if rows and text_width(rows[-1] + " · " + item) < 285:
+                rows[-1] += " · " + item
+            else:
+                rows.append(item)
         label = (f"VPC · {fit_label(vpc['name'], 290, 1)}\n{vpc['attributes'].get('CidrBlock', '')} · {vpc['resource_id']}\n"
-                 f"Subnet {count('subnet')} · EC2 {count('ec2')} · LB {count('load_balancer')} · TG {count('target_group')}"
-                 f" · NAT {count('nat_gateway')} · RDS {count('db_instance')}\n"
-                 f"AZ {', '.join(azs) if azs else '미확인'}")
+                 + "\n".join(rows) + f"\nAZ {', '.join(azs) if azs else '미확인'}")
         cards.append((label, vpc["id"], len(inside) == 0))
     outside = [n for n in nodes.values() if n["kind"] != "vpc" and n["id"] not in vpc_of]
     if outside:
@@ -230,6 +303,7 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
     if not vpcs:
         message = "조회된 VPC가 없습니다." if vpc_status == "complete" else "VPC 조회가 완료되지 않았습니다.\n빈 환경이 아니라 권한·조회 실패일 수 있습니다."
         cards.insert(0, (message, None, True))
+    card_h = max([112] + [36 + 15 * (label.count("\n") + 1) for label, _, _ in cards])
     for i, (label, resource, empty) in enumerate(cards):
         canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + gap),
                    VPC_HEADER + 18 + (i // columns) * (card_h + gap), card_w, card_h, "summary", label,
@@ -260,8 +334,11 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     def resource(key, parent, x, y, side):
         n = nodes[key]
         width = SIDE_LABEL if side == "right" else BOTTOM_LABEL
-        label = resource_label(n)
-        label = "\n".join(fit_label(part, width, MAX_LINES if i == 0 else 1) for i, part in enumerate(label.split("\n")))
+        parts = resource_label(n).split("\n")
+        # The name may wrap into whatever the detail lines leave of the label's line budget.
+        first = max(1, (SIDE_LINES if side == "right" else MAX_LINES) - len(parts) + 1)
+        label = "\n".join((fit_name(part, width) if first == 1 else fit_label(part, width, first)) if i == 0 else fit_label(part, width, 1)
+                           for i, part in enumerate(parts))
         shape = canvas.add(cell_id(key), parent, x, y, ICON, ICON, "resource", label, resource=key, kind=n["kind"],
                            reference=n["reference_only"], label_side=side, emphasis=key == focus, tooltip=n["name"],
                            outside_vpc=outside_vpc(n), variant=icon_variant(n))
@@ -270,8 +347,10 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
 
     subnet_at = {}  # subnet -> (cell, AZ column) for placement routes
     refs_votes = {}  # target outside every VPC -> gutter sides of the target groups feeding it
+    peer_of = {e["source"]: e["target"] for e in graph["edges"] if e["relation"] == "peer_vpc"}
     for vpc in vpcs:
-        members = sorted((nodes[k] for k in visible if vpc_of.get(k) == vpc["id"]), key=lambda n: (n["name"], n["id"]))
+        members = sorted((nodes[k] for k in visible if k not in placed and (vpc_of.get(k) == vpc["id"] or peer_of.get(k) == vpc["id"])),
+                         key=lambda n: (n["name"], n["id"]))
         # Internet-facing entry points first (left), then internal ones.
         lbs = sorted((n for n in members if n["kind"] == "load_balancer"),
                      key=lambda n: (n["attributes"].get("Scheme") != "internet-facing", n["name"], n["id"]))
@@ -291,9 +370,14 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         barycenter = lambda n: (sum(registered.get(n["id"], [len(tgs)])) / len(registered.get(n["id"], [0])), n["name"], n["id"])
         subnets = [n for n in members if n["kind"] == "subnet"]
         children = {s["id"]: sorted((nodes[k] for k in visible if subnet_of.get(k) == s["id"]), key=barycenter) for s in subnets}
-        gateways = sorted((n for n in members if n["kind"] in EDGE_KINDS), key=lambda n: (EDGE_KINDS[n["kind"]], n["name"], n["id"]))
-        asg_of = {e["target"]: e["source"] for e in graph["edges"] if e["relation"] == "asg_member"}
-        unplaced = sorted((n for n in members if n["kind"] not in {"subnet", "load_balancer", "target_group", "auto_scaling_group",
+        asg_of = {e["target"]: e["source"] for e in graph["edges"] if e["relation"] in GROUPS.values()}
+        # Auto Scaling groups and ECS services are framed around their members placed in this VPC's subnets.
+        group_inside = {n["id"]: sorted(e["target"] for e in graph["edges"] if e["source"] == n["id"] and e["relation"] == GROUPS[n["kind"]]
+                                        and e["target"] in visible and subnet_of.get(e["target"]) in children)
+                        for n in members if n["kind"] in GROUPS}
+        gateways = sorted((n for n in members if n["kind"] in EDGE_KINDS and not group_inside.get(n["id"])),
+                          key=lambda n: (EDGE_KINDS[n["kind"]], n["name"], n["id"]))
+        unplaced = sorted((n for n in members if n["kind"] not in {"subnet", "load_balancer", "target_group", *GROUPS,
                                                                    "route_table", *EDGE_KINDS}
                            and subnet_of.get(n["id"]) not in children), key=barycenter)
         azs = sorted({s["attributes"].get("AvailabilityZone", "AZ 미확인") for s in subnets})
@@ -305,18 +389,14 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         side = {t["id"]: last if len(tgs) > 1 and tg_index[t["id"]] >= len(tgs) / 2 else 0 for t in tgs}
         # Auto Scaling groups are framed across AZ columns when their members share one tier row;
         # a target group attached to a framed group then gets one edge instead of one per instance.
-        frames = {}
-        for asg in (n for n in members if n["kind"] == "auto_scaling_group"):
-            inside = sorted(e["target"] for e in graph["edges"] if e["source"] == asg["id"] and e["relation"] == "asg_member"
-                            and e["target"] in visible and subnet_of.get(e["target"]) in children)
-            if inside and len({tier_rank(nodes[subnet_of[m]]) for m in inside}) == 1:
-                frames[asg["id"]] = inside
+        frames = {gid: inside for gid, inside in group_inside.items()
+                  if inside and len({tier_rank(nodes[subnet_of[m]]) for m in inside}) == 1}
         # Gutters reserve room for both the registrations and the group edge; which one is drawn
         # is decided once the frame is known to enclose only its own members.
         demand = [set() for _ in range(last + 1)]
         placements = []
         for e in drawn_edges:
-            if e["relation"] == "asg_target_group" and e["source"] in frames:
+            if e["relation"] in GROUP_TARGETS and e["source"] in frames:
                 demand[min(column[m] for m in frames[e["source"]])].add(e["target"])
             elif e["relation"] == "registered_target" and e["source"] in tg_index and vpc_of.get(e["target"]) in (None, vpc["id"]):
                 g = column.get(e["target"], side[e["source"]])
@@ -326,7 +406,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                     demand[0].add(e["source"])
                     demand[last].add(e["source"])
                     refs_votes.setdefault(e["target"], []).append(g == last and last > 0)
-            elif e["relation"] in AUXILIARY | REGIONAL and vpc_of.get(e["source"]) == vpc["id"]:
+            elif e["relation"] in AUXILIARY | REGIONAL and e["relation"] != "vpn_connection" and vpc_of.get(e["source"]) == vpc["id"]:
                 demand[column.get(e["source"], 0)].add(e["id"])
             elif e["relation"] == "in_subnet" and e["source"] in lb_index and e["target"] in children:
                 placements.append(e["id"])
@@ -420,16 +500,13 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                          and top_y < canvas.abs[shape["id"]][1] + ICON and canvas.abs[shape["id"]][1] < bottom]
             if strangers:
                 continue  # a frame would claim other resources; keep per-instance edges instead
-            # An EKS managed node group is backed by this Auto Scaling group (DescribeNodegroup.resources).
-            owner = next((e for e in graph["edges"] if e["relation"] == "eks_nodegroup" and e["target"] == asg_id), None)
-            title = (f"EKS node group · {owner['details'].get('nodegroup')} ({nodes[owner['source']]['name']})" if owner
-                     else f"Auto Scaling group · {nodes[asg_id]['name']}")
             frame = canvas.add(cell_id(asg_id), vid, left - ox, top_y - oy, right - left, bottom - top_y, "asg",
-                               title, resource=asg_id, emphasis=asg_id == focus)
+                               fit_label(group_title(graph, nodes, asg_id), right - left - 40, 1, 11), resource=asg_id,
+                               emphasis=asg_id == focus, frame="ecs" if nodes[asg_id]["kind"] == "ecs_service" else "asg")
             frames_at[asg_id] = (frame["id"], min(column[m] for m in inside))
         for e in drawn_edges:
             # DescribeAutoScalingGroups.TargetGroupARNs: source is the group, target the target group.
-            if e["relation"] == "asg_target_group" and e["target"] in tg_index:
+            if e["relation"] in GROUP_TARGETS and e["target"] in tg_index:
                 if e["source"] in frames_at:
                     suppressed.update(r["id"] for r in drawn_edges if r["relation"] == "registered_target"
                                       and r["source"] == e["target"] and r["target"] in frames[e["source"]])
@@ -446,8 +523,8 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         group["h"] = y
         lanes[vpc["id"]] = geometry
         cursor += y + 36
-    # Auto Scaling groups are drawn only as frames around their members.
-    others = sorted((nodes[k] for k in visible if k not in placed and nodes[k]["kind"] not in {"vpc", "subnet", "auto_scaling_group"}),
+    # Auto Scaling groups and ECS services with placed tasks are drawn only as frames around their members.
+    others = sorted((nodes[k] for k in visible if k not in placed and nodes[k]["kind"] not in {"vpc", "subnet", *GROUPS}),
                     key=lambda n: (KIND_ORDER.get(n["kind"], 9), n["name"], n["id"]))
     width = max([sh["w"] for sh in canvas.shapes if sh["role"] == "vpc"] + [5 * SLOT + 60])
 
@@ -476,9 +553,23 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     remote = [n for n in others if outside_vpc(n)]
     if remote:
         # Beside the AWS Cloud: routes leave the VPC's right margin above the load balancer row.
-        place_box("onprem", "onprem", "Corporate data center · AvailabilityZone=all 로 등록된 VPC 밖 대상", "1",
+        place_box("onprem", "onprem", "Corporate data center · 고객 게이트웨이 · AvailabilityZone=all 로 등록된 VPC 밖 대상", "1",
                   cloud["x"] + cloud["w"] + 48, cloud["y"], remote, 520)
     route(canvas, [e for e in drawn_edges if e["id"] not in suppressed], vpc_of, placed, lanes, tg_order, subnet_at, frames_at)
+
+
+def group_title(graph, nodes, key):
+    """Frame caption: what the group is and its capacity."""
+    attrs = nodes[key]["attributes"]
+    if nodes[key]["kind"] == "ecs_service":
+        return (f"ECS service · {nodes[key]['name']} · {attrs.get('LaunchSummary') or ''} · 태스크 {attrs.get('runningCount', 0)}"
+                f"/{attrs.get('desiredCount', 0)}").replace(" ·  ·", " ·")
+    capacity = f"min {attrs.get('MinSize', '?')} · desired {attrs.get('DesiredCapacity', '?')} · max {attrs.get('MaxSize', '?')}"
+    # An EKS managed node group is backed by this Auto Scaling group (DescribeNodegroup.resources).
+    owner = next((e for e in graph["edges"] if e["relation"] == "eks_nodegroup" and e["target"] == key), None)
+    if owner:
+        return f"EKS node group · {owner['details'].get('nodegroup')} ({nodes[owner['source']]['name']}) · {capacity}"
+    return f"Auto Scaling group · {nodes[key]['name']} · {capacity}"
 
 
 def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frames_at):
@@ -493,7 +584,11 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
     specs, plain = {}, []
     for e in sorted(drawn_edges, key=lambda e: e["id"]):
         geometry = lanes.get(vpc_of.get(e["source"]))
-        if e["relation"] == "asg_target_group" and e["target"] in placed and e["source"] in frames_at \
+        if e["relation"] == "vpn_connection" and e["source"] in placed and e["target"] in placed and placed[e["target"]]["parent"] == "onprem":
+            # Site-to-Site VPN: from the gateway's row lane to a corridor right of the AWS Cloud, then into the data center box.
+            specs[e["id"]] = {"edge": e, "kind": "remote", "geometry": None, "turn_left": False}
+            continue
+        if e["relation"] in GROUP_TARGETS and e["target"] in placed and e["source"] in frames_at \
                 and lanes.get(vpc_of.get(e["target"])):
             # Routed on the target group's trunk like its registrations; the cell runs group -> target group.
             cell, g = frames_at[e["source"]]
@@ -530,7 +625,7 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
     # from the lane above their load balancer to the channel; that leg is a shallow slot in gutter 0.
     groups = {}
     for spec in specs.values():
-        if spec["kind"] == "lb":
+        if spec["kind"] in ("lb", "remote"):
             continue
         groups.setdefault((id(spec["geometry"]), spec["gutter"]), {}).setdefault(spec["group"], []).append(spec)
         if spec["kind"] == "place":
@@ -552,10 +647,13 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
                     # Routes to the box beside the cloud leave the right margin towards the right.
                     member["x"], member["turn_left"] = x, turn_left and placed[member["edge"]["target"]]["parent"] != "onprem" \
                         if member["edge"]["target"] in placed else turn_left
+    cloud_right = canvas.abs["cloud"][0] + shapes["cloud"]["w"]
+    for i, spec in enumerate(sorted((s for s in specs.values() if s["kind"] == "remote"), key=lambda s: s["edge"]["id"])):
+        spec["x"] = cloud_right + 14 + 8 * i
     # Entry points per target, then lanes per icon row.
     entering = {}
     for spec in specs.values():
-        if spec["kind"] in ("bus", "aux"):
+        if spec["kind"] in ("bus", "aux", "remote"):
             entering.setdefault(spec["edge"]["target"], []).append(spec)
     for members in entering.values():
         members.sort(key=lambda s: (s["x"] if not s["turn_left"] else -s["x"], s["edge"]["id"]))
@@ -564,18 +662,19 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
             spec["entry"] = 1 - fraction if spec["turn_left"] else fraction
     rows, leaving = {}, {}
     for spec in specs.values():
-        if spec["kind"] in ("bus", "aux"):
+        if spec["kind"] in ("bus", "aux", "remote"):
             tx, ty = position(spec["edge"]["target"])
             spec["end"] = tx + spec["entry"] * ICON
             rows.setdefault((placed[spec["edge"]["target"]]["parent"], ty), []).append(("in", spec, spec["end"], placed[spec["edge"]["target"]]))
-        if spec["kind"] in ("aux", "place"):
+        if spec["kind"] in ("aux", "place", "remote"):
             leaving.setdefault((spec["kind"], spec["edge"]["source"]), []).append(spec)
     for (kind, source), members in leaving.items():
         members.sort(key=lambda s: s["edge"]["id"])
         sx, sy = position(source)
         for i, spec in enumerate(members):
-            spec["exit"] = (i + 1) / (len(members) + 1)
-            # Reference routes leave from the left side; placement routes from the top.
+            # VPN routes leave from the top right, clear of the centred entries of routes into the same icon.
+            spec["exit"] = 0.88 - 0.08 * i if kind == "remote" else (i + 1) / (len(members) + 1)
+            # Reference routes leave from the left side; placement and VPN routes from the top.
             spec["stub"] = sx - 14 - 6 * i if kind == "aux" else sx + spec["exit"] * ICON
             rows.setdefault((placed[source]["parent"], sy), []).append(("out", spec, spec["stub"], placed[source]))
     for (_, top), members in rows.items():
@@ -604,6 +703,12 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
             canvas.edges.append(edge_entry(e, path, f"exitX=0;exitY={spec['entry']:.3f};entryX=0.5;entryY=1;"))
             continue
         sx, sy = position(e["source"])
+        if spec["kind"] == "remote":
+            tx, ty = position(e["target"])
+            path = [(spec["stub"], sy), (spec["stub"], spec["lane_out"]), (spec["x"], spec["lane_out"]), (spec["x"], spec["lane_in"]),
+                    (spec["end"], spec["lane_in"]), (spec["end"], ty)]
+            canvas.edges.append(edge_entry(e, path, f"exitX={spec['exit']:.3f};exitY=0;entryX={spec['entry']:.3f};entryY=0;"))
+            continue
         if spec["kind"] == "place":
             x, y, h = spec["subnet"]
             channel = geometry["placements"][e["id"]]
@@ -640,8 +745,9 @@ OUTSIDE_BOXES = {"references", "onprem"}
 
 
 def outside_vpc(node):
-    """Target registered with AvailabilityZone=all: an address outside the VPC (e.g. on premises)."""
-    return node["kind"] == "registered_target" and node["attributes"].get("Target", {}).get("AvailabilityZone") == "all"
+    """On premises: a target registered with AvailabilityZone=all, or a VPN customer gateway."""
+    return node["kind"] == "customer_gateway" or \
+        node["kind"] == "registered_target" and node["attributes"].get("Target", {}).get("AvailabilityZone") == "all"
 
 
 def target_on_right(canvas, target, geometry):
@@ -653,4 +759,4 @@ def edge_entry(e, path, constraints, label=""):
     return {"id": cell_id("edge/" + e["id"]), "relation_id": e["id"], "relation": e["relation"],
             "source": cell_id(e["source"]), "target": cell_id(e["target"]), "evidence": e["evidence"],
             "points": path[1:-1], "path": path, "constraints": constraints, "label": label,
-            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer", "asg_target_group", *REGIONAL}}
+            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer", *GROUP_TARGETS, *REGIONAL}}

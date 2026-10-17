@@ -15,6 +15,11 @@ def starts(text):
     return re.compile('^' + re.escape(text))
 
 
+def named(text):
+    """A resource named `text`: draw.io joins label lines without a separator, so only a longer name is excluded."""
+    return re.compile('^' + re.escape(text) + '(?![-_])')
+
+
 def geometry(xml, resource_suffix):
     for obj in ET.fromstring(xml).iter('object'):
         if obj.get('resourceId', '').endswith(resource_suffix):
@@ -65,7 +70,7 @@ def main():
         expect(detail).to_contain_text('DescribeTargetHealth.Target.Id')
 
         # 3. Detail placement of an instance, then the focused-resource view and back.
-        frame.get_by_text('web-c', exact=True).click()
+        frame.get_by_text(named('web-c')).click()
         expect(detail).to_contain_text('subnet-app-c')
         expect(detail).to_contain_text('DescribeInstances.SubnetId')
         page.screenshot(path=str(args.output / 'workspace.png'), full_page=True)
@@ -74,7 +79,7 @@ def main():
         expect(page.locator('#view-focus')).to_have_class('view-button active')
         expect(page.locator('#view-scope')).to_contain_text('표시 5개')
         expect(frame.get_by_text(starts('demo-api'))).to_be_visible()
-        expect(frame.get_by_text('web-a', exact=True)).to_have_count(0)
+        expect(frame.get_by_text(named('web-a'))).to_have_count(0)
         page.screenshot(path=str(args.output / 'focus.png'), full_page=True)
         detail.get_by_role('button', name='상세 구성으로 돌아가기').click()
         ready()
@@ -84,7 +89,7 @@ def main():
         expect(page.locator('#coverage-dialog')).to_contain_text('UnauthorizedOperation')
         expect(page.locator('#coverage-dialog')).to_contain_text('ec2:DescribeInstances')
         page.locator('#coverage-dialog [aria-label="닫기"]').click()
-        frame.get_by_text('i-demo-missing', exact=True).click()
+        frame.get_by_text(named('i-demo-missing')).click()
         expect(detail).to_contain_text('참조만 확인')
         page.locator('#inventory-tab').click()
         page.locator('#search').fill('web-a')
@@ -96,19 +101,19 @@ def main():
         page.locator('#diagram-tab').click()
         page.locator('[data-vpc="vpc-staging"]').click()
         ready()
-        expect(frame.get_by_text('staging-api', exact=True)).to_be_visible()
+        expect(frame.get_by_text(named('staging-api'))).to_be_visible()
         page.locator('[data-vpc="vpc-demo"]').click()
         ready()
         page.locator('#references').check()
         ready()
-        expect(frame.get_by_text('sg-web', exact=True)).to_be_visible()
+        expect(frame.get_by_text(named('sg-web'))).to_be_visible()
         page.locator('#references').uncheck()
         ready()
 
         # 5. Native edits: move an instance with the keyboard and write a review note.
         generated = page.evaluate("fetch('/api/snapshots/demo/document?view=detail&vpc=vpc-demo&references=false').then(r => r.json())")
         before = geometry(generated['xml'], '/ec2/i-demo-c')
-        frame.get_by_text('web-c', exact=True).click()
+        frame.get_by_text(named('web-c')).click()
         for _ in range(4):
             frame.locator('.geDiagramContainer').press('Shift+ArrowRight')
         page.locator('#note-button').click()
@@ -209,6 +214,24 @@ def main():
         frame.get_by_text(starts('platform-events')).first.click()
         expect(detail).to_contain_text('MSK 클러스터')
         page.screenshot(path=str(args.output / 'eks-platform.png'), full_page=True)
+        # 9. Data platform: ECS service frame, OpenSearch per-AZ nodes, read replica, then VPN in the peered VPC.
+        page.locator('#snapshot-select').select_option('sample-data-platform')
+        ready()
+        page.locator('[data-vpc="vpc-0a1b2c3d4e5f60007"]').click()
+        ready()
+        frame.get_by_text(starts('ECS service · data-api')).click()
+        expect(detail).to_contain_text('실행 3 / 원하는 3')
+        expect(detail).to_contain_text('ECS 서비스 태스크')
+        frame.get_by_text(starts('logs-search')).last.click()
+        expect(detail).to_contain_text('data 2 · master 1 · standby')
+        frame.get_by_text(starts('catalog-db-ro')).click()
+        expect(detail).to_contain_text('읽기 복제본 원본')
+        page.screenshot(path=str(args.output / 'data-platform.png'), full_page=True)
+        page.locator('[data-vpc="vpc-0a1b2c3d4e5f60008"]').click()
+        ready()
+        frame.get_by_text(starts('corp-dc-cgw')).click()
+        expect(detail).to_contain_text('2/2 UP')
+        expect(detail).to_contain_text('Site-to-Site VPN')
 
         options = page.locator('#snapshot-select option').count()
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
@@ -227,7 +250,9 @@ def main():
                          'drawio XML download with moved geometry', 'PNG 2x white', 'PNG 1x transparent', 'PNG 3x',
                          'JSON/CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
                          'infrastructure sample: ASG frame, RDS standby, route-classified subnet',
-                         'EKS sample: node group frame, Aurora writer, MSK brokers', 'snapshot import']}
+                         'EKS sample: node group frame, Aurora writer, MSK brokers',
+                         'data platform: ECS service frame, OpenSearch standby AZ, read replica, VPN customer gateway',
+                         'snapshot import']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 

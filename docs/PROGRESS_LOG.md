@@ -2,6 +2,20 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — More services and HA detail (user request: OpenSearch 등, primary/standby·Multi-AZ·replica)
+
+- Collector: OpenSearch (ListDomainNames, DescribeDomains, DescribeDomainNodes), ECS (clusters,
+  services, tasks), EFS (file systems, mount targets), Redshift (clusters, subnet groups), MSK
+  ListNodes, VPC peering, VPN gateways/connections, customer gateways; IAM prefixes es/
+  elasticfilesystem; policy example updated.
+- Graph: OpenSearch nodes per AZ (data/master/standby), ECS tasks as target-group targets, IP
+  targets placed by subnet CIDR, RDS read replicas and Multi-AZ DB cluster readable standbys,
+  ElastiCache shards, Redshift Multi-AZ, EFS mount targets, peering, VPN, `0.0.0.0/0 → VGW`.
+- Layout: four-line labels with HA role and size, ECS service frames, VPN routes to the data
+  center box, overview cards listing every collected kind, frame captions with capacity.
+- Samples: new data-platform (two VPCs); three-tier read replica; microservices ECS services;
+  hybrid VPN over TGW. Verified: 51 tests, browser acceptance 26 checks.
+
 ## 2026-10-17 — Common services (user request: EKS·MSK·RDS·ElastiCache·NAT 등)
 
 - Collector: rds DescribeDBClusters, ElastiCache cache clusters/replication groups/subnet groups,

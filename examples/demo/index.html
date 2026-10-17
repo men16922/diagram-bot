@@ -22,8 +22,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T07:25:42.339242+00:00",
-    "finished_at": "2026-10-17T07:25:42.339242+00:00",
+    "started_at": "2026-10-17T07:48:29.205800+00:00",
+    "finished_at": "2026-10-17T07:48:29.205800+00:00",
     "status": "partial",
     "demo": true,
     "scope": [
@@ -1174,6 +1174,30 @@
         "details": {},
         "inferred": false,
         "id": "rel-10154e79f28ec7a9cd0c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/demo-ip-targets/678#10.20.11.25:9000:ap-northeast-2a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-64058c61765589869f48"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/demo-ip-targets/678#10.20.11.25:9000:ap-northeast-2a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-demo",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f7d8d613d1ba175c3941"
       },
       {
         "source": "111122223333/ap-northeast-2/subnet/subnet-a",

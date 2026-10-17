@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T07:25:41.975526+00:00",
-    "finished_at": "2026-10-17T07:25:41.975526+00:00",
+    "started_at": "2026-10-17T07:47:10.918031+00:00",
+    "finished_at": "2026-10-17T07:47:10.918031+00:00",
     "status": "complete",
     "demo": true,
     "sample": "hybrid",
@@ -15,7 +15,7 @@
       "VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시",
       "클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크",
       "내부 ALB로 사내망 전용 노출",
-      "온프레미스 대역(192.168.0.0/16)은 Transit Gateway로 라우팅 (VPN/Direct Connect 연결은 수집 범위 밖)"
+      "온프레미스 대역(192.168.0.0/16)은 Transit Gateway에 붙은 Site-to-Site VPN(터널 2개, BGP)으로 연결 (Direct Connect는 수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -34,11 +34,17 @@
       "EKS",
       "MSK",
       "ElastiCache",
-      "Lambda"
+      "Lambda",
+      "OpenSearch",
+      "ECS",
+      "EFS",
+      "Redshift",
+      "VpcPeering",
+      "VPN"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -161,6 +167,83 @@
       "status": "complete",
       "pages": 1,
       "items": 0
+    },
+    {
+      "service": "kafka",
+      "operation": "list_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domains",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domain_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_services",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_tasks",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_mount_targets",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
     },
     {
       "service": "elbv2",
@@ -508,8 +591,56 @@
     "replication_groups": [],
     "cache_subnet_groups": [],
     "msk_clusters": [],
+    "msk_nodes": [],
     "lambda_functions": [],
-    "eks_clusters": []
+    "eks_clusters": [],
+    "opensearch_domains": [],
+    "opensearch_nodes": [],
+    "ecs_services": [],
+    "ecs_tasks": [],
+    "efs_file_systems": [],
+    "efs_mount_targets": [],
+    "redshift_clusters": [],
+    "redshift_subnet_groups": [],
+    "vpc_peering_connections": [],
+    "vpn_gateways": [],
+    "vpn_connections": [
+      {
+        "VpnConnectionId": "vpn-hybrid-seoul",
+        "CustomerGatewayId": "cgw-seoul-dc",
+        "State": "available",
+        "Type": "ipsec.1",
+        "TransitGatewayId": "tgw-hybrid00000005",
+        "Options": {
+          "StaticRoutesOnly": false
+        },
+        "VgwTelemetry": [
+          {
+            "OutsideIpAddress": "52.78.0.10",
+            "Status": "UP"
+          },
+          {
+            "OutsideIpAddress": "52.78.0.11",
+            "Status": "UP"
+          }
+        ]
+      }
+    ],
+    "customer_gateways": [
+      {
+        "CustomerGatewayId": "cgw-seoul-dc",
+        "IpAddress": "203.0.113.10",
+        "BgpAsn": "65010",
+        "State": "available",
+        "Type": "ipsec.1",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "seoul-dc-cgw"
+          }
+        ]
+      }
+    ]
   },
   "graph": {
     "nodes": [
@@ -545,6 +676,32 @@
         },
         "reference_only": false,
         "source": "DescribeAutoScalingGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/customer_gateway/cgw-seoul-dc",
+        "resource_id": "cgw-seoul-dc",
+        "kind": "customer_gateway",
+        "name": "seoul-dc-cgw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "CustomerGatewayId": "cgw-seoul-dc",
+          "IpAddress": "203.0.113.10",
+          "BgpAsn": "65010",
+          "State": "available",
+          "Type": "ipsec.1",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "seoul-dc-cgw"
+            }
+          ],
+          "VpnTunnels": [
+            "2/2"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeCustomerGateways"
       },
       {
         "id": "111122223333/ap-northeast-2/ec2/i-erpa0000000000005",
@@ -1417,6 +1574,23 @@
         "details": {},
         "inferred": false,
         "id": "rel-42d981a6783291ec36a6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/transit_gateway/tgw-hybrid00000005",
+        "target": "111122223333/ap-northeast-2/customer_gateway/cgw-seoul-dc",
+        "relation": "vpn_connection",
+        "evidence": "DescribeVpnConnections.TransitGatewayId + CustomerGatewayId",
+        "qualifiers": {
+          "destination": "vpn-hybrid-seoul"
+        },
+        "details": {
+          "VpnConnectionId": "vpn-hybrid-seoul",
+          "State": "available",
+          "Tunnels": "2/2 UP",
+          "StaticRoutesOnly": false
+        },
+        "inferred": false,
+        "id": "rel-7732ee4833dcc4325e77"
       }
     ]
   }

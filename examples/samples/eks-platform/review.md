@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T07:25:42.138567+00:00 ~ 2026-10-17T07:25:42.138567+00:00
+- 수집 구간: 2026-10-17T07:47:11.333646+00:00 ~ 2026-10-17T07:47:11.333646+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -25,12 +25,23 @@
 - kafka / list_clusters_v2: complete, 1개, 오류 없음; 범위 {}
 - lambda / list_functions: complete, 1개, 오류 없음; 범위 {}
 - eks / list_clusters: complete, 1개, 오류 없음; 범위 {}
+- kafka / list_nodes: complete, 3개, 오류 없음; 범위 {}
+- opensearch / describe_domains: complete, 0개, 오류 없음; 범위 {}
+- opensearch / describe_domain_nodes: complete, 0개, 오류 없음; 범위 {}
+- ecs / describe_services: complete, 0개, 오류 없음; 범위 {}
+- ecs / describe_tasks: complete, 0개, 오류 없음; 범위 {}
+- efs / describe_file_systems: complete, 0개, 오류 없음; 범위 {}
+- efs / describe_mount_targets: complete, 0개, 오류 없음; 범위 {}
+- redshift / describe_clusters: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_vpc_peering_connections: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_vpn_gateways: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_vpn_connections: complete, 0개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001"}
 
 ## 해석 범위
 
 - AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.
-- 보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.
+- 보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.
 - 설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다.
 
 ## 검토할 항목

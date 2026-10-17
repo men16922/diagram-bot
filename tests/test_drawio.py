@@ -146,7 +146,18 @@ def test_references_and_ip_targets_do_not_invent_placement():
     root = validate_document(generate_document(snapshot, "vpc-demo"))
     target = next(o for o in root.findall(".//object") if "/registered_target/" in o.get("resourceId", ""))
     assert target.get("label") == "10.20.11.25:9000"
-    assert target.find("mxCell").get("parent") == "references"
+    # Placed only because its IP lies in exactly one subnet CIDR of the target group's VPC, in the stated AZ;
+    # it stays a separate target, never merged with the instance that has the same address.
+    graph = build_graph(snapshot)
+    placement = next(e for e in graph["edges"] if e["source"] == target.get("resourceId") and e["relation"] == "in_subnet")
+    assert placement["evidence"] == "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock"
+    assert target.find("mxCell").get("parent") == cell_id(placement["target"])
+    # AvailabilityZone=all marks an address outside the VPC: never placed in a subnet.
+    for result in snapshot["raw"]["target_health"]:
+        for description in result["Descriptions"]:
+            if description["Target"]["Id"] == "10.20.11.25":
+                description["Target"]["AvailabilityZone"] = "all"
+    assert not any(e["relation"] == "in_subnet" and "/registered_target/" in e["source"] for e in build_graph(snapshot)["edges"])
     missing = next(o for o in root.findall(".//object") if o.get("resourceId", "").endswith("/ec2/i-demo-missing"))
     assert missing.find("mxCell").get("parent") == "references" and "dashed=1" in missing.find("mxCell").get("style")
 
@@ -154,7 +165,7 @@ def test_references_and_ip_targets_do_not_invent_placement():
 def test_long_korean_names_are_truncated_with_full_tooltip():
     root = validate_document(generate_document(demo_snapshot(), "vpc-demo"))
     batch = next(o for o in root.findall(".//object") if o.get("resourceId", "").endswith("i-demo-batch"))
-    assert batch.get("label").endswith("…") and batch.get("tooltip").startswith("주문 정산 야간 배치")
+    assert batch.get("label").split("\n")[0].endswith("…") and batch.get("tooltip").startswith("주문 정산 야간 배치")
 
 
 def test_empty_unknown_scope_and_xml_labels():
@@ -162,7 +173,7 @@ def test_empty_unknown_scope_and_xml_labels():
     label = '<script>"& 검토</script>'
     snapshot["raw"]["instances"][0]["Tags"][0]["Value"] = label
     root = validate_document(generate_document(snapshot, "vpc-demo"))
-    assert any(o.get("label") == label for o in root.findall(".//object"))
+    assert any(o.get("label", "").split("\n")[0] == label for o in root.findall(".//object"))
     with pytest.raises(ValueError):
         generate_document(snapshot, "vpc-missing")
     empty = validate_document(generate_document(snapshot, "vpc-empty"))
@@ -172,6 +183,10 @@ def test_empty_unknown_scope_and_xml_labels():
     snapshot["coverage"] = [{"service": "ec2", "operation": "describe_vpcs", "status": "unavailable", "error_code": "AccessDenied"}]
     denied = generate_document(snapshot)
     assert "빈 환경이 아니라" in denied and ET.fromstring(denied).tag == "mxfile"
+
+
+FOCUSED = {"load_balancer", "target_group", "ecs_service", "auto_scaling_group", "customer_gateway", "vpn_gateway", "vpc_peering",
+           "search_node", "db_instance", "cache_node", "redshift_cluster", "efs_mount_target", "ecs_task"}
 
 
 @pytest.mark.parametrize("key", sorted(SAMPLES))
@@ -186,7 +201,7 @@ def test_best_practice_samples_are_readable(key):
             assert_readable(layout)
             assert_no_shared_segments(layout)
     for node in graph["nodes"]:
-        if node["kind"] in ("load_balancer", "target_group") and not node["reference_only"]:
+        if node["kind"] in FOCUSED and not node["reference_only"]:
             layout = layout_document(snapshot, "focus", None, node["id"], True)
             assert_readable(layout)
             assert_no_shared_segments(layout)

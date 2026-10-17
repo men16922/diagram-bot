@@ -73,13 +73,21 @@ draw.io 32.4.1's `aws4` library (`js/diagramly/sidebar/Sidebar-AWS4.js`, "AWS / 
 | Public subnet | `group_security_group` lock, #7AA116 on #F2F6E8 |
 | Private subnet | `group_security_group` lock, #00A4A6 on #E6F6F7 |
 | Corporate data center | `group_corporate_data_center`, #7D8998 (targets with AvailabilityZone=all) |
-| Resources | resource-level icons: `instance2` (EC2), `application_load_balancer`, `network_load_balancer`, `gateway_load_balancer`, `elastic_network_interface`, `volume` |
+| Corporate data center | also holds VPN customer gateways (`customer_gateway`) |
+| Auto Scaling group / EKS node group | `groupCenter` + `group_auto_scaling_group`, dashed #D86613, caption with min/desired/max |
+| ECS service | rounded dashed #ED7100 frame around its tasks (no official group icon), caption with running/desired tasks |
+| Resources | resource-level icons: `instance2` (EC2), `application_load_balancer`, `network_load_balancer`, `gateway_load_balancer`, `elastic_network_interface` (EC2 ENI, IP targets), `volume`, `internet_gateway`, `nat_gateway`, `vpn_gateway`, `customer_gateway`, `peering`, `endpoints`, `transit_gateway_attachment`, `rds_instance`, `rds_instance_alt` (standby), `aurora_instance`, `elasticache_for_redis/valkey/memcached`, `ecs_task`, `ecs_service`, `opensearch_service_data_node`, `elastic_file_system_standard/one_zone`, `redshift_ra3`, `lambda_function`; tiles where no resource icon exists (EKS, MSK, DocumentDB, Neptune, Transit Gateway, target group) |
+
+Resource labels have up to four lines: name, type/engine, high-availability role (primary, standby,
+read replica, writer/reader, shard primary/replica, OpenSearch data/master counts and standby
+AZ), then size or address. Names ending in a number keep their tail when shortened.
 
 Nesting follows the icon guide: AWS Cloud > Region > VPC > Availability Zone > subnet; one icon
 per instance per AZ (redundancy stays visible); subnet tiers (public, web, app, data) are aligned
 across AZ columns; CIDR ranges are labelled. Deliberate deviations: lines have no arrowheads
 because they are configuration relations, not traffic flow; target groups use the ELB tile
-(no official resource icon); "public" is MapPublicIpOnLaunch or a name/Tier tag because route
-tables are not collected, and the document states that basis. aws.amazon.com and
+(no official resource icon); subnet type comes from the route table's `0.0.0.0/0` route (IGW public; NAT, TGW, VGW private;
+none isolated), falling back to MapPublicIpOnLaunch or a name/Tier tag when route tables are
+not collected, and the document states that basis. aws.amazon.com and
 docs.aws.amazon.com were not reachable from the build environment, so the official deck was
 consulted through search excerpts and the draw.io library, not read directly.

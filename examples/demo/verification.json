@@ -4,7 +4,7 @@
   "external_requests": [],
   "png_2x_size": [
     2498,
-    2672
+    3060
   ],
   "moved_instance": {
     "before": [
@@ -41,6 +41,7 @@
     "restore archived edit",
     "infrastructure sample: ASG frame, RDS standby, route-classified subnet",
     "EKS sample: node group frame, Aurora writer, MSK brokers",
+    "data platform: ECS service frame, OpenSearch standby AZ, read replica, VPN customer gateway",
     "snapshot import"
   ]
 }

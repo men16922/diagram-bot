@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T07:25:42.138567+00:00",
-    "finished_at": "2026-10-17T07:25:42.138567+00:00",
+    "started_at": "2026-10-17T07:47:11.333646+00:00",
+    "finished_at": "2026-10-17T07:47:11.333646+00:00",
     "status": "complete",
     "demo": true,
     "sample": "eks-platform",
@@ -35,11 +35,17 @@
       "EKS",
       "MSK",
       "ElastiCache",
-      "Lambda"
+      "Lambda",
+      "OpenSearch",
+      "ECS",
+      "EFS",
+      "Redshift",
+      "VpcPeering",
+      "VPN"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -162,6 +168,83 @@
       "status": "complete",
       "pages": 1,
       "items": 1
+    },
+    {
+      "service": "kafka",
+      "operation": "list_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domains",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domain_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_services",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_tasks",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_mount_targets",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
     },
     {
       "service": "elbv2",
@@ -1222,6 +1305,35 @@
         }
       }
     ],
+    "msk_nodes": [
+      {
+        "ClusterArn": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "NodeType": "BROKER",
+        "InstanceType": "kafka.m7g.large",
+        "BrokerNodeInfo": {
+          "BrokerId": 1,
+          "ClientSubnet": "subnet-pf-data-a"
+        }
+      },
+      {
+        "ClusterArn": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "NodeType": "BROKER",
+        "InstanceType": "kafka.m7g.large",
+        "BrokerNodeInfo": {
+          "BrokerId": 2,
+          "ClientSubnet": "subnet-pf-data-b"
+        }
+      },
+      {
+        "ClusterArn": "arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
+        "NodeType": "BROKER",
+        "InstanceType": "kafka.m7g.large",
+        "BrokerNodeInfo": {
+          "BrokerId": 3,
+          "ClientSubnet": "subnet-pf-data-c"
+        }
+      }
+    ],
     "lambda_functions": [
       {
         "FunctionName": "order-events-consumer",
@@ -1293,7 +1405,19 @@
           }
         ]
       }
-    ]
+    ],
+    "opensearch_domains": [],
+    "opensearch_nodes": [],
+    "ecs_services": [],
+    "ecs_tasks": [],
+    "efs_file_systems": [],
+    "efs_mount_targets": [],
+    "redshift_clusters": [],
+    "redshift_subnet_groups": [],
+    "vpc_peering_connections": [],
+    "vpn_gateways": [],
+    "vpn_connections": [],
+    "customer_gateways": []
   },
   "graph": {
     "nodes": [
@@ -1383,7 +1507,8 @@
           "CacheNodeType": "cache.r7g.large",
           "PreferredAvailabilityZone": "ap-northeast-2b",
           "CacheSubnetGroupName": "platform-redis-subnets",
-          "CurrentRole": "primary"
+          "CurrentRole": "primary",
+          "Shard": null
         },
         "reference_only": false,
         "source": "DescribeCacheClusters"
@@ -1402,7 +1527,8 @@
           "CacheNodeType": "cache.r7g.large",
           "PreferredAvailabilityZone": "ap-northeast-2c",
           "CacheSubnetGroupName": "platform-redis-subnets",
-          "CurrentRole": "replica"
+          "CurrentRole": "replica",
+          "Shard": null
         },
         "reference_only": false,
         "source": "DescribeCacheClusters"
@@ -2055,10 +2181,14 @@
           "ClusterName": "platform-events",
           "Brokers": 1,
           "InstanceType": "kafka.m7g.large",
+          "BrokerIds": [
+            1
+          ],
+          "Estimated": false,
           "KafkaVersion": "3.7.x"
         },
         "reference_only": false,
-        "source": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]"
+        "source": "ListNodes.BrokerNodeInfo.ClientSubnet"
       },
       {
         "id": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-b",
@@ -2071,10 +2201,14 @@
           "ClusterName": "platform-events",
           "Brokers": 1,
           "InstanceType": "kafka.m7g.large",
+          "BrokerIds": [
+            2
+          ],
+          "Estimated": false,
           "KafkaVersion": "3.7.x"
         },
         "reference_only": false,
-        "source": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]"
+        "source": "ListNodes.BrokerNodeInfo.ClientSubnet"
       },
       {
         "id": "111122223333/ap-northeast-2/msk_broker/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1#subnet-pf-data-c",
@@ -2087,10 +2221,14 @@
           "ClusterName": "platform-events",
           "Brokers": 1,
           "InstanceType": "kafka.m7g.large",
+          "BrokerIds": [
+            3
+          ],
+          "Estimated": false,
           "KafkaVersion": "3.7.x"
         },
         "reference_only": false,
-        "source": "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]"
+        "source": "ListNodes.BrokerNodeInfo.ClientSubnet"
       },
       {
         "id": "111122223333/ap-northeast-2/msk_cluster/arn:aws:kafka:ap-northeast-2:111122223333:cluster/platform-events/1",
@@ -3894,6 +4032,78 @@
         "details": {},
         "inferred": false,
         "id": "rel-2101263104ceddd705c0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.17.21:8080:ap-northeast-2a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-df300868c18197dcb1c3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.17.21:8080:ap-northeast-2a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-bd99cee57bad24a402a8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.33.42:8080:ap-northeast-2b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-8efb7e0b6511bbd323ac"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.33.42:8080:ap-northeast-2b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1f19b9275c50794914a8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.49.13:8080:ap-northeast-2c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeTargetHealth.Target.Id ∈ DescribeSubnets.CidrBlock",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-9a8e6b08c6ab723e5ddf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001#10.60.49.13:8080:ap-northeast-2c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-490d868a28800df9ee36"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-platform-main",

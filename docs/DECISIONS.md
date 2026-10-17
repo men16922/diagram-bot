@@ -26,6 +26,14 @@ Last Updated: 2026-10-17
   icon per client subnet (brokers spread evenly by AWS); ElastiCache and RDS/Aurora nodes are placed
   only when exactly one subnet-group subnet matches their AZ. Cluster/replication-group objects
   are not drawn; they appear through their members in the inspector.
+- Per-AZ detail comes from per-node APIs when granted (OpenSearch DescribeDomainNodes, MSK
+  ListNodes, ECS DescribeTasks); without them the even spread is shown and marked estimated.
+- IP targets are placed in a subnet only when exactly one subnet CIDR in the target group's VPC
+  holds the address and the AZ matches (AZ=all stays outside). An IP target is drawn as an ECS task
+  only when that task's service names the target group and the task ENI has the same address.
+- ECS services with placed tasks are frames like Auto Scaling groups; services without collected
+  tasks sit in the attachment row. VPC peering appears in both collected VPCs; VPN connections run
+  from the VGW/TGW to customer gateways in the data center box beside the AWS Cloud.
 - Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
 - Automatic layout only on first generation or explicit relayout; superseded edits are archived
   and user-added notes carried over.

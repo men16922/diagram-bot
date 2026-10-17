@@ -33,12 +33,24 @@ OPERATIONS = [
     ("kafka", "list_clusters_v2", "ClusterInfoList", "msk_clusters"),
     ("lambda", "list_functions", "Functions", "lambda_functions"),
     ("eks", "list_clusters", "clusters", "eks_cluster_names"),
+    # Search, containers, file storage, warehouse and hybrid connectivity.
+    ("opensearch", "list_domain_names", "DomainNames", "opensearch_domain_names"),
+    ("ecs", "list_clusters", "clusterArns", "ecs_cluster_arns"),
+    ("efs", "describe_file_systems", "FileSystems", "efs_file_systems"),
+    ("redshift", "describe_clusters", "Clusters", "redshift_clusters"),
+    ("redshift", "describe_cluster_subnet_groups", "ClusterSubnetGroups", "redshift_subnet_groups"),
+    ("ec2", "describe_vpc_peering_connections", "VpcPeeringConnections", "vpc_peering_connections"),
+    ("ec2", "describe_vpn_gateways", "VpnGateways", "vpn_gateways"),
+    ("ec2", "describe_vpn_connections", "VpnConnections", "vpn_connections"),
+    ("ec2", "describe_customer_gateways", "CustomerGateways", "customer_gateways"),
 ]
+# IAM service prefixes that differ from the boto3 client name.
+IAM_PREFIX = {"elbv2": "elasticloadbalancing", "opensearch": "es", "efs": "elasticfilesystem"}
 
 
 def permission(service, operation):
     """IAM action needed for a read operation, shown next to denied or partial coverage."""
-    prefix = {"elbv2": "elasticloadbalancing"}.get(service, service)
+    prefix = IAM_PREFIX.get(service, service)
     action = "".join(part.title() for part in operation.split("_"))
     return prefix + ":" + {"DescribeDbInstances": "DescribeDBInstances", "DescribeDbClusters": "DescribeDBClusters"}.get(action, action)
 
@@ -94,23 +106,41 @@ def collect(region, profile=None, expected_account=None, session=None):
         result.update(service="elbv2", permission=permission("elbv2", "describe_target_health"))
         coverage.append(result)
         raw["target_health"].append({"TargetGroupArn": arn, "Descriptions": rows})
+    def call(service, operation, key, params):
+        rows, result = query(clients[service], operation, key, params)
+        result.update(service=service, permission=permission(service, operation))
+        coverage.append(result)
+        return rows
+
+    def batches(items, size):
+        return [items[i:i + size] for i in range(0, len(items), size)]
+
     raw["eks_clusters"] = []
     for name in raw.pop("eks_cluster_names"):
-        details = []
-        for operation, key, params in (("describe_cluster", "cluster", {"name": name}),
-                                       ("list_nodegroups", "nodegroups", {"clusterName": name})):
-            rows, result = query(clients["eks"], operation, key, params)
-            result.update(service="eks", permission=permission("eks", operation))
-            coverage.append(result)
-            details.append(rows)
-        if details[0]:
-            cluster = {**details[0][0], "nodegroups": []}
-            for group in details[1]:
-                rows, result = query(clients["eks"], "describe_nodegroup", "nodegroup", {"clusterName": name, "nodegroupName": group})
-                result.update(service="eks", permission=permission("eks", "describe_nodegroup"))
-                coverage.append(result)
-                cluster["nodegroups"] += rows
-            raw["eks_clusters"].append(cluster)
+        cluster = call("eks", "describe_cluster", "cluster", {"name": name})
+        groups = call("eks", "list_nodegroups", "nodegroups", {"clusterName": name})
+        if cluster:
+            raw["eks_clusters"].append({**cluster[0], "nodegroups": [g for group in groups for g in call(
+                "eks", "describe_nodegroup", "nodegroup", {"clusterName": name, "nodegroupName": group})]})
+    # Per-resource detail: which AZ each broker, search node and task actually runs in.
+    raw["msk_nodes"] = [{**node, "ClusterArn": cluster["ClusterArn"]} for cluster in raw["msk_clusters"]
+                        if cluster.get("ClusterType", "PROVISIONED") == "PROVISIONED"
+                        for node in call("kafka", "list_nodes", "NodeInfoList", {"ClusterArn": cluster["ClusterArn"]})]
+    names = [d["DomainName"] for d in raw.pop("opensearch_domain_names")]
+    raw["opensearch_domains"] = [d for batch in batches(names, 5)
+                                 for d in call("opensearch", "describe_domains", "DomainStatusList", {"DomainNames": batch})]
+    raw["opensearch_nodes"] = [{**node, "DomainName": domain["DomainName"]} for domain in raw["opensearch_domains"]
+                               if (domain.get("VPCOptions") or {}).get("SubnetIds")
+                               for node in call("opensearch", "describe_domain_nodes", "DomainNodesStatusList", {"DomainName": domain["DomainName"]})]
+    raw["ecs_services"], raw["ecs_tasks"] = [], []
+    for cluster in raw.pop("ecs_cluster_arns"):
+        arns = call("ecs", "list_services", "serviceArns", {"cluster": cluster})
+        raw["ecs_services"] += [s for batch in batches(arns, 10)
+                                for s in call("ecs", "describe_services", "services", {"cluster": cluster, "services": batch})]
+        tasks = call("ecs", "list_tasks", "taskArns", {"cluster": cluster, "desiredStatus": "RUNNING"})
+        raw["ecs_tasks"] += [t for batch in batches(tasks, 100) for t in call("ecs", "describe_tasks", "tasks", {"cluster": cluster, "tasks": batch})]
+    raw["efs_mount_targets"] = [m for fs in raw["efs_file_systems"]
+                                for m in call("efs", "describe_mount_targets", "MountTargets", {"FileSystemId": fs["FileSystemId"]})]
     if any(c["status"] != "complete" for c in coverage if c["operation"] == "describe_target_groups"):
         coverage.append({"service": "elbv2", "operation": "describe_target_health",
                          "parameters": {}, "status": "not_discovered",
@@ -122,9 +152,9 @@ def collect(region, profile=None, expected_account=None, session=None):
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
         "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway",
                   "NatGateway", "RouteTable", "RDS", "Aurora", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment",
-                  "EKS", "MSK", "ElastiCache", "Lambda"],
+                  "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN"],
         "limitations": ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
                         "여러 API의 순차 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
                         "보안 그룹·ENI·EBS는 EC2/ELB 응답의 참조만 표시합니다. 별도 상세 조회는 하지 않습니다.",
-                        "EKS·리스너 규칙·보안 그룹 규칙·VPN/Direct Connect·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
+                        "리스너 규칙·보안 그룹 규칙·Direct Connect·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
         "coverage": coverage, "raw": raw}

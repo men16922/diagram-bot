@@ -15,6 +15,7 @@ RELATIONS = {
     "in_subnet": "서브넷 배치", "uses_security_group": "SG 연결",
     "attached_interface": "ENI 장착", "attached_volume": "EBS 장착",
     "asg_target_group": "Auto Scaling 대상 그룹", "attached_transit_gateway": "TGW 연결",
+    "ecs_target_group": "ECS 서비스 대상 그룹", "vpn_connection": "Site-to-Site VPN",
 }
 # Resource-level icons from the AWS Architecture Icons set (draw.io aws4 library).
 RESOURCE_ICONS = {
@@ -35,6 +36,16 @@ RESOURCE_ICONS = {
     "valkey": ("elasticache_for_valkey", "#C925D1"),
     "memcached": ("elasticache_for_memcached", "#C925D1"),
     "tgw_attachment": ("transit_gateway_attachment", "#8C4FFF"),
+    "vpn_gateway": ("vpn_gateway", "#8C4FFF"),
+    "customer_gateway": ("customer_gateway", "#8C4FFF"),
+    "vpc_peering": ("peering", "#8C4FFF"),
+    "ip_target": ("elastic_network_interface", "#8C4FFF"),
+    "ecs_task": ("ecs_task", "#ED7100"),
+    "ecs_service": ("ecs_service", "#ED7100"),
+    "search_node": ("opensearch_service_data_node", "#8C4FFF"),
+    "efs_standard": ("elastic_file_system_standard", "#7AA116"),
+    "efs_one_zone": ("elastic_file_system_one_zone", "#7AA116"),
+    "redshift_cluster": ("redshift_ra3", "#8C4FFF"),
 }
 # Square resource-icon tiles for things without a resource-level icon.
 ICONS = {
@@ -44,6 +55,8 @@ ICONS = {
     "transit_gateway": ("transit_gateway", "#8C4FFF"),
     "eks_cluster": ("eks", "#ED7100"),
     "msk_broker": ("managed_streaming_for_kafka", "#8C4FFF"),
+    "documentdb": ("documentdb_with_mongodb_compatibility", "#C925D1"),
+    "neptune": ("neptune", "#C925D1"),
 }
 COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
 # Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.
@@ -66,6 +79,9 @@ STYLES = {
     "asg": (COMMON + "outlineConnect=0;gradientColor=none;whiteSpace=wrap;container=0;pointerEvents=0;shape=mxgraph.aws4.groupCenter;"
             "grIcon=mxgraph.aws4.group_auto_scaling_group;grStroke=1;strokeColor=#D86613;fillColor=none;fontColor=#D86613;"
             "dashed=1;align=left;spacingLeft=12;verticalAlign=bottom;spacingBottom=4;fontSize=11;"),
+    # ECS service around its tasks: same overlay idea in the containers colour, without a group icon.
+    "ecs_frame": (COMMON + "rounded=1;arcSize=4;whiteSpace=wrap;container=0;pointerEvents=0;strokeColor=#ED7100;fillColor=none;"
+                  "fontColor=#C25E00;dashed=1;dashPattern=6 3;align=left;spacingLeft=12;verticalAlign=bottom;spacingBottom=4;fontSize=11;"),
     "onprem": AWS_GROUP + "grIcon=mxgraph.aws4.group_corporate_data_center;strokeColor=#7D8998;fillColor=none;fontColor=#5A6C86;dashed=0;",
 }
 EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;fontFamily=Arial;fontSize=9;fontColor=#536A82;strokeColor=#7C91A8;strokeWidth=1.5;endArrow=none;labelBackgroundColor=#FFFFFF;"
@@ -84,14 +100,16 @@ def validate_document(xml):
 
 
 def resource_style(shape):
-    icon = RESOURCE_ICONS.get(shape.get("variant") or shape.get("kind"))
-    shape_name, color = ICONS.get(shape.get("kind"), ("", "#687B90"))
+    variant = shape.get("variant")
+    # A variant (engine, file system class, IP target) picks its own icon, else the kind's.
+    icon = RESOURCE_ICONS.get(variant) or (None if variant in ICONS else RESOURCE_ICONS.get(shape.get("kind")))
+    shape_name, color = ICONS.get(variant) or ICONS.get(shape.get("kind"), ("", "#687B90"))
     style = COMMON + "whiteSpace=wrap;"
     if shape.get("label_side") == "right":
         style += "labelWidth=170;labelPosition=right;verticalLabelPosition=middle;align=left;verticalAlign=middle;spacingLeft=8;"
     else:
         style += "labelWidth=140;align=center;verticalLabelPosition=bottom;verticalAlign=top;spacingTop=8;"
-    if shape.get("outside_vpc"):
+    if shape.get("outside_vpc") and not icon:
         # Target registered with AvailabilityZone=all: an address outside the VPC (e.g. on premises).
         style += "shape=mxgraph.aws4.traditional_server;fillColor=#232F3D;strokeColor=none;gradientColor=none;"
     elif icon:
@@ -123,7 +141,7 @@ def page(file, layout, name):
         if shape["role"] == "summary":
             attrs["summary"] = "1"
         role = ("public_subnet" if shape.get("public") else "private_subnet") if shape["role"] == "subnet" else shape["role"]
-        style = resource_style(shape) if shape["role"] == "resource" else STYLES[role]
+        style = resource_style(shape) if shape["role"] == "resource" else STYLES["ecs_frame" if shape.get("frame") == "ecs" else role]
         if shape["role"] == "summary" and not shape.get("resource"):
             style = STYLES["references"] + "fontColor=#232F3E;spacingTop=12;spacingLeft=16;"
         if shape.get("empty"):

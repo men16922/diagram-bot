@@ -22,12 +22,13 @@ diagram-bot serve
 
 `setup-editor`는 최초 한 번 공식 draw.io **32.4.1** 배포물(약 48 MB)을 다운로드하고 고정 SHA-256을 확인합니다. 이후 구성도 편집과 PNG 생성은 로컬에서 수행합니다. 오프라인 설치에는 동일 버전의 공식 `draw.war`를 준비해 `diagram-bot setup-editor --archive /path/to/draw.war`를 사용합니다. [배포물 출처와 라이선스](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
-[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 5종](examples/samples/README.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
+[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 7종](examples/samples/README.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
 
 ## 시연 버전에서 할 수 있는 것
 
 - **세 가지 보기:** 계정·리전·VPC 요약 카드의 `전체 구성`, 한 VPC의 AZ·서브넷·EC2·ALB·대상 그룹을 그린 `상세 구성`, 선택 리소스와 직접 관계·필요한 상위 경계만 그린 `선택 리소스`. 각 보기는 표시/수집/참조/숨김 수와 부분 조회 여부를 함께 보여줍니다.
-- **인프라 아키텍처 표기:** AWS Cloud > Region > VPC > AZ > 서브넷(라우팅으로 퍼블릭·프라이빗·격리 구분)에 Internet/NAT Gateway, VPC 엔드포인트, Transit Gateway 연결, EKS(컨트롤 플레인·노드 그룹), MSK 브로커, ElastiCache, Aurora writer/reader, RDS 기본·대기, VPC Lambda, AZ를 가로지르는 Auto Scaling 그룹 프레임을 AWS Architecture Icons 스타일로 그립니다.
+- **인프라 아키텍처 표기:** AWS Cloud > Region > VPC > AZ > 서브넷(라우팅으로 퍼블릭·프라이빗·격리 구분)에 Internet/NAT Gateway, VPC 엔드포인트, Transit Gateway 연결, VPC 피어링, Site-to-Site VPN(VGW/TGW → 고객 게이트웨이, 터널 상태), EKS(컨트롤 플레인·노드 그룹), ECS 서비스·Fargate 태스크, MSK 브로커, OpenSearch 노드, ElastiCache, RDS·Aurora·DocumentDB·Neptune, EFS 마운트 타깃, Redshift, VPC Lambda, AZ를 가로지르는 Auto Scaling 그룹·ECS 서비스 프레임을 AWS Architecture Icons 스타일로 그립니다.
+- **고가용성 표기:** 각 리소스가 어느 AZ·서브넷에서 어떤 역할인지 라벨에 표시합니다. RDS primary/standby/read replica, Multi-AZ DB 클러스터 readable standby, Aurora·DocumentDB writer/reader, ElastiCache 샤드별 primary/replica, OpenSearch AZ별 data·master 노드 수와 standby AZ, MSK AZ별 브로커 ID, Redshift Multi-AZ primary/secondary, EFS Regional/One Zone, Auto Scaling·EKS 노드 그룹 min/desired/max, ECS 실행/원하는 태스크 수.
 - **결정적 자동 배치:** 로드밸런서 → 대상 그룹 → AZ 열·서브넷 순서의 계층 배치. 연결선은 채널과 AZ 사이 통로로만 지나가 다른 도형을 가로지르지 않습니다. 같은 입력은 항상 같은 좌표를 만듭니다([배치 엔진 평가](docs/engineering/LAYOUT_EVALUATION.md)).
 - 선택한 리소스의 속성·태그·관계와 API 근거, 포트·AZ 한정자, 구성도에서 직접 관계 강조.
 - 실제 draw.io 도형 이동·스타일 수정·메모 편집. 편집본은 보기별로 저장되며, 덮어쓴 버전은 이력에 보관됩니다.
@@ -48,7 +49,7 @@ diagram-bot serve
 
 화면의 **AWS에서 새로 수집**에서 프로파일, 예상 계정 ID, 리전을 지정합니다. 프로파일을 지정하지 않으면 boto3의 기본 인증 체인을 사용합니다. 기존 `AWS_CONFIG_FILE`·`AWS_PROFILE`·`credential_process`도 SDK가 처리합니다. STS의 실제 계정 ID와 예상 계정 ID가 다르면 리소스를 수집하지 않습니다. 브라우저에서 SSO 로그인을 대신 수행하지는 않습니다.
 
-수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 읽기 API(EC2·ELBv2·RDS·Auto Scaling·EKS·MSK·ElastiCache·Lambda)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
+수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 읽기 API(EC2·ELBv2·RDS·Auto Scaling·EKS·ECS·MSK·ElastiCache·OpenSearch·EFS·Redshift·Lambda)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
 
 | 범위 | API 근거 |
 | --- | --- |
@@ -66,11 +67,21 @@ diagram-bot serve
 | Transit Gateway와 VPC 연결 | DescribeTransitGateways, DescribeTransitGatewayVpcAttachments |
 | Aurora writer/reader | rds DescribeDBClusters.DBClusterMembers |
 | ElastiCache 노드 (primary/replica) | DescribeCacheClusters·ReplicationGroups·CacheSubnetGroups (AZ와 서브넷 그룹으로 배치) |
-| MSK 브로커 | kafka ListClustersV2의 ClientSubnets·NumberOfBrokerNodes |
+| MSK 브로커 | kafka ListClustersV2의 ClientSubnets, ListNodes의 브로커별 ClientSubnet (없으면 균등 분산으로 표시) |
 | EKS 컨트롤 플레인·관리형 노드 그룹 | eks DescribeCluster·DescribeNodegroup (노드 그룹 → Auto Scaling 그룹) |
 | VPC 연결 Lambda | lambda ListFunctions.VpcConfig |
+| RDS 읽기 전용 복제본·Multi-AZ DB 클러스터 | DescribeDBInstances.ReadReplicaSourceDBInstanceIdentifier, DescribeDBClusters.DBClusterMembers |
+| ElastiCache 클러스터 모드 샤드 | DescribeReplicationGroups.NodeGroups[].NodeGroupMembers |
+| OpenSearch 도메인 노드 (data·master·standby) | es ListDomainNames·DescribeDomains.VPCOptions, DescribeDomainNodes의 AZ·NodeStatus |
+| ECS 서비스·태스크 | ecs ListClusters·ListServices·DescribeServices, ListTasks·DescribeTasks의 ENI 서브넷·IP |
+| ECS 태스크 = 대상 그룹 IP 대상 | 서비스의 loadBalancers[].targetGroupArn과 태스크 ENI IP가 같은 대상 |
+| EFS 마운트 타깃 | elasticfilesystem DescribeFileSystems·DescribeMountTargets.SubnetId |
+| Redshift (Multi-AZ primary/secondary) | redshift DescribeClusters.AvailabilityZone·MultiAZSecondary, DescribeClusterSubnetGroups |
+| VPC 피어링 | DescribeVpcPeeringConnections, 라우팅 테이블의 VpcPeeringConnectionId 경로 |
+| Site-to-Site VPN | DescribeVpnGateways·DescribeVpnConnections(VgwTelemetry)·DescribeCustomerGateways |
+| IP 대상의 서브넷 | 대상 그룹 VPC 안에서 IP를 포함하는 서브넷 CIDR이 하나이고 AZ가 일치할 때만 |
 
-ALB는 여러 서브넷에 걸쳐도 VPC 수준에 한 번만 그리며, 서브넷 연결은 속성 패널과 선택 리소스 보기에서 확인합니다. 대상 그룹은 논리 자원으로 서브넷 밖에 둡니다. 관계 ID는 출발·대상·관계 종류와 포트·AZ로 정해지므로 조회 순서나 상태가 바뀌어도 유지됩니다. SG·ENI·EBS는 **참조만** 표시하며 상세 조회하지 않습니다. IP·Lambda 대상은 별도 등록 대상으로 남기고 EC2와 추측으로 합치지 않습니다. 그래프 관계에는 API 근거와 `inferred: false`가 기록됩니다. 보안 그룹 허용 규칙과 실제 통신을 혼동하지 않습니다.
+ALB는 여러 서브넷에 걸쳐도 VPC 수준에 한 번만 그리며, 서브넷 연결은 속성 패널과 선택 리소스 보기에서 확인합니다. 대상 그룹은 논리 자원으로 서브넷 밖에 둡니다. 관계 ID는 출발·대상·관계 종류와 포트·AZ로 정해지므로 조회 순서나 상태가 바뀌어도 유지됩니다. SG·ENI·EBS는 **참조만** 표시하며 상세 조회하지 않습니다. IP·Lambda 대상은 별도 등록 대상으로 남기고 EC2와 추측으로 합치지 않습니다. IP 대상은 서브넷 CIDR·AZ가 하나로 일치할 때만 서브넷에 두고, ECS 서비스가 그 대상 그룹을 지정하고 태스크 ENI IP가 같을 때만 태스크로 표시합니다. 그래프 관계에는 API 근거와 `inferred: false`가 기록됩니다. 보안 그룹 허용 규칙과 실제 통신을 혼동하지 않습니다.
 
 SDK 페이지네이션·재시도·타임아웃을 적용합니다. `partial`은 일부 페이지 실패, `unavailable`은 한 페이지도 조회하지 못한 상태이며 리소스가 없다는 뜻이 아닙니다. 앞서 조회한 데이터는 보존합니다. 수집 시작·종료 시각과 범위를 기록하며 순차 API 조회이므로 원자적 스냅샷은 아닙니다.
 
@@ -110,6 +121,6 @@ python -m playwright install chromium
 python scripts/verify_demo.py
 ```
 
-자동 테스트 **42개**와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
+자동 테스트 **51개**와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
 
-현재는 **단일 사용자 로컬 시연 버전**입니다. 다중 사용자 인증·동시 편집, 수집 작업의 재시작 복구, 예약 수집, 변경 비교, RDS·EKS·라우팅·실제 트래픽 분석, 대규모 계정 성능 검증은 포함하지 않습니다. 이 환경에는 AWS 인증이 없어 실제 계정의 권한·접속·SSO 갱신은 검증하지 못했으며, 수집 로직은 모의 AWS 응답으로 검증했습니다.
+현재는 **단일 사용자 로컬 시연 버전**입니다. 다중 사용자 인증·동시 편집, 수집 작업의 재시작 복구, 예약 수집, 변경 비교, 리스너 규칙·보안 그룹 규칙·Direct Connect·실제 트래픽 분석, 대규모 계정 성능 검증은 포함하지 않습니다. 이 환경에는 AWS 인증이 없어 실제 계정의 권한·접속·SSO 갱신은 검증하지 못했으며, 수집 로직은 모의 AWS 응답으로 검증했습니다.

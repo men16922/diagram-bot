@@ -1,8 +1,11 @@
 """Synthetic reference architectures following AWS best-practice patterns. Never live data.
 
-Each sample stays inside the collector's scope (VPC, subnet, EC2, ELBv2, target groups and
-registered targets), so it renders exactly like a collected snapshot would.
+Each sample uses only fields the collector reads from the AWS APIs, so it renders exactly like a
+collected snapshot would.
 """
+import hashlib
+import ipaddress
+
 from .collector import now
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
@@ -16,7 +19,10 @@ class Sample:
                     "internet_gateways": [], "nat_gateways": [], "route_tables": [], "db_instances": [], "auto_scaling_groups": [],
                     "vpc_endpoints": [], "transit_gateways": [], "transit_gateway_attachments": [],
                     "db_clusters": [], "cache_clusters": [], "replication_groups": [], "cache_subnet_groups": [],
-                    "msk_clusters": [], "lambda_functions": [], "eks_clusters": []}
+                    "msk_clusters": [], "msk_nodes": [], "lambda_functions": [], "eks_clusters": [],
+                    "opensearch_domains": [], "opensearch_nodes": [], "ecs_services": [], "ecs_tasks": [],
+                    "efs_file_systems": [], "efs_mount_targets": [], "redshift_clusters": [], "redshift_subnet_groups": [],
+                    "vpc_peering_connections": [], "vpn_gateways": [], "vpn_connections": [], "customer_gateways": []}
         self.counter = 0
 
     def tags(self, name, **extra):
@@ -65,6 +71,10 @@ class Sample:
         self.raw["target_health"].append({"TargetGroupArn": arn, "Descriptions": descriptions})
         return arn
 
+    def address(self, subnet, offset):
+        cidr = next(s["CidrBlock"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
+        return str(ipaddress.ip_network(cidr)[offset])
+
     def az_of(self, subnet):
         return next(s["AvailabilityZone"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
 
@@ -90,14 +100,21 @@ class Sample:
         self.raw["route_tables"].append({"RouteTableId": key, "VpcId": vpc, "Routes": routes, "Associations": associations, "Tags": self.tags(name)})
         return key
 
-    def database(self, identifier, vpc, subnets, primary, engine="mysql", size="db.r6g.large", standby=None):
+    def database(self, identifier, vpc, subnets, primary, engine="mysql", size="db.r6g.large", standby=None, replica=None):
         group = {"DBSubnetGroupName": f"{identifier}-subnets", "VpcId": vpc,
                  "Subnets": [{"SubnetIdentifier": subnet, "SubnetAvailabilityZone": {"Name": self.az_of(subnet)}} for subnet in subnets]}
         self.raw["db_instances"].append({
             "DBInstanceIdentifier": identifier, "DBInstanceArn": f"arn:aws:rds:{REGION}:{ACCOUNT}:db:{identifier}",
             "Engine": engine, "DBInstanceClass": size, "AvailabilityZone": f"{REGION}{primary}", "MultiAZ": bool(standby),
             "SecondaryAvailabilityZone": f"{REGION}{standby}" if standby else None, "PubliclyAccessible": False,
-            "StorageEncrypted": True, "DBSubnetGroup": group})
+            "StorageEncrypted": True, "DBSubnetGroup": group, "ReadReplicaDBInstanceIdentifiers": [f"{identifier}-ro"] if replica else []})
+        if replica:
+            # Asynchronous read replica in a third AZ: read scaling, not failover.
+            self.raw["db_instances"].append({
+                "DBInstanceIdentifier": f"{identifier}-ro", "DBInstanceArn": f"arn:aws:rds:{REGION}:{ACCOUNT}:db:{identifier}-ro",
+                "Engine": engine, "DBInstanceClass": size, "AvailabilityZone": f"{REGION}{replica}", "MultiAZ": False,
+                "PubliclyAccessible": False, "StorageEncrypted": True, "DBSubnetGroup": group,
+                "ReadReplicaSourceDBInstanceIdentifier": identifier})
 
     def auto_scaling_group(self, name, instances, subnets, target_groups=(), minimum=2, maximum=6):
         self.raw["auto_scaling_groups"].append({
@@ -159,8 +176,11 @@ class Sample:
                                                "NodeGroups": [{"NodeGroupId": "0001", "NodeGroupMembers": members}]})
 
     def kafka(self, name, subnets, brokers, size="kafka.m7g.large"):
+        arn = f"arn:aws:kafka:{REGION}:{ACCOUNT}:cluster/{name}/1"
+        self.raw["msk_nodes"] += [{"ClusterArn": arn, "NodeType": "BROKER", "InstanceType": size,
+                                   "BrokerNodeInfo": {"BrokerId": i + 1, "ClientSubnet": subnets[i % len(subnets)]}} for i in range(brokers)]
         self.raw["msk_clusters"].append({
-            "ClusterName": name, "ClusterArn": f"arn:aws:kafka:{REGION}:{ACCOUNT}:cluster/{name}/1", "ClusterType": "PROVISIONED",
+            "ClusterName": name, "ClusterArn": arn, "ClusterType": "PROVISIONED",
             "State": "ACTIVE", "Provisioned": {"NumberOfBrokerNodes": brokers, "CurrentBrokerSoftwareInfo": {"KafkaVersion": "3.7.x"},
                                                "BrokerNodeGroupInfo": {"InstanceType": size, "ClientSubnets": list(subnets)},
                                                "EncryptionInfo": {"EncryptionInTransit": {"ClientBroker": "TLS"}}}})
@@ -176,6 +196,100 @@ class Sample:
                                          "nodegroups": [{"nodegroupName": group, "instanceTypes": [size], "scalingConfig": scaling,
                                                          "resources": {"autoScalingGroups": [{"name": asg}]}}
                                                         for group, asg, size, scaling in nodegroups]})
+
+    def redis_cluster(self, group, vpc, subnets, shards, size="cache.r7g.large"):
+        """Cluster mode enabled: one node group per shard, each with a primary and replicas in other AZs."""
+        self.raw["cache_subnet_groups"].append({"CacheSubnetGroupName": f"{group}-subnets", "VpcId": vpc,
+                                                "Subnets": [{"SubnetIdentifier": s, "SubnetAvailabilityZone": {"Name": self.az_of(s)}} for s in subnets]})
+        node_groups = []
+        for shard, (primary, replicas) in enumerate(shards, 1):
+            members = []
+            for index, az in enumerate([primary, *replicas]):
+                node = f"{group}-000{shard}-00{index + 1}"
+                self.raw["cache_clusters"].append({"CacheClusterId": node, "ReplicationGroupId": group, "Engine": "redis", "EngineVersion": "7.1",
+                                                   "CacheNodeType": size, "PreferredAvailabilityZone": f"{REGION}{az}",
+                                                   "CacheSubnetGroupName": f"{group}-subnets"})
+                members.append({"CacheClusterId": node, "CurrentRole": "primary" if index == 0 else "replica"})
+            node_groups.append({"NodeGroupId": f"000{shard}", "NodeGroupMembers": members})
+        self.raw["replication_groups"].append({"ReplicationGroupId": group, "MultiAZ": "enabled", "AutomaticFailover": "enabled",
+                                               "ClusterEnabled": True, "NodeGroups": node_groups})
+
+    def opensearch(self, domain, vpc, subnets, data_per_az, masters_per_az=1, size="r6g.large.search", standby=None):
+        """Three-AZ domain with dedicated masters; with standby, the standby AZ's data nodes take no traffic until failover."""
+        arn = f"arn:aws:es:{REGION}:{ACCOUNT}:domain/{domain}"
+        self.raw["opensearch_domains"].append({
+            "DomainName": domain, "ARN": arn, "DomainId": f"{ACCOUNT}/{domain}", "EngineVersion": "OpenSearch_2.13",
+            "ClusterConfig": {"InstanceType": size, "InstanceCount": data_per_az * len(subnets), "DedicatedMasterEnabled": bool(masters_per_az),
+                              "DedicatedMasterType": "m6g.large.search", "DedicatedMasterCount": masters_per_az * len(subnets),
+                              "ZoneAwarenessEnabled": True, "ZoneAwarenessConfig": {"AvailabilityZoneCount": len(subnets)},
+                              "MultiAZWithStandbyEnabled": bool(standby)},
+            "VPCOptions": {"VPCId": vpc, "SubnetIds": list(subnets), "AvailabilityZones": [self.az_of(x) for x in subnets]},
+            "EncryptionAtRestOptions": {"Enabled": True}, "NodeToNodeEncryptionOptions": {"Enabled": True}})
+        for subnet in subnets:
+            zone = self.az_of(subnet)
+            status = "StandBy" if standby and zone.endswith(standby) else "Active"
+            self.raw["opensearch_nodes"] += [{"DomainName": domain, "NodeId": f"{domain}-{zone[-1]}-{kind[0]}{i}", "NodeType": kind,
+                                              "AvailabilityZone": zone, "InstanceType": size if kind == "Data" else "m6g.large.search",
+                                              "NodeStatus": status if kind == "Data" else "Active"}
+                                             for kind, count in (("Data", data_per_az), ("Master", masters_per_az)) for i in range(count)]
+
+    def ecs_service(self, cluster, name, vpc, tasks, target_group=None, port=8080, launch="FARGATE"):
+        """Fargate service with awsvpc tasks; each task's ENI address is the IP target ECS registers."""
+        cluster_arn = f"arn:aws:ecs:{REGION}:{ACCOUNT}:cluster/{cluster}"
+        subnets = sorted({subnet for subnet, _ in tasks})
+        self.raw["ecs_services"].append({
+            "serviceArn": f"arn:aws:ecs:{REGION}:{ACCOUNT}:service/{cluster}/{name}", "serviceName": name, "clusterArn": cluster_arn,
+            "status": "ACTIVE", "launchType": launch, "desiredCount": len(tasks), "runningCount": len(tasks), "platformVersion": "1.4.0",
+            "networkConfiguration": {"awsvpcConfiguration": {"subnets": subnets, "securityGroups": [f"sg-{name}"], "assignPublicIp": "DISABLED"}},
+            "loadBalancers": [{"targetGroupArn": target_group, "containerName": name, "containerPort": port}] if target_group else [],
+            "deploymentConfiguration": {"deploymentCircuitBreaker": {"enable": True, "rollback": True}},
+            "availabilityZoneRebalancing": "ENABLED"})
+        for index, (subnet, ip) in enumerate(tasks):
+            task_id = hashlib.sha256(f"{cluster}/{name}/{index}".encode()).hexdigest()[:32]
+            self.raw["ecs_tasks"].append({
+                "taskArn": f"arn:aws:ecs:{REGION}:{ACCOUNT}:task/{cluster}/{task_id}", "clusterArn": cluster_arn, "group": f"service:{name}",
+                "launchType": launch, "lastStatus": "RUNNING", "availabilityZone": self.az_of(subnet), "cpu": "512", "memory": "1024",
+                "attachments": [{"type": "ElasticNetworkInterface", "status": "ATTACHED",
+                                 "details": [{"name": "subnetId", "value": subnet}, {"name": "privateIPv4Address", "value": ip}]}]})
+
+    def efs(self, key, name, vpc, subnets, one_zone=None):
+        self.raw["efs_file_systems"].append({"FileSystemId": key, "Name": name, "PerformanceMode": "generalPurpose", "ThroughputMode": "elastic",
+                                             "Encrypted": True, "LifeCycleState": "available", "NumberOfMountTargets": len(subnets),
+                                             **({"AvailabilityZoneName": f"{REGION}{one_zone}"} if one_zone else {}), "Tags": self.tags(name)})
+        for i, subnet in enumerate(subnets):
+            self.raw["efs_mount_targets"].append({"MountTargetId": f"fsmt-{key[3:]}{i}", "FileSystemId": key, "SubnetId": subnet, "VpcId": vpc,
+                                                  "AvailabilityZoneName": self.az_of(subnet), "LifeCycleState": "available",
+                                                  "IpAddress": self.address(subnet, 200)})
+
+    def redshift(self, cluster, vpc, subnets, primary, secondary=None, node_type="ra3.xlplus", nodes=2):
+        self.raw["redshift_subnet_groups"].append({"ClusterSubnetGroupName": f"{cluster}-subnets", "VpcId": vpc,
+                                                   "Subnets": [{"SubnetIdentifier": s, "SubnetAvailabilityZone": {"Name": self.az_of(s)}} for s in subnets]})
+        roles = lambda: [{"NodeRole": "LEADER" if nodes > 1 and i == 0 else "COMPUTE-" + str(i)} for i in range(nodes)]
+        self.raw["redshift_clusters"].append({
+            "ClusterIdentifier": cluster, "NodeType": node_type, "NumberOfNodes": nodes, "ClusterStatus": "available", "VpcId": vpc,
+            "ClusterSubnetGroupName": f"{cluster}-subnets", "AvailabilityZone": f"{REGION}{primary}", "Encrypted": True,
+            "PubliclyAccessible": False, "ClusterNodes": roles(), "MultiAZ": "Enabled" if secondary else "Disabled",
+            **({"MultiAZSecondary": {"AvailabilityZone": f"{REGION}{secondary}", "ClusterNodes": roles()}} if secondary else {})})
+
+    def peering(self, key, requester, accepter, name):
+        cidr = lambda vpc: next(v["CidrBlock"] for v in self.raw["vpcs"] if v["VpcId"] == vpc)
+        self.raw["vpc_peering_connections"].append({
+            "VpcPeeringConnectionId": key, "Status": {"Code": "active"}, "Tags": self.tags(name),
+            "RequesterVpcInfo": {"VpcId": requester, "OwnerId": ACCOUNT, "Region": REGION, "CidrBlock": cidr(requester)},
+            "AccepterVpcInfo": {"VpcId": accepter, "OwnerId": ACCOUNT, "Region": REGION, "CidrBlock": cidr(accepter)}})
+
+    def vpn(self, key, customer, ip, name, vgw=None, tgw=None, vpc=None, tunnels_up=2, vgw_name=None):
+        """Site-to-Site VPN with two tunnels, terminated on a virtual private gateway or a Transit Gateway."""
+        if vgw and not any(g["VpnGatewayId"] == vgw for g in self.raw["vpn_gateways"]):
+            self.raw["vpn_gateways"].append({"VpnGatewayId": vgw, "State": "available", "Type": "ipsec.1", "AmazonSideAsn": 64512,
+                                             "VpcAttachments": [{"VpcId": vpc, "State": "attached"}], "Tags": self.tags(vgw_name or vgw)})
+        if not any(c["CustomerGatewayId"] == customer for c in self.raw["customer_gateways"]):
+            self.raw["customer_gateways"].append({"CustomerGatewayId": customer, "IpAddress": ip, "BgpAsn": "65010", "State": "available",
+                                                  "Type": "ipsec.1", "Tags": self.tags(name)})
+        self.raw["vpn_connections"].append({
+            "VpnConnectionId": key, "CustomerGatewayId": customer, "State": "available", "Type": "ipsec.1",
+            **({"VpnGatewayId": vgw} if vgw else {"TransitGatewayId": tgw}), "Options": {"StaticRoutesOnly": False},
+            "VgwTelemetry": [{"OutsideIpAddress": f"52.78.0.{10 + i}", "Status": "UP" if i < tunnels_up else "DOWN"} for i in range(2)]})
 
     def network(self, vpc, prefix, azs, public, private, nat_per_az=True):
         """Internet gateway, NAT in public subnets, and one route table per tier (private per AZ)."""
@@ -207,16 +321,27 @@ class Sample:
                                                     ("elasticache", "describe_cache_clusters", "cache_clusters"),
                                                     ("kafka", "list_clusters_v2", "msk_clusters"),
                                                     ("lambda", "list_functions", "lambda_functions"),
-                                                    ("eks", "list_clusters", "eks_clusters"))]
+                                                    ("eks", "list_clusters", "eks_clusters"),
+                                                    ("kafka", "list_nodes", "msk_nodes"),
+                                                    ("opensearch", "describe_domains", "opensearch_domains"),
+                                                    ("opensearch", "describe_domain_nodes", "opensearch_nodes"),
+                                                    ("ecs", "describe_services", "ecs_services"), ("ecs", "describe_tasks", "ecs_tasks"),
+                                                    ("efs", "describe_file_systems", "efs_file_systems"),
+                                                    ("efs", "describe_mount_targets", "efs_mount_targets"),
+                                                    ("redshift", "describe_clusters", "redshift_clusters"),
+                                                    ("ec2", "describe_vpc_peering_connections", "vpc_peering_connections"),
+                                                    ("ec2", "describe_vpn_gateways", "vpn_gateways"),
+                                                    ("ec2", "describe_vpn_connections", "vpn_connections"))]
         coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
                       "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in self.raw["target_health"]]
         return {"schema_version": 1, "metadata": {
             "account_id": ACCOUNT, "region": REGION, "partition": "aws", "started_at": timestamp, "finished_at": timestamp,
             "status": "complete", "demo": True, "sample": self.key, "title": self.title, "practices": self.practices,
             "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway", "NatGateway",
-                      "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGateway", "EKS", "MSK", "ElastiCache", "Lambda"],
+                      "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGateway", "EKS", "MSK", "ElastiCache", "Lambda",
+                      "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN"],
             "limitations": ["AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-                            "보안 그룹 규칙·VPC 엔드포인트·리스너 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+                            "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
                             "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."]},
             "coverage": coverage, "raw": self.raw}
 
@@ -228,7 +353,7 @@ def three_tier():
         "웹 계층과 앱 계층 사이에 내부 ALB를 두어 계층별 확장·격리",
         "AZ마다 NAT 게이트웨이를 두어 프라이빗 서브넷의 외부 통신이 AZ 장애에 묶이지 않음",
         "웹·앱 계층은 Auto Scaling 그룹(ELB 헬스 체크)으로 AZ에 분산",
-        "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개)",
+        "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개), 읽기는 세 번째 AZ의 읽기 전용 복제본",
         "S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM 인터페이스 엔드포인트(배스천 없음)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60001", "10.10.0.0/16", "prod-web", Environment="production")
     public, web, app, data = [], [], [], []
@@ -246,7 +371,7 @@ def three_tier():
     app_tg = s.target_group("prod-app-http", vpc, "HTTP", 8080, apps, [internal_alb])
     s.auto_scaling_group("prod-web-asg", webs, web, [web_tg], 3, 9)
     s.auto_scaling_group("prod-app-asg", apps, app, [app_tg], 3, 12)
-    s.database("prod-orders-db", vpc, data, "a", "mysql", "db.r6g.large", standby="b")
+    s.database("prod-orders-db", vpc, data, "a", "mysql", "db.r6g.large", standby="b", replica="c")
     s.gateway_endpoint("vpce-prod-s3", vpc, "s3", [f"rtb-prod-private-{az}" for az in "abc"])
     s.interface_endpoint("vpce-prod-ssm", vpc, "ssm", app)
     return s.snapshot()
@@ -255,14 +380,14 @@ def three_tier():
 def microservices():
     s = Sample("microservices", "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4)", [
         "ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)",
-        "컨테이너(awsvpc) 서비스는 IP 대상 유형으로 등록",
+        "ECS Fargate 서비스(awsvpc)는 태스크 IP를 대상으로 등록, 배포 회로 차단기로 자동 롤백",
         "서비스마다 전용 포트·헬스 체크 경로",
         "두 AZ 이상에 각 서비스 대상을 분산하고 서비스별 Auto Scaling 그룹",
         "서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ",
         "이미지 풀·S3 접근은 ECR 인터페이스·S3 게이트웨이 엔드포인트로 사설 경로 사용"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60002", "10.20.0.0/16", "commerce-services", Environment="production")
     public = [s.subnet(f"subnet-ms-pub-{az}", vpc, az, f"10.20.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ab")]
-    private = [s.subnet(f"subnet-ms-app-{az}", vpc, az, f"10.20.{10 + i}.0/22", f"services-{az}", "app") for i, az in enumerate("ab")]
+    private = [s.subnet(f"subnet-ms-app-{az}", vpc, az, f"10.20.{8 + 4 * i}.0/22", f"services-{az}", "app") for i, az in enumerate("ab")]
     data = [s.subnet(f"subnet-ms-data-{az}", vpc, az, f"10.20.{20 + i}.0/24", f"data-{az}", "data") for i, az in enumerate("ab")]
     catalog = [s.instance(f"i-catalog{az}00000001", private[i], f"catalog-{az}", "c6i.large", sg="sg-services") for i, az in enumerate("ab")]
     orders = [s.instance(f"i-orders{az}000000001", private[i], f"orders-{az}", "c6i.large", sg="sg-services") for i, az in enumerate("ab")]
@@ -275,10 +400,11 @@ def microservices():
     s.database("commerce-db", vpc, data, "a", "postgres", "db.r6g.xlarge", standby="b")
     s.gateway_endpoint("vpce-commerce-s3", vpc, "s3", [f"rtb-commerce-private-{az}" for az in "ab"])
     s.interface_endpoint("vpce-commerce-ecr", vpc, "ecr.dkr", private)
-    s.target_group("cart-svc-ecs", vpc, "HTTP", 9000, [("10.20.10.41", 9000, f"{REGION}a"), ("10.20.11.57", 9000, f"{REGION}b")],
-                   [alb], target_type="ip", health="/cart/health")
-    s.target_group("payments-svc-ecs", vpc, "HTTP", 9100, [("10.20.10.88", 9100, f"{REGION}a"), ("10.20.11.92", 9100, f"{REGION}b")],
-                   [alb], target_type="ip", health="/payments/health")
+    for name, port, offset in (("cart-svc", 9000, 41), ("payments-svc", 9100, 88)):
+        tasks = [(subnet, s.address(subnet, offset + i)) for i, subnet in enumerate(private)]
+        group = s.target_group(f"{name}-ecs", vpc, "HTTP", port, [(ip, port, s.az_of(subnet)) for subnet, ip in tasks],
+                               [alb], target_type="ip", health=f"/{name.split('-')[0]}/health")
+        s.ecs_service("commerce", name, vpc, tasks, group, port)
     return s.snapshot()
 
 
@@ -345,7 +471,7 @@ def hybrid():
         "VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시",
         "클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크",
         "내부 ALB로 사내망 전용 노출",
-        "온프레미스 대역(192.168.0.0/16)은 Transit Gateway로 라우팅 (VPN/Direct Connect 연결은 수집 범위 밖)"])
+        "온프레미스 대역(192.168.0.0/16)은 Transit Gateway에 붙은 Site-to-Site VPN(터널 2개, BGP)으로 연결 (Direct Connect는 수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60005", "10.50.0.0/16", "migration-hub", Environment="production")
     app = [s.subnet(f"subnet-hy-app-{az}", vpc, az, f"10.50.{10 + i}.0/24", f"app-{az}", "app") for i, az in enumerate("ab")]
     cloud = [s.instance(f"i-erp{az}0000000000005", app[i], f"erp-cloud-{az}", "r6i.large", sg="sg-erp") for i, az in enumerate("ab")]
@@ -355,6 +481,7 @@ def hybrid():
     hub = s.transit_gateway("tgw-hybrid00000005", "hybrid-tgw")
     s.route("rtb-hybrid-main", "192.168.0.0/16", TransitGatewayId=hub)
     s.tgw_attachment("tgw-attach-hybrid", hub, vpc, app, "migration-attachment")
+    s.vpn("vpn-hybrid-seoul", "cgw-seoul-dc", "203.0.113.10", "seoul-dc-cgw", tgw=hub)
     alb = s.load_balancer("erp-internal-alb", vpc, app, scheme="internal", sg="sg-erp-alb")
     erp = s.target_group("erp-cloud", vpc, "HTTPS", 443, cloud, [alb])
     s.auto_scaling_group("erp-cloud-asg", cloud, app, [erp])
@@ -399,5 +526,46 @@ def eks_platform():
     return s.snapshot()
 
 
+def data_platform():
+    s = Sample("data-platform", "데이터 플랫폼 (ECS · OpenSearch · RDS · ElastiCache · EFS · Redshift · DocumentDB)", [
+        "ECS Fargate 서비스는 세 AZ 프라이빗 서브넷에 태스크를 분산하고 ALB가 태스크 IP를 대상으로 등록",
+        "OpenSearch는 3 AZ · 전용 마스터 노드 · Multi-AZ with Standby (한 AZ의 데이터 노드는 대기)",
+        "RDS PostgreSQL Multi-AZ(동기식 대기) + 세 번째 AZ의 읽기 전용 복제본",
+        "ElastiCache Redis 클러스터 모드: 샤드마다 primary와 replica를 서로 다른 AZ에, 자동 장애 조치",
+        "EFS(리전 클래스)는 AZ마다 마운트 타깃을 두어 AZ 장애에도 같은 AZ 경로로 접근",
+        "분석 VPC는 Redshift Multi-AZ와 DocumentDB writer/reader, 데이터 플랫폼 VPC와 피어링",
+        "사내 데이터 센터는 가상 프라이빗 게이트웨이의 Site-to-Site VPN(터널 2개)으로 연결"])
+    vpc = s.vpc("vpc-0a1b2c3d4e5f60007", "10.70.0.0/16", "data-platform", Environment="production")
+    azs = "abc"
+    public = [s.subnet(f"subnet-dp-pub-{az}", vpc, az, f"10.70.{i}.0/24", f"public-{az}", "public") for i, az in enumerate(azs)]
+    app = [s.subnet(f"subnet-dp-app-{az}", vpc, az, f"10.70.{16 * (i + 1)}.0/20", f"services-{az}", "app") for i, az in enumerate(azs)]
+    data = [s.subnet(f"subnet-dp-data-{az}", vpc, az, f"10.70.{100 + i}.0/24", f"data-{az}", "data") for i, az in enumerate(azs)]
+    s.network(vpc, "dp", azs, public, [app])
+    alb = s.load_balancer("data-api-alb", vpc, public, sg="sg-data-api-alb")
+    tasks = [(subnet, s.address(subnet, 21 + i)) for i, subnet in enumerate(app)]
+    group = s.target_group("data-api-tasks", vpc, "HTTP", 8080, [(ip, 8080, s.az_of(subnet)) for subnet, ip in tasks], [alb],
+                           target_type="ip", health="/healthz")
+    s.ecs_service("data-apps", "data-api", vpc, tasks, group)
+    s.ecs_service("data-apps", "ingest-worker", vpc, [(subnet, s.address(subnet, 60 + i)) for i, subnet in enumerate(app[:2])])
+    s.efs("fs-0dp0000000000007", "shared-assets", vpc, app)
+    s.opensearch("logs-search", vpc, data, 2, 1, standby="c")
+    s.database("catalog-db", vpc, data, "a", "postgres", "db.r6g.xlarge", standby="b", replica="c")
+    s.redis_cluster("session-cache", vpc, data, [("a", ["b"]), ("b", ["c"])])
+    s.gateway_endpoint("vpce-dp-s3", vpc, "s3", [f"rtb-dp-private-{az}" for az in azs])
+    s.interface_endpoint("vpce-dp-ecr", vpc, "ecr.dkr", app)
+    analytics = s.vpc("vpc-0a1b2c3d4e5f60008", "10.71.0.0/16", "analytics", Environment="production")
+    warehouse = [s.subnet(f"subnet-an-data-{az}", analytics, az, f"10.71.{10 + i}.0/24", f"warehouse-{az}", "data") for i, az in enumerate("ab")]
+    s.route_table("rtb-an-main", analytics, "analytics-isolated", main=True)
+    s.peering("pcx-dp-analytics0007", vpc, analytics, "data-platform-to-analytics")
+    s.route("rtb-an-main", "10.70.0.0/16", VpcPeeringConnectionId="pcx-dp-analytics0007")
+    for az in azs:
+        s.route(f"rtb-dp-private-{az}", "10.71.0.0/16", VpcPeeringConnectionId="pcx-dp-analytics0007")
+    s.vpn("vpn-an-corp", "cgw-corp-dc", "203.0.113.20", "corp-dc-cgw", vgw="vgw-analytics0008", vpc=analytics, vgw_name="analytics-vgw")
+    s.route("rtb-an-main", "192.168.0.0/16", GatewayId="vgw-analytics0008")
+    s.redshift("warehouse", analytics, warehouse, "a", "b", "ra3.4xlarge", 2)
+    s.aurora("profiles-docdb", analytics, warehouse, "a", ["b"], engine="docdb", size="db.r6g.large")
+    return s.snapshot()
+
+
 SAMPLES = {"three-tier": three_tier, "microservices": microservices, "nlb-alb": static_ip_front,
-           "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform}
+           "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform, "data-platform": data_platform}

@@ -11,11 +11,14 @@ Last Updated: 2026-10-17
 
 ## Current Baseline (v0.3)
 
-- Collection: direct SSO/SDK, read-only EC2/ELBv2/RDS/Auto Scaling/EKS/MSK/ElastiCache/Lambda calls incl. internet and
+- Collection: direct SSO/SDK, read-only EC2/ELBv2/RDS/Auto Scaling/EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/
+  Lambda calls plus VPC peering and Site-to-Site VPN, incl. internet and
   NAT gateways, route tables, VPC endpoints and Transit Gateway attachments; coverage rows name the
   IAM action needed when denied or partial.
 - Diagrams: AWS Architecture Icons style (Cloud > Region > VPC > AZ > route-classified subnets),
-  IGW/NAT/RDS standby, Auto Scaling frames; samples in examples/samples (6 reference patterns incl. EKS platform).
+  IGW/NAT, Auto Scaling and ECS service frames, VPN to customer gateways; labels carry each node's HA role
+  (primary/standby/read replica, writer/reader, shard primary/replica, OpenSearch data/master/standby per AZ,
+  MSK broker IDs, Redshift primary/secondary). Samples in examples/samples (7 patterns incl. data platform).
 - Graph: relation IDs from source/relation/target + port/AZ qualifiers; independent of API
   array order and target health. Same instance on two ports = two relations. Legacy snapshots
   get IDs on read in their stored order, so saved `relationIndex` documents still resolve.
@@ -36,11 +39,11 @@ Last Updated: 2026-10-17
 
 ## Verification (2026-10-17, this container)
 
-- `make check`: 48 pytest cases + five-artifact CLI round trip passed (GitHub Actions green on main 15665ad).
+- `make check`: 51 pytest cases + five-artifact CLI round trip passed.
 - Layout tests: no sibling overlap (icons + label boxes), nothing outside its container, no
   routed segment through another icon/label, identical rerun — all sample views and both VPCs
   of a 100-resource fixture. 100-resource layout of all pages ≈0.02 s (limit 5 s).
-- Browser (`scripts/verify_demo.py`, Chromium, draw.io 32.4.1): 25 checks incl. overview →
+- Browser (`scripts/verify_demo.py`, Chromium, draw.io 32.4.1): 26 checks incl. overview →
   detail → focus, ALB relations/evidence, relation highlight, native keyboard move + note,
   save/reload, `.drawio` with moved geometry, PNG 1×/2×/3× and transparent, relayout keeps
   the note, restore, JSON/CSV, import. No page errors, no external requests.
@@ -61,6 +64,7 @@ Last Updated: 2026-10-17
   collect` stopped with exit 1 and wrote no report (expected failure path). Needs a valid
   read-only key or SSO profile for the intended account.
 - 100-resource views are structurally correct but dense; no large-environment claim.
-- No shared-user hosting, scheduled collection, snapshot diff or listener rules. ECS, EFS and
-  OpenSearch are not collected. EKS/MSK/ElastiCache/Lambda calls are verified on stubs only.
+- No shared-user hosting, scheduled collection, snapshot diff, listener rules or Direct Connect.
+  EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN calls are verified on stubs only;
+  ElastiCache Serverless, MSK Serverless, EKS Fargate profiles and Aurora Global Database are not drawn.
 - Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.
