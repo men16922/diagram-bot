@@ -2,6 +2,18 @@
 
 Last Updated: 2026-10-18
 
+## 2026-10-18 — AI/GPU as a strength (owner: AI·GPU 쪽이 너무 약하다, 강점이 되어야 한다)
+
+- Collection: FSx, SageMaker real-time endpoints (config instance type, model VpcConfig) and HyperPod clusters, placement
+  groups; EFA interfaces, Capacity Block/ODCR and placement group read from DescribeInstances. Policy + CFN role updated.
+- Drawing: FSx (type icons) and HyperPod in their subnet, SageMaker endpoints in the VPC row (else regional card); EC2
+  labels/inspector show GPU · EFA and capacity · PG on separate lines so a 140 px label never cuts them.
+- Review: new AI/ML pillar, 13 more rules with lens BP IDs (internet-open Jupyter/Ray/MLflow/vLLM, public GPU, P5 subnet
+  IP headroom, Spot EFA, placement, Lustre AZ/scratch, Bedrock/SageMaker endpoint DNS/AZ, SageMaker VPC/AZ, HyperPod public).
+- Samples: `genai-rag`, `gpu-training`; `ai-platform` gains EFA, placement group, FSx. Designer: training groups get a
+  dedicated /20, EFA and a placement group; `add_fsx_lustre`, `add_sagemaker_endpoint`. ARCHITECTURE.md §5.5–5.8.
+- Verified: `make check` 160 tests; verify_demo 29 checks; all 10 samples review low or clean; label crops reviewed.
+
 ## 2026-10-18 — Overview becomes the network diagram (owner: 전체 구성이 의미 없어 보인다; goal: 잔여 작업 완료시까지)
 
 - The overview drew VPC cards only (no relations). It now draws the network joining them: VPC → Transit Gateway (via its

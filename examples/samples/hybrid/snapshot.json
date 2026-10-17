@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T20:59:51.653663+00:00",
-    "finished_at": "2026-10-17T20:59:51.653663+00:00",
+    "started_at": "2026-10-17T21:15:48.136993+00:00",
+    "finished_at": "2026-10-17T21:15:48.136993+00:00",
     "status": "complete",
     "demo": true,
     "sample": "hybrid",
-    "sample_version": 2,
+    "sample_version": 3,
     "title": "하이브리드 대상 (온프레미스 IP 포함)",
     "practices": [
       "점진 이전 중 온프레미스 서버를 IP 대상으로 함께 등록 (AvailabilityZone=all)",
@@ -255,6 +255,34 @@
       "items": 0
     },
     {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
       "service": "elbv2",
       "operation": "describe_target_health",
       "parameters": {
@@ -308,7 +336,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       },
       {
         "SubnetId": "subnet-hy-app-b",
@@ -325,7 +354,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       }
     ],
     "instances": [
@@ -357,7 +387,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-erpa0000000000005"
+            "NetworkInterfaceId": "eni-erpa0000000000005",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -396,7 +427,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-erpb0000000000005"
+            "NetworkInterfaceId": "eni-erpb0000000000005",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -683,7 +715,11 @@
         ]
       }
     ],
-    "security_groups": []
+    "security_groups": [],
+    "placement_groups": [],
+    "fsx_file_systems": [],
+    "sagemaker_endpoints": [],
+    "sagemaker_clusters": []
   },
   "graph": {
     "nodes": [
@@ -807,7 +843,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-erpa0000000000005"
+              "NetworkInterfaceId": "eni-erpa0000000000005",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -856,7 +893,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-erpb0000000000005"
+              "NetworkInterfaceId": "eni-erpb0000000000005",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1046,7 +1084,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -1075,7 +1114,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",

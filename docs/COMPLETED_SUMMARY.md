@@ -58,3 +58,9 @@ Last Updated: 2026-10-17
 - 8 samples (new ai-platform), GPU review rules, accelerated-instance/Bedrock icons, chat `add_gpu_node_group`,
   sample reseeding by version, wrapped attachment row, scripts/render_samples.py.
 - Evidence: `make check` 143 tests; verify_demo 28 checks; all samples pass `review --fail-on medium`.
+
+## Network overview and AI/GPU strength — completed 2026-10-18
+
+- Overview draws the TGW/peering/VPN network; single unconnected VPC opens in detail; stale notices cleared.
+- AI/GPU: FSx/SageMaker/HyperPod/placement collection, AI/ML review pillar (17 rules), samples genai-rag and gpu-training,
+  ai-platform with EFA/PG/FSx, designer tools. Evidence: `make check` 160 tests, verify_demo 29 checks.

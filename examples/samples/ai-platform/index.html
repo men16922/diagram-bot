@@ -22,22 +22,23 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T20:59:51.993546+00:00",
-    "finished_at": "2026-10-17T20:59:51.993546+00:00",
+    "started_at": "2026-10-17T21:15:48.492214+00:00",
+    "finished_at": "2026-10-17T21:15:48.492214+00:00",
     "status": "complete",
     "demo": true,
     "sample": "ai-platform",
-    "sample_version": 2,
+    "sample_version": 3,
     "title": "AI 플랫폼 (사설 EKS GPU 추론·학습 · Bedrock · Aurora pgvector)",
     "practices": [
       "인터넷 경로 없는 사설 VPC: IGW·NAT 없이 Transit Gateway로 사내망·중앙 egress에 연결 (MLSEC03-BP02)",
       "Bedrock·ECR·EKS·STS·CloudWatch Logs 등은 세 AZ의 인터페이스 엔드포인트, S3는 게이트웨이 엔드포인트로 사설 호출 (GENSEC01-BP02)",
       "GPU 추론 노드 그룹(g6e)은 세 AZ에 분산하고 내부 ALB가 추론 파드 IP를 대상으로 등록, 자동 확장 (GENREL02-BP01, MLREL05-BP01)",
-      "EFA 학습 노드 그룹(p5)은 의도적으로 한 AZ의 전용 /20 서브넷에, 자기 참조 전체 허용 보안 그룹 (EFA는 AZ를 넘지 못함, HPCREL01-BP02)",
+      "EFA 학습 노드 그룹(p5)은 의도적으로 한 AZ의 전용 /20 서브넷과 클러스터 배치 그룹에, 자기 참조 전체 허용 보안 그룹 (EFA는 AZ를 넘지 못함, HPCREL01-BP02)",
+      "체크포인트·학습 데이터는 학습 노드와 같은 AZ의 FSx for Lustre PERSISTENT_2 (GENREL06-BP01, HPCREL01-BP01)",
       "학습과 추론은 노드 그룹·인스턴스 유형을 분리 (MLPERF04-BP01), 학습 노드 그룹은 0까지 축소 (GENSUS01-BP01)",
       "RAG 벡터 저장소는 VPC 안 격리 서브넷의 Aurora PostgreSQL(pgvector) writer/reader, 노드 보안 그룹만 허용 (GENSEC01-BP03)",
       "모델 캐시는 세 AZ 마운트 타깃의 EFS (EKS AI/ML Storage)",
-      "도형 밖 권고: 학습 배치는 클러스터 배치 그룹 또는 Capacity Block(둘 중 하나), 체크포인트는 같은 AZ의 S3 연동 FSx for Lustre (GENREL06-BP01)",
+      "도형 밖 권고: FSx for Lustre를 S3 데이터 리포지토리와 연결해 체크포인트를 S3로 내보내고 다른 AZ에서 재시작 (HPCREL01-BP02)",
       "도형 밖 권고: Bedrock 모델 호출 로깅(기본 꺼짐)·Guardrails·InvokeModel만 허용하는 엔드포인트 정책, S3는 SSE-KMS와 aws:SourceVpce (수집 범위 밖)",
       "도형 밖 권고: Karpenter·KEDA·NVIDIA/EFA device plugin은 Kubernetes 객체라 그리지 않음 (Karpenter 노드는 ASG 없는 EC2로 표시)"
     ],
@@ -277,6 +278,34 @@
       "items": 4
     },
     {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
       "service": "elbv2",
       "operation": "describe_target_health",
       "parameters": {
@@ -320,7 +349,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 8185
       },
       {
         "SubnetId": "subnet-ai-app-b",
@@ -337,7 +367,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 8185
       },
       {
         "SubnetId": "subnet-ai-app-c",
@@ -354,7 +385,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 8185
       },
       {
         "SubnetId": "subnet-ai-train-a",
@@ -371,7 +403,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 4089
       },
       {
         "SubnetId": "subnet-ai-data-a",
@@ -388,7 +421,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-ai-data-b",
@@ -405,7 +439,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-ai-data-c",
@@ -422,7 +457,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       }
     ],
     "instances": [
@@ -462,7 +498,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-aisysa000000009"
+            "NetworkInterfaceId": "eni-aisysa000000009",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -509,7 +546,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-aisysb000000009"
+            "NetworkInterfaceId": "eni-aisysb000000009",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -556,7 +594,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-aisysc000000009"
+            "NetworkInterfaceId": "eni-aisysc000000009",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -603,7 +642,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-aiinfa000000009"
+            "NetworkInterfaceId": "eni-aiinfa000000009",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -650,7 +690,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-aiinfb000000009"
+            "NetworkInterfaceId": "eni-aiinfb000000009",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -697,7 +738,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-aiinfc000000009"
+            "NetworkInterfaceId": "eni-aiinfc000000009",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -718,7 +760,8 @@
         },
         "PrivateIpAddress": "10.0.7.17",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a"
+          "AvailabilityZone": "ap-northeast-2a",
+          "GroupName": "ai-train-pg"
         },
         "MetadataOptions": {
           "HttpTokens": "required"
@@ -744,7 +787,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-aitrn10000000009"
+            "NetworkInterfaceId": "eni-aitrn10000000009",
+            "InterfaceType": "efa"
           }
         ],
         "BlockDeviceMappings": [
@@ -765,7 +809,8 @@
         },
         "PrivateIpAddress": "10.0.8.18",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a"
+          "AvailabilityZone": "ap-northeast-2a",
+          "GroupName": "ai-train-pg"
         },
         "MetadataOptions": {
           "HttpTokens": "required"
@@ -791,7 +836,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-aitrn20000000009"
+            "NetworkInterfaceId": "eni-aitrn20000000009",
+            "InterfaceType": "efa"
           }
         ],
         "BlockDeviceMappings": [
@@ -1661,7 +1707,42 @@
           }
         ]
       }
-    ]
+    ],
+    "placement_groups": [
+      {
+        "GroupName": "ai-train-pg",
+        "GroupId": "pg-37ac358131b42ba71",
+        "Strategy": "cluster",
+        "State": "available"
+      }
+    ],
+    "fsx_file_systems": [
+      {
+        "FileSystemId": "fs-0ai1ustre0000009",
+        "FileSystemType": "LUSTRE",
+        "Lifecycle": "AVAILABLE",
+        "StorageCapacity": 9600,
+        "StorageType": "SSD",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "SubnetIds": [
+          "subnet-ai-train-a"
+        ],
+        "KmsKeyId": "arn:aws:kms:ap-northeast-2:111122223333:key/fsx",
+        "LustreConfiguration": {
+          "DeploymentType": "PERSISTENT_2",
+          "PerUnitStorageThroughput": 500,
+          "DataCompressionType": "LZ4"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ai-checkpoints"
+          }
+        ]
+      }
+    ],
+    "sagemaker_endpoints": [],
+    "sagemaker_clusters": []
   },
   "graph": {
     "nodes": [
@@ -1927,7 +2008,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-aiinfa000000009"
+              "NetworkInterfaceId": "eni-aiinfa000000009",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1984,7 +2066,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-aiinfb000000009"
+              "NetworkInterfaceId": "eni-aiinfb000000009",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -2041,7 +2124,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-aiinfc000000009"
+              "NetworkInterfaceId": "eni-aiinfc000000009",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -2098,7 +2182,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-aisysa000000009"
+              "NetworkInterfaceId": "eni-aisysa000000009",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -2155,7 +2240,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-aisysb000000009"
+              "NetworkInterfaceId": "eni-aisysb000000009",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -2212,7 +2298,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-aisysc000000009"
+              "NetworkInterfaceId": "eni-aisysc000000009",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -2243,7 +2330,8 @@
           },
           "PrivateIpAddress": "10.0.7.17",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a"
+            "AvailabilityZone": "ap-northeast-2a",
+            "GroupName": "ai-train-pg"
           },
           "MetadataOptions": {
             "HttpTokens": "required"
@@ -2269,7 +2357,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-aitrn10000000009"
+              "NetworkInterfaceId": "eni-aitrn10000000009",
+              "InterfaceType": "efa"
             }
           ],
           "BlockDeviceMappings": [
@@ -2300,7 +2389,8 @@
           },
           "PrivateIpAddress": "10.0.8.18",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a"
+            "AvailabilityZone": "ap-northeast-2a",
+            "GroupName": "ai-train-pg"
           },
           "MetadataOptions": {
             "HttpTokens": "required"
@@ -2326,7 +2416,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-aitrn20000000009"
+              "NetworkInterfaceId": "eni-aitrn20000000009",
+              "InterfaceType": "efa"
             }
           ],
           "BlockDeviceMappings": [
@@ -2519,6 +2610,39 @@
         "source": "DescribeCluster"
       },
       {
+        "id": "111122223333/ap-northeast-2/fsx_file_system/fs-0ai1ustre0000009",
+        "resource_id": "fs-0ai1ustre0000009",
+        "kind": "fsx_file_system",
+        "name": "ai-checkpoints",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "FileSystemId": "fs-0ai1ustre0000009",
+          "FileSystemType": "LUSTRE",
+          "Lifecycle": "AVAILABLE",
+          "StorageCapacity": 9600,
+          "StorageType": "SSD",
+          "VpcId": "vpc-0a1b2c3d4e5f60009",
+          "SubnetIds": [
+            "subnet-ai-train-a"
+          ],
+          "KmsKeyId": "arn:aws:kms:ap-northeast-2:111122223333:key/fsx",
+          "LustreConfiguration": {
+            "DeploymentType": "PERSISTENT_2",
+            "PerUnitStorageThroughput": 500,
+            "DataCompressionType": "LZ4"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ai-checkpoints"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeFileSystems"
+      },
+      {
         "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
         "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",
         "kind": "load_balancer",
@@ -2639,6 +2763,22 @@
         "attributes": {},
         "reference_only": true,
         "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/placement_group/ai-train-pg",
+        "resource_id": "ai-train-pg",
+        "kind": "placement_group",
+        "name": "ai-train-pg",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupName": "ai-train-pg",
+          "GroupId": "pg-37ac358131b42ba71",
+          "Strategy": "cluster",
+          "State": "available"
+        },
+        "reference_only": false,
+        "source": "DescribePlacementGroups"
       },
       {
         "id": "111122223333/ap-northeast-2/registered_target/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001#10.80.0.40:8080:ap-northeast-2a",
@@ -3004,7 +3144,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 8185
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3033,7 +3174,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 8185
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3062,7 +3204,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 8185
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3091,7 +3234,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3120,7 +3264,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3149,7 +3294,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3178,7 +3324,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 4089
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -4242,6 +4389,16 @@
       },
       {
         "source": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
+        "target": "111122223333/ap-northeast-2/placement_group/ai-train-pg",
+        "relation": "in_placement_group",
+        "evidence": "DescribeInstances.Placement.GroupName",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-54faed16382e888c1ca3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn10000000009",
         "target": "111122223333/ap-northeast-2/subnet/subnet-ai-train-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
@@ -4289,6 +4446,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-bedcc43ca5d6600ea295"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
+        "target": "111122223333/ap-northeast-2/placement_group/ai-train-pg",
+        "relation": "in_placement_group",
+        "evidence": "DescribeInstances.Placement.GroupName",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-905fdd02061dc919bfa0"
       },
       {
         "source": "111122223333/ap-northeast-2/ec2/i-aitrn20000000009",
@@ -4521,6 +4688,30 @@
         "details": {},
         "inferred": false,
         "id": "rel-9cdafb8b84db89e718cd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/fsx_file_system/fs-0ai1ustre0000009",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ai-train-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeFileSystems.SubnetIds[]",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-516d9130580b016550bc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/fsx_file_system/fs-0ai1ustre0000009",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60009",
+        "relation": "in_vpc",
+        "evidence": "DescribeFileSystems.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c72dd5aa6e9dc99e5305"
       },
       {
         "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001",

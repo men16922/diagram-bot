@@ -22,12 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T20:59:51.876027+00:00",
-    "finished_at": "2026-10-17T20:59:51.876027+00:00",
+    "started_at": "2026-10-17T21:15:48.372611+00:00",
+    "finished_at": "2026-10-17T21:15:48.372611+00:00",
     "status": "complete",
     "demo": true,
     "sample": "data-platform",
-    "sample_version": 2,
+    "sample_version": 3,
     "title": "데이터 플랫폼 (ECS · OpenSearch · RDS · ElastiCache · EFS · Redshift · DocumentDB)",
     "practices": [
       "ECS Fargate 서비스는 세 AZ 프라이빗 서브넷에 태스크를 분산하고 ALB가 태스크 IP를 대상으로 등록",
@@ -275,6 +275,34 @@
       "items": 0
     },
     {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
       "service": "elbv2",
       "operation": "describe_target_health",
       "parameters": {
@@ -332,7 +360,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-dp-pub-b",
@@ -349,7 +378,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-dp-pub-c",
@@ -366,7 +396,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-dp-app-a",
@@ -383,7 +414,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 4091
       },
       {
         "SubnetId": "subnet-dp-app-b",
@@ -400,7 +432,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 4091
       },
       {
         "SubnetId": "subnet-dp-app-c",
@@ -417,7 +450,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 4091
       },
       {
         "SubnetId": "subnet-dp-data-a",
@@ -434,7 +468,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-dp-data-b",
@@ -451,7 +486,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-dp-data-c",
@@ -468,7 +504,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-an-data-a",
@@ -485,7 +522,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-an-data-b",
@@ -502,7 +540,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-an-data-c",
@@ -519,7 +558,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       }
     ],
     "instances": [],
@@ -1737,7 +1777,11 @@
         ]
       }
     ],
-    "security_groups": []
+    "security_groups": [],
+    "placement_groups": [],
+    "fsx_file_systems": [],
+    "sagemaker_endpoints": [],
+    "sagemaker_clusters": []
   },
   "graph": {
     "nodes": [
@@ -3208,7 +3252,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3237,7 +3282,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3266,7 +3312,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3295,7 +3342,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 4091
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3324,7 +3372,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 4091
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3353,7 +3402,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 4091
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3382,7 +3432,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3411,7 +3462,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3440,7 +3492,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3469,7 +3522,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3498,7 +3552,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3527,7 +3582,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",

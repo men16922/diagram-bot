@@ -5,7 +5,8 @@ Last Updated: 2026-10-18
 ## Active Plan
 
 - 2026-10-18 samples aligned with AWS best practice (docs/ARCHITECTURE.md, plan docs/plans/2026-10-18-best-practice-samples.md):
-  8 samples incl. `ai-platform`, GPU review rules, accelerated-instance/Bedrock icons, `add_gpu_node_group` (25 tools),
+  10 samples incl. `ai-platform`, `genai-rag`, `gpu-training`; AI/ML collection (FSx, SageMaker endpoints, HyperPod, placement groups,
+  EFA/Capacity Block), AI/ML review pillar (17 rules), accelerated-instance/Bedrock/FSx icons, AI designer tools (27 tools),
   sample reseeding by `SAMPLE_VERSION`, wrapped VPC attachment row. All samples review low or clean.
 - 2026-10-17 chat design agent (Strands + Bedrock): chat panel, `diagram-bot chat`, `/api/agent/*`, 24 tools
   (standard designs + read-only boto3 collection). Benchmark: docs/engineering/DEVOPS_AGENT_BENCHMARK.md;
@@ -17,8 +18,7 @@ Last Updated: 2026-10-18
   collection, parallel collection, scale tests, lint in the gate, CHANGELOG/SECURITY/OPERATIONS docs
   and a CloudFormation read-only role template.
 
-- AWS topology refinement plan (docs/TOPOLOGY_PLAN.md): P1–P5 implemented and verified on the
-  synthetic sample. Merged to main (fast-forward) on 2026-10-17 at the user's request.
+- AWS topology refinement plan (docs/TOPOLOGY_PLAN.md): P1–P5 done; merged to main 2026-10-17 at the user's request.
 - All manual verification is done (live keys, workload stack, cross-account role, SSO, visual review).
   Follow-ups from the visual review are tracked in docs/NEXT_PLAN.md. No [auto] backlog is approved.
 
@@ -31,7 +31,7 @@ Last Updated: 2026-10-18
 - Diagrams: AWS Architecture Icons style (Cloud > Region > VPC > AZ > route-classified subnets),
   IGW/NAT, Auto Scaling and ECS service frames, VPN to customer gateways; labels carry each node's HA role
   (primary/standby/read replica, writer/reader, shard primary/replica, OpenSearch data/master/standby per AZ,
-  MSK broker IDs, Redshift primary/secondary). Samples in examples/samples (8 patterns incl. data and AI platform; basis docs/ARCHITECTURE.md).
+  MSK broker IDs, Redshift primary/secondary). Samples in examples/samples (10 patterns incl. three AI/GPU; basis docs/ARCHITECTURE.md).
 - Graph: relation IDs from source/relation/target + port/AZ qualifiers; independent of API
   array order and target health. Same instance on two ports = two relations. Legacy snapshots
   get IDs on read in their stored order, so saved `relationIndex` documents still resolve.
@@ -99,7 +99,7 @@ Last Updated: 2026-10-18
 ## Verification (2026-10-17, cloud container)
 
 - Gate, team-mode Chromium run, layout tests, 27 browser checks and evidence files: docs/archive/STATUS-verification-2026-10.md.
-  Current gate: `make check` = ruff + 152 pytest cases + CLI round trip; `verify_demo.py` 28 browser checks (2026-10-18).
+  Current gate: `make check` = ruff + 160 pytest cases + CLI round trip; `verify_demo.py` 29 browser checks (2026-10-18).
 
 ## Harness
 
@@ -115,6 +115,6 @@ Last Updated: 2026-10-18
 - 100-resource views are structurally correct but dense; no large-environment claim.
 - Team mode provides local accounts and OIDC SSO, roles, TLS and audit; SAML only via an auth proxy; no built-in scheduler (use cron/CI with `review`/`diff` exit codes),
   listener rules, NACLs or Direct Connect. Licensed Apache-2.0; NOTICE holder "men16922 and Diagram Bot contributors" (both owner decisions, 2026-10-17).
-  EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN calls are verified on stubs only;
+  EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN/FSx/SageMaker/HyperPod/placement-group calls are verified on stubs only;
   ElastiCache Serverless, MSK Serverless, EKS Fargate profiles and Aurora Global Database are not drawn.
 - Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.

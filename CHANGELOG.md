@@ -19,7 +19,12 @@
 - 검토 규칙: `REL-GPU-TRAIN-AZ`(EFA 학습 노드가 여러 AZ), `REL-GPU-INFER-AZ`(GPU 추론 노드가 한 AZ), `SEC-EFA-SG`(EFA 보안 그룹 자기 참조 규칙 없음).
   단일 AZ EFA 학습 그룹은 `REL-ASG-AZ` low(의도적 단일 AZ)로 표시.
 - 가속 인스턴스 아이콘(P3·P4d·P4de·G4dn·G4ad·Trainium·Inferentia·DL1), 그 밖의 GPU 계열은 `GPU` 라벨. Bedrock·SageMaker 엔드포인트 아이콘.
-- 채팅 도구 `add_gpu_node_group`(도구 25개), 표준 설계 `ai-platform`.
+- 채팅 도구 `add_gpu_node_group`·`add_fsx_lustre`·`add_sagemaker_endpoint`(도구 27개), 표준 설계 `ai-platform`·`genai-rag`·`gpu-training`.
+- **AI/GPU 수집·표기:** FSx(`fsx:DescribeFileSystems`), SageMaker 실시간 엔드포인트·HyperPod(`sagemaker:List*/Describe*`), 배치 그룹(`ec2:DescribePlacementGroups`)
+  수집. EC2 라벨·속성 패널에 EFA·Capacity Block·ODCR·배치 그룹. 검토 탭에 `AI/ML` 영역과 규칙 13개 추가(`SEC-AI-PORT-OPEN`, `SEC-GPU-PUBLIC`,
+  `REL-GPU-SUBNET-IP`, `REL-GPU-SPOT-EFA`, `OPS-GPU-PLACEMENT`, `REL-FSX-TRAIN-AZ`, `OPS-FSX-SCRATCH`, `SEC-AI-ENDPOINT-DNS`, `REL-AI-ENDPOINT-AZ`,
+  `OPS-GPU-S3-ENDPOINT`, `SEC-SAGEMAKER-VPC`, `REL-SAGEMAKER-AZ`, `SEC-HYPERPOD-PUBLIC`). 샘플 10종(`genai-rag`, `gpu-training` 추가, `SAMPLE_VERSION` 3).
+  읽기 전용 정책·CloudFormation 역할에 새 권한 추가.
 - `scripts/render_samples.py`: examples/samples 산출물·PNG·README 재생성.
 
 ### Changed

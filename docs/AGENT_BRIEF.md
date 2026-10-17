@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: Remaining work done (2026-10-18): best-practice samples (8 incl. ai-platform), GPU rules/icons, overview redrawn as the TGW/peering/VPN network (single unconnected VPC opens in detail), stale-notice fix. Branch feat/chat-design-agent not merged to main (owner's call). Next candidate: multi-account view. No [auto] backlog.
+> ▶ NEXT SESSION: AI/GPU strengthened (2026-10-18): FSx/SageMaker/HyperPod/placement collection, AI/ML review pillar (17 rules), 3 AI samples (ai-platform, genai-rag, gpu-training), AI designer tools; overview is the network diagram. Branch feat/chat-design-agent not merged (owner's call). Not live-verified: new FSx/SageMaker/HyperPod calls (stubs only). No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 

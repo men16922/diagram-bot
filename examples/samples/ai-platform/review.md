@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T20:59:51.993546+00:00 ~ 2026-10-17T20:59:51.993546+00:00
+- 수집 구간: 2026-10-17T21:15:48.492214+00:00 ~ 2026-10-17T21:15:48.492214+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -37,6 +37,10 @@
 - ec2 / describe_vpn_gateways: complete, 0개, 오류 없음; 범위 {}
 - ec2 / describe_vpn_connections: complete, 0개, 오류 없음; 범위 {}
 - ec2 / describe_security_groups: complete, 4개, 오류 없음; 범위 {}
+- ec2 / describe_placement_groups: complete, 1개, 오류 없음; 범위 {}
+- fsx / describe_file_systems: complete, 1개, 오류 없음; 범위 {}
+- sagemaker / list_endpoints: complete, 0개, 오류 없음; 범위 {}
+- sagemaker / list_clusters: complete, 0개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001"}
 
 ## 아키텍처 검토 결과
@@ -45,7 +49,7 @@
 
 | 심각도 | 영역 | 규칙 | 리소스 | 내용 | 근거 | 권장 조치 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 낮음 | 안정성 | REL-ASG-AZ | eks-ai-gpu-train-5e6f | 학습 노드 그룹이 한 AZ에만 있음 (강결합 학습은 의도적 단일 AZ) | DescribeAutoScalingGroups.VPCZoneIdentifier → AZ ap-northeast-2a · InstanceType p5.48xlarge | EFA 학습은 단일 AZ가 맞습니다. 체크포인트 저장소와 다른 AZ에서 다시 시작하는 경로(IaC·용량)를 확인하세요. |
+| 낮음 | AI/ML | REL-ASG-AZ | eks-ai-gpu-train-5e6f | 학습 노드 그룹이 한 AZ에만 있음 (강결합 학습은 의도적 단일 AZ) | DescribeAutoScalingGroups.VPCZoneIdentifier → AZ ap-northeast-2a · InstanceType p5.48xlarge | EFA 학습은 단일 AZ가 맞습니다. 체크포인트 저장소와 다른 AZ에서 다시 시작하는 경로(IaC·용량)를 확인하세요. |
 
 ## 해석 범위
 

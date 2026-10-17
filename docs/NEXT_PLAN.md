@@ -41,6 +41,8 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 
 ## Candidate Follow-ups (not approved)
 
+- Live check of the AI/ML calls (FSx, SageMaker endpoints/HyperPod, placement groups) on an account that has them.
+
 - Multi-account / multi-region view: merge several snapshots (accounts × regions) into one network diagram.
 
 - Optional sample items from ARCHITECTURE.md §4 #7 (microservices 3 AZ, EKS /28 cluster subnets, egress VPC).

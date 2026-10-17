@@ -22,12 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T20:59:51.318235+00:00",
-    "finished_at": "2026-10-17T20:59:51.318235+00:00",
+    "started_at": "2026-10-17T21:15:47.778399+00:00",
+    "finished_at": "2026-10-17T21:15:47.778399+00:00",
     "status": "complete",
     "demo": true,
     "sample": "microservices",
-    "sample_version": 2,
+    "sample_version": 3,
     "title": "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4)",
     "practices": [
       "ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)",
@@ -274,6 +274,34 @@
       "items": 0
     },
     {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
       "service": "elbv2",
       "operation": "describe_target_health",
       "parameters": {
@@ -347,7 +375,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-ms-pub-b",
@@ -364,7 +393,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-ms-app-a",
@@ -381,7 +411,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 1017
       },
       {
         "SubnetId": "subnet-ms-app-b",
@@ -398,7 +429,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 1017
       },
       {
         "SubnetId": "subnet-ms-data-a",
@@ -415,7 +447,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-ms-data-b",
@@ -432,7 +465,8 @@
             "Key": "Tier",
             "Value": "data"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       }
     ],
     "instances": [
@@ -464,7 +498,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-cataloga00000001"
+            "NetworkInterfaceId": "eni-cataloga00000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -503,7 +538,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-catalogb00000001"
+            "NetworkInterfaceId": "eni-catalogb00000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -542,7 +578,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-ordersa000000001"
+            "NetworkInterfaceId": "eni-ordersa000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -581,7 +618,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-ordersb000000001"
+            "NetworkInterfaceId": "eni-ordersb000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -1284,7 +1322,11 @@
     "vpn_gateways": [],
     "vpn_connections": [],
     "customer_gateways": [],
-    "security_groups": []
+    "security_groups": [],
+    "placement_groups": [],
+    "fsx_file_systems": [],
+    "sagemaker_endpoints": [],
+    "sagemaker_clusters": []
   },
   "graph": {
     "nodes": [
@@ -1445,7 +1487,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-cataloga00000001"
+              "NetworkInterfaceId": "eni-cataloga00000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1494,7 +1537,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-catalogb00000001"
+              "NetworkInterfaceId": "eni-catalogb00000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1543,7 +1587,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-ordersa000000001"
+              "NetworkInterfaceId": "eni-ordersa000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1592,7 +1637,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-ordersb000000001"
+              "NetworkInterfaceId": "eni-ordersb000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -2210,7 +2256,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 1017
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2239,7 +2286,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 1017
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2268,7 +2316,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2297,7 +2346,8 @@
               "Key": "Tier",
               "Value": "data"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2326,7 +2376,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2355,7 +2406,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",

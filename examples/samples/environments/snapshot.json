@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T20:59:51.539864+00:00",
-    "finished_at": "2026-10-17T20:59:51.539864+00:00",
+    "started_at": "2026-10-17T21:15:48.014448+00:00",
+    "finished_at": "2026-10-17T21:15:48.014448+00:00",
     "status": "complete",
     "demo": true,
     "sample": "environments",
-    "sample_version": 2,
+    "sample_version": 3,
     "title": "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스)",
     "practices": [
       "환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)",
@@ -256,6 +256,34 @@
       "items": 0
     },
     {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
       "service": "elbv2",
       "operation": "describe_target_health",
       "parameters": {
@@ -337,7 +365,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-prod-pub-b",
@@ -354,7 +383,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-prod-pub-c",
@@ -371,7 +401,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-prod-app-a",
@@ -388,7 +419,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       },
       {
         "SubnetId": "subnet-prod-app-b",
@@ -405,7 +437,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       },
       {
         "SubnetId": "subnet-prod-app-c",
@@ -422,7 +455,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       },
       {
         "SubnetId": "subnet-staging-pub-a",
@@ -439,7 +473,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-staging-pub-b",
@@ -456,7 +491,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-staging-app-a",
@@ -473,7 +509,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       },
       {
         "SubnetId": "subnet-staging-app-b",
@@ -490,7 +527,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       },
       {
         "SubnetId": "subnet-shared-a",
@@ -507,7 +545,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       },
       {
         "SubnetId": "subnet-shared-b",
@@ -524,7 +563,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 250
       }
     ],
     "instances": [
@@ -560,7 +600,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-proda00000000001"
+            "NetworkInterfaceId": "eni-proda00000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -603,7 +644,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-prodb00000000001"
+            "NetworkInterfaceId": "eni-prodb00000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -646,7 +688,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-prodc00000000001"
+            "NetworkInterfaceId": "eni-prodc00000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -689,7 +732,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-staginga00000000001"
+            "NetworkInterfaceId": "eni-staginga00000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -732,7 +776,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-stagingb00000000001"
+            "NetworkInterfaceId": "eni-stagingb00000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -775,7 +820,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-ci0000000000000004"
+            "NetworkInterfaceId": "eni-ci0000000000000004",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -818,7 +864,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-monitor00000000004"
+            "NetworkInterfaceId": "eni-monitor00000000004",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -1492,7 +1539,11 @@
     "vpn_gateways": [],
     "vpn_connections": [],
     "customer_gateways": [],
-    "security_groups": []
+    "security_groups": [],
+    "placement_groups": [],
+    "fsx_file_systems": [],
+    "sagemaker_endpoints": [],
+    "sagemaker_clusters": []
   },
   "graph": {
     "nodes": [
@@ -1606,7 +1657,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-ci0000000000000004"
+              "NetworkInterfaceId": "eni-ci0000000000000004",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1659,7 +1711,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-monitor00000000004"
+              "NetworkInterfaceId": "eni-monitor00000000004",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1712,7 +1765,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-proda00000000001"
+              "NetworkInterfaceId": "eni-proda00000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1765,7 +1819,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-prodb00000000001"
+              "NetworkInterfaceId": "eni-prodb00000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1818,7 +1873,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-prodc00000000001"
+              "NetworkInterfaceId": "eni-prodc00000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1871,7 +1927,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-staginga00000000001"
+              "NetworkInterfaceId": "eni-staginga00000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1924,7 +1981,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-stagingb00000000001"
+              "NetworkInterfaceId": "eni-stagingb00000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -2716,7 +2774,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2745,7 +2804,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2774,7 +2834,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2803,7 +2864,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2832,7 +2894,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2861,7 +2924,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2890,7 +2954,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2919,7 +2984,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2948,7 +3014,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -2977,7 +3044,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 250
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3006,7 +3074,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -3035,7 +3104,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",

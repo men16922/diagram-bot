@@ -26,11 +26,16 @@ diagram-bot serve
 
 `setup-editor`는 최초 한 번 공식 draw.io **32.4.1** 배포물(약 48 MB)을 다운로드하고 고정 SHA-256을 확인합니다. 이후 구성도 편집과 PNG 생성은 로컬에서 수행합니다. 오프라인 설치에는 동일 버전의 공식 `draw.war`를 준비해 `diagram-bot setup-editor --archive /path/to/draw.war`를 사용합니다. [배포물 출처와 라이선스](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
-[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 8종](examples/samples/README.md) · [사례 아키텍처 기준](docs/ARCHITECTURE.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
+[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 10종](examples/samples/README.md) · [사례 아키텍처 기준](docs/ARCHITECTURE.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
 
 ## 시연 버전에서 할 수 있는 것
 
-- **세 가지 보기:** 계정·리전·VPC 요약 카드의 `전체 구성`, 한 VPC의 AZ·서브넷·EC2·ALB·대상 그룹을 그린 `상세 구성`, 선택 리소스와 직접 관계·필요한 상위 경계만 그린 `선택 리소스`. 각 보기는 표시/수집/참조/숨김 수와 부분 조회 여부를 함께 보여줍니다.
+- **AI/GPU 워크로드 (Well-Architected Generative AI·ML·HPC 렌즈):** GPU·Trainium·Inferentia 노드의 EFA 인터페이스·Capacity Block·용량 예약·클러스터 배치 그룹,
+  FSx for Lustre, SageMaker 실시간 엔드포인트·HyperPod, Bedrock·SageMaker 인터페이스 엔드포인트를 수집해 그리고, AI/ML 검토 규칙 17개로 점검합니다
+  (인터넷에 열린 Jupyter·Ray·MLflow·vLLM 포트, GPU 노드 퍼블릭 노출, 여러 AZ에 걸친 EFA 학습, 단일 AZ 추론, EFA 보안 그룹, Spot EFA, 배치 그룹 누락,
+  GPU 서브넷 IP 부족, 학습 노드와 다른 AZ의 Lustre, Scratch Lustre, Bedrock 엔드포인트 AZ·프라이빗 DNS, VPC 밖·단일 AZ SageMaker 엔드포인트 등).
+  AI 사례 3종(사설 EKS GPU 플랫폼, Bedrock RAG, GPU 분산 학습)과 채팅 설계 도구(GPU 노드 그룹·FSx·SageMaker 엔드포인트)를 제공합니다. 근거: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 5절.
+- **세 가지 보기:** VPC 카드와 Transit Gateway·피어링·VPN(온프레미스까지) 연결도의 `전체 구성`, 한 VPC의 AZ·서브넷·EC2·ALB·대상 그룹을 그린 `상세 구성`, 선택 리소스와 직접 관계·필요한 상위 경계만 그린 `선택 리소스`. 각 보기는 표시/수집/참조/숨김 수와 부분 조회 여부를 함께 보여줍니다.
 - **인프라 아키텍처 표기:** AWS Cloud > Region > VPC > AZ > 서브넷(라우팅으로 퍼블릭·프라이빗·격리 구분)에 Internet/NAT Gateway, VPC 엔드포인트, Transit Gateway 연결, VPC 피어링, Site-to-Site VPN(VGW/TGW → 고객 게이트웨이, 터널 상태), EKS(컨트롤 플레인·노드 그룹), ECS 서비스·Fargate 태스크, MSK 브로커, OpenSearch 노드, ElastiCache, RDS·Aurora·DocumentDB·Neptune, EFS 마운트 타깃, Redshift, VPC Lambda, AZ를 가로지르는 Auto Scaling 그룹·ECS 서비스 프레임을 AWS Architecture Icons 스타일로 그립니다.
 - **고가용성 표기:** 각 리소스가 어느 AZ·서브넷에서 어떤 역할인지 라벨에 표시합니다. RDS primary/standby/read replica, Multi-AZ DB 클러스터 readable standby, Aurora·DocumentDB writer/reader, ElastiCache 샤드별 primary/replica, OpenSearch AZ별 data·master 노드 수와 standby AZ, MSK AZ별 브로커 ID, Redshift Multi-AZ primary/secondary, EFS Regional/One Zone, Auto Scaling·EKS 노드 그룹 min/desired/max, ECS 실행/원하는 태스크 수.
 - **결정적 자동 배치:** 로드밸런서 → 대상 그룹 → AZ 열·서브넷 순서의 계층 배치. 연결선은 채널과 AZ 사이 통로로만 지나가 다른 도형을 가로지르지 않습니다. 같은 입력은 항상 같은 좌표를 만듭니다([배치 엔진 평가](docs/engineering/LAYOUT_EVALUATION.md)).
@@ -55,7 +60,7 @@ diagram-bot serve
 
 화면의 **AWS에서 새로 수집**에서 프로파일, 예상 계정 ID, 리전을 지정합니다. 프로파일을 지정하지 않으면 boto3의 기본 인증 체인을 사용합니다. 기존 `AWS_CONFIG_FILE`·`AWS_PROFILE`·`credential_process`도 SDK가 처리합니다. STS의 실제 계정 ID와 예상 계정 ID가 다르면 리소스를 수집하지 않습니다. 브라우저에서 SSO 로그인을 대신 수행하지는 않습니다.
 
-수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 읽기 API(EC2·ELBv2·RDS·Auto Scaling·EKS·ECS·MSK·ElastiCache·OpenSearch·EFS·Redshift·Lambda)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
+수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 읽기 API(EC2·ELBv2·RDS·Auto Scaling·EKS·ECS·MSK·ElastiCache·OpenSearch·EFS·Redshift·Lambda·FSx·SageMaker)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
 
 | 범위 | API 근거 |
 | --- | --- |
@@ -86,6 +91,10 @@ diagram-bot serve
 | VPC 피어링 | DescribeVpcPeeringConnections, 라우팅 테이블의 VpcPeeringConnectionId 경로 |
 | Site-to-Site VPN | DescribeVpnGateways·DescribeVpnConnections(VgwTelemetry)·DescribeCustomerGateways |
 | 보안 그룹 규칙 | DescribeSecurityGroups.IpPermissions (검토 결과·속성 패널) |
+| GPU 노드의 EFA·용량·배치 | DescribeInstances의 NetworkInterfaces[].InterfaceType·InstanceLifecycle·CapacityReservationId·Placement.GroupName, DescribePlacementGroups.Strategy |
+| FSx (Lustre·ONTAP·OpenZFS·Windows) | fsx DescribeFileSystems.SubnetIds·LustreConfiguration |
+| SageMaker 실시간 엔드포인트 | sagemaker ListEndpoints·DescribeEndpoint·DescribeEndpointConfig(인스턴스 유형)·DescribeModel.VpcConfig(서브넷) |
+| SageMaker HyperPod | sagemaker ListClusters·DescribeCluster(InstanceGroups·VpcConfig·Orchestrator) |
 | 교차 계정 수집 | sts:AssumeRole (+ ReadOnlyAccess 세션 정책), GetCallerIdentity로 계정 확인 |
 | IP 대상의 서브넷 | 대상 그룹 VPC 안에서 IP를 포함하는 서브넷 CIDR이 하나이고 AZ가 일치할 때만 |
 
@@ -107,7 +116,7 @@ diagram-bot chat --env-file .env -m "서울 리전에 3 AZ 3계층 웹 서비스
 
 - `.env`에는 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`을 넣고, 선택으로 `AWS_ACCOUNT_ID`(수집 계정 확인)를 넣습니다. `.env`는 Git 추적에서 제외되어 있습니다. 키가 있으면 셸의 `AWS_PROFILE`보다 우선합니다.
 - 모델은 Bedrock Converse로 호출합니다. 기본은 Amazon Nova 2 Lite입니다. OpenAI GPT-6 Luna와 Claude Sonnet 4.5도 고를 수 있고, 고른 모델을 쓸 수 없으면 Nova 2 Lite로 자동 전환합니다. 응답마다 실제로 답한 모델이 표시됩니다. 계정에서 Bedrock 모델 액세스가 필요합니다.
-- 도구: 표준 아키텍처 8종 불러오기(AI 플랫폼 포함), VPC(AZ·계층·NAT 전략), ALB/NLB, EC2 Auto Scaling, ECS Fargate, EKS·GPU 노드 그룹, RDS/Aurora, Redis, MSK, OpenSearch, EFS, Lambda, VPC 엔드포인트, 피어링, VPN, 검토. 수집 도구는 읽기 전용입니다(STS 확인, 리전 수집, 리소스 찾기, 검토).
+- 도구: 표준 아키텍처 10종 불러오기(AI 플랫폼·RAG·분산 학습 포함), VPC(AZ·계층·NAT 전략), ALB/NLB, EC2 Auto Scaling, ECS Fargate, EKS·GPU 노드 그룹(학습: 전용 서브넷·EFA·배치 그룹), FSx for Lustre, SageMaker 엔드포인트, RDS/Aurora, Redis, MSK, OpenSearch, EFS, Lambda, VPC 엔드포인트, 피어링, VPN, 검토. 수집 도구는 읽기 전용입니다(STS 확인, 리전 수집, 리소스 찾기, 검토).
 - 설계안은 스냅샷으로 저장되어 구성도, 검토, `.drawio`/PNG 다운로드, 변경 비교에 그대로 쓰입니다. 화면에는 `설계안`으로 표시되며 실제 계정 데이터가 아닙니다.
 - 벤치마킹(AWS DevOps Agent)과 설계 근거는 [docs/engineering/DEVOPS_AGENT_BENCHMARK.md](docs/engineering/DEVOPS_AGENT_BENCHMARK.md), draw.io 연동과 자동 배치는 [docs/DRAWIO.md](docs/DRAWIO.md)에 있습니다.
 

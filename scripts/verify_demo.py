@@ -281,6 +281,26 @@ def main():
         expect(page.locator('#review-rows')).to_contain_text('학습 노드 그룹이 한 AZ에만 있음')
         page.locator('#diagram-tab').click()
 
+        # 9c. GPU training: EFA/Capacity Block/placement group labels, FSx for Lustre and HyperPod in the compute subnet; AI review pillar.
+        page.locator('#snapshot-select').select_option('sample-gpu-training')
+        ready()
+        expect(page.locator('#view-detail')).to_have_class('view-button active')
+        frame.get_by_text(starts('p5-train-1')).click()
+        expect(detail).to_contain_text('Capacity Block')
+        expect(detail).to_contain_text('EFA 인터페이스 있음')
+        frame.get_by_text(starts('trn2-train-1')).click()
+        expect(detail).to_contain_text('trn2-pg')
+        frame.get_by_text(starts('training-data')).click()
+        expect(detail).to_contain_text('FSx file system')
+        frame.get_by_text(starts('hp-slurm')).click()
+        expect(detail).to_contain_text('SageMaker HyperPod cluster')
+        page.screenshot(path=str(args.output / 'gpu-training.png'), full_page=True)
+        page.locator('#snapshot-select').select_option('sample-genai-rag')
+        ready()
+        frame.get_by_text(starts('rag-reranker')).click()
+        expect(detail).to_contain_text('SageMaker endpoint')
+        page.screenshot(path=str(args.output / 'genai-rag.png'), full_page=True)
+
         options = page.locator('#snapshot-select option').count()
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
         expect(page.locator('#snapshot-select option')).to_have_count(options + 1)
@@ -314,6 +334,7 @@ def main():
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
                          'network overview (TGW, customer gateways); data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
                          'AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review',
+                         'GPU training: EFA, Capacity Block, placement group, FSx for Lustre, HyperPod; GenAI RAG: SageMaker endpoint',
                          'snapshot import', 'change review between snapshots']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))

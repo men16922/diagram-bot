@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T20:59:51.762055+00:00 ~ 2026-10-17T20:59:51.762055+00:00
+- 수집 구간: 2026-10-17T21:15:48.254932+00:00 ~ 2026-10-17T21:15:48.254932+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -37,6 +37,10 @@
 - ec2 / describe_vpn_gateways: complete, 0개, 오류 없음; 범위 {}
 - ec2 / describe_vpn_connections: complete, 0개, 오류 없음; 범위 {}
 - ec2 / describe_security_groups: complete, 0개, 오류 없음; 범위 {}
+- ec2 / describe_placement_groups: complete, 0개, 오류 없음; 범위 {}
+- fsx / describe_file_systems: complete, 0개, 오류 없음; 범위 {}
+- sagemaker / list_endpoints: complete, 0개, 오류 없음; 범위 {}
+- sagemaker / list_clusters: complete, 0개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/k8s-web-pods/0000000000000001"}
 
 ## 아키텍처 검토 결과

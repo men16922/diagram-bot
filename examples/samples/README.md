@@ -125,17 +125,48 @@ VPC 2 · 서브넷 12 · 로드밸런서 1 · 대상 그룹 1 · NAT 3 · RDS/Au
 
 ## AI 플랫폼 (사설 EKS GPU 추론·학습 · Bedrock · Aurora pgvector) — `ai-platform`
 
-VPC 1 · 서브넷 7 · EC2 8 · 로드밸런서 1 · 대상 그룹 1 · RDS/Aurora/DocumentDB 2 · EKS 1 · EFS 마운트 타깃 3 · Auto Scaling 그룹 3 · VPC 엔드포인트 12 · TGW 연결 1
+VPC 1 · 서브넷 7 · EC2 8 · 로드밸런서 1 · 대상 그룹 1 · RDS/Aurora/DocumentDB 2 · EKS 1 · EFS 마운트 타깃 3 · Auto Scaling 그룹 3 · VPC 엔드포인트 12 · TGW 연결 1 · FSx 1
 
 - 인터넷 경로 없는 사설 VPC: IGW·NAT 없이 Transit Gateway로 사내망·중앙 egress에 연결 (MLSEC03-BP02)
 - Bedrock·ECR·EKS·STS·CloudWatch Logs 등은 세 AZ의 인터페이스 엔드포인트, S3는 게이트웨이 엔드포인트로 사설 호출 (GENSEC01-BP02)
 - GPU 추론 노드 그룹(g6e)은 세 AZ에 분산하고 내부 ALB가 추론 파드 IP를 대상으로 등록, 자동 확장 (GENREL02-BP01, MLREL05-BP01)
-- EFA 학습 노드 그룹(p5)은 의도적으로 한 AZ의 전용 /20 서브넷에, 자기 참조 전체 허용 보안 그룹 (EFA는 AZ를 넘지 못함, HPCREL01-BP02)
+- EFA 학습 노드 그룹(p5)은 의도적으로 한 AZ의 전용 /20 서브넷과 클러스터 배치 그룹에, 자기 참조 전체 허용 보안 그룹 (EFA는 AZ를 넘지 못함, HPCREL01-BP02)
+- 체크포인트·학습 데이터는 학습 노드와 같은 AZ의 FSx for Lustre PERSISTENT_2 (GENREL06-BP01, HPCREL01-BP01)
 - 학습과 추론은 노드 그룹·인스턴스 유형을 분리 (MLPERF04-BP01), 학습 노드 그룹은 0까지 축소 (GENSUS01-BP01)
 - RAG 벡터 저장소는 VPC 안 격리 서브넷의 Aurora PostgreSQL(pgvector) writer/reader, 노드 보안 그룹만 허용 (GENSEC01-BP03)
 - 모델 캐시는 세 AZ 마운트 타깃의 EFS (EKS AI/ML Storage)
-- 도형 밖 권고: 학습 배치는 클러스터 배치 그룹 또는 Capacity Block(둘 중 하나), 체크포인트는 같은 AZ의 S3 연동 FSx for Lustre (GENREL06-BP01)
+- 도형 밖 권고: FSx for Lustre를 S3 데이터 리포지토리와 연결해 체크포인트를 S3로 내보내고 다른 AZ에서 재시작 (HPCREL01-BP02)
 - 도형 밖 권고: Bedrock 모델 호출 로깅(기본 꺼짐)·Guardrails·InvokeModel만 허용하는 엔드포인트 정책, S3는 SSE-KMS와 aws:SourceVpce (수집 범위 밖)
 - 도형 밖 권고: Karpenter·KEDA·NVIDIA/EFA device plugin은 Kubernetes 객체라 그리지 않음 (Karpenter 노드는 ASG 없는 EC2로 표시)
 
 ![ai-platform ai-platform.png](ai-platform/ai-platform.png)
+
+## 생성형 AI RAG 애플리케이션 (Bedrock · Aurora pgvector · 시맨틱 캐시) — `genai-rag`
+
+VPC 1 · 서브넷 9 · 로드밸런서 1 · 대상 그룹 1 · NAT 3 · RDS/Aurora/DocumentDB 3 · ElastiCache 2 · Lambda 1 · ECS 서비스 2 · ECS 태스크 5 · VPC 엔드포인트 8 · SageMaker 엔드포인트 1
+
+- 채팅 API는 세 AZ의 ECS Fargate 태스크, 인터넷용 ALB는 퍼블릭 서브넷에만 (REL10-BP01, SEC05-BP01)
+- Bedrock 런타임·에이전트 런타임과 ECR·CloudWatch Logs·Secrets Manager·STS는 세 AZ의 인터페이스 엔드포인트로 사설 호출 (GENSEC01-BP02, GENREL02-BP01)
+- 벡터 저장소는 격리 서브넷의 Aurora PostgreSQL(pgvector) writer와 다른 두 AZ의 reader, 앱 태스크 보안 그룹만 허용 (GENSEC01-BP03, GENREL02-BP01)
+- 시맨틱 캐시·세션은 ElastiCache Redis primary/replica 자동 장애 조치로 같은 질의의 모델 호출을 줄임
+- 문서 수집은 VPC 안 Lambda와 ECS 워커가 청크·임베딩 후 벡터 저장소에 적재, S3는 게이트웨이 엔드포인트
+- 자체 호스팅 리랭커는 VPC 안 SageMaker 실시간 엔드포인트(인스턴스 2대, 서로 다른 AZ) (MLSEC03-BP02, MLCOST06-BP03)
+- 도형 밖 권고: Bedrock Guardrails로 입출력 검증, 모델 호출 로깅(기본 꺼짐) 켜기, 엔드포인트 정책은 InvokeModel만 (GENSEC02-BP01, GENSEC01-BP04, GENSEC01-BP01)
+- 도형 밖 권고: 처리량은 지리 교차 리전 추론 프로필 또는 Provisioned Throughput(둘 중 하나), ALB 앞 AWS WAF·CloudFront (GENREL01-BP01, REL02-BP01)
+
+![genai-rag genai-rag.png](genai-rag/genai-rag.png)
+
+## GPU 분산 학습 클러스터 (EFA · Capacity Block · FSx for Lustre · HyperPod) — `gpu-training`
+
+VPC 1 · 서브넷 5 · EC2 9 · NAT 2 · Auto Scaling 그룹 1 · VPC 엔드포인트 8 · FSx 1 · HyperPod 1
+
+- 강결합 학습 노드는 한 AZ의 전용 /20 컴퓨트 서브넷에, 모든 EFA 노드가 자기 참조 전체 허용 보안 그룹 공유 (EFA는 AZ·VPC를 넘지 못함, HPCREL01-BP02)
+- p5 학습 큐는 Capacity Block(UltraCluster 자동 배치), trn2 큐는 클러스터 배치 그룹 + 용량 예약(ODCR): 둘은 함께 쓸 수 없음 (EC2 Capacity Blocks)
+- 학습 데이터·체크포인트는 같은 AZ의 FSx for Lustre PERSISTENT_2 (GENREL06-BP01, HPCREL01-BP01, MLCOST06-BP03)
+- 관리형 대안으로 같은 컴퓨트 서브넷의 SageMaker HyperPod(Slurm) 클러스터 (GENPERF03-BP01)
+- 헤드 노드와 로그인 노드는 프라이빗 서브넷, 관리 접근은 Session Manager 엔드포인트, S3는 게이트웨이 엔드포인트 (MLSEC03-BP02)
+- 학습과 추론은 인스턴스 유형을 분리하고 학습은 Spot을 쓰지 않음 (MLPERF04-BP01, EKS AI/ML Networking)
+- 도형 밖 권고: Lustre를 S3 데이터 리포지토리와 연결하고 IaC로 다른 AZ에서 클러스터를 다시 띄우는 복구 절차 (HPCREL01-BP02)
+- 도형 밖 권고: 노드 간 통신 암호화·EFA 드라이버·NCCL 설정과 학습 작업 스케줄러(Slurm/Kubernetes) 구성 (MLSEC04-BP02)
+
+![gpu-training gpu-training.png](gpu-training/gpu-training.png)

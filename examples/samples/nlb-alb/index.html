@@ -22,12 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T20:59:51.429200+00:00",
-    "finished_at": "2026-10-17T20:59:51.429200+00:00",
+    "started_at": "2026-10-17T21:15:47.896937+00:00",
+    "finished_at": "2026-10-17T21:15:47.896937+00:00",
     "status": "complete",
     "demo": true,
     "sample": "nlb-alb",
-    "sample_version": 2,
+    "sample_version": 3,
     "title": "고정 IP가 필요한 진입점 (NLB → ALB)",
     "practices": [
       "고정 IP·PrivateLink가 필요한 진입점은 NLB, L7 라우팅은 뒤의 ALB (alb 대상 유형)",
@@ -272,6 +272,34 @@
       "items": 0
     },
     {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
       "service": "elbv2",
       "operation": "describe_target_health",
       "parameters": {
@@ -335,7 +363,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-gw-pub-c",
@@ -352,7 +381,8 @@
             "Key": "Tier",
             "Value": "public"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 251
       },
       {
         "SubnetId": "subnet-gw-app-a",
@@ -369,7 +399,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 249
       },
       {
         "SubnetId": "subnet-gw-app-c",
@@ -386,7 +417,8 @@
             "Key": "Tier",
             "Value": "app"
           }
-        ]
+        ],
+        "AvailableIpAddressCount": 249
       }
     ],
     "instances": [
@@ -418,7 +450,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-apia0000000000001"
+            "NetworkInterfaceId": "eni-apia0000000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -457,7 +490,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-apic0000000000001"
+            "NetworkInterfaceId": "eni-apic0000000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -496,7 +530,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-mqtta000000000001"
+            "NetworkInterfaceId": "eni-mqtta000000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -535,7 +570,8 @@
         ],
         "NetworkInterfaces": [
           {
-            "NetworkInterfaceId": "eni-mqttc000000000001"
+            "NetworkInterfaceId": "eni-mqttc000000000001",
+            "InterfaceType": "interface"
           }
         ],
         "BlockDeviceMappings": [
@@ -936,7 +972,11 @@
     "vpn_gateways": [],
     "vpn_connections": [],
     "customer_gateways": [],
-    "security_groups": []
+    "security_groups": [],
+    "placement_groups": [],
+    "fsx_file_systems": [],
+    "sagemaker_endpoints": [],
+    "sagemaker_clusters": []
   },
   "graph": {
     "nodes": [
@@ -1041,7 +1081,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-apia0000000000001"
+              "NetworkInterfaceId": "eni-apia0000000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1090,7 +1131,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-apic0000000000001"
+              "NetworkInterfaceId": "eni-apic0000000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1139,7 +1181,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-mqtta000000000001"
+              "NetworkInterfaceId": "eni-mqtta000000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1188,7 +1231,8 @@
           ],
           "NetworkInterfaces": [
             {
-              "NetworkInterfaceId": "eni-mqttc000000000001"
+              "NetworkInterfaceId": "eni-mqttc000000000001",
+              "InterfaceType": "interface"
             }
           ],
           "BlockDeviceMappings": [
@@ -1581,7 +1625,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 249
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -1610,7 +1655,8 @@
               "Key": "Tier",
               "Value": "app"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 249
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -1639,7 +1685,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",
@@ -1668,7 +1715,8 @@
               "Key": "Tier",
               "Value": "public"
             }
-          ]
+          ],
+          "AvailableIpAddressCount": 251
         },
         "reference_only": false,
         "source": "DescribeSubnets",

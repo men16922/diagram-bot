@@ -27,7 +27,8 @@ COUNTS = [("vpc", "VPC"), ("subnet", "서브넷"), ("ec2", "EC2"), ("load_balanc
           ("search_node", "OpenSearch 노드 그룹"), ("eks_cluster", "EKS"), ("lambda_function", "Lambda"), ("ecs_service", "ECS 서비스"),
           ("ecs_task", "ECS 태스크"), ("efs_mount_target", "EFS 마운트 타깃"), ("redshift_cluster", "Redshift"),
           ("auto_scaling_group", "Auto Scaling 그룹"), ("vpc_endpoint", "VPC 엔드포인트"), ("tgw_attachment", "TGW 연결"),
-          ("vpc_peering", "VPC 피어링"), ("vpn_gateway", "VPN 게이트웨이"), ("customer_gateway", "고객 게이트웨이")]
+          ("vpc_peering", "VPC 피어링"), ("vpn_gateway", "VPN 게이트웨이"), ("customer_gateway", "고객 게이트웨이"),
+          ("fsx_file_system", "FSx"), ("sagemaker_endpoint", "SageMaker 엔드포인트"), ("sagemaker_cluster", "HyperPod")]
 
 
 def write_readme(output):

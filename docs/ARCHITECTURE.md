@@ -2,9 +2,9 @@
 
 Last Updated: 2026-10-18
 
-샘플 8종(`src/diagram_bot/samples.py`)은 데모 데이터이자 채팅 에이전트의 표준 설계(`designer.py` `STANDARDS`)다.
+샘플 10종(`src/diagram_bot/samples.py`)은 데모 데이터이자 채팅 에이전트의 표준 설계(`designer.py` `STANDARDS`)다.
 이 문서는 각 사례가 따라야 할 AWS 공식 권고를 출처와 함께 정리하고, 현재 샘플과의 차이와 변경안을 기록한다.
-변경안은 2026-10-18 소유자 지시로 반영했다(4절·5.6절의 반영 현황).
+변경안은 2026-10-18 소유자 지시로 반영했다(4절·5.9절의 반영 현황).
 
 ## 1. 범위와 판정 기준
 
@@ -22,8 +22,8 @@ Last Updated: 2026-10-18
 
 | 구분 | 서비스 |
 | --- | --- |
-| 수집·도형화 가능 | VPC, 서브넷, 라우팅 테이블, IGW, NAT, VPC 엔드포인트, TGW·attachment, 피어링, VGW·CGW·Site-to-Site VPN, ELB(ALB/NLB/GWLB)·대상 그룹, EC2·ASG, ECS, EKS·노드 그룹, Lambda, RDS·Aurora·DocumentDB, ElastiCache, MSK, OpenSearch, EFS, Redshift, 보안 그룹 |
-| 수집 안 함 (도형 불가) | CloudFront, AWS WAF, Shield, Route 53(Resolver 포함), Global Accelerator, Network Firewall, Direct Connect, Elastic IP, TGW 라우팅 테이블, NACL, 리스너 규칙, Organizations(계정·OU), S3, DynamoDB |
+| 수집·도형화 가능 | VPC, 서브넷, 라우팅 테이블, IGW, NAT, VPC 엔드포인트, TGW·attachment, 피어링, VGW·CGW·Site-to-Site VPN, ELB(ALB/NLB/GWLB)·대상 그룹, EC2·ASG, ECS, EKS·노드 그룹, Lambda, RDS·Aurora·DocumentDB, ElastiCache, MSK, OpenSearch, EFS, Redshift, 보안 그룹, **AI/ML: FSx(Lustre 등), SageMaker 실시간 엔드포인트, SageMaker HyperPod, 클러스터 배치 그룹, EC2의 EFA 인터페이스·Capacity Block·용량 예약** |
+| 수집 안 함 (도형 불가) | CloudFront, AWS WAF, Shield, Route 53(Resolver 포함), Global Accelerator, Network Firewall, Direct Connect, Elastic IP, TGW 라우팅 테이블, NACL, 리스너 규칙, Organizations(계정·OU), S3, DynamoDB, Bedrock 설정(Guardrails·호출 로깅·Knowledge Base), SageMaker 학습 작업·노트북, Kubernetes 객체(Karpenter·KEDA·device plugin) |
 | 구조상 제약 | 스냅샷은 계정 × 리전 하나 단위라 한 구성도에 여러 계정을 그릴 수 없다 |
 
 ## 2. 공통 원칙 (모든 사례)
@@ -166,7 +166,7 @@ Multi-VPC 백서(VPC peering, VPN).
 수집 범위 확장 후보(별도 승인 필요): CloudFront·WAF(엣지), Elastic IP(NLB 고정 IP), TGW 라우팅 테이블(환경 격리),
 Direct Connect, 다중 계정 구성도(계정 그룹).
 
-AI/GPU 워크로드 관련 변경안(신규 `ai-platform` 사례, GPU 아이콘, 검토 규칙)은 5.6절에 따로 둔다.
+AI/GPU 워크로드 관련 변경안(신규 AI 사례, GPU 아이콘, 검토 규칙)은 5.5–5.9절에 따로 둔다.
 
 ## 5. AI/GPU 워크로드 (Well-Architected)
 
@@ -238,7 +238,7 @@ HPCREL01-BP02). 학습의 복구 수단은 다중 AZ 배치가 아니라 체크�
 - HyperPod(EKS 오케스트레이션): EKS와 같은 VPC의 프라이빗 서브넷, 기본은 단일 AZ(다중 AZ는 인스턴스 그룹을 AZ별로 분리),
   인터넷이 없으면 S3 엔드포인트 필수, FSx는 노드와 같은 AZ.
 
-### 5.5 신규 사례 제안: `ai-platform`
+### 5.5 사례: `ai-platform` (사설 EKS GPU 플랫폼)
 
 수집 가능한 요소만으로 그릴 수 있는 사설 AI 플랫폼. 근거는 괄호 안.
 
@@ -250,18 +250,65 @@ HPCREL01-BP02). 학습의 복구 수단은 다중 AZ 배치가 아니라 체크�
 | 인터페이스 엔드포인트 (3 AZ) | `bedrock-runtime`, `bedrock-agent-runtime`, `sagemaker.runtime`(선택), `ecr.api`, `ecr.dkr`, `sts`, `eks`, `eks-auth`, `ec2`, `elasticloadbalancing`, `logs`, `ssm` | GENSEC01-BP02, GENREL02-BP01, EKS 사설 클러스터 |
 | EKS | 비공개 엔드포인트. 노드 그룹 `system`(m7g.large, 3 AZ), `gpu-inference`(g6e.2xlarge, min 2, 3 AZ, taint), `gpu-train`(p5.48xlarge, `train-a`만, min 0) | Solutions Guidance, MLCOST06-BP03, GENREL05-BP01, EFA 제약 |
 | EFA SG | `sg-train-efa`: 자기 참조 전체 허용, 0.0.0.0/0 아웃바운드 없음 | EKS AI/ML Networking, HyperPod |
+| 학습 배치·데이터 | 학습 노드 EFA 인터페이스 + 클러스터 배치 그룹 `ai-train-pg`, 같은 AZ의 FSx for Lustre PERSISTENT_2(체크포인트) | EC2 placement strategies, GENREL06-BP01, HPCREL01-BP01 |
 | 진입 | 내부 ALB(3 AZ) → 추론 파드 IP 대상 | GENREL01-BP01, MLREL05-BP01 |
 | 벡터 저장소 | Aurora PostgreSQL(pgvector) writer + 다른 AZ reader, 노드 SG만 허용 | GENSEC01-BP03, GENREL02-BP01, Bedrock KB 지원 |
 | 모델 캐시 | EFS, 3 AZ 마운트 타깃 | EKS AI/ML Storage |
 
-문구로만 남길 것(수집 안 함): 학습 배치(클러스터 배치 그룹 **또는** Capacity Block), EFA 인터페이스, FSx for Lustre(AZ a,
-S3 연동, 체크포인트), S3 버킷(모델·데이터셋·호출 로그, SSE-KMS, `aws:SourceVpce`), Bedrock 호출 로깅·Guardrails·엔드포인트
+문구로만 남길 것(수집 안 함): FSx의 S3 데이터 리포지토리 연동, S3 버킷(모델·데이터셋·호출 로그, SSE-KMS, `aws:SourceVpce`), Bedrock 호출 로깅·Guardrails·엔드포인트
 정책·교차 리전 추론 또는 Provisioned Throughput, HyperPod, Karpenter·KEDA·device plugin(Karpenter 노드는 ASG 없는 EC2로 보임),
 공개 진입 변형의 WAF·CloudFront·API Gateway.
 
-### 5.6 AI/GPU 변경안
+### 5.6 사례: `genai-rag` (Bedrock RAG 애플리케이션)
 
-**반영 현황 (2026-10-18):** A1–A3 완료. A2는 아이콘에 계열 이름이 찍혀 있어(P3·P4d·G4dn) 정확히 같은 계열에만 전용 아이콘을 쓰고, p5·g6e 등은 일반 인스턴스 아이콘 + `GPU` 라벨로 바꿨다. 추가로 VPC 상단 연결 행이 AZ 폭에서 줄바꿈된다(엔드포인트 12개인 ai-platform이 AZ 영역의 세 배로 넓어지던 문제).
+| 요소 | 구성 | 근거 |
+| --- | --- | --- |
+| 진입·앱 | 인터넷 ALB(퍼블릭) → ECS Fargate `chat-api` 3 AZ, 수집용 `ingest-worker`·VPC Lambda `document-ingest` | REL10-BP01, SEC05-BP01 |
+| 모델 호출 | `bedrock-runtime`·`bedrock-agent-runtime`·`ecr.api`·`ecr.dkr`·`logs`·`secretsmanager`·`sts` 인터페이스 엔드포인트 3 AZ, S3 게이트웨이 | GENSEC01-BP02, GENREL02-BP01 |
+| 벡터 저장소 | Aurora PostgreSQL(pgvector) writer a + reader b·c, 앱 태스크 SG만 5432 | GENSEC01-BP03, GENREL02-BP01, GENPERF04·GENCOST04(벡터 저장소 선택) |
+| 캐시 | ElastiCache Redis primary b / replica c (시맨틱 캐시·세션) | REL10-BP01 |
+| 자체 호스팅 모델 | VPC 안 SageMaker 실시간 엔드포인트 `rag-reranker` ml.g5.xlarge × 2, 서브넷 2 AZ | MLSEC03-BP02, MLCOST06-BP03 |
+| 문구 | Guardrails, 모델 호출 로깅, 엔드포인트 정책 InvokeModel 한정, 교차 리전 추론 또는 Provisioned Throughput, WAF·CloudFront | GENSEC02-BP01, GENSEC01-BP04·BP01, GENREL01-BP01, REL02-BP01 |
+
+### 5.7 사례: `gpu-training` (GPU 분산 학습 클러스터)
+
+| 요소 | 구성 | 근거 |
+| --- | --- | --- |
+| 서브넷 | `compute-a` /20 (AZ a만, 학습 노드·FSx·HyperPod), `head-a/b` /24 (헤드·로그인 노드), 퍼블릭 a/b (NAT) | HyperPod IP 계획, HPCREL01-BP02 |
+| p5 큐 | p5.48xlarge × 4, EFA, **Capacity Block**(UltraCluster 자동 배치, 배치 그룹 없음) | EC2 Capacity Blocks |
+| trn2 큐 | trn2.48xlarge × 2, EFA, **클러스터 배치 그룹** `trn2-pg` + 용량 예약(ODCR) | EC2 placement strategies, MLSUS05-BP02 |
+| EFA SG | 자기 참조 전체 허용, 헤드 노드에서만 22, 이그레스는 자신·VPC | EKS AI/ML Networking |
+| 데이터 | FSx for Lustre PERSISTENT_2 18.75 TiB, 학습 노드와 같은 서브넷 | GENREL06-BP01, HPCREL01-BP01, MLCOST06-BP03 |
+| 관리형 대안 | SageMaker HyperPod(Slurm) `hp-slurm`: controller ml.m5.2xlarge × 1, workers ml.p5.48xlarge × 8 | GENPERF03-BP01 |
+| 접근·사설 경로 | 헤드·로그인 노드 프라이빗, SSM·SSM Messages·EC2 Messages·Logs·ECR·STS 엔드포인트, S3 게이트웨이 | MLSEC03-BP02 |
+
+### 5.8 AI/ML 검토 규칙 (검토 탭 `AI/ML` 영역)
+
+모두 수집한 API 필드만으로 판정하고, 권장 조치에 렌즈 BP를 적는다. 입력이 없으면(권한 거부 등) 판정하지 않는다.
+
+| 규칙 | 심각도 | 판정 근거 (API 필드) | 렌즈·문서 |
+| --- | --- | --- | --- |
+| SEC-AI-PORT-OPEN | high | SG가 0.0.0.0/0에 Jupyter 8888·TensorBoard 6006·Ray 8265/10001·MLflow 5000·Gradio 7860·Streamlit 8501·Ollama 11434·vLLM/Triton 8000/8001 허용 | MLSEC03-BP02 |
+| SEC-GPU-PUBLIC | high | 가속 인스턴스(p·g·trn·inf·dl)에 퍼블릭 IP 또는 IGW 경로 서브넷 | MLSEC03-BP02, GENSEC01-BP02 |
+| SEC-HYPERPOD-PUBLIC | high | HyperPod `VpcConfig.Subnets`가 IGW 경로 서브넷 | GENSEC01-BP02, HyperPod 사전 조건 |
+| REL-GPU-TRAIN-AZ | medium | EFA 학습 그룹이 여러 AZ | EC2 EFA(AZ 불가), EKS AI/ML Networking |
+| REL-GPU-INFER-AZ | medium | G·Inferentia 추론 그룹이 한 AZ | GENREL02-BP01, MLCOST06-BP03 |
+| SEC-EFA-SG | medium | EFA 노드 SG에 자기 참조 `IpProtocol -1` 없음 | EKS AI/ML Networking, HyperPod |
+| REL-GPU-SPOT-EFA | medium | EFA 노드 `InstanceLifecycle = spot` | EKS AI/ML Networking (상관 중단) |
+| REL-GPU-SUBNET-IP | medium | p5 그룹의 (MaxSize − 현재) × 81(EKS)/32 > `AvailableIpAddressCount` 합 | HyperPod 사전 조건, EKS IP 최적화 |
+| REL-FSX-TRAIN-AZ | medium | EFA 학습 노드 AZ에 같은 VPC의 Lustre가 없음 | HPCREL01-BP01, MLCOST06-BP03 |
+| SEC-AI-ENDPOINT-DNS | medium | bedrock*/sagemaker.* 인터페이스 엔드포인트 `PrivateDnsEnabled = false` | GENSEC01-BP02 |
+| REL-AI-ENDPOINT-AZ | medium | bedrock*/sagemaker.* 엔드포인트 서브넷 AZ ⊉ VPC 컴퓨팅(EC2·ECS 태스크) AZ | GENREL02-BP01, SageMaker 런타임 엔드포인트 |
+| SEC-SAGEMAKER-VPC | medium | SageMaker 엔드포인트 모델에 `VpcConfig` 없음 | MLSEC03-BP02 |
+| REL-SAGEMAKER-AZ | medium | 엔드포인트 인스턴스 < 2 또는 서브넷 AZ < 2 | MLCOST06-BP03, MLREL05-BP01 |
+| OPS-GPU-PLACEMENT | low | EFA 노드가 cluster 전략 배치 그룹·Capacity Block 밖 | EC2 placement strategies, Capacity Blocks |
+| OPS-FSX-SCRATCH | low | Lustre `DeploymentType = SCRATCH_*` | GENREL06-BP01 |
+| OPS-GPU-S3-ENDPOINT | low | 가속 인스턴스 VPC에 S3 게이트웨이 엔드포인트 없음 | MLSEC03-BP02 |
+| REL-ASG-AZ (학습) | low | 단일 AZ EFA 학습 그룹은 의도적 단일 AZ 알림(일반 ASG는 medium) | HPCREL01-BP02 |
+
+### 5.9 AI/GPU 변경안 이력
+
+**반영 현황 (2026-10-18):** A1–A3 완료. 이어서 소유자 요청("AI/GPU가 강점이 되어야")으로 수집(FSx·SageMaker 엔드포인트·HyperPod·배치 그룹·EFA/Capacity Block), 사례(genai-rag·gpu-training, ai-platform 보강), 검토 규칙 13개(5.8절), 채팅 도구(add_fsx_lustre·add_sagemaker_endpoint, 학습 그룹의 전용 서브넷·EFA·배치 그룹)를 추가했다. A2는 아이콘에 계열 이름이 찍혀 있어(P3·P4d·G4dn) 정확히 같은 계열에만 전용 아이콘을 쓰고, p5·g6e 등은 일반 인스턴스 아이콘 + `GPU` 라벨로 바꿨다. 추가로 VPC 상단 연결 행이 AZ 폭에서 줄바꿈된다(엔드포인트 12개인 ai-platform이 AZ 영역의 세 배로 넓어지던 문제).
 
 | 순위 | 변경 | 비고 |
 | --- | --- | --- |

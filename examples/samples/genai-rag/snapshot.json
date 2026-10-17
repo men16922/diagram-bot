@@ -1,0 +1,4521 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "account_id": "111122223333",
+    "region": "ap-northeast-2",
+    "partition": "aws",
+    "started_at": "2026-10-17T21:15:48.610572+00:00",
+    "finished_at": "2026-10-17T21:15:48.610572+00:00",
+    "status": "complete",
+    "demo": true,
+    "sample": "genai-rag",
+    "sample_version": 3,
+    "title": "생성형 AI RAG 애플리케이션 (Bedrock · Aurora pgvector · 시맨틱 캐시)",
+    "practices": [
+      "채팅 API는 세 AZ의 ECS Fargate 태스크, 인터넷용 ALB는 퍼블릭 서브넷에만 (REL10-BP01, SEC05-BP01)",
+      "Bedrock 런타임·에이전트 런타임과 ECR·CloudWatch Logs·Secrets Manager·STS는 세 AZ의 인터페이스 엔드포인트로 사설 호출 (GENSEC01-BP02, GENREL02-BP01)",
+      "벡터 저장소는 격리 서브넷의 Aurora PostgreSQL(pgvector) writer와 다른 두 AZ의 reader, 앱 태스크 보안 그룹만 허용 (GENSEC01-BP03, GENREL02-BP01)",
+      "시맨틱 캐시·세션은 ElastiCache Redis primary/replica 자동 장애 조치로 같은 질의의 모델 호출을 줄임",
+      "문서 수집은 VPC 안 Lambda와 ECS 워커가 청크·임베딩 후 벡터 저장소에 적재, S3는 게이트웨이 엔드포인트",
+      "자체 호스팅 리랭커는 VPC 안 SageMaker 실시간 엔드포인트(인스턴스 2대, 서로 다른 AZ) (MLSEC03-BP02, MLCOST06-BP03)",
+      "도형 밖 권고: Bedrock Guardrails로 입출력 검증, 모델 호출 로깅(기본 꺼짐) 켜기, 엔드포인트 정책은 InvokeModel만 (GENSEC02-BP01, GENSEC01-BP04, GENSEC01-BP01)",
+      "도형 밖 권고: 처리량은 지리 교차 리전 추론 프로필 또는 Provisioned Throughput(둘 중 하나), ALB 앞 AWS WAF·CloudFront (GENREL01-BP01, REL02-BP01)"
+    ],
+    "scope": [
+      "VPC",
+      "Subnet",
+      "EC2",
+      "ELBv2",
+      "TargetGroup",
+      "RegisteredTarget",
+      "InternetGateway",
+      "NatGateway",
+      "RouteTable",
+      "RDS",
+      "AutoScalingGroup",
+      "VpcEndpoint",
+      "TransitGateway",
+      "EKS",
+      "MSK",
+      "ElastiCache",
+      "Lambda",
+      "OpenSearch",
+      "ECS",
+      "EFS",
+      "Redshift",
+      "VpcPeering",
+      "VPN"
+    ],
+    "limitations": [
+      "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
+      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
+    ]
+  },
+  "coverage": [
+    {
+      "service": "ec2",
+      "operation": "describe_vpcs",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_subnets",
+      "status": "complete",
+      "pages": 1,
+      "items": 9
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_load_balancers",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_internet_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_nat_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_route_tables",
+      "status": "complete",
+      "pages": 1,
+      "items": 5
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "autoscaling",
+      "operation": "describe_auto_scaling_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 8
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_transit_gateway_vpc_attachments",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "rds",
+      "operation": "describe_db_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "kafka",
+      "operation": "list_clusters_v2",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "lambda",
+      "operation": "list_functions",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "kafka",
+      "operation": "list_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domains",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domain_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_services",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_tasks",
+      "status": "complete",
+      "pages": 1,
+      "items": 5
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_mount_targets",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 4
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_health",
+      "parameters": {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    }
+  ],
+  "raw": {
+    "vpcs": [
+      {
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "CidrBlock": "10.110.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "genai-rag"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          }
+        ]
+      }
+    ],
+    "subnets": [
+      {
+        "SubnetId": "subnet-rag-pub-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.110.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-rag-pub-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.110.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-rag-pub-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.110.2.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-rag-app-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.110.16.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "app-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 4091
+      },
+      {
+        "SubnetId": "subnet-rag-app-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.110.32.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "app-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 4091
+      },
+      {
+        "SubnetId": "subnet-rag-app-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.110.48.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "app-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 4091
+      },
+      {
+        "SubnetId": "subnet-rag-data-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.110.100.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-rag-data-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.110.101.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-rag-data-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.110.102.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      }
+    ],
+    "instances": [],
+    "load_balancers": [
+      {
+        "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "LoadBalancerName": "rag-chat-alb",
+        "Type": "application",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "Scheme": "internet-facing",
+        "AvailabilityZones": [
+          {
+            "ZoneName": "ap-northeast-2a",
+            "SubnetId": "subnet-rag-pub-a"
+          },
+          {
+            "ZoneName": "ap-northeast-2b",
+            "SubnetId": "subnet-rag-pub-b"
+          },
+          {
+            "ZoneName": "ap-northeast-2c",
+            "SubnetId": "subnet-rag-pub-c"
+          }
+        ],
+        "SecurityGroups": [
+          "sg-rag-alb"
+        ]
+      }
+    ],
+    "target_groups": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "TargetGroupName": "chat-api-tasks",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "TargetType": "ip",
+        "Protocol": "HTTP",
+        "Port": 8080,
+        "HealthCheckPath": "/healthz",
+        "LoadBalancerArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001"
+        ]
+      }
+    ],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "10.110.16.21",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2a"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.110.32.22",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.110.48.23",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ],
+    "internet_gateways": [
+      {
+        "InternetGatewayId": "igw-rag",
+        "Attachments": [
+          {
+            "VpcId": "vpc-0a1b2c3d4e5f60010",
+            "State": "available"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-igw"
+          }
+        ]
+      }
+    ],
+    "nat_gateways": [
+      {
+        "NatGatewayId": "nat-rag-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "SubnetId": "subnet-rag-pub-a",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-nat-a"
+          }
+        ]
+      },
+      {
+        "NatGatewayId": "nat-rag-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "SubnetId": "subnet-rag-pub-b",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-nat-b"
+          }
+        ]
+      },
+      {
+        "NatGatewayId": "nat-rag-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "SubnetId": "subnet-rag-pub-c",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-nat-c"
+          }
+        ]
+      }
+    ],
+    "route_tables": [
+      {
+        "RouteTableId": "rtb-rag-public",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.110.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "GatewayId": "igw-rag",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-rag-public-0",
+            "SubnetId": "subnet-rag-pub-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-rag-public-1",
+            "SubnetId": "subnet-rag-pub-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-rag-public-2",
+            "SubnetId": "subnet-rag-pub-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-public"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-rag-private-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.110.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-rag-a",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-rag-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-rag-private-a-0",
+            "SubnetId": "subnet-rag-app-a"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-private-a"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-rag-private-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.110.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-rag-b",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-rag-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-rag-private-b-0",
+            "SubnetId": "subnet-rag-app-b"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-private-b"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-rag-private-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.110.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-rag-c",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-rag-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-rag-private-c-0",
+            "SubnetId": "subnet-rag-app-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-private-c"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-rag-main",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.110.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-rag-main-main",
+            "Main": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "rag-isolated"
+          }
+        ]
+      }
+    ],
+    "db_instances": [
+      {
+        "DBInstanceIdentifier": "rag-vectors-1",
+        "DBClusterIdentifier": "rag-vectors",
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2a",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "rag-vectors-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-rag-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-rag-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-rag-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "DBInstanceIdentifier": "rag-vectors-2",
+        "DBClusterIdentifier": "rag-vectors",
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2b",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "rag-vectors-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-rag-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-rag-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-rag-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "DBInstanceIdentifier": "rag-vectors-3",
+        "DBClusterIdentifier": "rag-vectors",
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2c",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "rag-vectors-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-rag-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-rag-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-rag-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "auto_scaling_groups": [],
+    "vpc_endpoints": [
+      {
+        "VpcEndpointId": "vpce-rag-bedrock-runtime",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.bedrock-runtime",
+        "SubnetIds": [
+          "subnet-rag-app-a",
+          "subnet-rag-app-b",
+          "subnet-rag-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "bedrock-runtime-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-rag-bedrock-agent-runtime",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.bedrock-agent-runtime",
+        "SubnetIds": [
+          "subnet-rag-app-a",
+          "subnet-rag-app-b",
+          "subnet-rag-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "bedrock-agent-runtime-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-rag-ecr-api",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+        "SubnetIds": [
+          "subnet-rag-app-a",
+          "subnet-rag-app-b",
+          "subnet-rag-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ecr.api-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-rag-ecr-dkr",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
+        "SubnetIds": [
+          "subnet-rag-app-a",
+          "subnet-rag-app-b",
+          "subnet-rag-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ecr.dkr-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-rag-logs",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.logs",
+        "SubnetIds": [
+          "subnet-rag-app-a",
+          "subnet-rag-app-b",
+          "subnet-rag-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "logs-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-rag-secretsmanager",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.secretsmanager",
+        "SubnetIds": [
+          "subnet-rag-app-a",
+          "subnet-rag-app-b",
+          "subnet-rag-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "secretsmanager-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-rag-sts",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.sts",
+        "SubnetIds": [
+          "subnet-rag-app-a",
+          "subnet-rag-app-b",
+          "subnet-rag-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "sts-endpoint"
+          }
+        ]
+      },
+      {
+        "VpcEndpointId": "vpce-rag-s3",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "VpcEndpointType": "Gateway",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.s3",
+        "RouteTableIds": [
+          "rtb-rag-private-a",
+          "rtb-rag-private-b",
+          "rtb-rag-private-c"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "s3-gateway-endpoint"
+          }
+        ]
+      }
+    ],
+    "transit_gateways": [],
+    "transit_gateway_attachments": [],
+    "db_clusters": [
+      {
+        "DBClusterIdentifier": "rag-vectors",
+        "Engine": "aurora-postgresql",
+        "MultiAZ": true,
+        "StorageEncrypted": true,
+        "DBClusterMembers": [
+          {
+            "DBInstanceIdentifier": "rag-vectors-1",
+            "IsClusterWriter": true
+          },
+          {
+            "DBInstanceIdentifier": "rag-vectors-2",
+            "IsClusterWriter": false
+          },
+          {
+            "DBInstanceIdentifier": "rag-vectors-3",
+            "IsClusterWriter": false
+          }
+        ]
+      }
+    ],
+    "cache_clusters": [
+      {
+        "CacheClusterId": "semantic-cache-001",
+        "ReplicationGroupId": "semantic-cache",
+        "Engine": "redis",
+        "CacheNodeType": "cache.r7g.large",
+        "PreferredAvailabilityZone": "ap-northeast-2b",
+        "CacheSubnetGroupName": "semantic-cache-subnets"
+      },
+      {
+        "CacheClusterId": "semantic-cache-002",
+        "ReplicationGroupId": "semantic-cache",
+        "Engine": "redis",
+        "CacheNodeType": "cache.r7g.large",
+        "PreferredAvailabilityZone": "ap-northeast-2c",
+        "CacheSubnetGroupName": "semantic-cache-subnets"
+      }
+    ],
+    "replication_groups": [
+      {
+        "ReplicationGroupId": "semantic-cache",
+        "MultiAZ": "enabled",
+        "AutomaticFailover": "enabled",
+        "AtRestEncryptionEnabled": true,
+        "TransitEncryptionEnabled": true,
+        "NodeGroups": [
+          {
+            "NodeGroupId": "0001",
+            "NodeGroupMembers": [
+              {
+                "CacheClusterId": "semantic-cache-001",
+                "CurrentRole": "primary"
+              },
+              {
+                "CacheClusterId": "semantic-cache-002",
+                "CurrentRole": "replica"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "cache_subnet_groups": [
+      {
+        "CacheSubnetGroupName": "semantic-cache-subnets",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "Subnets": [
+          {
+            "SubnetIdentifier": "subnet-rag-data-a",
+            "SubnetAvailabilityZone": {
+              "Name": "ap-northeast-2a"
+            }
+          },
+          {
+            "SubnetIdentifier": "subnet-rag-data-b",
+            "SubnetAvailabilityZone": {
+              "Name": "ap-northeast-2b"
+            }
+          },
+          {
+            "SubnetIdentifier": "subnet-rag-data-c",
+            "SubnetAvailabilityZone": {
+              "Name": "ap-northeast-2c"
+            }
+          }
+        ]
+      }
+    ],
+    "msk_clusters": [],
+    "msk_nodes": [],
+    "lambda_functions": [
+      {
+        "FunctionName": "document-ingest",
+        "Runtime": "python3.12",
+        "VpcConfig": {
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "SubnetIds": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b",
+            "subnet-rag-app-c"
+          ],
+          "SecurityGroupIds": [
+            "sg-document-ingest"
+          ]
+        }
+      }
+    ],
+    "eks_clusters": [],
+    "opensearch_domains": [],
+    "opensearch_nodes": [],
+    "ecs_services": [
+      {
+        "serviceArn": "arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "serviceName": "chat-api",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "status": "ACTIVE",
+        "launchType": "FARGATE",
+        "desiredCount": 3,
+        "runningCount": 3,
+        "platformVersion": "1.4.0",
+        "networkConfiguration": {
+          "awsvpcConfiguration": {
+            "subnets": [
+              "subnet-rag-app-a",
+              "subnet-rag-app-b",
+              "subnet-rag-app-c"
+            ],
+            "securityGroups": [
+              "sg-chat-api"
+            ],
+            "assignPublicIp": "DISABLED"
+          }
+        },
+        "loadBalancers": [
+          {
+            "targetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+            "containerName": "chat-api",
+            "containerPort": 8080
+          }
+        ],
+        "deploymentConfiguration": {
+          "deploymentCircuitBreaker": {
+            "enable": true,
+            "rollback": true
+          }
+        },
+        "availabilityZoneRebalancing": "ENABLED"
+      },
+      {
+        "serviceArn": "arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+        "serviceName": "ingest-worker",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "status": "ACTIVE",
+        "launchType": "FARGATE",
+        "desiredCount": 2,
+        "runningCount": 2,
+        "platformVersion": "1.4.0",
+        "networkConfiguration": {
+          "awsvpcConfiguration": {
+            "subnets": [
+              "subnet-rag-app-a",
+              "subnet-rag-app-b"
+            ],
+            "securityGroups": [
+              "sg-ingest-worker"
+            ],
+            "assignPublicIp": "DISABLED"
+          }
+        },
+        "loadBalancers": [],
+        "deploymentConfiguration": {
+          "deploymentCircuitBreaker": {
+            "enable": true,
+            "rollback": true
+          }
+        },
+        "availabilityZoneRebalancing": "ENABLED"
+      }
+    ],
+    "ecs_tasks": [
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:chat-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2a",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-a"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.16.21"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:chat-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2b",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-b"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.32.22"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:chat-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2c",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-c"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.48.23"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:ingest-worker",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2a",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-a"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.16.60"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:ingest-worker",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2b",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-b"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.32.61"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "efs_file_systems": [],
+    "efs_mount_targets": [],
+    "redshift_clusters": [],
+    "redshift_subnet_groups": [],
+    "vpc_peering_connections": [],
+    "vpn_gateways": [],
+    "vpn_connections": [],
+    "customer_gateways": [],
+    "security_groups": [
+      {
+        "GroupId": "sg-rag-alb",
+        "GroupName": "rag-alb",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-rag-tasks",
+        "GroupName": "rag-tasks",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-rag-alb"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-rag-db",
+        "GroupName": "rag-vectors",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-rag-tasks"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "GroupId": "sg-rag-cache",
+        "GroupName": "semantic-cache",
+        "VpcId": "vpc-0a1b2c3d4e5f60010",
+        "IpPermissions": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 6379,
+            "ToPort": 6379,
+            "UserIdGroupPairs": [
+              {
+                "GroupId": "sg-rag-tasks"
+              }
+            ]
+          }
+        ],
+        "IpPermissionsEgress": [
+          {
+            "IpProtocol": "-1",
+            "IpRanges": [
+              {
+                "CidrIp": "0.0.0.0/0"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "placement_groups": [],
+    "fsx_file_systems": [],
+    "sagemaker_endpoints": [
+      {
+        "EndpointName": "rag-reranker",
+        "EndpointArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:endpoint/rag-reranker",
+        "EndpointStatus": "InService",
+        "EndpointConfigName": "rag-reranker-config",
+        "ProductionVariants": [
+          {
+            "VariantName": "main",
+            "CurrentInstanceCount": 2,
+            "DesiredInstanceCount": 2
+          }
+        ],
+        "EndpointConfig": {
+          "EndpointConfigName": "rag-reranker-config",
+          "ProductionVariants": [
+            {
+              "VariantName": "main",
+              "ModelName": "rag-reranker-model",
+              "InstanceType": "ml.g5.xlarge",
+              "InitialInstanceCount": 2
+            }
+          ]
+        },
+        "Models": [
+          {
+            "ModelName": "rag-reranker-model",
+            "VpcConfig": {
+              "Subnets": [
+                "subnet-rag-app-a",
+                "subnet-rag-app-b"
+              ],
+              "SecurityGroupIds": [
+                "sg-rag-tasks"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "sagemaker_clusters": []
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/cache_node/semantic-cache-001",
+        "resource_id": "semantic-cache-001",
+        "kind": "cache_node",
+        "name": "semantic-cache-001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "CacheClusterId": "semantic-cache-001",
+          "ReplicationGroupId": "semantic-cache",
+          "Engine": "redis",
+          "CacheNodeType": "cache.r7g.large",
+          "PreferredAvailabilityZone": "ap-northeast-2b",
+          "CacheSubnetGroupName": "semantic-cache-subnets",
+          "CurrentRole": "primary",
+          "Shard": null
+        },
+        "reference_only": false,
+        "source": "DescribeCacheClusters"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/cache_node/semantic-cache-002",
+        "resource_id": "semantic-cache-002",
+        "kind": "cache_node",
+        "name": "semantic-cache-002",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "CacheClusterId": "semantic-cache-002",
+          "ReplicationGroupId": "semantic-cache",
+          "Engine": "redis",
+          "CacheNodeType": "cache.r7g.large",
+          "PreferredAvailabilityZone": "ap-northeast-2c",
+          "CacheSubnetGroupName": "semantic-cache-subnets",
+          "CurrentRole": "replica",
+          "Shard": null
+        },
+        "reference_only": false,
+        "source": "DescribeCacheClusters"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/cache_replication_group/semantic-cache",
+        "resource_id": "semantic-cache",
+        "kind": "cache_replication_group",
+        "name": "semantic-cache",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "ReplicationGroupId": "semantic-cache",
+          "MultiAZ": "enabled",
+          "AutomaticFailover": "enabled",
+          "AtRestEncryptionEnabled": true,
+          "TransitEncryptionEnabled": true,
+          "NodeGroups": [
+            {
+              "NodeGroupId": "0001",
+              "NodeGroupMembers": [
+                {
+                  "CacheClusterId": "semantic-cache-001",
+                  "CurrentRole": "primary"
+                },
+                {
+                  "CacheClusterId": "semantic-cache-002",
+                  "CurrentRole": "replica"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeReplicationGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_cluster/rag-vectors",
+        "resource_id": "rag-vectors",
+        "kind": "db_cluster",
+        "name": "rag-vectors",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBClusterIdentifier": "rag-vectors",
+          "Engine": "aurora-postgresql",
+          "MultiAZ": true,
+          "StorageEncrypted": true,
+          "DBClusterMembers": [
+            {
+              "DBInstanceIdentifier": "rag-vectors-1",
+              "IsClusterWriter": true
+            },
+            {
+              "DBInstanceIdentifier": "rag-vectors-2",
+              "IsClusterWriter": false
+            },
+            {
+              "DBInstanceIdentifier": "rag-vectors-3",
+              "IsClusterWriter": false
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeDBClusters"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/rag-vectors-1",
+        "resource_id": "rag-vectors-1",
+        "kind": "db_instance",
+        "name": "rag-vectors-1",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "rag-vectors-1",
+          "DBClusterIdentifier": "rag-vectors",
+          "Engine": "aurora-postgresql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2a",
+          "MultiAZ": false,
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "rag-vectors-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60010",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-rag-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-rag-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-rag-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances",
+        "db_role": "writer"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/rag-vectors-2",
+        "resource_id": "rag-vectors-2",
+        "kind": "db_instance",
+        "name": "rag-vectors-2",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "rag-vectors-2",
+          "DBClusterIdentifier": "rag-vectors",
+          "Engine": "aurora-postgresql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2b",
+          "MultiAZ": false,
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "rag-vectors-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60010",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-rag-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-rag-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-rag-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances",
+        "db_role": "reader"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/rag-vectors-3",
+        "resource_id": "rag-vectors-3",
+        "kind": "db_instance",
+        "name": "rag-vectors-3",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "rag-vectors-3",
+          "DBClusterIdentifier": "rag-vectors",
+          "Engine": "aurora-postgresql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2c",
+          "MultiAZ": false,
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "rag-vectors-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60010",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-rag-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-rag-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-rag-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances",
+        "db_role": "reader"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "kind": "ecs_service",
+        "name": "chat-api",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "serviceArn": "arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+          "serviceName": "chat-api",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+          "status": "ACTIVE",
+          "launchType": "FARGATE",
+          "desiredCount": 3,
+          "runningCount": 3,
+          "platformVersion": "1.4.0",
+          "networkConfiguration": {
+            "awsvpcConfiguration": {
+              "subnets": [
+                "subnet-rag-app-a",
+                "subnet-rag-app-b",
+                "subnet-rag-app-c"
+              ],
+              "securityGroups": [
+                "sg-chat-api"
+              ],
+              "assignPublicIp": "DISABLED"
+            }
+          },
+          "loadBalancers": [
+            {
+              "targetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+              "containerName": "chat-api",
+              "containerPort": 8080
+            }
+          ],
+          "deploymentConfiguration": {
+            "deploymentCircuitBreaker": {
+              "enable": true,
+              "rollback": true
+            }
+          },
+          "availabilityZoneRebalancing": "ENABLED",
+          "LaunchSummary": "FARGATE"
+        },
+        "reference_only": false,
+        "source": "DescribeServices"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+        "kind": "ecs_service",
+        "name": "ingest-worker",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "serviceArn": "arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+          "serviceName": "ingest-worker",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+          "status": "ACTIVE",
+          "launchType": "FARGATE",
+          "desiredCount": 2,
+          "runningCount": 2,
+          "platformVersion": "1.4.0",
+          "networkConfiguration": {
+            "awsvpcConfiguration": {
+              "subnets": [
+                "subnet-rag-app-a",
+                "subnet-rag-app-b"
+              ],
+              "securityGroups": [
+                "sg-ingest-worker"
+              ],
+              "assignPublicIp": "DISABLED"
+            }
+          },
+          "loadBalancers": [],
+          "deploymentConfiguration": {
+            "deploymentCircuitBreaker": {
+              "enable": true,
+              "rollback": true
+            }
+          },
+          "availabilityZoneRebalancing": "ENABLED",
+          "LaunchSummary": "FARGATE"
+        },
+        "reference_only": false,
+        "source": "DescribeServices"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+        "kind": "ecs_task",
+        "name": "chat-api/26b6072d",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+          "group": "service:chat-api",
+          "launchType": "FARGATE",
+          "lastStatus": "RUNNING",
+          "availabilityZone": "ap-northeast-2a",
+          "cpu": "512",
+          "memory": "1024",
+          "attachments": [
+            {
+              "type": "ElasticNetworkInterface",
+              "status": "ATTACHED",
+              "details": [
+                {
+                  "name": "subnetId",
+                  "value": "subnet-rag-app-a"
+                },
+                {
+                  "name": "privateIPv4Address",
+                  "value": "10.110.16.21"
+                }
+              ]
+            }
+          ],
+          "DisplayName": "chat-api/26b6072d",
+          "ServiceName": "chat-api",
+          "PrivateIp": "10.110.16.21",
+          "SubnetId": "subnet-rag-app-a"
+        },
+        "reference_only": false,
+        "source": "DescribeTasks"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+        "kind": "ecs_task",
+        "name": "chat-api/375fbd8d",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+          "group": "service:chat-api",
+          "launchType": "FARGATE",
+          "lastStatus": "RUNNING",
+          "availabilityZone": "ap-northeast-2b",
+          "cpu": "512",
+          "memory": "1024",
+          "attachments": [
+            {
+              "type": "ElasticNetworkInterface",
+              "status": "ATTACHED",
+              "details": [
+                {
+                  "name": "subnetId",
+                  "value": "subnet-rag-app-b"
+                },
+                {
+                  "name": "privateIPv4Address",
+                  "value": "10.110.32.22"
+                }
+              ]
+            }
+          ],
+          "DisplayName": "chat-api/375fbd8d",
+          "ServiceName": "chat-api",
+          "PrivateIp": "10.110.32.22",
+          "SubnetId": "subnet-rag-app-b"
+        },
+        "reference_only": false,
+        "source": "DescribeTasks"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+        "kind": "ecs_task",
+        "name": "chat-api/7784fe77",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+          "group": "service:chat-api",
+          "launchType": "FARGATE",
+          "lastStatus": "RUNNING",
+          "availabilityZone": "ap-northeast-2c",
+          "cpu": "512",
+          "memory": "1024",
+          "attachments": [
+            {
+              "type": "ElasticNetworkInterface",
+              "status": "ATTACHED",
+              "details": [
+                {
+                  "name": "subnetId",
+                  "value": "subnet-rag-app-c"
+                },
+                {
+                  "name": "privateIPv4Address",
+                  "value": "10.110.48.23"
+                }
+              ]
+            }
+          ],
+          "DisplayName": "chat-api/7784fe77",
+          "ServiceName": "chat-api",
+          "PrivateIp": "10.110.48.23",
+          "SubnetId": "subnet-rag-app-c"
+        },
+        "reference_only": false,
+        "source": "DescribeTasks"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
+        "kind": "ecs_task",
+        "name": "ingest-worker/7bb071e5",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+          "group": "service:ingest-worker",
+          "launchType": "FARGATE",
+          "lastStatus": "RUNNING",
+          "availabilityZone": "ap-northeast-2a",
+          "cpu": "512",
+          "memory": "1024",
+          "attachments": [
+            {
+              "type": "ElasticNetworkInterface",
+              "status": "ATTACHED",
+              "details": [
+                {
+                  "name": "subnetId",
+                  "value": "subnet-rag-app-a"
+                },
+                {
+                  "name": "privateIPv4Address",
+                  "value": "10.110.16.60"
+                }
+              ]
+            }
+          ],
+          "DisplayName": "ingest-worker/7bb071e5",
+          "ServiceName": "ingest-worker",
+          "PrivateIp": "10.110.16.60",
+          "SubnetId": "subnet-rag-app-a"
+        },
+        "reference_only": false,
+        "source": "DescribeTasks"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
+        "kind": "ecs_task",
+        "name": "ingest-worker/fd4632e8",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+          "group": "service:ingest-worker",
+          "launchType": "FARGATE",
+          "lastStatus": "RUNNING",
+          "availabilityZone": "ap-northeast-2b",
+          "cpu": "512",
+          "memory": "1024",
+          "attachments": [
+            {
+              "type": "ElasticNetworkInterface",
+              "status": "ATTACHED",
+              "details": [
+                {
+                  "name": "subnetId",
+                  "value": "subnet-rag-app-b"
+                },
+                {
+                  "name": "privateIPv4Address",
+                  "value": "10.110.32.61"
+                }
+              ]
+            }
+          ],
+          "DisplayName": "ingest-worker/fd4632e8",
+          "ServiceName": "ingest-worker",
+          "PrivateIp": "10.110.32.61",
+          "SubnetId": "subnet-rag-app-b"
+        },
+        "reference_only": false,
+        "source": "DescribeTasks"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/internet_gateway/igw-rag",
+        "resource_id": "igw-rag",
+        "kind": "internet_gateway",
+        "name": "rag-igw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InternetGatewayId": "igw-rag",
+          "Attachments": [
+            {
+              "VpcId": "vpc-0a1b2c3d4e5f60010",
+              "State": "available"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-igw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInternetGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/lambda_function/document-ingest",
+        "resource_id": "document-ingest",
+        "kind": "lambda_function",
+        "name": "document-ingest",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "FunctionName": "document-ingest",
+          "Runtime": "python3.12",
+          "VpcConfig": {
+            "VpcId": "vpc-0a1b2c3d4e5f60010",
+            "SubnetIds": [
+              "subnet-rag-app-a",
+              "subnet-rag-app-b",
+              "subnet-rag-app-c"
+            ],
+            "SecurityGroupIds": [
+              "sg-document-ingest"
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "ListFunctions"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "kind": "load_balancer",
+        "name": "rag-chat-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+          "LoadBalancerName": "rag-chat-alb",
+          "Type": "application",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Scheme": "internet-facing",
+          "AvailabilityZones": [
+            {
+              "ZoneName": "ap-northeast-2a",
+              "SubnetId": "subnet-rag-pub-a"
+            },
+            {
+              "ZoneName": "ap-northeast-2b",
+              "SubnetId": "subnet-rag-pub-b"
+            },
+            {
+              "ZoneName": "ap-northeast-2c",
+              "SubnetId": "subnet-rag-pub-c"
+            }
+          ],
+          "SecurityGroups": [
+            "sg-rag-alb"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeLoadBalancers"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-rag-a",
+        "resource_id": "nat-rag-a",
+        "kind": "nat_gateway",
+        "name": "rag-nat-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-rag-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "SubnetId": "subnet-rag-pub-a",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-nat-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-rag-b",
+        "resource_id": "nat-rag-b",
+        "kind": "nat_gateway",
+        "name": "rag-nat-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-rag-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "SubnetId": "subnet-rag-pub-b",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-nat-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-rag-c",
+        "resource_id": "nat-rag-c",
+        "kind": "nat_gateway",
+        "name": "rag-nat-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-rag-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "SubnetId": "subnet-rag-pub-c",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-nat-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-rag-main",
+        "resource_id": "rtb-rag-main",
+        "kind": "route_table",
+        "name": "rag-isolated",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-rag-main",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.110.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-rag-main-main",
+              "Main": true
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-isolated"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-rag-private-a",
+        "resource_id": "rtb-rag-private-a",
+        "kind": "route_table",
+        "name": "rag-private-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-rag-private-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.110.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-rag-a",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-rag-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-rag-private-a-0",
+              "SubnetId": "subnet-rag-app-a"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-private-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-rag-private-b",
+        "resource_id": "rtb-rag-private-b",
+        "kind": "route_table",
+        "name": "rag-private-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-rag-private-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.110.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-rag-b",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-rag-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-rag-private-b-0",
+              "SubnetId": "subnet-rag-app-b"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-private-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-rag-private-c",
+        "resource_id": "rtb-rag-private-c",
+        "kind": "route_table",
+        "name": "rag-private-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-rag-private-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.110.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-rag-c",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-rag-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-rag-private-c-0",
+              "SubnetId": "subnet-rag-app-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-private-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-rag-public",
+        "resource_id": "rtb-rag-public",
+        "kind": "route_table",
+        "name": "rag-public",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-rag-public",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.110.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "GatewayId": "igw-rag",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-rag-public-0",
+              "SubnetId": "subnet-rag-pub-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-rag-public-1",
+              "SubnetId": "subnet-rag-pub-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-rag-public-2",
+              "SubnetId": "subnet-rag-pub-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "rag-public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/sagemaker_endpoint/rag-reranker",
+        "resource_id": "rag-reranker",
+        "kind": "sagemaker_endpoint",
+        "name": "rag-reranker",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "EndpointName": "rag-reranker",
+          "EndpointArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:endpoint/rag-reranker",
+          "EndpointStatus": "InService",
+          "EndpointConfigName": "rag-reranker-config",
+          "ProductionVariants": [
+            {
+              "VariantName": "main",
+              "CurrentInstanceCount": 2,
+              "DesiredInstanceCount": 2
+            }
+          ],
+          "EndpointConfig": {
+            "EndpointConfigName": "rag-reranker-config",
+            "ProductionVariants": [
+              {
+                "VariantName": "main",
+                "ModelName": "rag-reranker-model",
+                "InstanceType": "ml.g5.xlarge",
+                "InitialInstanceCount": 2
+              }
+            ]
+          },
+          "Models": [
+            {
+              "ModelName": "rag-reranker-model",
+              "VpcConfig": {
+                "Subnets": [
+                  "subnet-rag-app-a",
+                  "subnet-rag-app-b"
+                ],
+                "SecurityGroupIds": [
+                  "sg-rag-tasks"
+                ]
+              }
+            }
+          ],
+          "InstanceType": "ml.g5.xlarge",
+          "InstanceCount": 2,
+          "Subnets": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeEndpoint"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-rag-alb",
+        "resource_id": "sg-rag-alb",
+        "kind": "security_group",
+        "name": "rag-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-rag-alb",
+          "GroupName": "rag-alb",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 443,
+              "ToPort": 443,
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-rag-cache",
+        "resource_id": "sg-rag-cache",
+        "kind": "security_group",
+        "name": "semantic-cache",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-rag-cache",
+          "GroupName": "semantic-cache",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 6379,
+              "ToPort": 6379,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-rag-tasks"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-rag-db",
+        "resource_id": "sg-rag-db",
+        "kind": "security_group",
+        "name": "rag-vectors",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-rag-db",
+          "GroupName": "rag-vectors",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 5432,
+              "ToPort": 5432,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-rag-tasks"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-rag-tasks",
+        "resource_id": "sg-rag-tasks",
+        "kind": "security_group",
+        "name": "rag-tasks",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "GroupId": "sg-rag-tasks",
+          "GroupName": "rag-tasks",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "IpPermissions": [
+            {
+              "IpProtocol": "tcp",
+              "FromPort": 8080,
+              "ToPort": 8080,
+              "UserIdGroupPairs": [
+                {
+                  "GroupId": "sg-rag-alb"
+                }
+              ]
+            }
+          ],
+          "IpPermissionsEgress": [
+            {
+              "IpProtocol": "-1",
+              "IpRanges": [
+                {
+                  "CidrIp": "0.0.0.0/0"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSecurityGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "resource_id": "subnet-rag-app-a",
+        "kind": "subnet",
+        "name": "app-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-app-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.110.16.0/20",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "app-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 4091
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-rag-private-a"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "resource_id": "subnet-rag-app-b",
+        "kind": "subnet",
+        "name": "app-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-app-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.110.32.0/20",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "app-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 4091
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-rag-private-b"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "resource_id": "subnet-rag-app-c",
+        "kind": "subnet",
+        "name": "app-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-app-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.110.48.0/20",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "app-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 4091
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-rag-private-c"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-data-a",
+        "resource_id": "subnet-rag-data-a",
+        "kind": "subnet",
+        "name": "data-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-data-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.110.100.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-rag-main"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-data-b",
+        "resource_id": "subnet-rag-data-b",
+        "kind": "subnet",
+        "name": "data-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-data-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.110.101.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-rag-main"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-data-c",
+        "resource_id": "subnet-rag-data-c",
+        "kind": "subnet",
+        "name": "data-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-data-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.110.102.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-rag-main"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-a",
+        "resource_id": "subnet-rag-pub-a",
+        "kind": "subnet",
+        "name": "public-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-pub-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.110.0.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-rag-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-b",
+        "resource_id": "subnet-rag-pub-b",
+        "kind": "subnet",
+        "name": "public-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-pub-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.110.1.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-rag-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-c",
+        "resource_id": "subnet-rag-pub-c",
+        "kind": "subnet",
+        "name": "public-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-rag-pub-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.110.2.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-rag-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "kind": "target_group",
+        "name": "chat-api-tasks",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+          "TargetGroupName": "chat-api-tasks",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "TargetType": "ip",
+          "Protocol": "HTTP",
+          "Port": 8080,
+          "HealthCheckPath": "/healthz",
+          "LoadBalancerArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "resource_id": "vpc-0a1b2c3d4e5f60010",
+        "kind": "vpc",
+        "name": "genai-rag",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "CidrBlock": "10.110.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "genai-rag"
+            },
+            {
+              "Key": "Environment",
+              "Value": "production"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-agent-runtime",
+        "resource_id": "vpce-rag-bedrock-agent-runtime",
+        "kind": "vpc_endpoint",
+        "name": "bedrock-agent-runtime-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-rag-bedrock-agent-runtime",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.bedrock-agent-runtime",
+          "SubnetIds": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b",
+            "subnet-rag-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "bedrock-agent-runtime-endpoint"
+            }
+          ],
+          "ServiceShortName": "bedrock-agent-runtime"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-runtime",
+        "resource_id": "vpce-rag-bedrock-runtime",
+        "kind": "vpc_endpoint",
+        "name": "bedrock-runtime-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-rag-bedrock-runtime",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.bedrock-runtime",
+          "SubnetIds": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b",
+            "subnet-rag-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "bedrock-runtime-endpoint"
+            }
+          ],
+          "ServiceShortName": "bedrock-runtime"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-api",
+        "resource_id": "vpce-rag-ecr-api",
+        "kind": "vpc_endpoint",
+        "name": "ecr.api-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-rag-ecr-api",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+          "SubnetIds": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b",
+            "subnet-rag-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ecr.api-endpoint"
+            }
+          ],
+          "ServiceShortName": "ecr.api"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-dkr",
+        "resource_id": "vpce-rag-ecr-dkr",
+        "kind": "vpc_endpoint",
+        "name": "ecr.dkr-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-rag-ecr-dkr",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
+          "SubnetIds": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b",
+            "subnet-rag-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ecr.dkr-endpoint"
+            }
+          ],
+          "ServiceShortName": "ecr.dkr"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-logs",
+        "resource_id": "vpce-rag-logs",
+        "kind": "vpc_endpoint",
+        "name": "logs-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-rag-logs",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.logs",
+          "SubnetIds": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b",
+            "subnet-rag-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "logs-endpoint"
+            }
+          ],
+          "ServiceShortName": "logs"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-s3",
+        "resource_id": "vpce-rag-s3",
+        "kind": "vpc_endpoint",
+        "name": "s3-gateway-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-rag-s3",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "VpcEndpointType": "Gateway",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.s3",
+          "RouteTableIds": [
+            "rtb-rag-private-a",
+            "rtb-rag-private-b",
+            "rtb-rag-private-c"
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "s3-gateway-endpoint"
+            }
+          ],
+          "ServiceShortName": "s3"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-secretsmanager",
+        "resource_id": "vpce-rag-secretsmanager",
+        "kind": "vpc_endpoint",
+        "name": "secretsmanager-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-rag-secretsmanager",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.secretsmanager",
+          "SubnetIds": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b",
+            "subnet-rag-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "secretsmanager-endpoint"
+            }
+          ],
+          "ServiceShortName": "secretsmanager"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-sts",
+        "resource_id": "vpce-rag-sts",
+        "kind": "vpc_endpoint",
+        "name": "sts-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-rag-sts",
+          "VpcId": "vpc-0a1b2c3d4e5f60010",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.sts",
+          "SubnetIds": [
+            "subnet-rag-app-a",
+            "subnet-rag-app-b",
+            "subnet-rag-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "sts-endpoint"
+            }
+          ],
+          "ServiceShortName": "sts"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
+      }
+    ],
+    "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/semantic-cache-001",
+        "target": "111122223333/ap-northeast-2/cache_replication_group/semantic-cache",
+        "relation": "cache_member_of",
+        "evidence": "DescribeCacheClusters.ReplicationGroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f3d9f30de280139d0226"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/semantic-cache-001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-data-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeCacheClusters.PreferredAvailabilityZone + DescribeCacheSubnetGroups.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-59a1e2f8043c9148c522"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/semantic-cache-001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeCacheClusters.CacheSubnetGroupName → DescribeCacheSubnetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-44d356413e294473377a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/semantic-cache-002",
+        "target": "111122223333/ap-northeast-2/cache_replication_group/semantic-cache",
+        "relation": "cache_member_of",
+        "evidence": "DescribeCacheClusters.ReplicationGroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-60be29911f3d0a49ef6e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/semantic-cache-002",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-data-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeCacheClusters.PreferredAvailabilityZone + DescribeCacheSubnetGroups.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-8b1422db81e0b55f3d88"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/cache_node/semantic-cache-002",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeCacheClusters.CacheSubnetGroupName → DescribeCacheSubnetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-56fd910c9cf65fae075e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_cluster/rag-vectors",
+        "target": "111122223333/ap-northeast-2/db_instance/rag-vectors-1",
+        "relation": "cluster_member",
+        "evidence": "DescribeDBClusters.DBClusterMembers[]",
+        "qualifiers": {},
+        "details": {
+          "writer": true
+        },
+        "inferred": false,
+        "id": "rel-d995435f363430153840"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_cluster/rag-vectors",
+        "target": "111122223333/ap-northeast-2/db_instance/rag-vectors-2",
+        "relation": "cluster_member",
+        "evidence": "DescribeDBClusters.DBClusterMembers[]",
+        "qualifiers": {},
+        "details": {
+          "writer": false
+        },
+        "inferred": false,
+        "id": "rel-abf1b177f4b14a73e5ef"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_cluster/rag-vectors",
+        "target": "111122223333/ap-northeast-2/db_instance/rag-vectors-3",
+        "relation": "cluster_member",
+        "evidence": "DescribeDBClusters.DBClusterMembers[]",
+        "qualifiers": {},
+        "details": {
+          "writer": false
+        },
+        "inferred": false,
+        "id": "rel-6e2f727f364e108544d5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/rag-vectors-1",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-data-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-380ccaed7970ce85258d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/rag-vectors-1",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6f572718b44a6f48c036"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/rag-vectors-2",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-data-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-90ff5088783bffc75ce0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/rag-vectors-2",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1a2bdebabe2adaf8c060"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/rag-vectors-3",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-data-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-28aa07409a6e4d6ecca7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/rag-vectors-3",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f867c3278c5ac720e2f0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "relation": "ecs_target_group",
+        "evidence": "DescribeServices.loadBalancers[].targetGroupArn",
+        "qualifiers": {},
+        "details": {
+          "container": "chat-api",
+          "port": 8080
+        },
+        "inferred": false,
+        "id": "rel-98d40e50b72aa5811366"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[] → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8ac285522a5a985569ae"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "service_subnet",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d02d1bdfa1a48c914978"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "service_subnet",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9c1d2c5f7f72b6889a02"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "service_subnet",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-18c4ee321a3177b986c8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+        "relation": "service_task",
+        "evidence": "DescribeTasks.group",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6f22f4bb7bd09efff576"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+        "relation": "service_task",
+        "evidence": "DescribeTasks.group",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-998cb338f00f0424f41d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+        "relation": "service_task",
+        "evidence": "DescribeTasks.group",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-480b7b6697c6792c53d2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[] → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2a177a03e0ddbd961c5d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "service_subnet",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d688998e404b7125cefb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "service_subnet",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9ef4c603dc4b972b04f5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
+        "relation": "service_task",
+        "evidence": "DescribeTasks.group",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-53fe341af06f19f05d6e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/rag/ingest-worker",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
+        "relation": "service_task",
+        "evidence": "DescribeTasks.group",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-01032d199c41bb8a44f7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeTasks.attachments[].details.subnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-4c1aefdf21174589d7d5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeTasks.attachments[].details.subnetId → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5d6f13ea354d9fcd2f80"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeTasks.attachments[].details.subnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-0b7fa7e4a7bf20261a69"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeTasks.attachments[].details.subnetId → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ed7d99d26b974f063cd5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeTasks.attachments[].details.subnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-ba2e738d61577b6e4093"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeTasks.attachments[].details.subnetId → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c406671c470cb975d776"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeTasks.attachments[].details.subnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-f1fadb964d78a0cfd647"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeTasks.attachments[].details.subnetId → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b5b8959d4977be528567"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeTasks.attachments[].details.subnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-9c9fd814b917dfcad031"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeTasks.attachments[].details.subnetId → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5b3e0bd5e01fa4758169"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/internet_gateway/igw-rag",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeInternetGateways.Attachments[].VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-bb9a3146124f2fd998e9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/lambda_function/document-ingest",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "ListFunctions.VpcConfig.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4f9d61c65c655771c110"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/lambda_function/document-ingest",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "lambda_subnet",
+        "evidence": "ListFunctions.VpcConfig.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-dbe2f2a1866b1d3c196f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/lambda_function/document-ingest",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "lambda_subnet",
+        "evidence": "ListFunctions.VpcConfig.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5a906804e5083cf69f33"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/lambda_function/document-ingest",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "lambda_subnet",
+        "evidence": "ListFunctions.VpcConfig.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a87068896411d7023597"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-ec0ed70b062a0fb58bbc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-78dc689417c7d7029e41"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-2a0028659f5edd0dd6d8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeLoadBalancers.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b6687de8fdf9df260891"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-rag-alb",
+        "relation": "uses_security_group",
+        "evidence": "DescribeLoadBalancers.SecurityGroups[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4ec7c4957cb6a2480716"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-rag-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d43be2becdd1d02d0c39"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-rag-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-14b11aed0609dda0922c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-rag-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-126bca3332e462903197"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-rag-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-01f57c24d6cd14e111d9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-rag-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ae0d12212d68f0021039"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-rag-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8203f99966b7639e06a8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-data-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-7bf7746b677a008beba8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-data-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-374a63befd1f0dcacd3b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-data-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-c8531edc3b4e0e12667c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-main",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e9d844355b641a147d70"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2e4bc3dda57ac497c318"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-bd9e506d24d94ffbaf7f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-a",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-rag-a",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-51cfd126905f0f94e39c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-a",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-388f8335049a5d85ea0e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f28c78fc18779dbe7a68"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a513663fb79e2c9471ee"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-b",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-rag-b",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-a62736c433ca7cb0e4eb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-b",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-1561315f7f5cab22504d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a0939df012f639e5474f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a0446caa4ffcb7d55253"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-c",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-rag-c",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-4b9442f6fdd54b620997"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-private-c",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-b5757944e6d96054af60"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3c4e3348ba6a28bb8849"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9835f695c875044cb6ea"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e958235fc1aea368eabb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-public",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9a6abf458557ed5d47b6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-rag-public",
+        "target": "111122223333/ap-northeast-2/internet_gateway/igw-rag",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-14778d6905dc776d7cb0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/sagemaker_endpoint/rag-reranker",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeModel.VpcConfig.Subnets[] → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6b9ae9e438abdbdfae81"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/sagemaker_endpoint/rag-reranker",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "sagemaker_subnet",
+        "evidence": "DescribeModel.VpcConfig.Subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f134e056caa6968b3b14"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/sagemaker_endpoint/rag-reranker",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "sagemaker_subnet",
+        "evidence": "DescribeModel.VpcConfig.Subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4b31e514893ae280e2a9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6c4a3770f8043ca7a1ed"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a3ce72ab4d78c1020813"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7af669b98c91cafb679c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-data-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4fa67251e9eb7f701565"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-data-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d79fd4823763d5d8536a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-data-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-448b1f932e236efc8960"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-93699d6ae9a084a1b593"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-20e561387c7508b6db63"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-rag-pub-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-84a6f9b12cd5c43c1263"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001",
+        "relation": "associated_load_balancer",
+        "evidence": "DescribeTargetGroups.LoadBalancerArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-26c1fc51a20eebadad11"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-eb1a30788d749f497255"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.110.16.21",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-77de935c130054c84eb3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.110.32.22",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-4f8c41c00b4b9db6d738"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080,
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.110.48.23",
+            "Port": 8080,
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-90761e38db13b664c03b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-agent-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c595892f95a5daad583c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-agent-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a923893739ce0b2b73b0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-agent-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5221e91e360afb73a551"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-agent-runtime",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d60cf6f59b3bcc0b9dfd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b4401f2a1eea5eed9000"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c392d95879d142bc3055"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-runtime",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-01643f5c59b2c8952020"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-bedrock-runtime",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-23cd9f029d352747e11a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2821b577e4326ff51a9f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-08d17d64c6f7b97dc069"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2f07787c212b8bd7f730"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-api",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-87991f7c15aa0dc44bfa"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-21c7a26b20f5a65611fb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7aea85a972be15780c9e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f7f43c285c63442a16bc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f9687bc586600346a50b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3bc0637ed7b83c6ceb29"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-23200d484cd7c7d208e9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ce1af1c045f4608c4bb5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-logs",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-14a630e3ee478f9403ce"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-rag-private-a",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ab10b4dcef50dbf6a0f2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-rag-private-b",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d3cc8fe529ed22d1367c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-rag-private-c",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c4fc49cecb90ae1b7afa"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-s3",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-317c8caa6b0a62b2f5dd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-secretsmanager",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-10131380638235f93bd1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-secretsmanager",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-86ec2ce34d1b18090f5c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-secretsmanager",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1e28c3f3298ca86db942"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-secretsmanager",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-14740ce858c223c87e4e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3e0d6ce86a269ad30143"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-b",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-77adf985ed7d69e69e6d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-sts",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-rag-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-036913bea17b385299ec"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-rag-sts",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60010",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-80efa57f7c6d5054dc3c"
+      }
+    ]
+  }
+}
