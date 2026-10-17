@@ -18,6 +18,12 @@ OPERATIONS = [
 ]
 
 
+def permission(service, operation):
+    """IAM action needed for a read operation, shown next to denied or partial coverage."""
+    prefix = {"ec2": "ec2", "elbv2": "elasticloadbalancing"}[service]
+    return prefix + ":" + "".join(part.title() for part in operation.split("_"))
+
+
 def query(client, operation, key, params=None):
     """Keep successful pages even if a later page is inaccessible."""
     params = params or {}
@@ -54,7 +60,7 @@ def collect(region, profile=None, expected_account=None, session=None):
     raw, coverage = {}, []
     for service, operation, key, name in OPERATIONS:
         rows, result = query(clients[service], operation, key)
-        result["service"] = service
+        result.update(service=service, permission=permission(service, operation))
         coverage.append(result)
         raw[name] = ([i for reservation in rows for i in reservation.get("Instances", [])]
                      if name == "instances" else rows)
@@ -64,7 +70,7 @@ def collect(region, profile=None, expected_account=None, session=None):
         arn = group["TargetGroupArn"]
         rows, result = query(clients["elbv2"], "describe_target_health",
                              "TargetHealthDescriptions", {"TargetGroupArn": arn})
-        result["service"] = "elbv2"
+        result.update(service="elbv2", permission=permission("elbv2", "describe_target_health"))
         coverage.append(result)
         raw["target_health"].append({"TargetGroupArn": arn, "Descriptions": rows})
     if any(c["status"] != "complete" for c in coverage if c["operation"] == "describe_target_groups"):

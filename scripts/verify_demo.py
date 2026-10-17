@@ -13,11 +13,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--url', default='http://127.0.0.1:8765')
     parser.add_argument('--output', type=Path, default=Path('artifacts/browser'))
+    parser.add_argument('--chromium', help='Optional preinstalled Chromium executable')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     errors, external = [], []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, executable_path=args.chromium)
         page = browser.new_page(viewport={'width': 1600, 'height': 1100}, device_scale_factor=1)
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.on('request', lambda req: external.append(req.url) if req.url.startswith(('http:', 'https:')) and urlparse(req.url).netloc != urlparse(args.url).netloc else None)

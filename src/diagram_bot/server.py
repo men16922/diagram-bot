@@ -77,14 +77,7 @@ def create_app(directory=None, editor_directory=None):
         return identifier
 
     if not (snapshots / "demo.json").exists():
-        sample = demo_snapshot()
-        sample["raw"]["vpcs"].append({"VpcId": "vpc-staging", "CidrBlock": "10.30.0.0/16", "Tags": [{"Key": "Name", "Value": "Staging Network"}]})
-        sample["raw"]["subnets"].append({"SubnetId": "subnet-staging", "VpcId": "vpc-staging", "AvailabilityZone": "ap-northeast-2a", "CidrBlock": "10.30.1.0/24"})
-        sample["raw"]["instances"].append({"InstanceId": "i-staging", "VpcId": "vpc-staging", "SubnetId": "subnet-staging", "InstanceType": "t3.micro", "State": {"Name": "running"}, "Tags": [{"Key": "Name", "Value": "staging-api"}, {"Key": "Environment", "Value": "staging"}]})
-        for c in sample["coverage"]:
-            if c["operation"] in {"describe_vpcs", "describe_subnets", "describe_instances"}:
-                c["items"] += 1
-        save_snapshot(sample, "demo")
+        save_snapshot(demo_snapshot(), "demo")
 
     @asynccontextmanager
     async def lifespan(app):

@@ -1,8 +1,33 @@
 """Deterministic joins. No traffic inference or IP-to-instance guessing."""
+import hashlib
+import json
+
+# Fields that distinguish two configured relations between the same resources. Health state and
+# other volatile description fields are deliberately excluded so IDs survive re-collection.
+QUALIFIERS = ("port", "availability_zone")
+
+
+def relation_id(edge):
+    """Stable ID from endpoints, relation type and qualifiers; independent of array order."""
+    qualifiers = {k: edge.get("qualifiers", {}).get(k) for k in QUALIFIERS}
+    key = json.dumps([edge["source"], edge["relation"], edge["target"], qualifiers], sort_keys=True, default=str)
+    return "rel-" + hashlib.sha256(key.encode()).hexdigest()[:20]
+
+
+def upgrade_graph(graph):
+    """Add relation IDs to graphs stored before IDs existed, keeping edge order for relationIndex."""
+    for edge in graph.get("edges", []):
+        if "id" not in edge:
+            details = edge.get("details") or {}
+            target = details.get("Target", {})
+            edge.setdefault("qualifiers", {k: v for k, v in (("port", target.get("Port")),
+                            ("availability_zone", target.get("AvailabilityZone") or details.get("availability_zone"))) if v is not None})
+            edge["id"] = relation_id(edge)
+    return graph
 
 
 def build_graph(snapshot):
-    nodes, edges = {}, []
+    nodes, edges = {}, {}
     account, region = snapshot["metadata"]["account_id"], snapshot["metadata"]["region"]
     prefix = f"{account}/{region}/"
 
@@ -17,12 +42,16 @@ def build_graph(snapshot):
                           "reference_only": reference, "source": source}
         return key
 
-    def link(source, kind, resource_id, relation, evidence, details=None):
+    def link(source, kind, resource_id, relation, evidence, details=None, qualifiers=None):
         if not resource_id:
             return
         target = node(kind, resource_id, reference=True)
-        edges.append({"source": source, "target": target, "relation": relation,
-                      "evidence": evidence, "details": details or {}, "inferred": False})
+        edge = {"source": source, "target": target, "relation": relation, "evidence": evidence,
+                "qualifiers": {k: v for k, v in (qualifiers or {}).items() if v is not None},
+                "details": details or {}, "inferred": False}
+        edge["id"] = relation_id(edge)
+        # A duplicated API entry is the same configured relation, not a second one.
+        edges.setdefault(edge["id"], edge)
 
     specs = [("vpcs", "vpc", "VpcId", "DescribeVpcs"),
              ("subnets", "subnet", "SubnetId", "DescribeSubnets"),
@@ -48,7 +77,8 @@ def build_graph(snapshot):
                     link(key, "volume", block.get("Ebs", {}).get("VolumeId"), "attached_volume", api + ".BlockDeviceMappings[].Ebs.VolumeId")
             if kind == "load_balancer":
                 for az in item.get("AvailabilityZones", []):
-                    link(key, "subnet", az.get("SubnetId"), "in_subnet", api + ".AvailabilityZones[].SubnetId", {"availability_zone": az.get("ZoneName")})
+                    link(key, "subnet", az.get("SubnetId"), "in_subnet", api + ".AvailabilityZones[].SubnetId",
+                         {"availability_zone": az.get("ZoneName")}, {"availability_zone": az.get("ZoneName")})
                 for sg in item.get("SecurityGroups", []):
                     link(key, "security_group", sg, "uses_security_group", api + ".SecurityGroups[]")
             if kind == "target_group":
@@ -67,6 +97,7 @@ def build_graph(snapshot):
             if kind == "registered_target":
                 rid = f"{arn}#{rid}:{target.get('Port', '')}:{target.get('AvailabilityZone', '')}"
                 node(kind, rid, {**description, "TargetType": target_type}, "DescribeTargetHealth")
-            link(key, kind, rid, "registered_target", "DescribeTargetHealth.Target.Id", description)
+            link(key, kind, rid, "registered_target", "DescribeTargetHealth.Target.Id", description,
+                 {"port": target.get("Port"), "availability_zone": target.get("AvailabilityZone")})
     return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
-            "edges": sorted(edges, key=lambda x: (x["source"], x["relation"], x["target"]))}
+            "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
