@@ -1,0 +1,2595 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "account_id": "111122223333",
+    "region": "ap-northeast-2",
+    "partition": "aws",
+    "started_at": "2026-10-17T04:56:00.153242+00:00",
+    "finished_at": "2026-10-17T04:56:00.153242+00:00",
+    "status": "complete",
+    "demo": true,
+    "sample": "environments",
+    "title": "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스)",
+    "practices": [
+      "환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)",
+      "운영은 3 AZ, 스테이징은 비용을 고려한 2 AZ",
+      "공용 서비스 VPC에는 내부 도구만 두고 인터넷용 LB 없음",
+      "Environment 태그로 소유·비용 구분"
+    ],
+    "scope": [
+      "VPC",
+      "Subnet",
+      "EC2",
+      "ELBv2",
+      "TargetGroup",
+      "RegisteredTarget"
+    ],
+    "limitations": [
+      "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
+      "RDS·NAT Gateway·라우팅·보안 그룹 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
+    ]
+  },
+  "coverage": [
+    {
+      "service": "ec2",
+      "operation": "describe_vpcs",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_subnets",
+      "status": "complete",
+      "pages": 1,
+      "items": 12
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 7
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_load_balancers",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_health",
+      "parameters": {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_health",
+      "parameters": {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    }
+  ],
+  "raw": {
+    "vpcs": [
+      {
+        "VpcId": "vpc-prod0000000000004",
+        "CidrBlock": "10.40.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-vpc"
+          },
+          {
+            "Key": "Environment",
+            "Value": "prod"
+          }
+        ]
+      },
+      {
+        "VpcId": "vpc-staging0000000000004",
+        "CidrBlock": "10.41.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-vpc"
+          },
+          {
+            "Key": "Environment",
+            "Value": "staging"
+          }
+        ]
+      },
+      {
+        "VpcId": "vpc-shared000000000004",
+        "CidrBlock": "10.42.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "shared-services"
+          },
+          {
+            "Key": "Environment",
+            "Value": "shared"
+          }
+        ]
+      }
+    ],
+    "subnets": [
+      {
+        "SubnetId": "subnet-prod-pub-a",
+        "VpcId": "vpc-prod0000000000004",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.40.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-public-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-prod-pub-b",
+        "VpcId": "vpc-prod0000000000004",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.40.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-public-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-prod-pub-c",
+        "VpcId": "vpc-prod0000000000004",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.40.2.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-public-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-prod-app-a",
+        "VpcId": "vpc-prod0000000000004",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.40.10.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-app-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-prod-app-b",
+        "VpcId": "vpc-prod0000000000004",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.40.11.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-app-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-prod-app-c",
+        "VpcId": "vpc-prod0000000000004",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.40.12.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-app-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-staging-pub-a",
+        "VpcId": "vpc-staging0000000000004",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.41.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-public-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-staging-pub-b",
+        "VpcId": "vpc-staging0000000000004",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.41.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-public-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-staging-app-a",
+        "VpcId": "vpc-staging0000000000004",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.41.10.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-app-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-staging-app-b",
+        "VpcId": "vpc-staging0000000000004",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.41.11.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-app-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-shared-a",
+        "VpcId": "vpc-shared000000000004",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.42.0.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "tools-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-shared-b",
+        "VpcId": "vpc-shared000000000004",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.42.1.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "tools-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      }
+    ],
+    "instances": [
+      {
+        "InstanceId": "i-proda00000000001",
+        "VpcId": "vpc-prod0000000000004",
+        "SubnetId": "subnet-prod-app-a",
+        "InstanceType": "m6i.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.1.11",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-api-a"
+          },
+          {
+            "Key": "Environment",
+            "Value": "prod"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-prod-api"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-proda00000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-proda00000000001"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-prodb00000000001",
+        "VpcId": "vpc-prod0000000000004",
+        "SubnetId": "subnet-prod-app-b",
+        "InstanceType": "m6i.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.2.12",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2b"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-api-b"
+          },
+          {
+            "Key": "Environment",
+            "Value": "prod"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-prod-api"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-prodb00000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-prodb00000000001"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-prodc00000000001",
+        "VpcId": "vpc-prod0000000000004",
+        "SubnetId": "subnet-prod-app-c",
+        "InstanceType": "m6i.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.3.13",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-api-c"
+          },
+          {
+            "Key": "Environment",
+            "Value": "prod"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-prod-api"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-prodc00000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-prodc00000000001"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-staginga00000000001",
+        "VpcId": "vpc-staging0000000000004",
+        "SubnetId": "subnet-staging-app-a",
+        "InstanceType": "t3.medium",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.4.14",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-api-a"
+          },
+          {
+            "Key": "Environment",
+            "Value": "staging"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-staging-api"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-staginga00000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-staginga00000000001"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-stagingb00000000001",
+        "VpcId": "vpc-staging0000000000004",
+        "SubnetId": "subnet-staging-app-b",
+        "InstanceType": "t3.medium",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.5.15",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2b"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-api-b"
+          },
+          {
+            "Key": "Environment",
+            "Value": "staging"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-staging-api"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-stagingb00000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-stagingb00000000001"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-ci0000000000000004",
+        "VpcId": "vpc-shared000000000004",
+        "SubnetId": "subnet-shared-a",
+        "InstanceType": "c6i.xlarge",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.6.16",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ci-runner"
+          },
+          {
+            "Key": "Environment",
+            "Value": "shared"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-ci"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-ci0000000000000004"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-ci0000000000000004"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-monitor00000000004",
+        "VpcId": "vpc-shared000000000004",
+        "SubnetId": "subnet-shared-b",
+        "InstanceType": "m6i.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.7.17",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2b"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "monitoring"
+          },
+          {
+            "Key": "Environment",
+            "Value": "shared"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-monitoring"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-monitor00000000004"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-monitor00000000004"
+            }
+          }
+        ]
+      }
+    ],
+    "load_balancers": [
+      {
+        "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "LoadBalancerName": "prod-alb",
+        "Type": "application",
+        "VpcId": "vpc-prod0000000000004",
+        "Scheme": "internet-facing",
+        "AvailabilityZones": [
+          {
+            "ZoneName": "ap-northeast-2a",
+            "SubnetId": "subnet-prod-pub-a"
+          },
+          {
+            "ZoneName": "ap-northeast-2b",
+            "SubnetId": "subnet-prod-pub-b"
+          },
+          {
+            "ZoneName": "ap-northeast-2c",
+            "SubnetId": "subnet-prod-pub-c"
+          }
+        ],
+        "SecurityGroups": [
+          "sg-prod-alb"
+        ]
+      },
+      {
+        "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+        "LoadBalancerName": "staging-alb",
+        "Type": "application",
+        "VpcId": "vpc-staging0000000000004",
+        "Scheme": "internet-facing",
+        "AvailabilityZones": [
+          {
+            "ZoneName": "ap-northeast-2a",
+            "SubnetId": "subnet-staging-pub-a"
+          },
+          {
+            "ZoneName": "ap-northeast-2b",
+            "SubnetId": "subnet-staging-pub-b"
+          }
+        ],
+        "SecurityGroups": [
+          "sg-staging-alb"
+        ]
+      }
+    ],
+    "target_groups": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "TargetGroupName": "prod-api",
+        "VpcId": "vpc-prod0000000000004",
+        "TargetType": "instance",
+        "Protocol": "HTTPS",
+        "Port": 443,
+        "HealthCheckPath": "/health",
+        "LoadBalancerArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001"
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+        "TargetGroupName": "staging-api",
+        "VpcId": "vpc-staging0000000000004",
+        "TargetType": "instance",
+        "Protocol": "HTTPS",
+        "Port": 443,
+        "HealthCheckPath": "/health",
+        "LoadBalancerArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002"
+        ]
+      }
+    ],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "i-proda00000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-prodb00000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-prodc00000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "i-staginga00000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-stagingb00000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-ci0000000000000004",
+        "resource_id": "i-ci0000000000000004",
+        "kind": "ec2",
+        "name": "ci-runner",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-ci0000000000000004",
+          "VpcId": "vpc-shared000000000004",
+          "SubnetId": "subnet-shared-a",
+          "InstanceType": "c6i.xlarge",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.6.16",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ci-runner"
+            },
+            {
+              "Key": "Environment",
+              "Value": "shared"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-ci"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-ci0000000000000004"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-ci0000000000000004"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-monitor00000000004",
+        "resource_id": "i-monitor00000000004",
+        "kind": "ec2",
+        "name": "monitoring",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-monitor00000000004",
+          "VpcId": "vpc-shared000000000004",
+          "SubnetId": "subnet-shared-b",
+          "InstanceType": "m6i.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.7.17",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "monitoring"
+            },
+            {
+              "Key": "Environment",
+              "Value": "shared"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-monitoring"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-monitor00000000004"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-monitor00000000004"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-proda00000000001",
+        "resource_id": "i-proda00000000001",
+        "kind": "ec2",
+        "name": "prod-api-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-proda00000000001",
+          "VpcId": "vpc-prod0000000000004",
+          "SubnetId": "subnet-prod-app-a",
+          "InstanceType": "m6i.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.1.11",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-api-a"
+            },
+            {
+              "Key": "Environment",
+              "Value": "prod"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-prod-api"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-proda00000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-proda00000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-prodb00000000001",
+        "resource_id": "i-prodb00000000001",
+        "kind": "ec2",
+        "name": "prod-api-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-prodb00000000001",
+          "VpcId": "vpc-prod0000000000004",
+          "SubnetId": "subnet-prod-app-b",
+          "InstanceType": "m6i.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.2.12",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-api-b"
+            },
+            {
+              "Key": "Environment",
+              "Value": "prod"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-prod-api"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-prodb00000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-prodb00000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-prodc00000000001",
+        "resource_id": "i-prodc00000000001",
+        "kind": "ec2",
+        "name": "prod-api-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-prodc00000000001",
+          "VpcId": "vpc-prod0000000000004",
+          "SubnetId": "subnet-prod-app-c",
+          "InstanceType": "m6i.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.3.13",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-api-c"
+            },
+            {
+              "Key": "Environment",
+              "Value": "prod"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-prod-api"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-prodc00000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-prodc00000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-staginga00000000001",
+        "resource_id": "i-staginga00000000001",
+        "kind": "ec2",
+        "name": "staging-api-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-staginga00000000001",
+          "VpcId": "vpc-staging0000000000004",
+          "SubnetId": "subnet-staging-app-a",
+          "InstanceType": "t3.medium",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.4.14",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-api-a"
+            },
+            {
+              "Key": "Environment",
+              "Value": "staging"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-staging-api"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-staginga00000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-staginga00000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-stagingb00000000001",
+        "resource_id": "i-stagingb00000000001",
+        "kind": "ec2",
+        "name": "staging-api-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-stagingb00000000001",
+          "VpcId": "vpc-staging0000000000004",
+          "SubnetId": "subnet-staging-app-b",
+          "InstanceType": "t3.medium",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.5.15",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2b"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-api-b"
+            },
+            {
+              "Key": "Environment",
+              "Value": "staging"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-staging-api"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-stagingb00000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-stagingb00000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "kind": "load_balancer",
+        "name": "prod-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+          "LoadBalancerName": "prod-alb",
+          "Type": "application",
+          "VpcId": "vpc-prod0000000000004",
+          "Scheme": "internet-facing",
+          "AvailabilityZones": [
+            {
+              "ZoneName": "ap-northeast-2a",
+              "SubnetId": "subnet-prod-pub-a"
+            },
+            {
+              "ZoneName": "ap-northeast-2b",
+              "SubnetId": "subnet-prod-pub-b"
+            },
+            {
+              "ZoneName": "ap-northeast-2c",
+              "SubnetId": "subnet-prod-pub-c"
+            }
+          ],
+          "SecurityGroups": [
+            "sg-prod-alb"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeLoadBalancers"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+        "kind": "load_balancer",
+        "name": "staging-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+          "LoadBalancerName": "staging-alb",
+          "Type": "application",
+          "VpcId": "vpc-staging0000000000004",
+          "Scheme": "internet-facing",
+          "AvailabilityZones": [
+            {
+              "ZoneName": "ap-northeast-2a",
+              "SubnetId": "subnet-staging-pub-a"
+            },
+            {
+              "ZoneName": "ap-northeast-2b",
+              "SubnetId": "subnet-staging-pub-b"
+            }
+          ],
+          "SecurityGroups": [
+            "sg-staging-alb"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeLoadBalancers"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-ci0000000000000004",
+        "resource_id": "eni-ci0000000000000004",
+        "kind": "network_interface",
+        "name": "eni-ci0000000000000004",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-monitor00000000004",
+        "resource_id": "eni-monitor00000000004",
+        "kind": "network_interface",
+        "name": "eni-monitor00000000004",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-proda00000000001",
+        "resource_id": "eni-proda00000000001",
+        "kind": "network_interface",
+        "name": "eni-proda00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-prodb00000000001",
+        "resource_id": "eni-prodb00000000001",
+        "kind": "network_interface",
+        "name": "eni-prodb00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-prodc00000000001",
+        "resource_id": "eni-prodc00000000001",
+        "kind": "network_interface",
+        "name": "eni-prodc00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-staginga00000000001",
+        "resource_id": "eni-staginga00000000001",
+        "kind": "network_interface",
+        "name": "eni-staginga00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-stagingb00000000001",
+        "resource_id": "eni-stagingb00000000001",
+        "kind": "network_interface",
+        "name": "eni-stagingb00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-ci",
+        "resource_id": "sg-ci",
+        "kind": "security_group",
+        "name": "sg-ci",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-monitoring",
+        "resource_id": "sg-monitoring",
+        "kind": "security_group",
+        "name": "sg-monitoring",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-prod-alb",
+        "resource_id": "sg-prod-alb",
+        "kind": "security_group",
+        "name": "sg-prod-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-prod-api",
+        "resource_id": "sg-prod-api",
+        "kind": "security_group",
+        "name": "sg-prod-api",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-staging-alb",
+        "resource_id": "sg-staging-alb",
+        "kind": "security_group",
+        "name": "sg-staging-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-staging-api",
+        "resource_id": "sg-staging-api",
+        "kind": "security_group",
+        "name": "sg-staging-api",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-prod-app-a",
+        "resource_id": "subnet-prod-app-a",
+        "kind": "subnet",
+        "name": "prod-app-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-prod-app-a",
+          "VpcId": "vpc-prod0000000000004",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.40.10.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-app-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-prod-app-b",
+        "resource_id": "subnet-prod-app-b",
+        "kind": "subnet",
+        "name": "prod-app-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-prod-app-b",
+          "VpcId": "vpc-prod0000000000004",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.40.11.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-app-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-prod-app-c",
+        "resource_id": "subnet-prod-app-c",
+        "kind": "subnet",
+        "name": "prod-app-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-prod-app-c",
+          "VpcId": "vpc-prod0000000000004",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.40.12.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-app-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-a",
+        "resource_id": "subnet-prod-pub-a",
+        "kind": "subnet",
+        "name": "prod-public-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-prod-pub-a",
+          "VpcId": "vpc-prod0000000000004",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.40.0.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-public-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-b",
+        "resource_id": "subnet-prod-pub-b",
+        "kind": "subnet",
+        "name": "prod-public-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-prod-pub-b",
+          "VpcId": "vpc-prod0000000000004",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.40.1.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-public-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-c",
+        "resource_id": "subnet-prod-pub-c",
+        "kind": "subnet",
+        "name": "prod-public-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-prod-pub-c",
+          "VpcId": "vpc-prod0000000000004",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.40.2.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-public-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-shared-a",
+        "resource_id": "subnet-shared-a",
+        "kind": "subnet",
+        "name": "tools-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-shared-a",
+          "VpcId": "vpc-shared000000000004",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.42.0.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "tools-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-shared-b",
+        "resource_id": "subnet-shared-b",
+        "kind": "subnet",
+        "name": "tools-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-shared-b",
+          "VpcId": "vpc-shared000000000004",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.42.1.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "tools-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-staging-app-a",
+        "resource_id": "subnet-staging-app-a",
+        "kind": "subnet",
+        "name": "staging-app-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-staging-app-a",
+          "VpcId": "vpc-staging0000000000004",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.41.10.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-app-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-staging-app-b",
+        "resource_id": "subnet-staging-app-b",
+        "kind": "subnet",
+        "name": "staging-app-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-staging-app-b",
+          "VpcId": "vpc-staging0000000000004",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.41.11.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-app-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-staging-pub-a",
+        "resource_id": "subnet-staging-pub-a",
+        "kind": "subnet",
+        "name": "staging-public-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-staging-pub-a",
+          "VpcId": "vpc-staging0000000000004",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.41.0.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-public-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-staging-pub-b",
+        "resource_id": "subnet-staging-pub-b",
+        "kind": "subnet",
+        "name": "staging-public-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-staging-pub-b",
+          "VpcId": "vpc-staging0000000000004",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.41.1.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-public-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "kind": "target_group",
+        "name": "prod-api",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+          "TargetGroupName": "prod-api",
+          "VpcId": "vpc-prod0000000000004",
+          "TargetType": "instance",
+          "Protocol": "HTTPS",
+          "Port": 443,
+          "HealthCheckPath": "/health",
+          "LoadBalancerArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+        "kind": "target_group",
+        "name": "staging-api",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+          "TargetGroupName": "staging-api",
+          "VpcId": "vpc-staging0000000000004",
+          "TargetType": "instance",
+          "Protocol": "HTTPS",
+          "Port": 443,
+          "HealthCheckPath": "/health",
+          "LoadBalancerArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-ci0000000000000004",
+        "resource_id": "vol-ci0000000000000004",
+        "kind": "volume",
+        "name": "vol-ci0000000000000004",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-monitor00000000004",
+        "resource_id": "vol-monitor00000000004",
+        "kind": "volume",
+        "name": "vol-monitor00000000004",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-proda00000000001",
+        "resource_id": "vol-proda00000000001",
+        "kind": "volume",
+        "name": "vol-proda00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-prodb00000000001",
+        "resource_id": "vol-prodb00000000001",
+        "kind": "volume",
+        "name": "vol-prodb00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-prodc00000000001",
+        "resource_id": "vol-prodc00000000001",
+        "kind": "volume",
+        "name": "vol-prodc00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-staginga00000000001",
+        "resource_id": "vol-staginga00000000001",
+        "kind": "volume",
+        "name": "vol-staginga00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-stagingb00000000001",
+        "resource_id": "vol-stagingb00000000001",
+        "kind": "volume",
+        "name": "vol-stagingb00000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "resource_id": "vpc-prod0000000000004",
+        "kind": "vpc",
+        "name": "prod-vpc",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-prod0000000000004",
+          "CidrBlock": "10.40.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-vpc"
+            },
+            {
+              "Key": "Environment",
+              "Value": "prod"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-shared000000000004",
+        "resource_id": "vpc-shared000000000004",
+        "kind": "vpc",
+        "name": "shared-services",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-shared000000000004",
+          "CidrBlock": "10.42.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "shared-services"
+            },
+            {
+              "Key": "Environment",
+              "Value": "shared"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "resource_id": "vpc-staging0000000000004",
+        "kind": "vpc",
+        "name": "staging-vpc",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-staging0000000000004",
+          "CidrBlock": "10.41.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-vpc"
+            },
+            {
+              "Key": "Environment",
+              "Value": "staging"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
+      }
+    ],
+    "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ci0000000000000004",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-ci0000000000000004",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f4b6fd4c9b3488f21920"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ci0000000000000004",
+        "target": "111122223333/ap-northeast-2/volume/vol-ci0000000000000004",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-19022697167f3e89eb14"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ci0000000000000004",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-shared-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cf3e87cb8829f5c45663"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ci0000000000000004",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-shared000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5e2928bae69fa8730677"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ci0000000000000004",
+        "target": "111122223333/ap-northeast-2/security_group/sg-ci",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2c34ad667d7c572ed5ed"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-monitor00000000004",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-monitor00000000004",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-04da51da59197479b2cb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-monitor00000000004",
+        "target": "111122223333/ap-northeast-2/volume/vol-monitor00000000004",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-99925fe30621ed514a1c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-monitor00000000004",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-shared-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cfdcf2a4fccff8c6ae7b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-monitor00000000004",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-shared000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-afd2c1db2144c70d923d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-monitor00000000004",
+        "target": "111122223333/ap-northeast-2/security_group/sg-monitoring",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b1d4a9cb6c427645af90"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-proda00000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-proda00000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-cb29f0490359c0195c8f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-proda00000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-proda00000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6d8c9705af3260763dc9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-proda00000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4b5231b2fd3244d6bb72"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-proda00000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1ac41983817ee94c8297"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-proda00000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-prod-api",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b1b0979efd7ccf9ac780"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodb00000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-prodb00000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-eed0bb52f579790ee7a6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodb00000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-prodb00000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3679a53637d4cf9a2081"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodb00000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ad8263a22ab9d2338063"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodb00000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-207efe5fdc41cb990696"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodb00000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-prod-api",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c05b85e9385e48f08e08"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodc00000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-prodc00000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9a93dec6dc8dd3635b92"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodc00000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-prodc00000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a21f9fe2ffe2de5986f5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodc00000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-10ae336226699dc2c586"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodc00000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-10b02ebc10a27c47db2f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-prodc00000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-prod-api",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-13ea390fd90f596d889d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-staginga00000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-staginga00000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4d363165f87019e5a143"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-staginga00000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-staginga00000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f02543271db0767795de"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-staginga00000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-staging-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fd16e15167290d557692"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-staginga00000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f5d60ea3b3996fc44043"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-staginga00000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-staging-api",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-eb3af49373432dafe24e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-stagingb00000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-stagingb00000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c37d402fe3d98e720830"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-stagingb00000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-stagingb00000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-196293cb01bca5cccccf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-stagingb00000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-staging-app-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7c613d76e2bb68648f61"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-stagingb00000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7f554a66c912876fee7a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-stagingb00000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-staging-api",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-01674db5e77759236866"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-29d0b81da794cb5d6e54"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-af127b90962333581aca"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-e49fe32b3de826b10824"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeLoadBalancers.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4023f49fea3330ff2deb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-prod-alb",
+        "relation": "uses_security_group",
+        "evidence": "DescribeLoadBalancers.SecurityGroups[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f66f728bd707298f910b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-staging-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-144f9e09f721fd59c87c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-staging-pub-b",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2b"
+        },
+        "inferred": false,
+        "id": "rel-b2dee1db5a419853c6bc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeLoadBalancers.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f480d5cdd780217b1829"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+        "target": "111122223333/ap-northeast-2/security_group/sg-staging-alb",
+        "relation": "uses_security_group",
+        "evidence": "DescribeLoadBalancers.SecurityGroups[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6d7a8f249b7b77ef2876"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-prod-app-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e4e573ed2f09dfe074b8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-prod-app-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-26bdd6206da3287c3fd2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-prod-app-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ac135063e92d83026cf5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4ad9699096164aeea6ed"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c32bed8b2ccb710e9211"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e0c13092e2a5d172002f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-shared-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-shared000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-de0bee61c1736cbc9f9f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-shared-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-shared000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a5cb55f754001fd2f73d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-staging-app-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3a09bd4ab10a60007788"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-staging-app-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9d68373ceb35539d2fc2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-staging-pub-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-971b6524b5203134f2ba"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-staging-pub-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b96e020ed97a58fe05fe"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-alb/0000000000000001",
+        "relation": "associated_load_balancer",
+        "evidence": "DescribeTargetGroups.LoadBalancerArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-747acff6be66d91e144b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-234ce5b46fcf67099389"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ec2/i-proda00000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 443
+        },
+        "details": {
+          "Target": {
+            "Id": "i-proda00000000001",
+            "Port": 443
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-b93b2608bdc901bc7e72"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ec2/i-prodb00000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 443
+        },
+        "details": {
+          "Target": {
+            "Id": "i-prodb00000000001",
+            "Port": 443
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-173b3fba5d1781004eb7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-api/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ec2/i-prodc00000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 443
+        },
+        "details": {
+          "Target": {
+            "Id": "i-prodc00000000001",
+            "Port": 443
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-3c02cffbf2ca7414d9d6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/staging-alb/0000000000000002",
+        "relation": "associated_load_balancer",
+        "evidence": "DescribeTargetGroups.LoadBalancerArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-11b10802dc4859e39d7d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-644929c4dbd3d24fb2e6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+        "target": "111122223333/ap-northeast-2/ec2/i-staginga00000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 443
+        },
+        "details": {
+          "Target": {
+            "Id": "i-staginga00000000001",
+            "Port": 443
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-ad6bef1513a3e31b8cbd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/staging-api/0000000000000002",
+        "target": "111122223333/ap-northeast-2/ec2/i-stagingb00000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 443
+        },
+        "details": {
+          "Target": {
+            "Id": "i-stagingb00000000001",
+            "Port": 443
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-10fdb14cb0adc85a6cd8"
+      }
+    ]
+  }
+}

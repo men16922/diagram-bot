@@ -22,6 +22,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .collector import collect, now
 from .demo import demo_snapshot
+from .samples import SAMPLES
 from .drawio import carry_annotations, generate_document, validate_document
 from .editor import VERSION, editor_path
 from .graph import build_graph, upgrade_graph
@@ -90,6 +91,9 @@ def create_app(directory=None, editor_directory=None):
 
     if not (snapshots / "demo.json").exists():
         save_snapshot(demo_snapshot(), "demo")
+    for key, build in SAMPLES.items():
+        if not (snapshots / f"sample-{key}.json").exists():
+            save_snapshot(build(), f"sample-{key}")
 
     @asynccontextmanager
     async def lifespan(app):

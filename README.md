@@ -22,7 +22,7 @@ diagram-bot serve
 
 `setup-editor`는 최초 한 번 공식 draw.io **32.4.1** 배포물(약 48 MB)을 다운로드하고 고정 SHA-256을 확인합니다. 이후 구성도 편집과 PNG 생성은 로컬에서 수행합니다. 오프라인 설치에는 동일 버전의 공식 `draw.war`를 준비해 `diagram-bot setup-editor --archive /path/to/draw.war`를 사용합니다. [배포물 출처와 라이선스](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
-[5분 시연 순서](docs/DEMO.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
+[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 5종](examples/samples/README.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
 
 ## 시연 버전에서 할 수 있는 것
 
@@ -70,6 +70,7 @@ SDK 페이지네이션·재시도·타임아웃을 적용합니다. `partial`은
 
 ```bash
 diagram-bot demo --output reports/demo
+diagram-bot demo --sample three-tier --output reports/three-tier   # three-tier | microservices | nlb-alb | environments | hybrid
 diagram-bot collect --profile my-sso-profile --region ap-northeast-2 \
   --expected-account 123456789012 --output reports/current
 diagram-bot render reports/current/snapshot.json --output reports/rerendered

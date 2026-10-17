@@ -7,6 +7,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from .collector import collect
 from .demo import demo_snapshot
+from .samples import SAMPLES
 from .report import write_report
 
 
@@ -23,6 +24,7 @@ def main():
     render.add_argument("--output", required=True)
     demo = commands.add_parser("demo", help="인증 없이 샘플 보고서 생성")
     demo.add_argument("--output", default="reports/demo")
+    demo.add_argument("--sample", choices=sorted(SAMPLES), help="AWS best practice 참고 구성 샘플")
     setup = commands.add_parser("setup-editor", help="고정 버전 draw.io 편집기 설치 (최초 한 번)")
     setup.add_argument("--archive", help="오프라인 설치용 공식 draw.war 경로")
     serve = commands.add_parser("serve", help="draw.io 기반 로컬 시연 앱 실행")
@@ -45,7 +47,7 @@ def main():
                 parser.error("--expected-account는 12자리 AWS 계정 ID여야 합니다.")
             snapshot = collect(args.region, args.profile, args.expected_account)
         elif args.command == "demo":
-            snapshot = demo_snapshot()
+            snapshot = SAMPLES[args.sample]() if args.sample else demo_snapshot()
         else:
             snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
             if snapshot.get("schema_version") != 1:

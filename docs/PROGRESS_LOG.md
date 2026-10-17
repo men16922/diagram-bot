@@ -2,6 +2,17 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — AWS best-practice samples (user request)
+
+- samples.py: three-tier (3 AZ, public + internal ALB), microservices (one ALB, four target groups,
+  IP targets), nlb-alb (NLB → ALB static entry, TLS NLB), environments (prod/staging/shared VPCs),
+  hybrid (on-premises IP targets). Seeded in the app; `diagram-bot demo --sample <key>`.
+- Samples exposed two layout defects, fixed: second reference-box row routed through labels
+  (box is now one row) and lane wrap in busy rows (lane space now sized per row).
+- Layout: subnets ordered by tier (public → web → app → data), internet-facing LBs first,
+  AvailabilityZone=all targets drawn with the AWS traditional-server icon.
+- Verified: 47 tests incl. every sample view; browser acceptance; renders reviewed.
+
 ## 2026-10-17 — Edge overlap cleanup (user request: 선 겹침 정리)
 
 - Router rewrite: per-source buses, per-group gutter slots, per-edge row lanes, right-margin

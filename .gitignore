@@ -38,3 +38,9 @@ scripts/overnight/logs/
 scripts/overnight/STOP
 scripts/overnight/DONE
 docs/test/history/*-overnight-review-checklist.md
+# Synthetic best-practice samples are shared like examples/demo.
+!examples/samples/*/snapshot.json
+!examples/samples/*/inventory.csv
+!examples/samples/*/review.md
+!examples/samples/*/index.html
+!examples/samples/*/topology.drawio

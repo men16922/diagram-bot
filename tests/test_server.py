@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from diagram_bot.demo import demo_snapshot
+from diagram_bot.samples import SAMPLES
 from diagram_bot.server import create_app
 
 
@@ -22,7 +23,7 @@ def test_local_ui_and_missing_editor(client):
     assert 'Diagram Bot' in client.get('/').text
     assert client.get('/static/app.js').status_code == 200
     assert client.get('/editor/js/app.min.js').status_code == 503
-    assert client.get('/api/snapshots').json()[0]['id'] == 'demo'
+    assert {s['id'] for s in client.get('/api/snapshots').json()} == {'demo'} | {f'sample-{k}' for k in SAMPLES}
     assert client.get('/api/snapshots/demo').json()['metadata']['demo'] is True
 
 
@@ -133,7 +134,7 @@ def test_background_collection_result_and_failure(client, monkeypatch, fail):
         time.sleep(0.01)
     if fail:
         assert job['status'] == 'failed' and 'Account mismatch' in job['error']
-        assert len(client.get('/api/snapshots').json()) == 1
+        assert len(client.get('/api/snapshots').json()) == 1 + len(SAMPLES)
     else:
         assert job['status'] == 'partial'
         assert client.get('/api/snapshots/' + job['snapshot_id']).status_code == 200

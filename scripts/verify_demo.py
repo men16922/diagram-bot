@@ -183,8 +183,9 @@ def main():
         restored = page.evaluate("fetch('/api/snapshots/demo/document?view=detail&vpc=vpc-demo&references=false').then(r => r.json())")
         assert geometry(restored['xml'], '/ec2/i-demo-c') == moved
 
+        options = page.locator('#snapshot-select option').count()
         page.locator('#import-file').set_input_files(args.output / 'snapshot.json')
-        expect(page.locator('#snapshot-select option')).to_have_count(2)
+        expect(page.locator('#snapshot-select option')).to_have_count(options + 1)
         ready()
         expect(page.locator('#save-state')).to_have_text('자동 생성 구성도')
         assert not errors, errors

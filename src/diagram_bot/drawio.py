@@ -58,7 +58,10 @@ def resource_style(shape):
         style += "labelWidth=170;labelPosition=right;verticalLabelPosition=middle;align=left;verticalAlign=middle;spacingLeft=8;"
     else:
         style += "labelWidth=140;align=center;verticalLabelPosition=bottom;verticalAlign=top;spacingTop=8;"
-    if shape_name:
+    if shape.get("outside_vpc"):
+        # Target registered with AvailabilityZone=all: an address outside the VPC (e.g. on premises).
+        style += "shape=mxgraph.aws4.traditional_server;fillColor=#232F3D;strokeColor=none;gradientColor=none;"
+    elif shape_name:
         style += f"shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.{shape_name};fillColor={color};strokeColor=#FFFFFF;gradientColor=none;"
     else:
         style += "rounded=1;fillColor=#E8EFF6;strokeColor=#A7BFD4;"

@@ -1,0 +1,1608 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diagram Bot · AWS 현행 구성도</title>
+<style>
+:root{font-family:Inter,Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#dce7f5;background:#0b1220;font-size:14px}*{box-sizing:border-box}body{margin:0}header{padding:28px 32px 18px;border-bottom:1px solid #29374a;background:#101b2e}h1{font-size:25px;letter-spacing:-.6px;margin:4px 0 10px}.eyebrow{font-size:11px;letter-spacing:2px;color:#6ed9c5}.muted{color:#9cafc7;font-size:12px;line-height:1.6}#notice{margin-top:16px;padding:12px 16px;border:1px solid #8b692e;background:#352b1c;border-radius:8px;color:#f9d78d}button,input,select{font:inherit;color:inherit;background:#152238;border:1px solid #38506a;border-radius:6px;padding:8px 10px}button{cursor:pointer}button:hover{background:#263c55}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #6ed9c5}nav{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 0}main{padding:22px 32px}.toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}.toolbar input[type=search]{min-width:240px}.toolbar label{display:flex;align-items:center;gap:5px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px}.panel{border:1px solid #293e55;background:#101b2c;border-radius:12px;padding:18px;min-width:0}.panel h2{font-size:15px;margin:0 0 12px}#canvas{position:relative;min-height:450px;overflow:auto;padding:12px}#groups{position:relative;z-index:1;min-width:560px;pointer-events:none}.group{border:1px solid #36546c;border-radius:10px;padding:14px;margin:12px 0;background:#10263855}.group-title{font-size:12px;color:#81dccd;overflow-wrap:anywhere;margin-bottom:12px}.subnet{border-style:dashed;background:#18334c55;margin:10px 0}.cards{display:flex;flex-wrap:wrap;gap:14px;align-items:start;padding:5px 0}.resource{pointer-events:auto;width:190px;min-height:80px;text-align:left;position:relative;border-left:3px solid #65c9b6;box-shadow:0 4px 12px #0003;background:#17283c;overflow-wrap:anywhere}.resource .kind{display:block;font-size:10px;color:#90a8c3;letter-spacing:.7px;text-transform:uppercase;margin-bottom:5px}.resource strong{display:block;font-size:13px}.resource small{display:block;color:#a7b6c8;margin-top:5px;font-size:11px}.resource.ref{border-style:dashed;border-left-color:#d0ad6b}.resource.selected{outline:2px solid #80e5d1;background:#234254}.resource[data-kind=load_balancer]{border-left-color:#a29bfe}.resource[data-kind=target_group]{border-left-color:#f4b366}#edges{position:absolute;top:0;left:0;z-index:2;pointer-events:none;overflow:visible}.edge{fill:none;stroke:#708bb3;stroke-width:1.6;opacity:.5}.edge.active{stroke:#7cf0d6;stroke-width:2.5;opacity:1}#detail{position:sticky;top:18px;align-self:start;max-height:85vh;overflow:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1422;padding:12px;border-radius:6px;font-size:11px;line-height:1.65}.relation{padding:10px 0;border-bottom:1px solid #293d51;font-size:12px;overflow-wrap:anywhere}details{margin:18px 0}summary{cursor:pointer;color:#b8cde5}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:10px;border-bottom:1px solid #293e55;vertical-align:top;overflow-wrap:anywhere}th{color:#88b7cf}tbody tr{cursor:pointer}tbody tr:hover{background:#1c3047}.table-wrap{overflow:auto}.badge{padding:3px 7px;border-radius:4px;background:#274232;color:#a3e2bb}.badge.warn{background:#4c3b20;color:#f6d598}.empty{padding:30px;color:#9cafc7}#inventory{margin-top:20px}#stats{margin-left:auto;color:#80d5c4}.legend{font-size:11px;color:#a4b9ce;margin-top:10px;line-height:1.6}.relation-controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;color:#a4b9ce;font-size:12px}.relation-controls label{display:flex;align-items:center;gap:3px}@media(max-width:1000px){.layout{grid-template-columns:1fr}#detail{position:static;max-height:none}header,main{padding:20px}#stats{margin-left:0}}
+</style>
+</head>
+<body>
+<header><div class="eyebrow">DIAGRAM BOT / CONFIGURATION EXPLORER</div><h1>AWS 현행 구성도</h1><div id="scope" class="muted"></div><div id="notice" role="status"></div><nav><button id="json-download">스냅샷 JSON</button><button id="csv-download">리소스 CSV</button><button id="svg-download">구성도 SVG</button></nav></header>
+<main>
+<div class="toolbar"><input id="search" type="search" aria-label="리소스 검색" placeholder="이름 · ID 검색"><select id="kind" aria-label="리소스 종류"><option value="all">모든 리소스 종류</option></select><label><input id="references" type="checkbox">참조 리소스 표시</label><span id="stats"></span></div>
+<div class="relation-controls" id="relation-controls"></div>
+<div class="layout"><section class="panel"><h2>설정 기반 구성 관계</h2><div class="muted">계정 → 리전 → VPC → 서브넷 · 리소스를 선택하면 API 근거와 속성이 표시됩니다.</div><div id="canvas"><svg id="edges" aria-hidden="true"></svg><div id="groups"></div></div><div class="legend">박스 안 배치는 포함 관계입니다. 선은 설정상의 연결이며 실제 트래픽 흐름을 뜻하지 않습니다. 여러 서브넷에 속한 로드밸런서는 VPC 수준에 배치합니다. 점선 카드는 참조만 확인된 리소스입니다.</div></section><aside id="detail" class="panel"><h2>리소스 속성</h2><p class="muted">리소스를 선택하세요.</p></aside></div>
+<details open class="panel"><summary>조회 상태 · 누락 범위</summary><div class="table-wrap"><table><thead><tr><th>API / 조회 범위</th><th>상태</th><th>수량 / 페이지</th><th>오류 · 설명</th></tr></thead><tbody id="coverage"></tbody></table></div><ul id="limitations" class="muted"></ul></details>
+<section id="inventory" class="panel"><h2>리소스 내역 <span class="muted">· 현재 화면 필터 적용</span></h2><div class="table-wrap"><table><thead><tr><th>종류</th><th>이름</th><th>ID / ARN</th><th>근거</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+</main>
+<script id="snapshot" type="application/json">{
+  "schema_version": 1,
+  "metadata": {
+    "account_id": "111122223333",
+    "region": "ap-northeast-2",
+    "partition": "aws",
+    "started_at": "2026-10-17T04:55:59.992486+00:00",
+    "finished_at": "2026-10-17T04:55:59.992486+00:00",
+    "status": "complete",
+    "demo": true,
+    "sample": "nlb-alb",
+    "title": "고정 IP가 필요한 진입점 (NLB → ALB)",
+    "practices": [
+      "고정 IP·PrivateLink가 필요한 진입점은 NLB, L7 라우팅은 뒤의 ALB (alb 대상 유형)",
+      "TCP 서비스는 NLB 대상 그룹으로 직접 연결",
+      "두 AZ에 대상을 분산하고 교차 영역 구성",
+      "관리 접근은 배스천 대신 Session Manager 사용 (인스턴스 퍼블릭 IP 없음)"
+    ],
+    "scope": [
+      "VPC",
+      "Subnet",
+      "EC2",
+      "ELBv2",
+      "TargetGroup",
+      "RegisteredTarget"
+    ],
+    "limitations": [
+      "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
+      "RDS·NAT Gateway·라우팅·보안 그룹 규칙은 수집 범위 밖이라 표시하지 않습니다.",
+      "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
+    ]
+  },
+  "coverage": [
+    {
+      "service": "ec2",
+      "operation": "describe_vpcs",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_subnets",
+      "status": "complete",
+      "pages": 1,
+      "items": 4
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_instances",
+      "status": "complete",
+      "pages": 1,
+      "items": 4
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_load_balancers",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_health",
+      "parameters": {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_health",
+      "parameters": {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elbv2",
+      "operation": "describe_target_health",
+      "parameters": {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    }
+  ],
+  "raw": {
+    "vpcs": [
+      {
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "CidrBlock": "10.30.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-gateway"
+          },
+          {
+            "Key": "Environment",
+            "Value": "production"
+          }
+        ]
+      }
+    ],
+    "subnets": [
+      {
+        "SubnetId": "subnet-gw-pub-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.30.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-gw-pub-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.30.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-gw-app-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.30.10.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "app-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      },
+      {
+        "SubnetId": "subnet-gw-app-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.30.11.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "app-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ]
+      }
+    ],
+    "instances": [
+      {
+        "InstanceId": "i-apia0000000000001",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "SubnetId": "subnet-gw-app-a",
+        "InstanceType": "m6i.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.1.11",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-api-a"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-partner-api"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-apia0000000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-apia0000000000001"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-apic0000000000001",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "SubnetId": "subnet-gw-app-c",
+        "InstanceType": "m6i.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.2.12",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-api-c"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-partner-api"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-apic0000000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-apic0000000000001"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-mqtta000000000001",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "SubnetId": "subnet-gw-app-a",
+        "InstanceType": "c6gn.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.3.13",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2a"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "mqtt-broker-a"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-mqtt"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-mqtta000000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-mqtta000000000001"
+            }
+          }
+        ]
+      },
+      {
+        "InstanceId": "i-mqttc000000000001",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "SubnetId": "subnet-gw-app-c",
+        "InstanceType": "c6gn.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.4.14",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "mqtt-broker-c"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-mqtt"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-mqttc000000000001"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-mqttc000000000001"
+            }
+          }
+        ]
+      }
+    ],
+    "load_balancers": [
+      {
+        "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "LoadBalancerName": "partner-nlb",
+        "Type": "network",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "Scheme": "internet-facing",
+        "AvailabilityZones": [
+          {
+            "ZoneName": "ap-northeast-2a",
+            "SubnetId": "subnet-gw-pub-a"
+          },
+          {
+            "ZoneName": "ap-northeast-2c",
+            "SubnetId": "subnet-gw-pub-c"
+          }
+        ],
+        "SecurityGroups": []
+      },
+      {
+        "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "LoadBalancerName": "partner-alb",
+        "Type": "application",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "Scheme": "internal",
+        "AvailabilityZones": [
+          {
+            "ZoneName": "ap-northeast-2a",
+            "SubnetId": "subnet-gw-app-a"
+          },
+          {
+            "ZoneName": "ap-northeast-2c",
+            "SubnetId": "subnet-gw-app-c"
+          }
+        ],
+        "SecurityGroups": [
+          "sg-partner-alb"
+        ]
+      }
+    ],
+    "target_groups": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "TargetGroupName": "partner-api-https",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "TargetType": "instance",
+        "Protocol": "HTTPS",
+        "Port": 443,
+        "HealthCheckPath": "/health",
+        "LoadBalancerArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002"
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002",
+        "TargetGroupName": "partner-alb-tcp",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "TargetType": "alb",
+        "Protocol": "TCP",
+        "Port": 443,
+        "HealthCheckPath": "/",
+        "LoadBalancerArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001"
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "TargetGroupName": "mqtt-tls",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "TargetType": "instance",
+        "Protocol": "TLS",
+        "Port": 8883,
+        "HealthCheckPath": null,
+        "LoadBalancerArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001"
+        ]
+      }
+    ],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "i-apia0000000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-apic0000000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "i-mqtta000000000001",
+              "Port": 8883
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-mqttc000000000001",
+              "Port": 8883
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
+        "resource_id": "i-apia0000000000001",
+        "kind": "ec2",
+        "name": "partner-api-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-apia0000000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "SubnetId": "subnet-gw-app-a",
+          "InstanceType": "m6i.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.1.11",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-api-a"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-partner-api"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-apia0000000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-apia0000000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-apic0000000000001",
+        "resource_id": "i-apic0000000000001",
+        "kind": "ec2",
+        "name": "partner-api-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-apic0000000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "SubnetId": "subnet-gw-app-c",
+          "InstanceType": "m6i.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.2.12",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-api-c"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-partner-api"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-apic0000000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-apic0000000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-mqtta000000000001",
+        "resource_id": "i-mqtta000000000001",
+        "kind": "ec2",
+        "name": "mqtt-broker-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-mqtta000000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "SubnetId": "subnet-gw-app-a",
+          "InstanceType": "c6gn.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.3.13",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2a"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "mqtt-broker-a"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-mqtt"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-mqtta000000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-mqtta000000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ec2/i-mqttc000000000001",
+        "resource_id": "i-mqttc000000000001",
+        "kind": "ec2",
+        "name": "mqtt-broker-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-mqttc000000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "SubnetId": "subnet-gw-app-c",
+          "InstanceType": "c6gn.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.4.14",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "mqtt-broker-c"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-mqtt"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-mqttc000000000001"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-mqttc000000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "kind": "load_balancer",
+        "name": "partner-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+          "LoadBalancerName": "partner-alb",
+          "Type": "application",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "Scheme": "internal",
+          "AvailabilityZones": [
+            {
+              "ZoneName": "ap-northeast-2a",
+              "SubnetId": "subnet-gw-app-a"
+            },
+            {
+              "ZoneName": "ap-northeast-2c",
+              "SubnetId": "subnet-gw-app-c"
+            }
+          ],
+          "SecurityGroups": [
+            "sg-partner-alb"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeLoadBalancers"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "kind": "load_balancer",
+        "name": "partner-nlb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+          "LoadBalancerName": "partner-nlb",
+          "Type": "network",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "Scheme": "internet-facing",
+          "AvailabilityZones": [
+            {
+              "ZoneName": "ap-northeast-2a",
+              "SubnetId": "subnet-gw-pub-a"
+            },
+            {
+              "ZoneName": "ap-northeast-2c",
+              "SubnetId": "subnet-gw-pub-c"
+            }
+          ],
+          "SecurityGroups": []
+        },
+        "reference_only": false,
+        "source": "DescribeLoadBalancers"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-apia0000000000001",
+        "resource_id": "eni-apia0000000000001",
+        "kind": "network_interface",
+        "name": "eni-apia0000000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-apic0000000000001",
+        "resource_id": "eni-apic0000000000001",
+        "kind": "network_interface",
+        "name": "eni-apic0000000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-mqtta000000000001",
+        "resource_id": "eni-mqtta000000000001",
+        "kind": "network_interface",
+        "name": "eni-mqtta000000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-mqttc000000000001",
+        "resource_id": "eni-mqttc000000000001",
+        "kind": "network_interface",
+        "name": "eni-mqttc000000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-mqtt",
+        "resource_id": "sg-mqtt",
+        "kind": "security_group",
+        "name": "sg-mqtt",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-partner-alb",
+        "resource_id": "sg-partner-alb",
+        "kind": "security_group",
+        "name": "sg-partner-alb",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/security_group/sg-partner-api",
+        "resource_id": "sg-partner-api",
+        "kind": "security_group",
+        "name": "sg-partner-api",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",
+        "resource_id": "subnet-gw-app-a",
+        "kind": "subnet",
+        "name": "app-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-gw-app-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.30.10.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "app-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-gw-app-c",
+        "resource_id": "subnet-gw-app-c",
+        "kind": "subnet",
+        "name": "app-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-gw-app-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.30.11.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "app-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-a",
+        "resource_id": "subnet-gw-pub-a",
+        "kind": "subnet",
+        "name": "public-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-gw-pub-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.30.0.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-c",
+        "resource_id": "subnet-gw-pub-c",
+        "kind": "subnet",
+        "name": "public-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-gw-pub-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.30.1.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "kind": "target_group",
+        "name": "mqtt-tls",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+          "TargetGroupName": "mqtt-tls",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "TargetType": "instance",
+          "Protocol": "TLS",
+          "Port": 8883,
+          "HealthCheckPath": null,
+          "LoadBalancerArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002",
+        "kind": "target_group",
+        "name": "partner-alb-tcp",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002",
+          "TargetGroupName": "partner-alb-tcp",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "TargetType": "alb",
+          "Protocol": "TCP",
+          "Port": 443,
+          "HealthCheckPath": "/",
+          "LoadBalancerArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "resource_id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "kind": "target_group",
+        "name": "partner-api-https",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+          "TargetGroupName": "partner-api-https",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "TargetType": "instance",
+          "Protocol": "HTTPS",
+          "Port": 443,
+          "HealthCheckPath": "/health",
+          "LoadBalancerArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002"
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-apia0000000000001",
+        "resource_id": "vol-apia0000000000001",
+        "kind": "volume",
+        "name": "vol-apia0000000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-apic0000000000001",
+        "resource_id": "vol-apic0000000000001",
+        "kind": "volume",
+        "name": "vol-apic0000000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-mqtta000000000001",
+        "resource_id": "vol-mqtta000000000001",
+        "kind": "volume",
+        "name": "vol-mqtta000000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-mqttc000000000001",
+        "resource_id": "vol-mqttc000000000001",
+        "kind": "volume",
+        "name": "vol-mqttc000000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "resource_id": "vpc-0a1b2c3d4e5f60003",
+        "kind": "vpc",
+        "name": "partner-gateway",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "CidrBlock": "10.30.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-gateway"
+            },
+            {
+              "Key": "Environment",
+              "Value": "production"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
+      }
+    ],
+    "edges": [
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-apia0000000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-90c609b4022109d58f92"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-apia0000000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2133a5a645c514e68069"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0672e7d712286cdd8d30"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-eb62183e6ac2a41517a3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-partner-api",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-453f823e25591dbc3ac1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apic0000000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-apic0000000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c33e7a21fa7a7e11390b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apic0000000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-apic0000000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-06c7e88149c0ad8c4d73"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apic0000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b484bc3b0cd3ec2446fb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apic0000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e1aef152dd1a9868b315"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-apic0000000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-partner-api",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-62ca4d54195b0cb1b46b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqtta000000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-mqtta000000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ed781bbdae9b61b36539"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqtta000000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-mqtta000000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-06d347e75baf18416b86"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqtta000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9b3219f37d4608e0da70"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqtta000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b54a44356949226e634e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqtta000000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-mqtt",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c57b749448cf879aba72"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqttc000000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-mqttc000000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c45f7ed60247d234c7fc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqttc000000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-mqttc000000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-dd9f8c04d223d4bd4b58"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqttc000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0fe85830c8f8ee0e70ea"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqttc000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-56b57d3561f0adc6c048"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-mqttc000000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-mqtt",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ba044e3660f07431c6a5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-9596dc5dbc89bdd22904"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-6551ce33b3f305001431"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeLoadBalancers.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0deb1ead56c68f02bfe3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "target": "111122223333/ap-northeast-2/security_group/sg-partner-alb",
+        "relation": "uses_security_group",
+        "evidence": "DescribeLoadBalancers.SecurityGroups[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d0a2233b335398c356d0"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-a",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2a"
+        },
+        "inferred": false,
+        "id": "rel-36dc8c13b2aae4f33b0c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-bfcd19c48157b3315ec1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeLoadBalancers.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ce1a017736f7493057bf"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e61256a7aba749c1fbb8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-gw-app-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-44736420231ee7901eaa"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-420028a2a83b4a265f7b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-gw-pub-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-607698c3db89054e74fc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "relation": "associated_load_balancer",
+        "evidence": "DescribeTargetGroups.LoadBalancerArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-33ab77fee0ecc299b4a2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9d9c550ba85c06b34efc"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "target": "111122223333/ap-northeast-2/ec2/i-mqtta000000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8883
+        },
+        "details": {
+          "Target": {
+            "Id": "i-mqtta000000000001",
+            "Port": 8883
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-bab16c8c7e138511b78e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/mqtt-tls/0000000000000003",
+        "target": "111122223333/ap-northeast-2/ec2/i-mqttc000000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8883
+        },
+        "details": {
+          "Target": {
+            "Id": "i-mqttc000000000001",
+            "Port": 8883
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-f47c0f3a26c5c9fdf7e4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "relation": "associated_load_balancer",
+        "evidence": "DescribeTargetGroups.LoadBalancerArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d69d4930601c5a9fe073"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7c1c644dbb36cfecd6d4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-alb-tcp/0000000000000002",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 443
+        },
+        "details": {
+          "Target": {
+            "Id": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+            "Port": 443
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-5e7b2186394f556f2fb3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "relation": "associated_load_balancer",
+        "evidence": "DescribeTargetGroups.LoadBalancerArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2471389545d904f1111a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeTargetGroups.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0aa8b39fb581bcdfaaa6"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ec2/i-apia0000000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 443
+        },
+        "details": {
+          "Target": {
+            "Id": "i-apia0000000000001",
+            "Port": 443
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-4b7cdd44f0ddc70d419a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/partner-api-https/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ec2/i-apic0000000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 443
+        },
+        "details": {
+          "Target": {
+            "Id": "i-apic0000000000001",
+            "Port": 443
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-9ae0e923a1cf8026dc4d"
+      }
+    ]
+  }
+}</script>
+<script>
+'use strict';
+const snapshot=JSON.parse(document.getElementById('snapshot').textContent);
+const {nodes,edges}=snapshot.graph, meta=snapshot.metadata;
+const $=id=>document.getElementById(id), byId=new Map(nodes.map(n=>[n.id,n]));
+const names={vpc:'VPC',subnet:'서브넷',ec2:'EC2',load_balancer:'ELBv2',target_group:'대상 그룹',registered_target:'등록 대상',security_group:'보안 그룹',network_interface:'ENI',volume:'EBS'};
+const relations={in_vpc:'VPC 포함',in_subnet:'서브넷 배치',associated_load_balancer:'LB ↔ 대상 그룹',registered_target:'대상 등록',uses_security_group:'보안 그룹 연결',attached_interface:'ENI 연결',attached_volume:'EBS 연결'};
+const statusNames={complete:'조회 완료',partial:'부분 조회',unavailable:'조회 불가',not_discovered:'미발견 범위 있음'};
+let selected=null, visible=[], enabled=new Set(['associated_load_balancer','registered_target']);
+function el(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
+$('scope').textContent=`계정 ${meta.account_id} / ${meta.region} · 수집 ${meta.started_at} ~ ${meta.finished_at}`;
+$('notice').textContent=(meta.demo?'샘플 데이터 · 실제 AWS 계정을 조회한 결과가 아닙니다. ':'')+(meta.status==='complete'?'지정한 API 범위 조회 완료. ':'일부 범위가 조회되지 않았습니다. 리소스가 없다는 의미가 아닙니다. ')+'실제 통신 여부는 이 구성도로 판단할 수 없습니다.';
+for(const kind of [...new Set(nodes.map(n=>n.kind))].sort()){$('kind').append(new Option(names[kind]||kind,kind));}
+for(const [key,label] of Object.entries(relations).filter(([key])=>key!=='in_vpc')){const wrap=el('label');const input=el('input');input.type='checkbox';input.checked=enabled.has(key);input.addEventListener('change',()=>{input.checked?enabled.add(key):enabled.delete(key);drawEdges();});wrap.append(input,document.createTextNode(label));$('relation-controls').append(wrap);}
+for(const c of snapshot.coverage){const row=el('tr');const api=el('td',`${c.service} / ${c.operation}`);api.append(el('div',JSON.stringify(c.parameters||{}),'muted'));const state=el('td');state.append(el('span',statusNames[c.status]||c.status,'badge'+(c.status==='complete'?'':' warn')));row.append(api,state,el('td',`${c.items??'—'} / ${c.pages??'—'}`),el('td',c.error_code||c.reason||'—'));$('coverage').append(row);}
+for(const note of meta.limitations||[])$('limitations').append(el('li',note));
+function targets(id,relation){return edges.filter(e=>e.source===id&&e.relation===relation).map(e=>e.target);}
+function select(id){selected=id;const node=byId.get(id);$('detail').replaceChildren(el('h2',node.name),el('p',`${names[node.kind]} · ${node.reference_only?'참조만 확인됨 / 상세 미조회':'API 응답에서 조회됨'}`,'muted'));
+const attr=el('pre',JSON.stringify(node.attributes,null,2));$('detail').append(el('div',node.resource_id,'muted'),attr,el('h2','확인된 관계와 근거'));
+for(const edge of edges.filter(e=>e.source===id||e.target===id)){const other=byId.get(edge.source===id?edge.target:edge.source);const part=el('div',`${relations[edge.relation]} · ${other.name}`,'relation');part.append(el('div',edge.evidence,'muted'));if(Object.keys(edge.details).length)part.append(el('pre',JSON.stringify(edge.details,null,2)));$('detail').append(part);}
+document.querySelectorAll('.resource').forEach(e=>e.classList.toggle('selected',e.dataset.id===id));drawEdges();}
+function card(n){const b=el('button',undefined,'resource'+(n.reference_only?' ref':''));b.dataset.id=n.id;b.dataset.kind=n.kind;b.classList.toggle('selected',n.id===selected);b.append(el('span',names[n.kind]||n.kind,'kind'),el('strong',n.name),el('small',n.reference_only?'참조만 확인됨':n.attributes.CidrBlock||n.attributes.InstanceType||n.attributes.Type||'API에서 조회'));b.addEventListener('click',()=>select(n.id));return b;}
+function group(title,subnet=false){const box=el('div',undefined,'group'+(subnet?' subnet':''));box.append(el('div',title,'group-title'));const cards=el('div',undefined,'cards');box.append(cards);return {box,cards};}
+function render(){const search=$('search').value.toLowerCase(),kind=$('kind').value;visible=nodes.filter(n=>(!n.reference_only||$('references').checked)&&(kind==='all'||n.kind===kind)&&`${n.name} ${n.resource_id}`.toLowerCase().includes(search));$('groups').replaceChildren();$('rows').replaceChildren();const root=group(`ACCOUNT ${meta.account_id} / REGION ${meta.region}`);$('groups').append(root.box);const vpcs=new Map(),subnets=new Map();
+function ensureVpc(id){if(!vpcs.has(id)){const n=byId.get(id),g=group(n?`VPC · ${n.name}${n.reference_only?' · 참조만 확인됨':''}`:'VPC 미확인 / VPC 외 참조');root.box.append(g.box);vpcs.set(id,g);}return vpcs.get(id);}
+function ensureSubnet(id){if(!subnets.has(id)){const n=byId.get(id),parent=targets(id,'in_vpc')[0],g=group(`SUBNET · ${n?.name||id} · ${n?.attributes.AvailabilityZone||'AZ 미확인'}`,true);ensureVpc(parent).box.append(g.box);subnets.set(id,g);}return subnets.get(id);}
+const order={vpc:0,subnet:1,load_balancer:2,target_group:3,ec2:4};for(const n of [...visible].sort((a,b)=>(order[a.kind]??5)-(order[b.kind]??5))){let place;if(n.kind==='vpc')place=ensureVpc(n.id);else if(n.kind==='subnet')place=ensureSubnet(n.id);else{const subnet=targets(n.id,'in_subnet'),vpc=targets(n.id,'in_vpc')[0];place=n.kind==='ec2'&&subnet.length===1?ensureSubnet(subnet[0]):ensureVpc(vpc);}place.cards.append(card(n));const row=el('tr');row.tabIndex=0;row.append(el('td',names[n.kind]),el('td',n.name),el('td',n.resource_id),el('td',n.reference_only?'참조만 확인됨':n.source));row.addEventListener('click',()=>select(n.id));row.addEventListener('keydown',e=>{if(e.key==='Enter')select(n.id);});$('rows').append(row);}
+if(!visible.length)root.box.append(el('p','현재 필터에 해당하는 수집 리소스가 없습니다. 조회 상태도 함께 확인하세요.','empty'));
+$('stats').textContent=`표시 ${visible.length} / 전체 ${nodes.length} · 참조 ${nodes.filter(n=>n.reference_only).length}`;requestAnimationFrame(drawEdges);}
+function drawEdges(){const svg=$('edges'),canvas=$('canvas'),base=canvas.getBoundingClientRect();svg.replaceChildren();svg.setAttribute('width',canvas.scrollWidth);svg.setAttribute('height',canvas.scrollHeight);const cards=new Map([...document.querySelectorAll('.resource')].map(n=>[n.dataset.id,n]));for(const edge of edges){if(!enabled.has(edge.relation)||!cards.has(edge.source)||!cards.has(edge.target))continue;const a=cards.get(edge.source).getBoundingClientRect(),b=cards.get(edge.target).getBoundingClientRect();const x1=a.right-base.left+canvas.scrollLeft,y1=a.top+a.height/2-base.top+canvas.scrollTop,x2=b.right-base.left+canvas.scrollLeft,y2=b.top+b.height/2-base.top+canvas.scrollTop,bend=Math.max(x1,x2)+26;const path=document.createElementNS('http://www.w3.org/2000/svg','path');if(Math.abs(y1-y2)<12){const start=a.left<b.left?a.right:a.left,end=a.left<b.left?b.left:b.right;path.setAttribute('d',`M ${start-base.left+canvas.scrollLeft} ${y1} L ${end-base.left+canvas.scrollLeft} ${y2}`);}else{path.setAttribute('d',`M ${x1} ${y1} C ${bend} ${y1}, ${bend} ${y2}, ${x2} ${y2}`);}path.setAttribute('class','edge'+(edge.source===selected||edge.target===selected?' active':''));svg.append(path);}}
+function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type}));const link=el('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+$('json-download').onclick=()=>download('snapshot.json',JSON.stringify(snapshot,null,2),'application/json');
+function csvCell(value){let s=typeof value==='object'?JSON.stringify(value):String(value??'');if(/^[\s]*[=+\-@]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}
+$('csv-download').onclick=()=>{const fields=['account','region','kind','resource_id','name','reference_only','source','attributes'];const rows=[fields.concat(['collection_started_at','collection_finished_at','collection_status']),...nodes.map(n=>fields.map(f=>n[f]).concat([meta.started_at,meta.finished_at,meta.status]))];download('inventory.csv','\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');};
+$('svg-download').onclick=()=>{const canvas=$('canvas'),w=canvas.scrollWidth,h=canvas.scrollHeight+90;const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('width',w);svg.setAttribute('height',h);svg.setAttribute('viewBox',`0 0 ${w} ${h}`);const fo=document.createElementNS(svg.namespaceURI,'foreignObject');fo.setAttribute('width','100%');fo.setAttribute('height','100%');const box=document.createElementNS('http://www.w3.org/1999/xhtml','div');box.setAttribute('style',`background:#0b1220;color:#dce7f5;padding:16px;font-family:sans-serif;min-height:${h}px`);const style=el('style',document.querySelector('style').textContent);box.append(style,el('div',`${meta.demo?'샘플 · ':''}${meta.account_id} / ${meta.region} · ${statusNames[meta.status]} · ${meta.finished_at}`),el('p','설정 관계 · 실제 트래픽 미확인 · 조회 상태와 범위는 snapshot.json 참조','muted'));const clone=canvas.cloneNode(true);clone.style.overflow='visible';clone.style.width=`${w-32}px`;box.append(clone);fo.append(box);svg.append(fo);download('topology.svg',new XMLSerializer().serializeToString(svg),'image/svg+xml');};
+for(const id of ['search','kind','references'])$(id).addEventListener(id==='search'?'input':'change',render);
+new ResizeObserver(drawEdges).observe($('canvas'));render();
+</script>
+</body></html>

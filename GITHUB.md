@@ -36,7 +36,7 @@ gh pr create --base main
 - `.github/workflows/ci.yml`: Python 3.11/3.12/3.13 패키지 테스트와 Chromium 기반 실제 draw.io 편집·다운로드 검증. 브라우저 산출물은 Actions artifact로 보관.
 - `.github/pull_request_template.md`: 변경 내용과 검증 결과 기록.
 - `.gitignore`: 가상환경, 빌드 결과, `.env`, `.aws`, 키 파일, 수집 산출물 제외.
-- `examples/demo`: 실제 AWS 정보가 아닌 합성 샘플만 예외적으로 포함.
+- `examples/demo`, `examples/samples`: 실제 AWS 정보가 아닌 합성 샘플만 예외적으로 포함.
 
 CI는 모의 AWS 응답과 샘플 데이터로 실행하며 AWS/GitHub 추가 시크릿을 요구하지 않습니다. 실행 결과는 저장소의 Actions에서 확인합니다.
 

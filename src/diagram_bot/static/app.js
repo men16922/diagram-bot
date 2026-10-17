@@ -79,7 +79,7 @@ window.addEventListener('message', event=>{
 });
 async function refreshSnapshots(preferred) {
   const items=await api('/api/snapshots');$('snapshot-select').replaceChildren();
-  for(const item of items){const m=item.metadata;const label=`${m.demo?'샘플':'AWS'} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;const option=new Option(label,item.id);$('snapshot-select').append(option);}
+  for(const item of items){const m=item.metadata;const label=m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;const option=new Option(label,item.id);$('snapshot-select').append(option);}
   $('snapshot-select').value=preferred||items[0]?.id;
   return $('snapshot-select').value;
 }
@@ -110,7 +110,7 @@ function renderSummary() {
   $('total-count').textContent=graph.nodes.length;
   $('coverage-rows').replaceChildren();
   for(const row of state.snapshot.coverage){const container=el('div',undefined,'coverage-row');const text=el('div',row.operation);text.append(el('small',`${row.items??'—'}개 · ${row.pages??'—'} 페이지${row.error_code?' · '+row.error_code:''}${row.status!=='complete'&&row.permission?' · 필요 권한 '+row.permission:''}`));container.append(text,el('span',statuses[row.status]||row.status,'badge'+(row.status!=='complete'?' warn':'')));$('coverage-rows').append(container);}
-  $('limitations').replaceChildren(...(m.limitations||[]).map(s=>el('li',s)));
+  $('limitations').replaceChildren(...[...(m.practices||[]).map(s=>'반영한 권장 사항: '+s),...(m.limitations||[])].map(s=>el('li',s)));
 }
 function applyDocument(document) {
   state.xml=document.xml;state.revision=document.revision;state.history=document.history||[];state.visible=new Set(document.visible||[]);state.counts=document.counts;

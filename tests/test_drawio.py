@@ -7,6 +7,7 @@ from diagram_bot.demo import ALB, demo_snapshot
 from diagram_bot.drawio import cell_id, generate_document, layout_document, validate_document
 from diagram_bot.editor import install_editor
 from diagram_bot.graph import build_graph
+from diagram_bot.samples import SAMPLES
 from fixtures import scale_snapshot
 
 VIEWS = [("overview", None, None, False), ("detail", "vpc-demo", None, False), ("detail", "vpc-demo", None, True),
@@ -168,6 +169,24 @@ def test_empty_unknown_scope_and_xml_labels():
     snapshot["coverage"] = [{"service": "ec2", "operation": "describe_vpcs", "status": "unavailable", "error_code": "AccessDenied"}]
     denied = generate_document(snapshot)
     assert "빈 환경이 아니라" in denied and ET.fromstring(denied).tag == "mxfile"
+
+
+@pytest.mark.parametrize("key", sorted(SAMPLES))
+def test_best_practice_samples_are_readable(key):
+    snapshot = SAMPLES[key]()
+    graph = build_graph(snapshot)
+    assert snapshot["metadata"]["demo"] is True and snapshot["metadata"]["practices"]
+    assert_readable(layout_document(snapshot, "overview"))
+    for vpc in (n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc"):
+        for references in (False, True):
+            layout = layout_document(snapshot, "detail", vpc, None, references)
+            assert_readable(layout)
+            assert_no_shared_segments(layout)
+    for node in graph["nodes"]:
+        if node["kind"] in ("load_balancer", "target_group") and not node["reference_only"]:
+            layout = layout_document(snapshot, "focus", None, node["id"], True)
+            assert_readable(layout)
+            assert_no_shared_segments(layout)
 
 
 def test_hundred_resource_layout_is_readable_and_fast():
