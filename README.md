@@ -1,8 +1,8 @@
-# TA Bot — AWS 현행 구성도·리소스 내역 자동 생성
+# Diagram Bot — AWS 현행 구성도·리소스 내역 자동 생성
 
 기존 AWS IAM Identity Center(SSO) 인증을 boto3에서 재사용하여 한 계정·한 리전의 리소스를 읽고, 명시적인 ID·ARN 관계로 구성도를 생성합니다. LLM이나 외부 구성도 서비스는 사용하지 않습니다.
 
-GitHub 연결 및 업로드 방법은 [GITHUB.md](GITHUB.md)에 있습니다. CI는 AWS 인증 없이 테스트와 패키지 빌드를 수행합니다.
+저장소: [men16922/diagram-bot](https://github.com/men16922/diagram-bot). 개발 및 push 방법은 [GITHUB.md](GITHUB.md)에 있습니다. 현재 Python 패키지와 실행 명령은 `ta-bot`입니다. CI는 AWS 인증 없이 테스트와 패키지 빌드를 수행합니다.
 
 ## 실행
 

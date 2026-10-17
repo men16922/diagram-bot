@@ -1,27 +1,35 @@
-# GitHub 업로드 준비
+# GitHub 개발 안내
 
-이 프로젝트는 `main` 브랜치를 사용하는 Python 저장소입니다. GitHub 저장소 주소가 정해지면 연결하여 push할 수 있습니다.
+저장소: https://github.com/men16922/diagram-bot
 
-## 새 저장소를 만드는 경우
+기본 브랜치는 `main`입니다. Python 패키지와 CLI 명령 이름은 `ta-bot`입니다.
 
-아래 이름은 예시입니다. 실제 owner/name으로 바꿉니다.
-
-```bash
-cd /workspace/ta-bot
-gh repo create OWNER/ta-bot --private --source=. --remote=origin --push
-```
-
-## 이미 만든 빈 저장소를 연결하는 경우
+## 개발 환경 구성
 
 ```bash
-cd /workspace/ta-bot
-git remote add origin https://github.com/OWNER/REPOSITORY.git
-git push -u origin main
+git clone https://github.com/men16922/diagram-bot.git
+cd diagram-bot
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[test]' build
+pytest -q
+python -m build
+ta-bot demo --output reports/demo
 ```
 
-원격 저장소에 기존 커밋이 있다면 먼저 `git fetch origin`으로 이력을 확인하고 통합합니다. 위 명령은 비어 있는 저장소를 전제로 합니다.
+## 변경 사항 올리기
 
-## 포함된 준비 사항
+```bash
+git switch -c feature/my-change
+# 변경 후 테스트 실행
+pytest -q
+git add <변경한-파일>
+git commit -m "변경 내용"
+git push -u origin feature/my-change
+gh pr create --base main
+```
+
+## CI와 추적 범위
 
 - `pyproject.toml`: 설치 가능한 Python 패키지와 `ta-bot` CLI.
 - `.github/workflows/ci.yml`: Python 3.11/3.12/3.13에서 패키지 빌드, wheel 설치, pytest, 샘플 보고서 생성·재렌더링.
@@ -29,18 +37,6 @@ git push -u origin main
 - `.gitignore`: 가상환경, 빌드 결과, `.env`, `.aws`, 키 파일, 수집 산출물 제외.
 - `examples/demo`: 실제 AWS 정보가 아닌 합성 샘플만 예외적으로 포함.
 
-CI는 모의 AWS 응답과 샘플 데이터로 실행하며 AWS/GitHub 추가 시크릿을 요구하지 않습니다. 원격 push 이후 Actions 실행 결과를 확인합니다.
+CI는 모의 AWS 응답과 샘플 데이터로 실행하며 AWS/GitHub 추가 시크릿을 요구하지 않습니다. 실행 결과는 저장소의 Actions에서 확인합니다.
 
 실제 수집은 `--output reports/current`처럼 `reports/` 아래로 출력하면 HTML을 포함한 산출물 전체가 Git 추적에서 제외됩니다.
-
-## 로컬 검증
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e '.[test]' build
-pytest -q
-python -m build
-ta-bot demo --output reports/demo
-git status --short
-```
