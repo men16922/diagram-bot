@@ -361,7 +361,7 @@ class Sample:
                       "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGateway", "EKS", "MSK", "ElastiCache", "Lambda",
                       "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN"],
             "limitations": ["AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-                            "보안 그룹 규칙·리스너 규칙·Direct Connect는 수집 범위 밖이라 표시하지 않습니다.",
+                            "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
                             "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."]},
             "coverage": coverage, "raw": self.raw}
 
@@ -374,7 +374,8 @@ def three_tier():
         "AZ마다 NAT 게이트웨이를 두어 프라이빗 서브넷의 외부 통신이 AZ 장애에 묶이지 않음",
         "웹·앱 계층은 Auto Scaling 그룹(ELB 헬스 체크)으로 AZ에 분산",
         "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개), 읽기는 세 번째 AZ의 읽기 전용 복제본",
-        "S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM 인터페이스 엔드포인트(배스천 없음)"])
+        "S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM·SSM Messages·EC2 Messages 엔드포인트의 Session Manager(배스천 없음)",
+        "도형 밖 권고: CloudFront(정적 콘텐츠는 S3)·AWS WAF·Route 53 헬스 체크를 진입점 앞에 (REL02-BP01, 수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60001", "10.10.0.0/16", "prod-web", Environment="production")
     public, web, app, data = [], [], [], []
     for i, az in enumerate("abc"):
@@ -412,7 +413,8 @@ def microservices():
         "서비스마다 전용 포트·헬스 체크 경로",
         "두 AZ 이상에 각 서비스 대상을 분산하고 서비스별 Auto Scaling 그룹",
         "서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ",
-        "이미지 풀·S3 접근은 ECR 인터페이스·S3 게이트웨이 엔드포인트로 사설 경로 사용"])
+        "이미지 풀은 ECR API·Docker 인터페이스와 S3 게이트웨이 엔드포인트, 컨테이너 로그는 CloudWatch Logs 엔드포인트로 사설 경로 사용",
+        "도형 밖 권고: 인터넷용 ALB 앞에 AWS WAF·CloudFront (REL02-BP01, 수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60002", "10.20.0.0/16", "commerce-services", Environment="production")
     public = [s.subnet(f"subnet-ms-pub-{az}", vpc, az, f"10.20.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ab")]
     private = [s.subnet(f"subnet-ms-app-{az}", vpc, az, f"10.20.{8 + 4 * i}.0/22", f"services-{az}", "app") for i, az in enumerate("ab")]
@@ -443,7 +445,8 @@ def static_ip_front():
         "고정 IP·PrivateLink가 필요한 진입점은 NLB, L7 라우팅은 뒤의 ALB (alb 대상 유형)",
         "TCP 서비스는 NLB 대상 그룹으로 직접 연결",
         "두 AZ에 대상을 분산하고 교차 영역 구성",
-        "관리 접근은 배스천 대신 Session Manager 사용 (인스턴스 퍼블릭 IP 없음)"])
+        "관리 접근은 배스천 대신 Session Manager 사용 (인스턴스 퍼블릭 IP 없음)",
+        "도형 밖 권고: NLB 고정 IP는 AZ마다 Elastic IP, ALB에는 AWS WAF, 대안으로 Global Accelerator (수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60003", "10.30.0.0/16", "partner-gateway", Environment="production")
     public = [s.subnet(f"subnet-gw-pub-{az}", vpc, az, f"10.30.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ac")]
     private = [s.subnet(f"subnet-gw-app-{az}", vpc, az, f"10.30.{10 + i}.0/24", f"app-{az}", "app") for i, az in enumerate("ac")]
@@ -467,7 +470,9 @@ def environments():
         "운영은 3 AZ·AZ별 NAT, 스테이징은 비용을 고려한 2 AZ·NAT 1개",
         "공용 서비스 VPC에는 내부 도구만 두고 인터넷 경로 없음",
         "VPC 간 연결은 Transit Gateway 허브로 일원화 (VPC 피어링 그물망 대신)",
-        "Environment 태그로 소유·비용 구분"])
+        "Environment 태그로 소유·비용 구분",
+        "스테이징 NAT 1개는 비운영 환경의 비용 절충 (REL10-BP01은 운영 워크로드 기준)",
+        "도형 밖 권고: 환경별 AWS 계정 분리, Network 계정의 TGW를 RAM으로 공유, 운영·스테이징 TGW 라우팅 테이블 분리 (수집 범위 밖)"])
     for env, cidr, azs, size in (("prod", "10.40", "abc", "m6i.large"), ("staging", "10.41", "ab", "t3.medium")):
         vpc = s.vpc(f"vpc-{env}0000000000004", f"{cidr}.0.0/16", f"{env}-vpc", Environment=env)
         public = [s.subnet(f"subnet-{env}-pub-{az}", vpc, az, f"{cidr}.{i}.0/24", f"{env}-public-{az}", "public") for i, az in enumerate(azs)]
@@ -501,7 +506,8 @@ def hybrid():
         "VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시",
         "클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크",
         "내부 ALB로 사내망 전용 노출",
-        "온프레미스 대역(192.168.0.0/16)은 Transit Gateway에 붙은 Site-to-Site VPN(터널 2개, BGP)으로 연결 (Direct Connect는 수집 범위 밖)"])
+        "온프레미스 대역(192.168.0.0/16)은 Transit Gateway의 Site-to-Site VPN 2개로 연결: 고객 게이트웨이(장비·ISP) 2개, 각각 터널 2개, BGP (REL02-BP02)",
+        "도형 밖 권고: 운영 주 연결은 Direct Connect(다중 위치), VPN은 백업. 하이브리드 DNS는 Route 53 Resolver 엔드포인트 (수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60005", "10.50.0.0/16", "migration-hub", Environment="production")
     app = [s.subnet(f"subnet-hy-app-{az}", vpc, az, f"10.50.{10 + i}.0/24", f"app-{az}", "app") for i, az in enumerate("ab")]
     cloud = [s.instance(f"i-erp{az}0000000000005", app[i], f"erp-cloud-{az}", "r6i.large", sg="sg-erp") for i, az in enumerate("ab")]
@@ -529,7 +535,8 @@ def eks_platform():
         "Aurora PostgreSQL writer/reader를 서로 다른 AZ에, ElastiCache Redis는 primary/replica 자동 장애 조치",
         "MSK 브로커는 AZ마다 하나, 클라이언트-브로커 TLS",
         "데이터 계층(Aurora·Redis·MSK)은 인터넷 경로 없는 격리 서브넷",
-        "ECR·STS 인터페이스·S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로"])
+        "ECR API·Docker·STS 인터페이스와 S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로",
+        "도형 밖 권고: 인터넷 ALB에 AWS WAF, MSK 토픽 복제 계수 3 (수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60006", "10.60.0.0/16", "platform", Environment="production")
     azs = "abc"
     public = [s.subnet(f"subnet-pf-pub-{az}", vpc, az, f"10.60.{i}.0/24", f"public-{az}", "public") for i, az in enumerate(azs)]
@@ -566,8 +573,9 @@ def data_platform():
         "RDS PostgreSQL Multi-AZ(동기식 대기) + 세 번째 AZ의 읽기 전용 복제본",
         "ElastiCache Redis 클러스터 모드: 샤드마다 primary와 replica를 서로 다른 AZ에, 자동 장애 조치",
         "EFS(리전 클래스)는 AZ마다 마운트 타깃을 두어 AZ 장애에도 같은 AZ 경로로 접근",
-        "분석 VPC는 Redshift Multi-AZ와 DocumentDB writer/reader, 데이터 플랫폼 VPC와 피어링",
-        "사내 데이터 센터는 가상 프라이빗 게이트웨이의 Site-to-Site VPN(터널 2개)으로 연결"])
+        "분석 VPC는 Redshift Multi-AZ(서브넷 3개, AZ당 2노드)와 DocumentDB writer/reader",
+        "두 VPC와 사내 데이터 센터를 Transit Gateway 하나로 연결 (피어링은 비전이적이라 다른 VPC의 VPN을 쓸 수 없음)",
+        "사내 데이터 센터는 고객 게이트웨이 2개(장비·ISP 분리)의 Site-to-Site VPN, 각각 터널 2개 (REL02-BP02)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60007", "10.70.0.0/16", "data-platform", Environment="production")
     azs = "abc"
     public = [s.subnet(f"subnet-dp-pub-{az}", vpc, az, f"10.70.{i}.0/24", f"public-{az}", "public") for i, az in enumerate(azs)]
