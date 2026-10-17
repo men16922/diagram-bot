@@ -129,7 +129,9 @@ def resource_style(shape):
     if shape.get("label_side") == "right":
         style += "labelWidth=170;labelPosition=right;verticalLabelPosition=middle;align=left;verticalAlign=middle;spacingLeft=8;"
     else:
-        style += "labelWidth=140;align=center;verticalLabelPosition=bottom;verticalAlign=top;spacingTop=8;"
+        style += f"labelWidth={shape.get('label_width', 140)};align=center;verticalLabelPosition=bottom;verticalAlign=top;spacingTop=8;"
+    if shape.get("font_size"):
+        style += f"fontSize={shape['font_size']};"
     if shape.get("outside_vpc") and not icon:
         # Target registered with AvailabilityZone=all: an address outside the VPC (e.g. on premises).
         style += "shape=mxgraph.aws4.traditional_server;fillColor=#232F3D;strokeColor=none;gradientColor=none;"

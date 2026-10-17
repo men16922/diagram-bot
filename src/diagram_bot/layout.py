@@ -86,9 +86,10 @@ class Canvas:
 
     def label_box(self, shape):
         x, y = self.abs[shape["id"]]
-        lines = label_lines(shape["label"], BOTTOM_LABEL if shape.get("label_side") == "bottom" else SIDE_LABEL)
+        width = shape.get("label_width") or (BOTTOM_LABEL if shape.get("label_side") == "bottom" else SIDE_LABEL)
+        lines = label_lines(shape["label"], width)
         if shape.get("label_side") == "bottom":
-            return (x + shape["w"] / 2 - BOTTOM_LABEL / 2, y + shape["h"] + 8, BOTTOM_LABEL, lines * LINE)
+            return (x + shape["w"] / 2 - width / 2, y + shape["h"] + 8, width, lines * LINE)
         if shape.get("label_side") == "right":
             height = lines * LINE
             return (x + shape["w"] + 8, y + shape["h"] / 2 - height / 2, SIDE_LABEL, height)
@@ -306,7 +307,7 @@ def layout_view(snapshot, graph, selection):
                view=view["kind"], vpc=view["vpc"] or "", focus=view["resource"] or "",
                references="1" if view["references"] else "0")
     if view["kind"] == "overview":
-        overview(canvas, snapshot, graph, nodes, vpc_of)
+        overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of)
     else:
         detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of)
     width = max(s["x"] + s["w"] for s in canvas.shapes if s["parent"] == "1")
@@ -345,7 +346,109 @@ def edge_between(e, source, target, path, constraints):
             "label": "", "auxiliary": False}
 
 
-def overview(canvas, snapshot, graph, nodes, vpc_of):
+# Overview cards show each VPC at a glance: its services per tier (public, private, data), counted.
+TIER_NAMES = ("퍼블릭", "프라이빗", "격리")  # the subnet legend: internet route, NAT/TGW/VGW route, none
+GLANCE = {"igw": "IGW", "nat": "NAT", "alb": "ALB", "nlb": "NLB", "gwlb": "GWLB", "ec2": "EC2", "eks": "EKS", "ecs": "ECS 서비스",
+          "lambda": "Lambda", "sagemaker": "SageMaker", "hyperpod": "HyperPod", "endpoint": "엔드포인트", "rds": "RDS", "aurora": "Aurora",
+          "documentdb": "DocumentDB", "neptune": "Neptune", "cache": "ElastiCache", "msk": "MSK", "opensearch": "OpenSearch", "efs": "EFS",
+          "fsx": "FSx", "redshift": "Redshift"}
+GLANCE_KINDS = {"internet_gateway": "igw", "nat_gateway": "nat", "ec2": "ec2", "eks_cluster": "eks", "ecs_service": "ecs",
+                "lambda_function": "lambda", "sagemaker_endpoint": "sagemaker", "sagemaker_cluster": "hyperpod", "vpc_endpoint": "endpoint",
+                "cache_node": "cache", "msk_broker": "msk", "search_node": "opensearch", "efs_mount_target": "efs",
+                "fsx_file_system": "fsx", "redshift_cluster": "redshift"}
+SLOT_W, GLANCE_ICON, GLANCE_LEFT = 80, 32, 70
+
+
+def glance_key(n):
+    if n["kind"] == "load_balancer":
+        return {"network": "nlb", "gateway": "gwlb"}.get(n["attributes"].get("Type"), "alb")
+    if n["kind"] == "db_instance":
+        return {"aurora": "aurora", "documentdb": "documentdb", "neptune": "neptune"}.get(icon_variant(n), "rds")
+    return GLANCE_KINDS.get(n["kind"])
+
+
+def glance_label(key, members, standby, grouped):
+    """'EC2 × 6' over one detail line (scaling groups, scheme, Multi-AZ, endpoint types…)."""
+    a = lambda n: n["attributes"]
+    distinct = {"efs": lambda n: a(n).get("FileSystemId"), "redshift": lambda n: n["resource_id"].removesuffix("#secondary"),
+                "opensearch": lambda n: a(n).get("DomainName"), "msk": lambda n: n["resource_id"].split("#")[0]}.get(key, lambda n: n["id"])
+    count = len({distinct(n) for n in members})
+    detail = None
+    if key == "ec2":
+        groups = len({grouped[n["id"]] for n in members if n["id"] in grouped})
+        fast = sum(bool(GPU.match(instance_family(n)) or accelerated_icon(n)) for n in members)
+        detail = " · ".join(filter(None, (f"ASG {groups}개" if groups else None, f"가속 {fast}" if fast else None)))
+    elif key in ("alb", "nlb", "gwlb"):
+        internal = sum(a(n).get("Scheme") == "internal" for n in members)
+        detail = "내부" if internal == len(members) else "인터넷" if not internal else f"인터넷 {len(members) - internal} · 내부 {internal}"
+    elif key in ("rds", "aurora", "documentdb", "neptune"):
+        detail = "Multi-AZ" if standby or len(members) > 1 else "Single-AZ"
+    elif key == "endpoint":
+        types = [a(n).get("VpcEndpointType") for n in members]
+        detail = " · ".join(f"{t} {types.count(t)}" for t in ("Interface", "Gateway") if t in types)
+    elif key == "cache":
+        detail = ENGINES.get(a(members[0]).get("Engine"), a(members[0]).get("Engine"))
+    elif key == "fsx":
+        detail = ", ".join(sorted({(a(n).get("LustreConfiguration") or {}).get("DeploymentType") or a(n).get("FileSystemType", "") for n in members}))
+    elif key == "sagemaker":
+        detail = a(members[0]).get("InstanceType")
+    elif key == "ecs":
+        detail = f"태스크 {sum(int(a(n).get('runningCount') or 0) for n in members)}"
+    return GLANCE[key] + ("" if key == "igw" else f" × {count}") + (f"\n{detail}" if detail else "")
+
+
+def vpc_glance(vpc, nodes, graph, vpc_of, subnet_of):
+    """Rows of (members, key, label) per tier for one VPC card."""
+    inside = [n for k, n in nodes.items() if vpc_of.get(k) == vpc["id"] and not n["reference_only"]]
+    grouped = {e["target"]: e["source"] for e in graph["edges"] if e["relation"] == "asg_member"}
+    standby = any(n["kind"] == "db_standby" for n in inside)
+
+    def tier(n):
+        # Public: an internet route; data: no internet route at all (isolated) or a data-tier subnet; else private.
+        subnet = nodes.get(subnet_of.get(n["id"]))
+        if n["kind"] == "internet_gateway" or (subnet and tier_rank(subnet) == 0):
+            return 0
+        return 2 if subnet and (subnet.get("route_class") == "isolated" or tier_rank(subnet) == 3) else 1
+    groups = {}
+    for n in sorted(inside, key=lambda n: n["id"]):
+        key = glance_key(n)
+        if key:
+            groups.setdefault((tier(n), key), []).append(n)
+    order = list(GLANCE)
+    rows = [[] for _ in TIER_NAMES]
+    for (t, key), members in sorted(groups.items(), key=lambda item: (item[0][0], order.index(item[0][1]))):
+        rows[t].append((members, key, glance_label(key, members, standby, grouped)))
+    return rows
+
+
+def glance_lines(items):
+    """Height of each line of three icons: the icon plus its tallest wrapped label."""
+    return [GLANCE_ICON + 18 + LINE * max(label_lines(label, SLOT_W - 2) for _, _, label in items[i:i + 3])
+            for i in range(0, len(items), 3)]
+
+
+def glance_height(rows):
+    return sum(sum(glance_lines(items)) for items in rows)
+
+
+def draw_glance(canvas, card, rows, top):
+    """Tier captions and counted service icons inside a VPC card; an icon opens its first resource in the inspector."""
+    y = top
+    for t, items in enumerate(rows):
+        if not items:
+            continue
+        canvas.add(cell_id(card["resource"] + f"/tier/{t}"), card["id"], 12, y + 14, GLANCE_LEFT - 16, 20, "caption", TIER_NAMES[t])
+        lines = glance_lines(items)
+        for i, (members, key, label) in enumerate(items):
+            first = members[0]
+            canvas.add(cell_id(card["resource"] + f"/glance/{t}/{key}"), card["id"],
+                       GLANCE_LEFT + (i % 3) * SLOT_W + (SLOT_W - GLANCE_ICON) / 2, y + sum(lines[:i // 3]) + 6, GLANCE_ICON, GLANCE_ICON,
+                       "resource", label, resource=first["id"], kind=first["kind"], label_side="bottom", label_width=SLOT_W - 2,
+                       font_size=10, tooltip=f"{label.splitlines()[0]} · 선택하면 {first['name']} 속성", variant=None if key == "endpoint" else icon_variant(first))
+        y += sum(lines)
+
+
+def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
     vpcs = sorted((n for n in nodes.values() if n["kind"] == "vpc"), key=lambda n: (n["name"], n["id"]))
     links = overview_links(graph, nodes)
     to_hub = [(e, a, b) for e, a, b in links if nodes[a]["kind"] == "vpc"]
@@ -367,41 +470,40 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
     for key, vpc in vpc_of.items():
         members.setdefault(vpc, []).append(nodes[key])
     vpc_status = next((c["status"] for c in snapshot["coverage"] if c["operation"] == "describe_vpcs"), "unavailable")
-    cards = []
+    cards, glances, heads = [], {}, {}
     for vpc in vpcs:
         inside = members.get(vpc["id"], [])
-        # Distinct resources: an EFS file system by its mount targets, a Multi-AZ Redshift cluster once.
-        count = lambda kind: len({n["attributes"].get("FileSystemId") if kind == "efs_mount_target" else n["resource_id"].removesuffix("#secondary")
-                                  for n in inside if n["kind"] == kind})
         azs = sorted({n["attributes"].get("AvailabilityZone") for n in inside if n["kind"] == "subnet"} - {None})
-        # Every collected kind with a count, wrapped onto lines that fit the card.
-        counts = [f"{label} {count(kind)}" for label, kind in SUMMARY if count(kind) or label in ("Subnet", "EC2")]
-        rows = []
-        for item in counts:
-            if rows and text_width(rows[-1] + " · " + item) < 285:
-                rows[-1] += " · " + item
-            else:
-                rows.append(item)
-        where = (f"계정 {vpc['account']}" + (f" · {vpc['region']}" if len(snapshot["metadata"]["regions"]) > 1 else "") + "\n") if combined else ""
-        label = (f"VPC · {fit_label(vpc['name'], 290, 1)}\n{where}{vpc['attributes'].get('CidrBlock', '')} · {vpc['resource_id']}\n"
-                 + "\n".join(rows) + f"\nAZ {', '.join(azs) if azs else '미확인'}")
+        subnets = sum(n["kind"] == "subnet" for n in inside)
+        where = (f"\n계정 {vpc['account']}" + (f" · {vpc['region']}" if len(snapshot["metadata"]["regions"]) > 1 else "")) if combined else ""
+        label = (f"VPC · {fit_label(vpc['name'], 250, 1)}{where}\n{vpc['attributes'].get('CidrBlock', '')} · AZ {len(azs)}개 · 서브넷 {subnets}개"
+                 + ("" if inside else "\n조회된 리소스 없음"))
+        glances[vpc["id"]] = vpc_glance(vpc, nodes, graph, vpc_of, subnet_of)
+        heads[vpc["id"]] = 22 + 15 * (label.count("\n") + 1)
         cards.append((label, vpc["id"], len(inside) == 0))
     # Collected security groups are rule sets, not placed resources; referenced ones still count.
     # Lambda functions without VpcConfig run outside every VPC; their placement is known, not missing.
     regional = [n for n in nodes.values() if n["kind"] in ("lambda_function", "sagemaker_endpoint") and n["id"] not in vpc_of]
-    outside = [n for n in nodes.values() if n["kind"] not in ("vpc", "lambda_function", "sagemaker_endpoint", "placement_group")
-               and n["id"] not in vpc_of and not (n["kind"] == "security_group" and not n["reference_only"])]
+    # Only collected resources whose VPC is unknown; references (SG/ENI/EBS IDs seen in other responses) are not placed resources.
+    outside = [n for n in nodes.values() if n["kind"] not in ("vpc", "lambda_function", "sagemaker_endpoint", "placement_group", "security_group",
+                                                               "transit_gateway", "customer_gateway", "vpn_gateway", "vpc_peering")
+               and n["id"] not in vpc_of and not n["reference_only"]]
     if regional:
         kinds = " · ".join(f"{label} {count}개" for label, kind in (("Lambda", "lambda_function"), ("SageMaker 엔드포인트", "sagemaker_endpoint"))
                            if (count := sum(n["kind"] == kind for n in regional)))
         cards.append((f"VPC 미연결 리전 서비스\n{kinds}\n네트워크 구성도에는 그리지 않음\n리소스 목록·CSV에서 확인", None, False))
     if outside:
-        refs = sum(n["reference_only"] for n in outside)
-        cards.append((f"VPC 외 · 배치 미확인\n리소스 {len(outside)}개 (참조만 확인 {refs}개)\n보안 그룹·ENI·EBS·IP 대상 등\n상세 보기에서 관계 확인", None, False))
+        kinds = sorted({n["kind"] for n in outside})
+        cards.append((f"VPC 외 · 배치 미확인\n수집 리소스 {len(outside)}개\n{', '.join(kinds[:3])}{' 등' if len(kinds) > 3 else ''}\n상세 보기·리소스 목록에서 확인", None, False))
     if not vpcs:
         message = "조회된 VPC가 없습니다." if vpc_status == "complete" else "VPC 조회가 완료되지 않았습니다.\n빈 환경이 아니라 권한·조회 실패일 수 있습니다."
         cards.insert(0, (message, None, True))
-    card_h = max([112] + [36 + 15 * (label.count("\n") + 1) for label, _, _ in cards])
+    card_h = max([112] + [36 + 15 * (label.count("\n") + 1) for label, _, _ in cards]
+                 + [heads[r] + glance_height(glances[r]) + 6 for r in glances])
+
+    def fill():
+        for shape in [s for s in canvas.shapes if s["role"] == "summary" and s.get("resource") in glances]:
+            draw_glance(canvas, shape, glances[shape["resource"]], heads[shape["resource"]])
     if not to_hub and not combined:
         for i, (label, resource, empty) in enumerate(cards):
             canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + gap),
@@ -409,10 +511,12 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
                        resource=resource, empty=empty)
         group["h"] = VPC_HEADER + 18 + -(-len(cards) // columns) * (card_h + gap)
         cloud["h"] = group["y"] + group["h"] + 20
+        fill()
         return
     account_of = {v["id"]: v["account"] for v in vpcs} if combined else None
     network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, len(vpcs) if combined else len(connected), to_hub, to_site,
             account_of)
+    fill()
 
 
 def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, top_count, to_hub, to_site, account_of=None):
