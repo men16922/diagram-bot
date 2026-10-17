@@ -9,7 +9,7 @@ subnet or an icon. Identical input and options always yield identical coordinate
 import hashlib
 import re
 
-from .views import AUXILIARY, GROUP_TARGETS, GROUPS, REGIONAL, containment
+from .views import AUXILIARY, GROUP_TARGETS, GROUPS, HUB_ORDER, REGIONAL, containment, overview_links
 
 ENGINE, VERSION = "diagram-bot-layered", 2
 ICON, LINE, MAX_LINES = 52, 15, 4
@@ -299,15 +299,38 @@ def cloud_label(meta):
     return "AWS Cloud · 설계안 (실제 계정 아님)" if meta.get("design") else f"AWS Cloud · 계정 {meta['account_id']}"
 
 
+def icon_label(n, side):
+    width = SIDE_LABEL if side == "right" else BOTTOM_LABEL
+    parts = resource_label(n).split("\n")
+    # The name may wrap into whatever the detail lines leave of the label's line budget.
+    first = max(1, (SIDE_LINES if side == "right" else MAX_LINES) - len(parts) + 1)
+    return "\n".join((fit_name(part, width) if first == 1 else fit_label(part, width, first)) if i == 0 else fit_label(part, width, 1)
+                     for i, part in enumerate(parts))
+
+
+def edge_between(e, source, target, path, constraints):
+    """An overview route drawn between two shapes standing for the relation's ends (a VPC card for its attachment)."""
+    return {"id": cell_id("edge/" + e["id"]), "relation_id": e["id"], "relation": e["relation"], "source": cell_id(source),
+            "target": cell_id(target), "evidence": e["evidence"], "points": path[1:-1], "path": path, "constraints": constraints,
+            "label": "", "auxiliary": False}
+
+
 def overview(canvas, snapshot, graph, nodes, vpc_of):
     vpcs = sorted((n for n in nodes.values() if n["kind"] == "vpc"), key=lambda n: (n["name"], n["id"]))
+    links = overview_links(graph, nodes)
+    to_hub = [(e, a, b) for e, a, b in links if nodes[a]["kind"] == "vpc"]
+    to_site = [(e, a, b) for e, a, b in links if nodes[b]["kind"] == "customer_gateway"]
+    # Connected VPCs come first so their cards sit in the rows right above the network hubs.
+    connected = {a for _, a, _ in to_hub}
+    vpcs.sort(key=lambda n: n["id"] not in connected)
     columns = 3
     card_w, gap = 320, 24
     width = 32 + columns * (card_w + gap)
     meta = snapshot["metadata"]
     cloud = canvas.add("cloud", "1", 24, 112, width + 40, 0, "cloud", cloud_label(meta))
     group = canvas.add("region", "cloud", 20, 44, width, 0, "region",
-                       f"Region · {meta['region']} · VPC {len(vpcs)}개 · 요약 카드를 선택하면 상세 구성으로 이동")
+                       f"Region · {meta['region']} · VPC {len(vpcs)}개 · 요약 카드를 선택하면 상세 구성으로 이동"
+                       + (" · 연결선은 TGW·피어링·VPN 설정" if links else ""))
     members = {}
     for key, vpc in vpc_of.items():
         members.setdefault(vpc, []).append(nodes[key])
@@ -344,12 +367,118 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
         message = "조회된 VPC가 없습니다." if vpc_status == "complete" else "VPC 조회가 완료되지 않았습니다.\n빈 환경이 아니라 권한·조회 실패일 수 있습니다."
         cards.insert(0, (message, None, True))
     card_h = max([112] + [36 + 15 * (label.count("\n") + 1) for label, _, _ in cards])
-    for i, (label, resource, empty) in enumerate(cards):
-        canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + gap),
-                   VPC_HEADER + 18 + (i // columns) * (card_h + gap), card_w, card_h, "summary", label,
-                   resource=resource, empty=empty)
-    group["h"] = VPC_HEADER + 18 + -(-len(cards) // columns) * (card_h + gap)
+    if not to_hub:
+        for i, (label, resource, empty) in enumerate(cards):
+            canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + gap),
+                       VPC_HEADER + 18 + (i // columns) * (card_h + gap), card_w, card_h, "summary", label,
+                       resource=resource, empty=empty)
+        group["h"] = VPC_HEADER + 18 + -(-len(cards) // columns) * (card_h + gap)
+        cloud["h"] = group["y"] + group["h"] + 20
+        return
+    network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, connected, to_hub, to_site)
+
+
+def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, connected, to_hub, to_site):
+    """Overview with connections: connected VPC cards in rows, a band of network hubs (Transit Gateway,
+    VPN gateway, peering) below them, the customer gateways in a data center box right of the AWS Cloud,
+    and the remaining cards under the hubs.
+
+    Every route has its own lane: a card's routes leave from separate points on its bottom edge, routes from
+    upper rows drop through the gap right of their card, and each route has its own horizontal lane above the
+    hubs, so two routes share a segment only where they meet at the same shape."""
+    top = cards[:len(connected)]
+    rest = cards[len(connected):]
+    rows = [top[i:i + columns] for i in range(0, len(top), columns)]
+    hubs = sorted({b for _, _, b in to_hub} | {a for _, a, _ in to_site}, key=lambda k: (HUB_ORDER.get(nodes[k]["kind"], 9), nodes[k]["name"], k))
+    sites = sorted({b for _, _, b in to_site}, key=lambda k: (nodes[k]["name"], k))
+    hub_index = {k: i for i, k in enumerate(hubs)}
+    order = lambda link: (hub_index[link[2]], link[0]["id"])
+    by_card = {}
+    for link in sorted(to_hub, key=order):
+        by_card.setdefault(link[1], []).append(link)
+    row_of = {resource: (r, c) for r, row in enumerate(rows) for c, (_, resource, _) in enumerate(row)}
+    # Routes from upper rows drop through the gap right of their card; widen gaps and row gutters to fit them.
+    gap_use = [sum(len(by_card.get(resource, [])) for row in rows[:-1] for c, (_, resource, _) in enumerate(row) if c == col)
+               for col in range(columns)]
+    gaps = [24 + 6 * n for n in gap_use]
+    gutters = [24 + 6 * sum(len(by_card.get(resource, [])) for _, resource, _ in row) for row in rows[:-1]] + [0]
+    xs = [24 + sum(card_w + gaps[c] for c in range(col)) for col in range(columns)]
+    ys = [VPC_HEADER + 18 + sum(card_h + gutters[r] for r in range(row)) for row in range(len(rows))]
+    ox, oy = canvas.abs[group["id"]][0], canvas.abs[group["id"]][1]
+    for r, row in enumerate(rows):
+        for c, (label, resource, empty) in enumerate(row):
+            canvas.add(cell_id(resource), group["id"], xs[c], ys[r], card_w, card_h, "summary", label, resource=resource, empty=empty)
+    cards_bottom = ys[-1] + card_h
+    lane_top = cards_bottom + 14
+    hub_y = lane_top + 6 * len(to_hub) + 18
+    grid_width = xs[-1] + card_w + gaps[-1]
+    band = len(hubs) * SIDE_SLOT
+    start = 24 + max(0, (grid_width - 24 - band) / 2)
+    hub_shapes = {}
+    for i, key in enumerate(hubs):
+        hub_shapes[key] = canvas.add(cell_id(key), group["id"], start + i * SIDE_SLOT, hub_y, ICON, ICON, "resource",
+                                     icon_label(nodes[key], "right"), resource=key, kind=nodes[key]["kind"],
+                                     reference=nodes[key]["reference_only"], label_side="right", tooltip=nodes[key]["name"],
+                                     variant=icon_variant(nodes[key]))
+    entering = {}
+    for link in sorted(to_hub, key=order):
+        entering.setdefault(link[2], []).append(link)
+    entry_x = {link[0]["id"]: (i + 1) / (len(group_) + 1) for group_ in entering.values() for i, link in enumerate(group_)}
+    leaving = {}
+    for link in sorted(to_site, key=lambda link: (hub_index[link[1]], link[0]["id"])):
+        leaving.setdefault(link[1], []).append(link)
+    exit_x = {link[0]["id"]: (i + 1) / (len(group_) + 1) for group_ in leaving.values() for i, link in enumerate(group_)}
+    lane = 0
+    gap_slot = [0] * columns
+    row_slot = [0] * len(rows)
+    for resource, card_links in sorted(by_card.items(), key=lambda item: row_of[item[0]]):
+        r, c = row_of[resource]
+        for i, (e, vpc, hub) in enumerate(card_links):
+            fx = (i + 1) / (len(card_links) + 1)
+            sx, sy = ox + xs[c] + card_w * fx, oy + ys[r] + card_h
+            hx, hy = canvas.abs[hub_shapes[hub]["id"]]
+            tx = hx + ICON * entry_x[e["id"]]
+            ly = oy + lane_top + 6 * lane
+            lane += 1
+            if r < len(rows) - 1:
+                gy = sy + 12 + 6 * row_slot[r]
+                gx = ox + xs[c] + card_w + 8 + 6 * gap_slot[c]
+                row_slot[r] += 1
+                gap_slot[c] += 1
+                path = [(sx, sy), (sx, gy), (gx, gy), (gx, ly), (tx, ly), (tx, hy)]
+            else:
+                path = [(sx, sy), (sx, ly), (tx, ly), (tx, hy)]
+            canvas.edges.append(edge_between(e, vpc, hub, path, f"exitX={fx:.3f};exitY=1;entryX={entry_x[e['id']]:.3f};entryY=0;"))
+    site_lanes = hub_y + ICON + 16
+    next_y = site_lanes + 6 * len(to_site) + (24 if to_site else 0)
+    for i, (label, resource, empty) in enumerate(rest):
+        canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + 24),
+                   next_y + (i // columns) * (card_h + 24), card_w, card_h, "summary", label, resource=resource, empty=empty)
+    width = max(grid_width, start + band + 24, 32 + columns * (card_w + 24) if rest else 0)
+    group["w"] = width
+    group["h"] = next_y + (-(-len(rest) // columns) * (card_h + 24) if rest else 0) + 6
+    cloud["w"] = width + 40
     cloud["h"] = group["y"] + group["h"] + 20
+    if not to_site:
+        return
+    # Customer gateways stacked in a data center box right of the AWS Cloud, each entered from the left.
+    corridor = cloud["x"] + cloud["w"] + 12
+    box_x = corridor + 6 * len(to_site) + 24
+    box = canvas.add("onprem", "1", box_x, cloud["y"], SIDE_SLOT + 40, 44 + len(sites) * (ICON + 40), "onprem",
+                     "Corporate data center · 고객 게이트웨이")
+    site_shapes = {key: canvas.add(cell_id(key), box["id"], 20, 44 + i * (ICON + 40), ICON, ICON, "resource",
+                                   icon_label(nodes[key], "right"), resource=key, kind=nodes[key]["kind"],
+                                   reference=nodes[key]["reference_only"], label_side="right", tooltip=nodes[key]["name"],
+                                   outside_vpc=True, variant=icon_variant(nodes[key]))
+                   for i, key in enumerate(sites)}
+    for k, (e, hub, site) in enumerate(sorted(to_site, key=lambda link: (hub_index[link[1]], link[0]["id"]))):
+        hx, hy = canvas.abs[hub_shapes[hub]["id"]]
+        cx, cy = canvas.abs[site_shapes[site]["id"]]
+        sx = hx + ICON * exit_x[e["id"]]
+        ly = oy + site_lanes + 6 * k
+        x = corridor + 6 * k
+        path = [(sx, hy + ICON), (sx, ly), (x, ly), (x, cy + ICON / 2), (cx, cy + ICON / 2)]
+        canvas.edges.append(edge_between(e, hub, site, path, f"exitX={exit_x[e['id']]:.3f};exitY=1;entryX=0;entryY=0.5;"))
 
 
 def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
@@ -373,13 +502,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
 
     def resource(key, parent, x, y, side):
         n = nodes[key]
-        width = SIDE_LABEL if side == "right" else BOTTOM_LABEL
-        parts = resource_label(n).split("\n")
-        # The name may wrap into whatever the detail lines leave of the label's line budget.
-        first = max(1, (SIDE_LINES if side == "right" else MAX_LINES) - len(parts) + 1)
-        label = "\n".join((fit_name(part, width) if first == 1 else fit_label(part, width, first)) if i == 0 else fit_label(part, width, 1)
-                           for i, part in enumerate(parts))
-        shape = canvas.add(cell_id(key), parent, x, y, ICON, ICON, "resource", label, resource=key, kind=n["kind"],
+        shape = canvas.add(cell_id(key), parent, x, y, ICON, ICON, "resource", icon_label(n, side), resource=key, kind=n["kind"],
                            reference=n["reference_only"], label_side=side, emphasis=key == focus, tooltip=n["name"],
                            outside_vpc=outside_vpc(n), variant=icon_variant(n))
         placed[key] = shape

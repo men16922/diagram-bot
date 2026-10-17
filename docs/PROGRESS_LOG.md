@@ -2,6 +2,17 @@
 
 Last Updated: 2026-10-18
 
+## 2026-10-18 — Overview becomes the network diagram (owner: 전체 구성이 의미 없어 보인다; goal: 잔여 작업 완료시까지)
+
+- The overview drew VPC cards only (no relations). It now draws the network joining them: VPC → Transit Gateway (via its
+  attachment), peering, VPN gateways, and VPN to customer gateways in a data center box; one lane per route, routes from
+  upper rows drop through the gap right of their card. Unconnected snapshots keep the plain card grid.
+- A snapshot with one VPC and no TGW/peering/VPN opens in the detail view.
+- Fixed: the review step's "hidden in this view" notice survived snapshot/view switches (seen in verify_demo screenshots);
+  notices now clear on a new snapshot or view.
+- Verified: `make check` 152 tests (overview readable, no shared segments, no route through a card, for all samples and
+  the peering/VGW design); `verify_demo.py` 28 checks incl. detail-first single VPC, TGW/CGW overview, no stale notice.
+
 ## 2026-10-18 — Samples aligned with AWS best practice + AI/GPU (goal: 구현 및 검증 완료시까지 수행)
 
 - Plan docs/plans/2026-10-18-best-practice-samples.md executed with the recommended decisions (TGW hub, sample version,

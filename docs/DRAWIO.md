@@ -36,7 +36,9 @@ mxGraph·maxGraph 같은 JavaScript 라이브러리를 서버에서 쓰지도 �
 
 - `graph.py`는 API 응답 필드만으로 노드(VPC, 서브넷, EC2, LB, RDS …)와 관계(`in_vpc`, `in_subnet`, `registered_target`, `associated_load_balancer` …)를 만듭니다. 각 관계에는 근거 API 필드가 붙습니다. IP나 이름이 같다고 해서 관계를 추측하지 않습니다.
 - `views.py`는 보기마다 무엇을 그릴지 정합니다.
-  - **전체 구성(overview):** 계정 › 리전 › VPC 요약 카드입니다. VPC에 속하지 않은 리소스는 별도 카드에 표시합니다(VPC 미연결 Lambda, 배치 미확인 리소스).
+  - **전체 구성(overview):** 계정 › 리전 › VPC 요약 카드와 VPC를 잇는 네트워크입니다. 연결된 VPC 카드 아래에 Transit Gateway·VPN 게이트웨이·피어링 줄을 두고,
+    VPN은 AWS Cloud 오른쪽 Corporate data center 상자의 고객 게이트웨이까지 잇습니다. 경로마다 카드 아래 출발점·전용 가로 차선을 따로 두고 위 행의 경로는 카드 오른쪽 틈으로 내려가
+    두 경로는 같은 도형에서 만날 때만 선분을 공유합니다(`network()`). 연결이 없으면 카드 격자만 그립니다. VPC에 속하지 않은 리소스는 별도 카드(VPC 미연결 Lambda, 배치 미확인 리소스).
   - **상세 구성(detail):** VPC 하나와 그 안의 모든 리소스, 등록 대상, 리전 리소스(TGW, VPN)를 그립니다.
   - **선택 리소스(focus):** 리소스 하나와 직접 관계, 그리고 위치를 읽는 데 필요한 상위 경계만 그립니다.
   - SG·ENI·EBS 같은 참조 리소스는 옵션을 켤 때만 그립니다(`AUXILIARY`).

@@ -309,3 +309,45 @@ def test_ai_service_endpoints_use_their_service_icons(service, icon):
     node = {"kind": "vpc_endpoint", "attributes": {"ServiceName": f"com.amazonaws.us-east-1.{service}"}}
     style = resource_style({"kind": "vpc_endpoint", "variant": icon_variant(node)})
     assert (f"resIcon=mxgraph.aws4.{icon};" in style) if icon else "shape=mxgraph.aws4.endpoints;" in style
+
+
+def assert_routes_avoid_cards(layout):
+    """Overview routes never run through a summary card other than the one they leave."""
+    cards = [s for s in layout["shapes"] if s["role"] == "summary"]
+    for edge in layout["edges"]:
+        for (x1, y1), (x2, y2) in zip(edge["path"], edge["path"][1:]):
+            segment = (min(x1, x2), min(y1, y2), max(x1, x2) + 0.01, max(y1, y2) + 0.01)
+            for card in cards:
+                if card["id"] in (edge["source"], edge["target"]):
+                    continue
+                x, y = layout["absolute"][card["id"]]
+                assert not overlap(segment, (x + 1, y + 1, x + card["w"] - 1, y + card["h"] - 1)), (edge["relation"], card["label"][:30])
+
+
+@pytest.mark.parametrize("key", sorted(SAMPLES))
+def test_overview_draws_the_network_between_vpcs(key):
+    snapshot = SAMPLES[key]()
+    layout = layout_document(snapshot, "overview")
+    assert_readable(layout)
+    assert_no_shared_segments(layout)
+    assert_routes_avoid_cards(layout)
+    validate_document(generate_document(snapshot))
+    relations = sorted(e["relation"] for e in layout["edges"])
+    expected = {
+        "environments": ["attached_transit_gateway"] * 3,
+        "hybrid": ["attached_transit_gateway"] + ["vpn_connection"] * 2,
+        "data-platform": ["attached_transit_gateway"] * 2 + ["vpn_connection"] * 2,
+        "ai-platform": ["attached_transit_gateway"],
+    }.get(key, [])
+    assert relations == expected
+
+
+def test_overview_draws_peering_and_vpn_gateways():
+    snapshot = full_design().snapshot()
+    layout = layout_document(snapshot, "overview")
+    assert_readable(layout)
+    assert_no_shared_segments(layout)
+    assert_routes_avoid_cards(layout)
+    kinds = {s.get("kind") for s in layout["shapes"] if s["role"] == "resource"}
+    assert {"vpc_peering", "vpn_gateway", "customer_gateway"} <= kinds
+    assert sorted(e["relation"] for e in layout["edges"]) == ["in_vpc", "in_vpc", "peer_vpc", "vpn_connection"]

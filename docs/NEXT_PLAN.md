@@ -41,9 +41,10 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 
 ## Candidate Follow-ups (not approved)
 
+- Multi-account / multi-region view: merge several snapshots (accounts × regions) into one network diagram.
+
 - Optional sample items from ARCHITECTURE.md §4 #7 (microservices 3 AZ, EKS /28 cluster subnets, egress VPC).
 - Collection scope for drawn best practices: CloudFront/WAF, Elastic IPs, TGW route tables, Direct Connect, multi-account view.
-- verify_demo screenshots sometimes show a stale "현재 보기에서 숨겨진 리소스입니다" toast; not reproduced in isolation.
 
 - Design → IaC (CloudFormation/CDK) export; brownfield design starting from a collected snapshot; chat streaming.
 

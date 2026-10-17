@@ -28,6 +28,30 @@ def containment(graph):
     return nodes, vpc_of, subnet_of
 
 
+HUB_ORDER = {"transit_gateway": 0, "vpn_gateway": 1, "vpc_peering": 2}
+
+
+def overview_links(graph, nodes):
+    """Connections the overview draws between VPC cards and network hubs, then from hubs to on premises.
+
+    Each link is (edge, from, to): VPC -> Transit Gateway (through its VPC attachment), VPC -> peering or
+    virtual private gateway, and Transit Gateway / virtual private gateway -> customer gateway (VPN)."""
+    attachment_vpc = {e["source"]: e["target"] for e in graph["edges"]
+                      if e["relation"] == "in_vpc" and nodes.get(e["source"], {}).get("kind") == "tgw_attachment"}
+    links = []
+    for e in graph["edges"]:
+        source, target = nodes.get(e["source"]), nodes.get(e["target"])
+        if not source or not target:
+            continue
+        if e["relation"] == "attached_transit_gateway" and e["source"] in attachment_vpc:
+            links.append((e, attachment_vpc[e["source"]], e["target"]))
+        elif e["relation"] in ("in_vpc", "peer_vpc") and source["kind"] in ("vpc_peering", "vpn_gateway") and target["kind"] == "vpc":
+            links.append((e, e["target"], e["source"]))
+        elif e["relation"] == "vpn_connection":
+            links.append((e, e["source"], e["target"]))
+    return links
+
+
 def view_graph(graph, view=None, vpc=None, resource=None, references=False):
     """Return visible node IDs, drawn edges and counts for one view."""
     view = view or ("detail" if vpc else "overview")
@@ -68,8 +92,11 @@ def view_graph(graph, view=None, vpc=None, resource=None, references=False):
         visible |= {subnet_of[k] for k in list(visible) if k in subnet_of}
         drawn = [e for e in drawn if not (e["relation"] == "in_subnet" and nodes[e["source"]]["kind"] in SUBNET_KINDS)]
     else:
-        visible = {n["id"] for n in nodes.values() if n["kind"] == "vpc"}
-        drawn = []
+        # VPC summary cards plus the network that joins them: Transit Gateways, peering, VPN gateways and
+        # the customer gateways on premises.
+        links = overview_links(graph, nodes)
+        visible = {n["id"] for n in nodes.values() if n["kind"] == "vpc"} | {k for _, a, b in links for k in (a, b)}
+        drawn = [e for e, _, _ in links]
     visible -= {k for k in visible if nodes[k]["kind"] in UNDRAWN_KINDS and k != focus}
     if view != "overview":
         drawn = [e for e in drawn if e["source"] in visible and e["target"] in visible

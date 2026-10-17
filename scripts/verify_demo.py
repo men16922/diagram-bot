@@ -209,6 +209,10 @@ def main():
         # 8. Infrastructure sample: Auto Scaling frame, RDS and route-classified subnets.
         page.locator('#snapshot-select').select_option('sample-three-tier')
         ready()
+        # One VPC without TGW, peering or VPN: the snapshot opens in its detail view, not a one-card overview.
+        expect(page.locator('#view-detail')).to_have_class('view-button active')
+        # The review step's "hidden in this view" notice belongs to the previous snapshot and must not linger.
+        expect(page.locator('#toast')).to_be_hidden()
         page.locator('[data-vpc="vpc-0a1b2c3d4e5f60001"]').click()
         ready()
         frame.get_by_text(starts('Auto Scaling group · prod-web-asg')).click()
@@ -235,6 +239,13 @@ def main():
         # 9. Data platform: ECS service frame, OpenSearch per-AZ nodes, read replica, then the TGW VPNs from the analytics VPC.
         page.locator('#snapshot-select').select_option('sample-data-platform')
         ready()
+        # Connected VPCs open on the overview, which draws the Transit Gateway and the customer gateways.
+        expect(page.locator('#view-overview')).to_have_class('view-button active')
+        frame.get_by_text(starts('data-tgw')).click()
+        expect(detail).to_contain_text('Transit Gateway')
+        frame.get_by_text(starts('corp-dc-cgw-2')).click()
+        expect(detail).to_contain_text('198.51.100.20')
+        page.screenshot(path=str(args.output / 'network-overview.png'), full_page=True)
         page.locator('[data-vpc="vpc-0a1b2c3d4e5f60007"]').click()
         ready()
         frame.get_by_text(starts('ECS service · data-api')).click()
@@ -299,9 +310,9 @@ def main():
                          'SG/ENI/EBS references', 'native keyboard move', 'native note edit', 'save/reload',
                          'drawio XML download with moved geometry', 'PNG 2x white', 'PNG 1x transparent', 'PNG 3x',
                          'JSON/CSV/review CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
-                         'infrastructure sample: ASG frame, RDS standby, route-classified subnet',
+                         'single-VPC sample opens in detail; infrastructure sample: ASG frame, RDS standby, route-classified subnet',
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
-                         'data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
+                         'network overview (TGW, customer gateways); data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
                          'AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review',
                          'snapshot import', 'change review between snapshots']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

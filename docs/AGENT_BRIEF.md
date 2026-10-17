@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: Best-practice sample alignment done and verified (2026-10-18): 8 samples incl. ai-platform, GPU review rules and icons, chat GPU node groups; docs/ARCHITECTURE.md is the basis. Branch feat/chat-design-agent not merged to main yet (owner's call). Open: an occasional stale "hidden resource" toast seen only in verify_demo screenshots. No [auto] backlog.
+> ▶ NEXT SESSION: Remaining work done (2026-10-18): best-practice samples (8 incl. ai-platform), GPU rules/icons, overview redrawn as the TGW/peering/VPN network (single unconnected VPC opens in detail), stale-notice fix. Branch feat/chat-design-agent not merged to main (owner's call). Next candidate: multi-account view. No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 

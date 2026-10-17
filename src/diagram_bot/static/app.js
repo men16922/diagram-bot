@@ -10,6 +10,8 @@ const pending = new Map();
 let editorTimer, toastTimer, pngWaiter = null;
 const emptyDetail=document.querySelector('#detail-body .empty-detail');
 function el(tag, text, className) { const element=document.createElement(tag); if(text!==undefined)element.textContent=text; if(className)element.className=className; return element; }
+// Notices describe the current diagram; a new snapshot or view drops them (errors stay until they time out).
+function clearNotice() { if($('toast').className!=='error'){$('toast').hidden=true;clearTimeout(toastTimer);} }
 function toast(message, error=false) { $('toast').textContent=message; $('toast').className=error?'error':''; $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true,error?8500:4000); }
 async function api(path, options={}) {
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json','X-Diagram-Bot':state.token,...options.headers}});
@@ -92,9 +94,13 @@ async function refreshSnapshots(preferred) {
 }
 async function loadSnapshot(id) {
   if(state.dirty)await saveDocument(false);
+  clearNotice();
   state.snapshot=await api(`/api/snapshots/${id}`);state.snapshotId=id;
   state.review=await api(`/api/snapshots/${id}/findings`);renderReview();
-  state.view='overview';state.vpc=state.snapshot.graph.nodes.find(n=>n.kind==='vpc')?.resource_id||null;state.focus=null;state.selected=null;
+  // The overview shows how VPCs connect; with one VPC and no TGW, peering or VPN it is a single card, so open its detail.
+  const graphNodes=state.snapshot.graph.nodes,vpcs=graphNodes.filter(n=>n.kind==='vpc');
+  const linked=graphNodes.some(n=>['transit_gateway','vpc_peering','vpn_gateway','customer_gateway'].includes(n.kind));
+  state.view=vpcs.length===1&&!linked?'detail':'overview';state.vpc=vpcs[0]?.resource_id||null;state.focus=null;state.selected=null;
   $('snapshot-select').value=id;
   // A selection from the previous snapshot must not linger in the inspector.
   $('detail-body').replaceChildren(emptyDetail.cloneNode(true));
@@ -147,6 +153,7 @@ function documentActive() {
 }
 async function switchView(view, options={}) {
   if(state.loading||state.busy)return;
+  clearNotice();
   try{
     if(state.dirty)await saveDocument(false);
     state.view=view;if(options.vpc)state.vpc=options.vpc;if(options.focus)state.focus=options.focus;

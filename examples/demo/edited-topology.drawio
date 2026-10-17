@@ -9,7 +9,7 @@
             <mxGeometry height="30" width="1200" x="24" y="12" as="geometry" />
           </mxCell>
         </object>
-        <object label="부분 조회: describe_instances(UnauthorizedOperation) · 2026-10-17T20:39:25.528409+00:00&#xa;표시 15개 / 수집 20개 · 참조 3개 · 숨김 8개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도&#xa;퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)" layout="diagram-bot-layered/2" view="detail" vpc="vpc-demo" references="0" id="scope">
+        <object label="부분 조회: describe_instances(UnauthorizedOperation) · 2026-10-17T20:59:29.972859+00:00&#xa;표시 15개 / 수집 20개 · 참조 3개 · 숨김 8개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도&#xa;퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)" layout="diagram-bot-layered/2" view="detail" vpc="vpc-demo" references="0" id="scope">
           <mxCell parent="1" style="html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;text;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=10;fontColor=#5A6C86;strokeColor=none;fillColor=none;" vertex="1">
             <mxGeometry height="42" width="960" x="24" y="48" as="geometry" />
           </mxCell>
@@ -228,7 +228,7 @@
             </mxGeometry>
           </mxCell>
         </object>
-        <mxCell id="SjVoMCuGC08_B_KRSn9u-1" parent="1" style="rounded=1;html=0;whiteSpace=wrap;fillColor=#FFF3CD;strokeColor=#D6B453;fontColor=#6D5620;fontSize=14;" value="시연 검토 완료 · 사용자 메모" vertex="1">
+        <mxCell id="RU0uNcMCn8zeL1TXPSql-1" parent="1" style="rounded=1;html=0;whiteSpace=wrap;fillColor=#FFF3CD;strokeColor=#D6B453;fontColor=#6D5620;fontSize=14;" value="시연 검토 완료 · 사용자 메모" vertex="1">
           <mxGeometry height="85" width="220" x="48.5" y="1407.5000000000002" as="geometry" />
         </mxCell>
       </root>

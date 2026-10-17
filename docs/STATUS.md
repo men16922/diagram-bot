@@ -35,7 +35,7 @@ Last Updated: 2026-10-18
 - Graph: relation IDs from source/relation/target + port/AZ qualifiers; independent of API
   array order and target health. Same instance on two ports = two relations. Legacy snapshots
   get IDs on read in their stored order, so saved `relationIndex` documents still resolve.
-- Views (`views.py`): overview (account/region + VPC summary cards), detail (one VPC), focus
+- Views (`views.py`): overview (VPC cards + TGW/peering/VPN network to customer gateways; single unconnected VPC opens in detail), detail (one VPC), focus
   (one resource, direct relations, required boundaries). Each reports visible / collected /
   reference / hidden counts. SG/ENI/EBS references are an option; registered targets and
   unqueried references always appear in the detail view.
@@ -99,7 +99,7 @@ Last Updated: 2026-10-18
 ## Verification (2026-10-17, cloud container)
 
 - Gate, team-mode Chromium run, layout tests, 27 browser checks and evidence files: docs/archive/STATUS-verification-2026-10.md.
-  Current gate: `make check` = ruff + 143 pytest cases + CLI round trip; `verify_demo.py` 28 browser checks (2026-10-18).
+  Current gate: `make check` = ruff + 152 pytest cases + CLI round trip; `verify_demo.py` 28 browser checks (2026-10-18).
 
 ## Harness
 
