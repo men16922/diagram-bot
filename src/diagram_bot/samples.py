@@ -13,7 +13,8 @@ class Sample:
     def __init__(self, key, title, practices):
         self.key, self.title, self.practices = key, title, practices
         self.raw = {"vpcs": [], "subnets": [], "instances": [], "load_balancers": [], "target_groups": [], "target_health": [],
-                    "internet_gateways": [], "nat_gateways": [], "route_tables": [], "db_instances": [], "auto_scaling_groups": []}
+                    "internet_gateways": [], "nat_gateways": [], "route_tables": [], "db_instances": [], "auto_scaling_groups": [],
+                    "vpc_endpoints": [], "transit_gateways": [], "transit_gateway_attachments": []}
         self.counter = 0
 
     def tags(self, name, **extra):
@@ -103,6 +104,32 @@ class Sample:
             "Instances": [{"InstanceId": i, "AvailabilityZone": next(x["Placement"]["AvailabilityZone"] for x in self.raw["instances"] if x["InstanceId"] == i),
                            "LifecycleState": "InService"} for i in instances]})
 
+    def route(self, table, destination, **target):
+        routes = next(t for t in self.raw["route_tables"] if t["RouteTableId"] == table)["Routes"]
+        routes.append({("DestinationPrefixListId" if destination.startswith("pl-") else "DestinationCidrBlock"): destination,
+                       **target, "State": "active"})
+
+    def gateway_endpoint(self, key, vpc, service, tables):
+        """S3/DynamoDB gateway endpoint: reached through a prefix-list route in each listed table."""
+        self.raw["vpc_endpoints"].append({"VpcEndpointId": key, "VpcId": vpc, "VpcEndpointType": "Gateway", "State": "available",
+                                          "ServiceName": f"com.amazonaws.{REGION}.{service}", "RouteTableIds": list(tables),
+                                          "Tags": self.tags(f"{service}-gateway-endpoint")})
+        for table in tables:
+            self.route(table, f"pl-{service}", GatewayId=key)
+
+    def interface_endpoint(self, key, vpc, service, subnets):
+        self.raw["vpc_endpoints"].append({"VpcEndpointId": key, "VpcId": vpc, "VpcEndpointType": "Interface", "State": "available",
+                                          "ServiceName": f"com.amazonaws.{REGION}.{service}", "SubnetIds": list(subnets),
+                                          "PrivateDnsEnabled": True, "Tags": self.tags(f"{service}-endpoint")})
+
+    def transit_gateway(self, key, name):
+        self.raw["transit_gateways"].append({"TransitGatewayId": key, "State": "available", "Tags": self.tags(name)})
+        return key
+
+    def tgw_attachment(self, key, gateway, vpc, subnets, name):
+        self.raw["transit_gateway_attachments"].append({"TransitGatewayAttachmentId": key, "TransitGatewayId": gateway, "VpcId": vpc,
+                                                        "SubnetIds": list(subnets), "State": "available", "Tags": self.tags(name)})
+
     def network(self, vpc, prefix, azs, public, private, nat_per_az=True):
         """Internet gateway, NAT in public subnets, and one route table per tier (private per AZ)."""
         igw = self.internet_gateway(f"igw-{prefix}", vpc, f"{prefix}-igw")
@@ -147,7 +174,8 @@ def three_tier():
         "웹 계층과 앱 계층 사이에 내부 ALB를 두어 계층별 확장·격리",
         "AZ마다 NAT 게이트웨이를 두어 프라이빗 서브넷의 외부 통신이 AZ 장애에 묶이지 않음",
         "웹·앱 계층은 Auto Scaling 그룹(ELB 헬스 체크)으로 AZ에 분산",
-        "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개)"])
+        "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개)",
+        "S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM 인터페이스 엔드포인트(배스천 없음)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60001", "10.10.0.0/16", "prod-web", Environment="production")
     public, web, app, data = [], [], [], []
     for i, az in enumerate("abc"):
@@ -165,6 +193,8 @@ def three_tier():
     s.auto_scaling_group("prod-web-asg", webs, web, [web_tg], 3, 9)
     s.auto_scaling_group("prod-app-asg", apps, app, [app_tg], 3, 12)
     s.database("prod-orders-db", vpc, data, "a", "mysql", "db.r6g.large", standby="b")
+    s.gateway_endpoint("vpce-prod-s3", vpc, "s3", [f"rtb-prod-private-{az}" for az in "abc"])
+    s.interface_endpoint("vpce-prod-ssm", vpc, "ssm", app)
     return s.snapshot()
 
 
@@ -174,7 +204,8 @@ def microservices():
         "컨테이너(awsvpc) 서비스는 IP 대상 유형으로 등록",
         "서비스마다 전용 포트·헬스 체크 경로",
         "두 AZ 이상에 각 서비스 대상을 분산하고 서비스별 Auto Scaling 그룹",
-        "서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ"])
+        "서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ",
+        "이미지 풀·S3 접근은 ECR 인터페이스·S3 게이트웨이 엔드포인트로 사설 경로 사용"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60002", "10.20.0.0/16", "commerce-services", Environment="production")
     public = [s.subnet(f"subnet-ms-pub-{az}", vpc, az, f"10.20.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ab")]
     private = [s.subnet(f"subnet-ms-app-{az}", vpc, az, f"10.20.{10 + i}.0/22", f"services-{az}", "app") for i, az in enumerate("ab")]
@@ -188,6 +219,8 @@ def microservices():
     s.auto_scaling_group("catalog-asg", catalog, private, [catalog_tg])
     s.auto_scaling_group("orders-asg", orders, private, [orders_tg])
     s.database("commerce-db", vpc, data, "a", "postgres", "db.r6g.xlarge", standby="b")
+    s.gateway_endpoint("vpce-commerce-s3", vpc, "s3", [f"rtb-commerce-private-{az}" for az in "ab"])
+    s.interface_endpoint("vpce-commerce-ecr", vpc, "ecr.dkr", private)
     s.target_group("cart-svc-ecs", vpc, "HTTP", 9000, [("10.20.10.41", 9000, f"{REGION}a"), ("10.20.11.57", 9000, f"{REGION}b")],
                    [alb], target_type="ip", health="/cart/health")
     s.target_group("payments-svc-ecs", vpc, "HTTP", 9100, [("10.20.10.88", 9100, f"{REGION}a"), ("10.20.11.92", 9100, f"{REGION}b")],
@@ -214,6 +247,7 @@ def static_ip_front():
     mqtt_tg = s.target_group("mqtt-tls", vpc, "TLS", 8883, mqtt, [nlb], health=None)
     s.auto_scaling_group("partner-api-asg", api, private, [api_tg])
     s.auto_scaling_group("mqtt-broker-asg", mqtt, private, [mqtt_tg])
+    s.interface_endpoint("vpce-partner-ssm", vpc, "ssm", private)
     return s.snapshot()
 
 
@@ -221,7 +255,8 @@ def environments():
     s = Sample("environments", "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스)", [
         "환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)",
         "운영은 3 AZ·AZ별 NAT, 스테이징은 비용을 고려한 2 AZ·NAT 1개",
-        "공용 서비스 VPC에는 내부 도구만 두고 인터넷용 LB 없음",
+        "공용 서비스 VPC에는 내부 도구만 두고 인터넷 경로 없음",
+        "VPC 간 연결은 Transit Gateway 허브로 일원화 (VPC 피어링 그물망 대신)",
         "Environment 태그로 소유·비용 구분"])
     for env, cidr, azs, size in (("prod", "10.40", "abc", "m6i.large"), ("staging", "10.41", "ab", "t3.medium")):
         vpc = s.vpc(f"vpc-{env}0000000000004", f"{cidr}.0.0/16", f"{env}-vpc", Environment=env)
@@ -236,9 +271,17 @@ def environments():
         s.auto_scaling_group(f"{env}-api-asg", nodes, app, [group], len(azs), 3 * len(azs))
     shared = s.vpc("vpc-shared000000000004", "10.42.0.0/16", "shared-services", Environment="shared")
     tools = [s.subnet(f"subnet-shared-{az}", shared, az, f"10.42.{i}.0/24", f"tools-{az}", "app") for i, az in enumerate("ab")]
+    hub = s.transit_gateway("tgw-corp0000000004", "corp-tgw")
     s.instance("i-ci0000000000000004", tools[0], "ci-runner", "c6i.xlarge", sg="sg-ci", Environment="shared")
     s.instance("i-monitor00000000004", tools[1], "monitoring", "m6i.large", sg="sg-monitoring", Environment="shared")
     s.route_table("rtb-shared-main", shared, "shared-isolated", main=True)
+    # Environments reach shared services only through the Transit Gateway (10.0.0.0/8), never by peering.
+    s.route("rtb-shared-main", "10.0.0.0/8", TransitGatewayId=hub)
+    s.tgw_attachment("tgw-attach-shared", hub, shared, tools, "shared-attachment")
+    for env, azs in (("prod", "abc"), ("staging", "ab")):
+        s.tgw_attachment(f"tgw-attach-{env}", hub, f"vpc-{env}0000000000004", [f"subnet-{env}-app-{az}" for az in azs], f"{env}-attachment")
+        for az in azs:
+            s.route(f"rtb-{env}-private-{az}", "10.0.0.0/8", TransitGatewayId=hub)
     return s.snapshot()
 
 
@@ -247,13 +290,17 @@ def hybrid():
         "점진 이전 중 온프레미스 서버를 IP 대상으로 함께 등록 (AvailabilityZone=all)",
         "VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시",
         "클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크",
-        "내부 ALB로 사내망 전용 노출"])
+        "내부 ALB로 사내망 전용 노출",
+        "온프레미스 대역(192.168.0.0/16)은 Transit Gateway로 라우팅 (VPN/Direct Connect 연결은 수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60005", "10.50.0.0/16", "migration-hub", Environment="production")
     app = [s.subnet(f"subnet-hy-app-{az}", vpc, az, f"10.50.{10 + i}.0/24", f"app-{az}", "app") for i, az in enumerate("ab")]
     cloud = [s.instance(f"i-erp{az}0000000000005", app[i], f"erp-cloud-{az}", "r6i.large", sg="sg-erp") for i, az in enumerate("ab")]
     # Internal only: no internet gateway; the main route table has just the local route
     # (the on-premises path over VPN/Direct Connect is outside the collected scope).
     s.route_table("rtb-hybrid-main", vpc, "hybrid-isolated", main=True)
+    hub = s.transit_gateway("tgw-hybrid00000005", "hybrid-tgw")
+    s.route("rtb-hybrid-main", "192.168.0.0/16", TransitGatewayId=hub)
+    s.tgw_attachment("tgw-attach-hybrid", hub, vpc, app, "migration-attachment")
     alb = s.load_balancer("erp-internal-alb", vpc, app, scheme="internal", sg="sg-erp-alb")
     erp = s.target_group("erp-cloud", vpc, "HTTPS", 443, cloud, [alb])
     s.auto_scaling_group("erp-cloud-asg", cloud, app, [erp])

@@ -104,6 +104,7 @@ def build_graph(snapshot):
                 node(kind, rid, {**description, "TargetType": target_type}, "DescribeTargetHealth")
             link(key, kind, rid, "registered_target", "DescribeTargetHealth.Target.Id", description,
                  {"port": target.get("Port"), "availability_zone": target.get("AvailabilityZone")})
+    endpoints_and_transit(raw, node, link)
     infrastructure(raw, prefix, nodes, node, link)
     classify_subnets(raw, prefix, nodes, link)
     return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
@@ -128,12 +129,17 @@ def infrastructure(raw, prefix, nodes, node, link):
             link(key, "subnet", association.get("SubnetId"), "associated_subnet", "DescribeRouteTables.Associations[].SubnetId")
         for route in table.get("Routes", []):
             destination = route.get("DestinationCidrBlock") or route.get("DestinationIpv6CidrBlock") or route.get("DestinationPrefixListId")
-            target = route.get("NatGatewayId") or route.get("GatewayId")
-            kind = "nat_gateway" if route.get("NatGatewayId") else "internet_gateway" if str(target).startswith("igw-") else None
-            if kind:
-                field = "NatGatewayId" if kind == "nat_gateway" else "GatewayId"
-                link(key, kind, target, "routes_to", f"DescribeRouteTables.Routes[].{field}", {"state": route.get("State")},
-                     {"destination": destination})
+            gateway = str(route.get("GatewayId", ""))
+            if route.get("NatGatewayId"):
+                kind, field = "nat_gateway", "NatGatewayId"
+            elif route.get("TransitGatewayId"):
+                kind, field = "transit_gateway", "TransitGatewayId"
+            elif gateway.startswith(("igw-", "vpce-")):
+                kind, field = ("internet_gateway" if gateway.startswith("igw-") else "vpc_endpoint"), "GatewayId"
+            else:
+                continue  # local and other targets carry no drawable relation
+            link(key, kind, route[field], "routes_to", f"DescribeRouteTables.Routes[].{field}", {"state": route.get("State")},
+                 {"destination": destination})
     for db in raw.get("db_instances", []):
         identifier = db["DBInstanceIdentifier"]
         key = node("db_instance", identifier, db, "DescribeDBInstances")
@@ -169,6 +175,27 @@ def infrastructure(raw, prefix, nodes, node, link):
             link(key, "target_group", arn, "asg_target_group", "DescribeAutoScalingGroups.TargetGroupARNs[]")
 
 
+def endpoints_and_transit(raw, node, link):
+    """VPC endpoints (gateway via route tables, interface via subnets) and Transit Gateway VPC attachments."""
+    for endpoint in raw.get("vpc_endpoints", []):
+        attrs = {**endpoint, "ServiceShortName": endpoint.get("ServiceName", "").rsplit(".", 1)[-1]}
+        key = node("vpc_endpoint", endpoint["VpcEndpointId"], attrs, "DescribeVpcEndpoints")
+        link(key, "vpc", endpoint.get("VpcId"), "in_vpc", "DescribeVpcEndpoints.VpcId")
+        for subnet in endpoint.get("SubnetIds", []):
+            link(key, "subnet", subnet, "endpoint_subnet", "DescribeVpcEndpoints.SubnetIds[]")
+        for table in endpoint.get("RouteTableIds", []):
+            link(key, "route_table", table, "endpoint_route_table", "DescribeVpcEndpoints.RouteTableIds[]")
+    for gateway in raw.get("transit_gateways", []):
+        node("transit_gateway", gateway["TransitGatewayId"], gateway, "DescribeTransitGateways")
+    for attachment in raw.get("transit_gateway_attachments", []):
+        key = node("tgw_attachment", attachment["TransitGatewayAttachmentId"], attachment, "DescribeTransitGatewayVpcAttachments")
+        link(key, "vpc", attachment.get("VpcId"), "in_vpc", "DescribeTransitGatewayVpcAttachments.VpcId")
+        link(key, "transit_gateway", attachment.get("TransitGatewayId"), "attached_transit_gateway",
+             "DescribeTransitGatewayVpcAttachments.TransitGatewayId")
+        for subnet in attachment.get("SubnetIds", []):
+            link(key, "subnet", subnet, "attachment_subnet", "DescribeTransitGatewayVpcAttachments.SubnetIds[]")
+
+
 def classify_subnets(raw, prefix, nodes, link):
     """Subnet internet path from its route table: explicit association, else the VPC's main table."""
     tables = raw.get("route_tables")
@@ -189,6 +216,8 @@ def classify_subnets(raw, prefix, nodes, link):
             route_class = "public"
         elif any(r.get("NatGatewayId") for r in default):
             route_class = "nat"
+        elif any(r.get("TransitGatewayId") for r in default):
+            route_class = "tgw"
         else:
             route_class = "isolated"
         nodes[key]["route_class"] = route_class

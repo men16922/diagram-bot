@@ -14,6 +14,7 @@ RELATIONS = {
     "associated_load_balancer": "LB 연결", "registered_target": "대상 등록",
     "in_subnet": "서브넷 배치", "uses_security_group": "SG 연결",
     "attached_interface": "ENI 장착", "attached_volume": "EBS 장착",
+    "asg_target_group": "Auto Scaling 대상 그룹", "attached_transit_gateway": "TGW 연결",
 }
 # Resource-level icons from the AWS Architecture Icons set (draw.io aws4 library).
 RESOURCE_ICONS = {
@@ -27,12 +28,15 @@ RESOURCE_ICONS = {
     "nat_gateway": ("nat_gateway", "#8C4FFF"),
     "db_instance": ("rds_instance", "#C925D1"),
     "db_standby": ("rds_instance_alt", "#C925D1"),
+    "vpc_endpoint": ("endpoints", "#8C4FFF"),
+    "tgw_attachment": ("transit_gateway_attachment", "#8C4FFF"),
 }
 # Square resource-icon tiles for things without a resource-level icon.
 ICONS = {
     "load_balancer": ("elastic_load_balancing", "#8C4FFF"),
     "target_group": ("elastic_load_balancing", "#6D5DB3"),
     "security_group": ("group_security_group", "#DD344C"),
+    "transit_gateway": ("transit_gateway", "#8C4FFF"),
 }
 COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
 # Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.

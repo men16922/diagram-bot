@@ -88,6 +88,9 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         stubs["ec2"].add_response("describe_route_tables", {"RouteTables": []}, {})
         stubs["rds"].add_client_error("describe_db_instances", "AccessDenied", expected_params={})
         stubs["autoscaling"].add_response("describe_auto_scaling_groups", {"AutoScalingGroups": []}, {})
+        stubs["ec2"].add_response("describe_vpc_endpoints", {"VpcEndpoints": []}, {})
+        stubs["ec2"].add_response("describe_transit_gateways", {"TransitGateways": []}, {})
+        stubs["ec2"].add_response("describe_transit_gateway_vpc_attachments", {"TransitGatewayVpcAttachments": []}, {})
         result = collect("ap-northeast-2", expected_account="111122223333", session=session)
         assert result["metadata"]["status"] == "partial"
         assert result["raw"]["instances"] == [{"InstanceId": "i-a"}, {"InstanceId": "i-b"}]

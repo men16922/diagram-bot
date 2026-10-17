@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T05:18:27.820245+00:00",
-    "finished_at": "2026-10-17T05:18:27.820245+00:00",
+    "started_at": "2026-10-17T05:23:38.411698+00:00",
+    "finished_at": "2026-10-17T05:23:38.411698+00:00",
     "status": "complete",
     "demo": true,
     "sample": "environments",
@@ -13,7 +13,8 @@
     "practices": [
       "환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)",
       "운영은 3 AZ·AZ별 NAT, 스테이징은 비용을 고려한 2 AZ·NAT 1개",
-      "공용 서비스 VPC에는 내부 도구만 두고 인터넷용 LB 없음",
+      "공용 서비스 VPC에는 내부 도구만 두고 인터넷 경로 없음",
+      "VPC 간 연결은 Transit Gateway 허브로 일원화 (VPC 피어링 그물망 대신)",
       "Environment 태그로 소유·비용 구분"
     ],
     "scope": [
@@ -946,6 +947,11 @@
             "DestinationCidrBlock": "0.0.0.0/0",
             "NatGatewayId": "nat-prod-a",
             "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "10.0.0.0/8",
+            "TransitGatewayId": "tgw-corp0000000004",
+            "State": "active"
           }
         ],
         "Associations": [
@@ -974,6 +980,11 @@
             "DestinationCidrBlock": "0.0.0.0/0",
             "NatGatewayId": "nat-prod-b",
             "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "10.0.0.0/8",
+            "TransitGatewayId": "tgw-corp0000000004",
+            "State": "active"
           }
         ],
         "Associations": [
@@ -1001,6 +1012,11 @@
           {
             "DestinationCidrBlock": "0.0.0.0/0",
             "NatGatewayId": "nat-prod-c",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "10.0.0.0/8",
+            "TransitGatewayId": "tgw-corp0000000004",
             "State": "active"
           }
         ],
@@ -1085,6 +1101,11 @@
             "DestinationCidrBlock": "0.0.0.0/0",
             "NatGatewayId": "nat-staging-a",
             "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "10.0.0.0/8",
+            "TransitGatewayId": "tgw-corp0000000004",
+            "State": "active"
           }
         ],
         "Associations": [
@@ -1112,6 +1133,11 @@
           {
             "DestinationCidrBlock": "0.0.0.0/0",
             "NatGatewayId": "nat-staging-a",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "10.0.0.0/8",
+            "TransitGatewayId": "tgw-corp0000000004",
             "State": "active"
           }
         ],
@@ -1158,6 +1184,11 @@
           {
             "DestinationCidrBlock": "10.42.0.0/16",
             "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "10.0.0.0/8",
+            "TransitGatewayId": "tgw-corp0000000004",
             "State": "active"
           }
         ],
@@ -1225,6 +1256,70 @@
             "InstanceId": "i-stagingb00000000001",
             "AvailabilityZone": "ap-northeast-2b",
             "LifecycleState": "InService"
+          }
+        ]
+      }
+    ],
+    "vpc_endpoints": [],
+    "transit_gateways": [
+      {
+        "TransitGatewayId": "tgw-corp0000000004",
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "corp-tgw"
+          }
+        ]
+      }
+    ],
+    "transit_gateway_attachments": [
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-shared",
+        "TransitGatewayId": "tgw-corp0000000004",
+        "VpcId": "vpc-shared000000000004",
+        "SubnetIds": [
+          "subnet-shared-a",
+          "subnet-shared-b"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "shared-attachment"
+          }
+        ]
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-prod",
+        "TransitGatewayId": "tgw-corp0000000004",
+        "VpcId": "vpc-prod0000000000004",
+        "SubnetIds": [
+          "subnet-prod-app-a",
+          "subnet-prod-app-b",
+          "subnet-prod-app-c"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-attachment"
+          }
+        ]
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-staging",
+        "TransitGatewayId": "tgw-corp0000000004",
+        "VpcId": "vpc-staging0000000000004",
+        "SubnetIds": [
+          "subnet-staging-app-a",
+          "subnet-staging-app-b"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "staging-attachment"
           }
         ]
       }
@@ -2010,6 +2105,11 @@
               "DestinationCidrBlock": "0.0.0.0/0",
               "NatGatewayId": "nat-prod-a",
               "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "10.0.0.0/8",
+              "TransitGatewayId": "tgw-corp0000000004",
+              "State": "active"
             }
           ],
           "Associations": [
@@ -2048,6 +2148,11 @@
               "DestinationCidrBlock": "0.0.0.0/0",
               "NatGatewayId": "nat-prod-b",
               "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "10.0.0.0/8",
+              "TransitGatewayId": "tgw-corp0000000004",
+              "State": "active"
             }
           ],
           "Associations": [
@@ -2085,6 +2190,11 @@
             {
               "DestinationCidrBlock": "0.0.0.0/0",
               "NatGatewayId": "nat-prod-c",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "10.0.0.0/8",
+              "TransitGatewayId": "tgw-corp0000000004",
               "State": "active"
             }
           ],
@@ -2165,6 +2275,11 @@
               "DestinationCidrBlock": "10.42.0.0/16",
               "GatewayId": "local",
               "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "10.0.0.0/8",
+              "TransitGatewayId": "tgw-corp0000000004",
+              "State": "active"
             }
           ],
           "Associations": [
@@ -2236,6 +2351,11 @@
               "DestinationCidrBlock": "0.0.0.0/0",
               "NatGatewayId": "nat-staging-a",
               "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "10.0.0.0/8",
+              "TransitGatewayId": "tgw-corp0000000004",
+              "State": "active"
             }
           ],
           "Associations": [
@@ -2273,6 +2393,11 @@
             {
               "DestinationCidrBlock": "0.0.0.0/0",
               "NatGatewayId": "nat-staging-a",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "10.0.0.0/8",
+              "TransitGatewayId": "tgw-corp0000000004",
               "State": "active"
             }
           ],
@@ -2791,6 +2916,105 @@
         },
         "reference_only": false,
         "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-prod",
+        "resource_id": "tgw-attach-prod",
+        "kind": "tgw_attachment",
+        "name": "prod-attachment",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-prod",
+          "TransitGatewayId": "tgw-corp0000000004",
+          "VpcId": "vpc-prod0000000000004",
+          "SubnetIds": [
+            "subnet-prod-app-a",
+            "subnet-prod-app-b",
+            "subnet-prod-app-c"
+          ],
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-attachment"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayVpcAttachments"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-shared",
+        "resource_id": "tgw-attach-shared",
+        "kind": "tgw_attachment",
+        "name": "shared-attachment",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-shared",
+          "TransitGatewayId": "tgw-corp0000000004",
+          "VpcId": "vpc-shared000000000004",
+          "SubnetIds": [
+            "subnet-shared-a",
+            "subnet-shared-b"
+          ],
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "shared-attachment"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayVpcAttachments"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-staging",
+        "resource_id": "tgw-attach-staging",
+        "kind": "tgw_attachment",
+        "name": "staging-attachment",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-staging",
+          "TransitGatewayId": "tgw-corp0000000004",
+          "VpcId": "vpc-staging0000000000004",
+          "SubnetIds": [
+            "subnet-staging-app-a",
+            "subnet-staging-app-b"
+          ],
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "staging-attachment"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayVpcAttachments"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "resource_id": "tgw-corp0000000004",
+        "kind": "transit_gateway",
+        "name": "corp-tgw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayId": "tgw-corp0000000004",
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "corp-tgw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGateways"
       },
       {
         "id": "111122223333/ap-northeast-2/volume/vol-ci0000000000000004",
@@ -3648,6 +3872,20 @@
         "id": "rel-3bee7d576eb1b3f1cd8c"
       },
       {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.0.0.0/8"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-b6639c0966f76283ae30"
+      },
+      {
         "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
         "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-b",
         "relation": "associated_subnet",
@@ -3682,6 +3920,20 @@
         "id": "rel-96e9d8efbd169c8dd41a"
       },
       {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.0.0.0/8"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-a62ade1fed714b7b8e16"
+      },
+      {
         "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
         "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-c",
         "relation": "associated_subnet",
@@ -3714,6 +3966,20 @@
         },
         "inferred": false,
         "id": "rel-aac8dbc40153eb0a282d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.0.0.0/8"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-9be048c7345bcdcc0345"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-prod-public",
@@ -3804,6 +4070,20 @@
         "id": "rel-f9dd8ffb032b3ae5733a"
       },
       {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-shared-main",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.0.0.0/8"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-7d0ea7d4df6f60be0f32"
+      },
+      {
         "source": "111122223333/ap-northeast-2/route_table/rtb-staging-main",
         "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
         "relation": "in_vpc",
@@ -3848,6 +4128,20 @@
         "id": "rel-3c731a71f3335e25802a"
       },
       {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-a",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.0.0.0/8"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-9f8f25756e64a30ffcf4"
+      },
+      {
         "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-b",
         "target": "111122223333/ap-northeast-2/subnet/subnet-staging-app-b",
         "relation": "associated_subnet",
@@ -3880,6 +4174,20 @@
         },
         "inferred": false,
         "id": "rel-86bce02712e184fb15e8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-b",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.0.0.0/8"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-688146b670fee80fe2dd"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-staging-public",
@@ -4184,6 +4492,136 @@
         },
         "inferred": false,
         "id": "rel-10fdb14cb0adc85a6cd8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-prod",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "attached_transit_gateway",
+        "evidence": "DescribeTransitGatewayVpcAttachments.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ffd1cc25922da4ca096c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-prod",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-a",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-25521e79414a57f2f434"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-prod",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-b",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4f0720c72b769a3a3c91"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-prod",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-c",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f5b954763777883e4821"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-prod",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeTransitGatewayVpcAttachments.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-086f3f7e9ec43317f3f7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-shared",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "attached_transit_gateway",
+        "evidence": "DescribeTransitGatewayVpcAttachments.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f2a9b16e863b7259552f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-shared",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-shared-a",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d57c0b25ecb764bc5526"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-shared",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-shared-b",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c924c6eb2038bdd9619e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-shared",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-shared000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeTransitGatewayVpcAttachments.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-90ad1ca2a3055cd55e32"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-staging",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "attached_transit_gateway",
+        "evidence": "DescribeTransitGatewayVpcAttachments.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7786cae3de130be54838"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-staging",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-staging-app-a",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1a213ca13d1161e99c63"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-staging",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-staging-app-b",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8d76fcbd043201f91a42"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-staging",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeTransitGatewayVpcAttachments.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-40cef2a75a84bf753968"
       }
     ]
   }

@@ -22,6 +22,9 @@ OPERATIONS = [
     ("ec2", "describe_route_tables", "RouteTables", "route_tables"),
     ("rds", "describe_db_instances", "DBInstances", "db_instances"),
     ("autoscaling", "describe_auto_scaling_groups", "AutoScalingGroups", "auto_scaling_groups"),
+    ("ec2", "describe_vpc_endpoints", "VpcEndpoints", "vpc_endpoints"),
+    ("ec2", "describe_transit_gateways", "TransitGateways", "transit_gateways"),
+    ("ec2", "describe_transit_gateway_vpc_attachments", "TransitGatewayVpcAttachments", "transit_gateway_attachments"),
 ]
 
 
@@ -91,9 +94,9 @@ def collect(region, profile=None, expected_account=None, session=None):
         "started_at": started, "finished_at": now(), "demo": False,
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
         "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway",
-                  "NatGateway", "RouteTable", "RDS", "AutoScalingGroup"],
+                  "NatGateway", "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment"],
         "limitations": ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
                         "여러 API의 순차 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
                         "보안 그룹·ENI·EBS는 EC2/ELB 응답의 참조만 표시합니다. 별도 상세 조회는 하지 않습니다.",
-                        "EKS·리스너 규칙·보안 그룹 규칙·VPC 엔드포인트·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
+                        "EKS·리스너 규칙·보안 그룹 규칙·VPN/Direct Connect·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
         "coverage": coverage, "raw": raw}

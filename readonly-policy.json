@@ -14,7 +14,10 @@
         "ec2:DescribeNatGateways",
         "ec2:DescribeRouteTables",
         "rds:DescribeDBInstances",
-        "autoscaling:DescribeAutoScalingGroups"
+        "autoscaling:DescribeAutoScalingGroups",
+        "ec2:DescribeVpcEndpoints",
+        "ec2:DescribeTransitGateways",
+        "ec2:DescribeTransitGatewayVpcAttachments"
       ],
       "Resource": "*"
     }

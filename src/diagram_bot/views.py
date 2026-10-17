@@ -6,6 +6,8 @@ CORE = {"associated_load_balancer", "registered_target"}
 # Reference-only details from EC2/ELB responses; shown only when requested.
 AUXILIARY = {"uses_security_group", "attached_interface", "attached_volume"}
 AUXILIARY_KINDS = {"security_group", "network_interface", "volume"}
+# Regional resources reached from a VPC, drawn with the VPC's detail view.
+REGIONAL = {"attached_transit_gateway"}
 # Resources drawn inside the subnet that the API places them in.
 SUBNET_KINDS = {"ec2", "nat_gateway", "db_instance", "db_standby"}
 # Known to the graph and the inspector but not drawn as shapes (routing is shown on subnets).
@@ -35,17 +37,17 @@ def view_graph(graph, view=None, vpc=None, resource=None, references=False):
         visible = {vpc_node["id"]} | {k for k, v in vpc_of.items() if v == vpc_node["id"]}
         # Registered targets and associated load balancers stay visible even if only referenced.
         for _ in range(2):
-            visible |= {e["target"] for e in edges if e["relation"] in CORE and e["source"] in visible}
+            visible |= {e["target"] for e in edges if e["relation"] in CORE | REGIONAL and e["source"] in visible}
         if references:
             visible |= {e["target"] for e in edges if e["relation"] in AUXILIARY and e["source"] in visible}
         # Target group -> Auto Scaling group is a candidate; the layout draws it instead of the per-instance
         # registrations when the group's members can be framed together.
-        drawn = [e for e in edges if e["relation"] in CORE | {"asg_target_group"} | (AUXILIARY if references else set())]
+        drawn = [e for e in edges if e["relation"] in CORE | REGIONAL | {"asg_target_group"} | (AUXILIARY if references else set())]
     elif view == "focus":
         focus = next((n["id"] for n in nodes.values() if n["id"] == resource or n["resource_id"] == resource), None)
         if not focus:
             raise ValueError("선택한 리소스가 스냅샷에 없습니다.")
-        allowed = CORE | {"in_subnet", "asg_target_group"} | (AUXILIARY if references or nodes[focus]["kind"] in AUXILIARY_KINDS else set())
+        allowed = CORE | REGIONAL | {"in_subnet", "asg_target_group"} | (AUXILIARY if references or nodes[focus]["kind"] in AUXILIARY_KINDS else set())
         drawn = [e for e in edges if focus in (e["source"], e["target"]) and e["relation"] in allowed
                  and not (e["relation"] == "in_subnet" and nodes[e["source"]]["kind"] in SUBNET_KINDS and e["source"] != focus)]
         visible = {focus} | {e["source"] for e in drawn} | {e["target"] for e in drawn}

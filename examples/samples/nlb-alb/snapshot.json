@@ -4,8 +4,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T05:18:27.650130+00:00",
-    "finished_at": "2026-10-17T05:18:27.650130+00:00",
+    "started_at": "2026-10-17T05:23:38.223140+00:00",
+    "finished_at": "2026-10-17T05:23:38.223140+00:00",
     "status": "complete",
     "demo": true,
     "sample": "nlb-alb",
@@ -728,7 +728,29 @@
           }
         ]
       }
-    ]
+    ],
+    "vpc_endpoints": [
+      {
+        "VpcEndpointId": "vpce-partner-ssm",
+        "VpcId": "vpc-0a1b2c3d4e5f60003",
+        "VpcEndpointType": "Interface",
+        "State": "available",
+        "ServiceName": "com.amazonaws.ap-northeast-2.ssm",
+        "SubnetIds": [
+          "subnet-gw-app-a",
+          "subnet-gw-app-c"
+        ],
+        "PrivateDnsEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "ssm-endpoint"
+          }
+        ]
+      }
+    ],
+    "transit_gateways": [],
+    "transit_gateway_attachments": []
   },
   "graph": {
     "nodes": [
@@ -1600,6 +1622,35 @@
         },
         "reference_only": false,
         "source": "DescribeVpcs"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-partner-ssm",
+        "resource_id": "vpce-partner-ssm",
+        "kind": "vpc_endpoint",
+        "name": "ssm-endpoint",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcEndpointId": "vpce-partner-ssm",
+          "VpcId": "vpc-0a1b2c3d4e5f60003",
+          "VpcEndpointType": "Interface",
+          "State": "available",
+          "ServiceName": "com.amazonaws.ap-northeast-2.ssm",
+          "SubnetIds": [
+            "subnet-gw-app-a",
+            "subnet-gw-app-c"
+          ],
+          "PrivateDnsEnabled": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "ssm-endpoint"
+            }
+          ],
+          "ServiceShortName": "ssm"
+        },
+        "reference_only": false,
+        "source": "DescribeVpcEndpoints"
       }
     ],
     "edges": [
@@ -2348,6 +2399,36 @@
         },
         "inferred": false,
         "id": "rel-9ae0e923a1cf8026dc4d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-partner-ssm",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-a",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d607df556c383ec1c67a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-partner-ssm",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-gw-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7ed371115f36d23cce3f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-partner-ssm",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60003",
+        "relation": "in_vpc",
+        "evidence": "DescribeVpcEndpoints.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-54d03fcbdd83a46445e8"
       }
     ]
   }

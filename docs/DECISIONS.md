@@ -19,6 +19,8 @@ Last Updated: 2026-10-17
   groups (read-only). Subnet type comes from the route table's 0.0.0.0/0 route; RDS placement only
   when exactly one subnet-group subnet matches the AZ; a target group attached to a framed Auto
   Scaling group is drawn as one edge instead of per-instance registrations.
+- VPC endpoints and Transit Gateway attachments sit in the VPC entry row with the internet
+  gateway; Transit Gateways are regional and drawn outside VPCs, linked from their attachment.
 - Views are overview/detail/focus; each saved separately. Detail views keep the v0.2 storage key.
 - Automatic layout only on first generation or explicit relayout; superseded edits are archived
   and user-added notes carried over.

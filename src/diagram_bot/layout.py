@@ -8,7 +8,7 @@ subnet or an icon. Identical input and options always yield identical coordinate
 """
 import hashlib
 
-from .views import AUXILIARY, containment
+from .views import AUXILIARY, REGIONAL, containment
 
 ENGINE, VERSION = "diagram-bot-layered", 2
 ICON, LINE, MAX_LINES = 52, 15, 3
@@ -17,7 +17,9 @@ SLOT, SIDE_SLOT = 150, 290
 LANE_TOP = 36  # space above an icon row for up to LANES entering routes
 ROW = LANE_TOP + ICON + 8 + MAX_LINES * LINE + 8
 SUBNET_HEADER, AZ_HEADER, VPC_HEADER = 46, 32, 38
-KIND_ORDER = {"load_balancer": 0, "target_group": 1, "ec2": 2, "registered_target": 3,
+# The VPC's entry row: its edges to the internet, AWS services and other networks.
+EDGE_KINDS = {"internet_gateway": 0, "vpc_endpoint": 1, "tgw_attachment": 2}
+KIND_ORDER = {"transit_gateway": -1, "load_balancer": 0, "target_group": 1, "ec2": 2, "registered_target": 3,
               "security_group": 4, "network_interface": 5, "volume": 6}
 
 
@@ -69,7 +71,7 @@ class Canvas:
         return None
 
 
-ROUTES = {"public": "0.0.0.0/0 → IGW", "nat": "0.0.0.0/0 → NAT", "isolated": "인터넷 경로 없음"}
+ROUTES = {"public": "0.0.0.0/0 → IGW", "nat": "0.0.0.0/0 → NAT", "tgw": "0.0.0.0/0 → TGW", "isolated": "인터넷 경로 없음"}
 
 
 def is_public(subnet):
@@ -115,6 +117,14 @@ def resource_label(node):
         return f"{fit_label(node['name'], SIDE_LABEL, 2)}\n{kind} · {attrs.get('Scheme', '')}".rstrip(" ·")
     if node["kind"] == "internet_gateway":
         return f"{fit_label(node['name'], SIDE_LABEL, 2)}\nInternet gateway"
+    if node["kind"] == "vpc_endpoint":
+        kind = attrs.get("VpcEndpointType", "")
+        where = f" · 서브넷 {len(attrs.get('SubnetIds', []))}개" if kind == "Interface" else ""
+        return f"{fit_label(attrs.get('ServiceShortName') or node['name'], SIDE_LABEL, 1)}\n{kind}{where}"
+    if node["kind"] == "tgw_attachment":
+        return f"{fit_label(node['name'], SIDE_LABEL, 1)}\nTGW attachment"
+    if node["kind"] == "transit_gateway":
+        return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\nTransit Gateway"
     if node["kind"] == "nat_gateway":
         return f"{fit_label(node['name'], BOTTOM_LABEL, 1)}\nNAT gateway"
     if node["kind"] in ("db_instance", "db_standby"):
@@ -141,7 +151,7 @@ def layout_view(snapshot, graph, selection):
     status = "부분 조회: " + ", ".join(incomplete) if incomplete else "조회 완료"
     scope = (f"{status} · {meta['finished_at']}\n표시 {counts['visible']}개 / 수집 {counts['collected']}개 · 참조 {counts['references']}개"
              f" · 숨김 {counts['hidden']}개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도"
-             + ("\n서브넷 구분: 라우팅 테이블의 0.0.0.0/0 경로 (IGW = 퍼블릭, NAT = 프라이빗, 없음 = 격리)" if snapshot["raw"].get("route_tables")
+             + ("\n서브넷 구분: 라우팅 테이블의 0.0.0.0/0 경로 (IGW = 퍼블릭, NAT·TGW = 프라이빗, 없음 = 격리)" if snapshot["raw"].get("route_tables")
                 else "\n퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)"))
     canvas.add("scope", "1", 24, 48, 960, 42, "caption", scope, layout=f"{ENGINE}/{VERSION}",
                view=view["kind"], vpc=view["vpc"] or "", focus=view["resource"] or "",
@@ -249,10 +259,10 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         barycenter = lambda n: (sum(registered.get(n["id"], [len(tgs)])) / len(registered.get(n["id"], [0])), n["name"], n["id"])
         subnets = [n for n in members if n["kind"] == "subnet"]
         children = {s["id"]: sorted((nodes[k] for k in visible if subnet_of.get(k) == s["id"]), key=barycenter) for s in subnets}
-        gateways = [n for n in members if n["kind"] == "internet_gateway"]
+        gateways = sorted((n for n in members if n["kind"] in EDGE_KINDS), key=lambda n: (EDGE_KINDS[n["kind"]], n["name"], n["id"]))
         asg_of = {e["target"]: e["source"] for e in graph["edges"] if e["relation"] == "asg_member"}
-        unplaced = sorted((n for n in members if n["kind"] not in {"subnet", "load_balancer", "target_group", "internet_gateway",
-                                                                   "auto_scaling_group", "route_table"}
+        unplaced = sorted((n for n in members if n["kind"] not in {"subnet", "load_balancer", "target_group", "auto_scaling_group",
+                                                                   "route_table", *EDGE_KINDS}
                            and subnet_of.get(n["id"]) not in children), key=barycenter)
         azs = sorted({s["attributes"].get("AvailabilityZone", "AZ 미확인") for s in subnets})
         last = len(azs)  # gutter i is left of AZ column i; gutter `last` is the VPC's right margin
@@ -284,7 +294,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                     demand[0].add(e["source"])
                     demand[last].add(e["source"])
                     refs_votes.setdefault(e["target"], []).append(g == last and last > 0)
-            elif e["relation"] in AUXILIARY and vpc_of.get(e["source"]) == vpc["id"]:
+            elif e["relation"] in AUXILIARY | REGIONAL and vpc_of.get(e["source"]) == vpc["id"]:
                 demand[column.get(e["source"], 0)].add(e["id"])
             elif e["relation"] == "in_subnet" and e["source"] in lb_index and e["target"] in children:
                 placements.append(e["id"])
@@ -422,7 +432,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
 
     inside = [n for n in others if not outside_vpc(n)]
     if inside:
-        cursor += place_box("references", "references", "배치 미확인 · VPC 밖 또는 참조만 확인된 리소스 (점선 = 참조)",
+        cursor += place_box("references", "references", "VPC 밖 리전 리소스 · 배치 미확인 · 참조만 확인 (점선 = 참조)",
                             "region", 20, cursor, inside, width)["h"] + 36
     region["w"] = max([sh["x"] + sh["w"] for sh in canvas.shapes if sh["parent"] == "region"] + [400]) + 20
     region["h"] = cursor
@@ -473,7 +483,7 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
         if e["relation"] == "registered_target" and (same or outside):
             g = target["column"] if same else (geometry["last"] if target["parent"] == "onprem" or target_on_right(canvas, target, geometry) else 0)
             specs[e["id"]] = {**spec, "kind": "bus", "gutter": g, "group": ("bus", e["source"])}
-        elif e["relation"] in AUXILIARY and outside and "column" in placed[e["source"]]:
+        elif e["relation"] in AUXILIARY | REGIONAL and outside and "column" in placed[e["source"]]:
             specs[e["id"]] = {**spec, "kind": "aux", "gutter": placed[e["source"]]["column"], "group": ("aux", e["id"])}
         elif e["relation"] == "associated_load_balancer" and e["target"] in geometry["lb_mid"] \
                 and placed[e["target"]]["parent"] == placed[e["source"]]["parent"]:
@@ -607,4 +617,4 @@ def edge_entry(e, path, constraints, label=""):
     return {"id": cell_id("edge/" + e["id"]), "relation_id": e["id"], "relation": e["relation"],
             "source": cell_id(e["source"]), "target": cell_id(e["target"]), "evidence": e["evidence"],
             "points": path[1:-1], "path": path, "constraints": constraints, "label": label,
-            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer", "asg_target_group"}}
+            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer", "asg_target_group", *REGIONAL}}

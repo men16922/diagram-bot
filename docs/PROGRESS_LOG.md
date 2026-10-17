@@ -2,6 +2,14 @@
 
 Last Updated: 2026-10-17
 
+## 2026-10-17 — Recommended next steps (user request: 추천안대로 수행)
+
+- Merged the infrastructure work to main (fast-forward 5938d03..77749d9); CI passed on main.
+- Added VPC endpoints (gateway via route tables, interface via subnets) and Transit Gateway
+  VPC attachments: collector (3 Describe calls), graph, entry-row placement, TGW in the
+  region box, `0.0.0.0/0 → TGW` subnet class; samples gained S3/SSM/ECR endpoints and TGW hubs.
+- Verified: 47 tests, browser acceptance, renders reviewed.
+
 ## 2026-10-17 — Infrastructure architecture (user request: 인프라 아키텍처 기반)
 
 - Collector: DescribeInternetGateways, DescribeNatGateways, DescribeRouteTables, rds

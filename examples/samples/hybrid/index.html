@@ -22,8 +22,8 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T05:18:27.999085+00:00",
-    "finished_at": "2026-10-17T05:18:27.999085+00:00",
+    "started_at": "2026-10-17T05:23:38.586179+00:00",
+    "finished_at": "2026-10-17T05:23:38.586179+00:00",
     "status": "complete",
     "demo": true,
     "sample": "hybrid",
@@ -32,7 +32,8 @@
       "점진 이전 중 온프레미스 서버를 IP 대상으로 함께 등록 (AvailabilityZone=all)",
       "VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시",
       "클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크",
-      "내부 ALB로 사내망 전용 노출"
+      "내부 ALB로 사내망 전용 노출",
+      "온프레미스 대역(192.168.0.0/16)은 Transit Gateway로 라우팅 (VPN/Direct Connect 연결은 수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -387,6 +388,11 @@
             "DestinationCidrBlock": "10.50.0.0/16",
             "GatewayId": "local",
             "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "192.168.0.0/16",
+            "TransitGatewayId": "tgw-hybrid00000005",
+            "State": "active"
           }
         ],
         "Associations": [
@@ -425,6 +431,37 @@
             "InstanceId": "i-erpb0000000000005",
             "AvailabilityZone": "ap-northeast-2b",
             "LifecycleState": "InService"
+          }
+        ]
+      }
+    ],
+    "vpc_endpoints": [],
+    "transit_gateways": [
+      {
+        "TransitGatewayId": "tgw-hybrid00000005",
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "hybrid-tgw"
+          }
+        ]
+      }
+    ],
+    "transit_gateway_attachments": [
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-hybrid",
+        "TransitGatewayId": "tgw-hybrid00000005",
+        "VpcId": "vpc-0a1b2c3d4e5f60005",
+        "SubnetIds": [
+          "subnet-hy-app-a",
+          "subnet-hy-app-b"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "migration-attachment"
           }
         ]
       }
@@ -672,6 +709,11 @@
               "DestinationCidrBlock": "10.50.0.0/16",
               "GatewayId": "local",
               "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "192.168.0.0/16",
+              "TransitGatewayId": "tgw-hybrid00000005",
+              "State": "active"
             }
           ],
           "Associations": [
@@ -813,6 +855,52 @@
         },
         "reference_only": false,
         "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-hybrid",
+        "resource_id": "tgw-attach-hybrid",
+        "kind": "tgw_attachment",
+        "name": "migration-attachment",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-hybrid",
+          "TransitGatewayId": "tgw-hybrid00000005",
+          "VpcId": "vpc-0a1b2c3d4e5f60005",
+          "SubnetIds": [
+            "subnet-hy-app-a",
+            "subnet-hy-app-b"
+          ],
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "migration-attachment"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayVpcAttachments"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/transit_gateway/tgw-hybrid00000005",
+        "resource_id": "tgw-hybrid00000005",
+        "kind": "transit_gateway",
+        "name": "hybrid-tgw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayId": "tgw-hybrid00000005",
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "hybrid-tgw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGateways"
       },
       {
         "id": "111122223333/ap-northeast-2/volume/vol-erpa0000000000005",
@@ -1089,6 +1177,20 @@
         "id": "rel-cae8295e0d2fe05c7563"
       },
       {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-hybrid-main",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-hybrid00000005",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "192.168.0.0/16"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-92b834b4abf8778b2ce8"
+      },
+      {
         "source": "111122223333/ap-northeast-2/subnet/subnet-hy-app-a",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60005",
         "relation": "in_vpc",
@@ -1231,6 +1333,46 @@
         },
         "inferred": false,
         "id": "rel-e414106bbd47200a93dd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-hybrid",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-hybrid00000005",
+        "relation": "attached_transit_gateway",
+        "evidence": "DescribeTransitGatewayVpcAttachments.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c7dc4e6cfc61a45fee21"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-hybrid",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-hy-app-a",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c1fd3a4a3b4b3ba9f570"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-hybrid",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-hy-app-b",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b0ce57afe488bd4febb9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-hybrid",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60005",
+        "relation": "in_vpc",
+        "evidence": "DescribeTransitGatewayVpcAttachments.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-42d981a6783291ec36a6"
       }
     ]
   }
