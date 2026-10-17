@@ -25,7 +25,8 @@ class Sample:
                     "opensearch_domains": [], "opensearch_nodes": [], "ecs_services": [], "ecs_tasks": [],
                     "efs_file_systems": [], "efs_mount_targets": [], "redshift_clusters": [], "redshift_subnet_groups": [],
                     "vpc_peering_connections": [], "vpn_gateways": [], "vpn_connections": [], "customer_gateways": [],
-                    "security_groups": []}
+                    "security_groups": [], "placement_groups": [], "fsx_file_systems": [], "sagemaker_endpoints": [],
+                    "sagemaker_clusters": []}
         self.counter = 0
 
     @property
@@ -44,16 +45,18 @@ class Sample:
                                     "MapPublicIpOnLaunch": tier == "public", "Tags": self.tags(name, Tier=tier)})
         return key
 
-    def instance(self, key, subnet, name, kind="t3.medium", ip=None, sg=None, **tags):
+    def instance(self, key, subnet, name, kind="t3.medium", ip=None, sg=None, efa=False, placement=None, lifecycle=None, **tags):
         vpc = next(s["VpcId"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
         az = next(s["AvailabilityZone"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
         self.counter += 1
         self.raw["instances"].append({
             "InstanceId": key, "VpcId": vpc, "SubnetId": subnet, "InstanceType": kind, "State": {"Name": "running"},
-            "PrivateIpAddress": ip or f"10.0.{self.counter}.{10 + self.counter}", "Placement": {"AvailabilityZone": az},
+            "PrivateIpAddress": ip or f"10.0.{self.counter}.{10 + self.counter}",
+            "Placement": {"AvailabilityZone": az, **({"GroupName": placement} if placement else {})},
+            **({"InstanceLifecycle": lifecycle} if lifecycle else {}),
             "MetadataOptions": {"HttpTokens": "required"}, "Tags": self.tags(name, **tags),
             "SecurityGroups": [{"GroupId": sg}] if sg else [],
-            "NetworkInterfaces": [{"NetworkInterfaceId": "eni-" + key[2:]}],
+            "NetworkInterfaces": [{"NetworkInterfaceId": "eni-" + key[2:], "InterfaceType": "efa" if efa else "interface"}],
             "BlockDeviceMappings": [{"Ebs": {"VolumeId": "vol-" + key[2:]}}]})
         return key
 
@@ -310,6 +313,41 @@ class Sample:
             **({"VpnGatewayId": vgw} if vgw else {"TransitGatewayId": tgw}), "Options": {"StaticRoutesOnly": False},
             "VgwTelemetry": [{"OutsideIpAddress": f"52.78.0.{10 + i}", "Status": "UP" if i < tunnels_up else "DOWN"} for i in range(2)]})
 
+    def placement_group(self, name, strategy="cluster"):
+        self.raw["placement_groups"].append({"GroupName": name, "GroupId": "pg-" + hashlib.sha256(name.encode()).hexdigest()[:17],
+                                             "Strategy": strategy, "State": "available"})
+        return name
+
+    def fsx_lustre(self, key, name, vpc, subnet, deployment="PERSISTENT_2", capacity=4800, throughput=250):
+        """FSx for Lustre in one subnet (same AZ as the compute reading it)."""
+        self.raw["fsx_file_systems"].append({
+            "FileSystemId": key, "FileSystemType": "LUSTRE", "Lifecycle": "AVAILABLE", "StorageCapacity": capacity, "StorageType": "SSD",
+            "VpcId": vpc, "SubnetIds": [subnet], "KmsKeyId": f"arn:aws:kms:{self.region}:{self.account}:key/fsx",
+            "LustreConfiguration": {"DeploymentType": deployment, "PerUnitStorageThroughput": throughput,
+                                    "DataCompressionType": "LZ4"}, "Tags": self.tags(name)})
+        return key
+
+    def sagemaker_endpoint(self, name, instance_type, count, subnets=(), sg=None):
+        """Real-time endpoint; a model VpcConfig places its instances' ENIs in the given subnets."""
+        arn = f"arn:aws:sagemaker:{self.region}:{self.account}"
+        self.raw["sagemaker_endpoints"].append({
+            "EndpointName": name, "EndpointArn": f"{arn}:endpoint/{name}", "EndpointStatus": "InService", "EndpointConfigName": f"{name}-config",
+            "ProductionVariants": [{"VariantName": "main", "CurrentInstanceCount": count, "DesiredInstanceCount": count}],
+            "EndpointConfig": {"EndpointConfigName": f"{name}-config", "ProductionVariants": [
+                {"VariantName": "main", "ModelName": f"{name}-model", "InstanceType": instance_type, "InitialInstanceCount": count}]},
+            "Models": [{"ModelName": f"{name}-model", **({"VpcConfig": {"Subnets": list(subnets), "SecurityGroupIds": [sg] if sg else []}}
+                                                         if subnets else {})}]})
+
+    def hyperpod(self, name, subnets, groups, eks=None):
+        """SageMaker HyperPod cluster: instance groups as (name, instance type, count)."""
+        arn = f"arn:aws:sagemaker:{self.region}:{self.account}"
+        self.raw["sagemaker_clusters"].append({
+            "ClusterName": name, "ClusterArn": f"{arn}:cluster/{name}", "ClusterStatus": "InService",
+            "InstanceGroups": [{"InstanceGroupName": group, "InstanceType": kind, "CurrentCount": count, "TargetCount": count}
+                               for group, kind, count in groups],
+            "VpcConfig": {"Subnets": list(subnets), "SecurityGroupIds": []},
+            **({"Orchestrator": {"Eks": {"ClusterArn": f"arn:aws:eks:{self.region}:{self.account}:cluster/{eks}"}}} if eks else {})})
+
     def network(self, vpc, prefix, azs, public, private, nat_per_az=True):
         """Internet gateway, NAT in public subnets, and one route table per tier (private per AZ)."""
         igw = self.internet_gateway(f"igw-{prefix}", vpc, f"{prefix}-igw")
@@ -324,6 +362,10 @@ class Sample:
 
     def snapshot(self):
         timestamp = now()
+        # DescribeSubnets.AvailableIpAddressCount: the CIDR minus the five reserved addresses and the instances in it.
+        for subnet in self.raw["subnets"]:
+            used = sum(i["SubnetId"] == subnet["SubnetId"] for i in self.raw["instances"])
+            subnet.setdefault("AvailableIpAddressCount", ipaddress.ip_network(subnet["CidrBlock"]).num_addresses - 5 - used)
         coverage = [{"service": service, "operation": operation, "status": "complete", "pages": 1, "items": len(self.raw[key])}
                     for service, operation, key in (("ec2", "describe_vpcs", "vpcs"), ("ec2", "describe_subnets", "subnets"),
                                                     ("ec2", "describe_instances", "instances"),
@@ -351,7 +393,11 @@ class Sample:
                                                     ("ec2", "describe_vpc_peering_connections", "vpc_peering_connections"),
                                                     ("ec2", "describe_vpn_gateways", "vpn_gateways"),
                                                     ("ec2", "describe_vpn_connections", "vpn_connections"),
-                                                    ("ec2", "describe_security_groups", "security_groups"))]
+                                                    ("ec2", "describe_security_groups", "security_groups"),
+                                                    ("ec2", "describe_placement_groups", "placement_groups"),
+                                                    ("fsx", "describe_file_systems", "fsx_file_systems"),
+                                                    ("sagemaker", "list_endpoints", "sagemaker_endpoints"),
+                                                    ("sagemaker", "list_clusters", "sagemaker_clusters"))]
         coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
                       "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in self.raw["target_health"]]
         return {"schema_version": 1, "metadata": {

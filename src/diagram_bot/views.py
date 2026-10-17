@@ -10,14 +10,15 @@ AUXILIARY_KINDS = {"security_group", "network_interface", "volume"}
 REGIONAL = {"attached_transit_gateway", "vpn_connection"}
 # Resources drawn inside the subnet that the API places them in.
 SUBNET_KINDS = {"ec2", "nat_gateway", "db_instance", "db_standby", "cache_node", "msk_broker", "registered_target", "ecs_task",
-                "search_node", "efs_mount_target", "redshift_cluster"}
+                "search_node", "efs_mount_target", "redshift_cluster", "fsx_file_system", "sagemaker_cluster"}
 # Groups framed around their members across AZ columns, and the relation to their target groups.
 GROUPS = {"auto_scaling_group": "asg_member", "ecs_service": "service_task"}
 GROUP_TARGETS = {"asg_target_group", "ecs_target_group"}
 # Known to the graph and the inspector but not drawn as shapes (routing is shown on subnets).
 # Logical groupings shown through their members (DB cluster, cache replication group, MSK cluster,
 # OpenSearch domain, EFS file system).
-UNDRAWN_KINDS = {"route_table", "db_cluster", "cache_replication_group", "msk_cluster", "opensearch_domain", "efs_file_system"}
+UNDRAWN_KINDS = {"route_table", "db_cluster", "cache_replication_group", "msk_cluster", "opensearch_domain", "efs_file_system",
+                 "placement_group"}
 
 
 def containment(graph):

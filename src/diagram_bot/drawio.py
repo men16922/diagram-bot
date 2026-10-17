@@ -67,6 +67,13 @@ ICONS = {
     "neptune": ("neptune", "#C925D1"),
     "bedrock": ("bedrock", "#01A88D"),
     "sagemaker": ("sagemaker", "#01A88D"),
+    "sagemaker_endpoint": ("sagemaker", "#01A88D"),
+    "sagemaker_cluster": ("sagemaker", "#01A88D"),
+    "fsx_file_system": ("fsx", "#7AA116"),
+    "fsx_lustre": ("fsx_for_lustre", "#7AA116"),
+    "fsx_ontap": ("fsx_for_netapp_ontap", "#7AA116"),
+    "fsx_openzfs": ("fsx_for_openzfs", "#7AA116"),
+    "fsx_windows": ("fsx_for_windows_file_server", "#7AA116"),
 }
 COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
 # Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.

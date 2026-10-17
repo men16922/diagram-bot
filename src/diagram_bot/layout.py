@@ -23,7 +23,7 @@ SUBNET_HEADER, AZ_HEADER, VPC_HEADER = 46, 32, 38
 # services whose network interfaces span several subnets (EKS control plane, VPC Lambda, ECS services
 # whose tasks were not collected).
 EDGE_KINDS = {"internet_gateway": 0, "vpn_gateway": 1, "vpc_peering": 2, "tgw_attachment": 3, "vpc_endpoint": 4,
-              "eks_cluster": 5, "ecs_service": 6, "lambda_function": 7}
+              "eks_cluster": 5, "ecs_service": 6, "lambda_function": 7, "sagemaker_endpoint": 8}
 KIND_ORDER = {"transit_gateway": -1, "load_balancer": 0, "target_group": 1, "ec2": 2, "registered_target": 3,
               "security_group": 4, "network_interface": 5, "volume": 6}
 
@@ -153,6 +153,8 @@ def icon_variant(node):
         return str(attrs.get("Engine", "redis"))
     if node["kind"] == "efs_mount_target":
         return "efs_one_zone" if attrs.get("OneZone") else "efs_standard"
+    if node["kind"] == "fsx_file_system":
+        return {"LUSTRE": "fsx_lustre", "ONTAP": "fsx_ontap", "OPENZFS": "fsx_openzfs", "WINDOWS": "fsx_windows"}.get(attrs.get("FileSystemType"))
     if node["kind"] == "registered_target" and attrs.get("TargetType") == "ip" and not outside_vpc(node):
         return "ip_target"
     return None
@@ -185,8 +187,14 @@ def resource_label(node):
         target = attrs.get("Target", {})
         return f"{target.get('Id', name)}:{target.get('Port', '')}"
     if kind == "ec2":
+        # AI/ML placement facts from DescribeInstances: EFA interface, Capacity Block or reservation, cluster placement group.
+        efa = any(i.get("InterfaceType") == "efa" for i in attrs.get("NetworkInterfaces", []))
+        capacity = {"capacity-block": "Capacity Block", "spot": "spot"}.get(attrs.get("InstanceLifecycle")) \
+            or ("ODCR" if attrs.get("CapacityReservationId") else None)
+        group = (attrs.get("Placement") or {}).get("GroupName")
         return lines(name, " · ".join(filter(None, (attrs.get("InstanceType"), "GPU" if GPU.match(instance_family(node)) else None,
-                                                    "spot" if attrs.get("InstanceLifecycle") == "spot" else None))))
+                                                    "EFA" if efa else None))),
+                     " · ".join(filter(None, (capacity, f"PG {group}" if group else None))))
     if kind == "load_balancer" and attrs.get("Type"):
         short = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
         zones = len(attrs.get("AvailabilityZones", []))
@@ -236,6 +244,23 @@ def resource_label(node):
         return lines(attrs.get("DomainName") or name, f"{engine} {version}".strip(), ("~" if attrs.get("Estimated") else "") + counts, state)
     if kind == "efs_mount_target":
         return lines(name, "EFS mount target", "One Zone" if attrs.get("OneZone") else "Regional", attrs.get("IpAddress"))
+    if kind == "fsx_file_system":
+        kind_name = {"LUSTRE": "Lustre", "ONTAP": "NetApp ONTAP", "OPENZFS": "OpenZFS", "WINDOWS": "Windows File Server"}.get(
+            attrs.get("FileSystemType"), attrs.get("FileSystemType", ""))
+        config = attrs.get("LustreConfiguration") or attrs.get("OntapConfiguration") or attrs.get("OpenZFSConfiguration") \
+            or attrs.get("WindowsConfiguration") or {}
+        throughput = config.get("PerUnitStorageThroughput")
+        size = f"{attrs['StorageCapacity'] / 1024:g} TiB" if attrs.get("StorageCapacity") else None
+        return lines(name, f"FSx for {kind_name}", config.get("DeploymentType"),
+                     " · ".join(filter(None, (size, f"{throughput} MB/s/TiB" if throughput else None))))
+    if kind == "sagemaker_endpoint":
+        return lines(name, f"SageMaker endpoint · {attrs.get('EndpointStatus', '')}".rstrip(" ·"),
+                     f"{attrs.get('InstanceType', '')} × {attrs.get('InstanceCount', 0)}")
+    if kind == "sagemaker_cluster":
+        groups = attrs.get("InstanceGroups", [])
+        orchestrator = "EKS" if (attrs.get("Orchestrator") or {}).get("Eks") else "Slurm"
+        return lines(name, f"SageMaker HyperPod · {orchestrator}",
+                     *[f"{g.get('InstanceType', '')} × {g.get('CurrentCount', g.get('TargetCount', ''))}" for g in groups[:2]])
     if kind == "redshift_cluster":
         role = attrs.get("Role") or "single-AZ"
         return lines(attrs.get("ClusterIdentifier") or name, "Redshift", f"{attrs.get('NodeType', '')} × {attrs.get('NodesHere', '')}", role)
@@ -292,7 +317,8 @@ def layout_view(snapshot, graph, selection):
 SUMMARY = [("Subnet", "subnet"), ("EC2", "ec2"), ("LB", "load_balancer"), ("TG", "target_group"), ("NAT", "nat_gateway"),
            ("DB", "db_instance"), ("Cache", "cache_node"), ("MSK", "msk_cluster"), ("OpenSearch", "opensearch_domain"),
            ("EKS", "eks_cluster"), ("ECS", "ecs_service"), ("EFS", "efs_mount_target"), ("Redshift", "redshift_cluster"),
-           ("Lambda", "lambda_function"), ("Endpoint", "vpc_endpoint"), ("VPN", "vpn_gateway"), ("Peering", "vpc_peering")]
+           ("Lambda", "lambda_function"), ("Endpoint", "vpc_endpoint"), ("VPN", "vpn_gateway"), ("Peering", "vpc_peering"),
+           ("FSx", "fsx_file_system"), ("SageMaker", "sagemaker_endpoint"), ("HyperPod", "sagemaker_cluster")]
 
 
 def cloud_label(meta):
@@ -355,11 +381,13 @@ def overview(canvas, snapshot, graph, nodes, vpc_of):
         cards.append((label, vpc["id"], len(inside) == 0))
     # Collected security groups are rule sets, not placed resources; referenced ones still count.
     # Lambda functions without VpcConfig run outside every VPC; their placement is known, not missing.
-    regional = [n for n in nodes.values() if n["kind"] == "lambda_function" and n["id"] not in vpc_of]
-    outside = [n for n in nodes.values() if n["kind"] != "vpc" and n["id"] not in vpc_of and n["kind"] != "lambda_function"
-               and not (n["kind"] == "security_group" and not n["reference_only"])]
+    regional = [n for n in nodes.values() if n["kind"] in ("lambda_function", "sagemaker_endpoint") and n["id"] not in vpc_of]
+    outside = [n for n in nodes.values() if n["kind"] not in ("vpc", "lambda_function", "sagemaker_endpoint", "placement_group")
+               and n["id"] not in vpc_of and not (n["kind"] == "security_group" and not n["reference_only"])]
     if regional:
-        cards.append((f"VPC 미연결 리전 서비스\nLambda {len(regional)}개\n네트워크 구성도에는 그리지 않음\n리소스 목록·CSV에서 확인", None, False))
+        kinds = " · ".join(f"{label} {count}개" for label, kind in (("Lambda", "lambda_function"), ("SageMaker 엔드포인트", "sagemaker_endpoint"))
+                           if (count := sum(n["kind"] == kind for n in regional)))
+        cards.append((f"VPC 미연결 리전 서비스\n{kinds}\n네트워크 구성도에는 그리지 않음\n리소스 목록·CSV에서 확인", None, False))
     if outside:
         refs = sum(n["reference_only"] for n in outside)
         cards.append((f"VPC 외 · 배치 미확인\n리소스 {len(outside)}개 (참조만 확인 {refs}개)\n보안 그룹·ENI·EBS·IP 대상 등\n상세 보기에서 관계 확인", None, False))

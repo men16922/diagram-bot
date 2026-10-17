@@ -123,6 +123,7 @@ def build_graph(snapshot):
     services(raw, prefix, nodes, node, link)
     more_services(raw, prefix, nodes, node, link)
     connectivity(raw, prefix, nodes, node, link)
+    ai_infrastructure(raw, prefix, nodes, node, link)
     classify_subnets(raw, prefix, nodes, link)
     return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
             "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
@@ -420,6 +421,49 @@ def more_services(raw, prefix, nodes, node, link):
                  {"availability_zone": zone}, {"availability_zone": zone})
             if suffix:
                 link(key, "redshift_cluster", cluster["ClusterIdentifier"], "standby_of", "DescribeClusters.MultiAZSecondary")
+
+
+def ai_infrastructure(raw, prefix, nodes, node, link):
+    """Placement groups, FSx file systems, SageMaker endpoints and HyperPod clusters, placed from their own API fields."""
+    subnets = subnet_index(raw)
+    zone = lambda subnet: subnets.get(subnet, {}).get("AvailabilityZone")
+    vpc_of = lambda ids: next((subnets[s]["VpcId"] for s in ids if s in subnets), None)
+    for group in raw.get("placement_groups", []):
+        node("placement_group", group["GroupName"], group, "DescribePlacementGroups")
+    for instance in raw.get("instances", []):
+        group = (instance.get("Placement") or {}).get("GroupName")
+        if group and prefix + "ec2/" + instance["InstanceId"] in nodes:
+            link(prefix + "ec2/" + instance["InstanceId"], "placement_group", group, "in_placement_group", "DescribeInstances.Placement.GroupName")
+    for system in raw.get("fsx_file_systems", []):
+        key = node("fsx_file_system", system["FileSystemId"], system, "DescribeFileSystems")
+        # Lustre and single-AZ file systems have one subnet; Multi-AZ ones are drawn in the preferred (active) subnet.
+        subnet = system.get("PreferredSubnetId") or (system.get("SubnetIds") or [None])[0]
+        link(key, "vpc", system.get("VpcId") or vpc_of([subnet]), "in_vpc", "DescribeFileSystems.VpcId")
+        link(key, "subnet", subnet, "in_subnet", "DescribeFileSystems.SubnetIds[]", {"availability_zone": zone(subnet)},
+             {"availability_zone": zone(subnet)})
+    for endpoint in raw.get("sagemaker_endpoints", []):
+        configured = (endpoint.get("EndpointConfig") or {}).get("ProductionVariants", [])
+        running = {v.get("VariantName"): v for v in endpoint.get("ProductionVariants", [])}
+        chosen = sorted({s for model in endpoint.get("Models", []) for s in (model.get("VpcConfig") or {}).get("Subnets", [])})
+        count = sum(running.get(v.get("VariantName"), {}).get("CurrentInstanceCount") or v.get("InitialInstanceCount") or 0 for v in configured)
+        types = sorted({v.get("InstanceType") or ("serverless" if v.get("ServerlessConfig") else "?") for v in configured})
+        key = node("sagemaker_endpoint", endpoint["EndpointName"],
+                   {**endpoint, "InstanceType": ", ".join(types), "InstanceCount": count, "Subnets": chosen}, "DescribeEndpoint")
+        # Without a model VpcConfig the endpoint runs in the SageMaker service network (regional, not drawn in a VPC).
+        link(key, "vpc", vpc_of(chosen), "in_vpc", "DescribeModel.VpcConfig.Subnets[] → DescribeSubnets.VpcId")
+        for subnet in chosen:
+            link(key, "subnet", subnet, "sagemaker_subnet", "DescribeModel.VpcConfig.Subnets[]")
+    for cluster in raw.get("sagemaker_clusters", []):
+        chosen = (cluster.get("VpcConfig") or {}).get("Subnets", [])
+        key = node("sagemaker_cluster", cluster["ClusterName"], cluster, "DescribeCluster")
+        link(key, "vpc", vpc_of(chosen), "in_vpc", "DescribeCluster.VpcConfig.Subnets[] → DescribeSubnets.VpcId")
+        # HyperPod places its instances in one AZ by default: drawn in the first subnet, the others listed.
+        for i, subnet in enumerate(chosen):
+            link(key, "subnet", subnet, "in_subnet" if i == 0 else "hyperpod_subnet", "DescribeCluster.VpcConfig.Subnets[]",
+                 {"availability_zone": zone(subnet)}, {"availability_zone": zone(subnet)})
+        eks = ((cluster.get("Orchestrator") or {}).get("Eks") or {}).get("ClusterArn")
+        if eks:
+            link(key, "eks_cluster", eks.rsplit("/", 1)[-1], "orchestrated_by", "DescribeCluster.Orchestrator.Eks.ClusterArn")
 
 
 def connectivity(raw, prefix, nodes, node, link):
