@@ -1,7 +1,7 @@
 ---
 title: 팀 모드와 보안 경계
 summary: 앱 로그인(로컬 계정·OpenID Connect), 세션·역할, create_app 미들웨어(TrustedHost, 페이지 토큰, Origin, 본문 제한, 보안 헤더), 감사 로그, 비루프백 TLS 요구와 저장하지 않는 비밀.
-sources: [src/diagram_bot/auth.py, src/diagram_bot/expiry.py, src/diagram_bot/oidc.py, src/diagram_bot/server.py, src/diagram_bot/routes/session.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/cli.py, SECURITY.md, docs/OPERATIONS.md, tests/test_team.py, tests/test_oidc.py, tests/test_server.py]
+sources: [src/diagram_bot/auth.py, src/diagram_bot/expiry.py, src/diagram_bot/oidc.py, src/diagram_bot/server.py, src/diagram_bot/routes/session.py, src/diagram_bot/routes/standards.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/static/js/ui.js, src/diagram_bot/static/js/signin.js, src/diagram_bot/cli.py, SECURITY.md, docs/OPERATIONS.md, tests/test_team.py, tests/test_oidc.py, tests/test_server.py, tests/test_standards.py]
 related: [http-api, storage, web-app, chat-agent, browser-egress, aws-access-and-sso, cli]
 updated: 2026-10-19
 ---
@@ -29,9 +29,10 @@ updated: 2026-10-19
 
 ## 역할 (`auth.allowed`)
 - `GET`·`HEAD`와 `/api/logout`은 모든 역할 허용.
-- `/api/collections`·`/api/sso`로 시작하는 변경 요청은 `admin`만.
+- `/api/collections`·`/api/sso`·`/api/standards`로 시작하는 변경 요청은 `admin`만(`/api/standards`는 사내 표준 삭제, 서버 전체 기본 규격을 바꿀 수 있어 수집과 같은 등급).
 - 그 밖의 변경 요청(문서 저장·재배치·복원, 스냅샷 가져오기·통합, `/api/xml/align`·`/api/xml/import`·`/api/xml/adopt`, 채팅, `/api/relay/*` 응답)은 `editor`·`admin`. 문서 `?spec=` 미리보기는 GET이라 `viewer`도 되지만 저장할 수 없다(`revision: null`).
-- 핸들러 안의 추가 검사: `GET /api/identity`와 `GET /api/audit`은 팀 모드에서 `admin`만, 채팅의 AWS 수집 도구도 `admin`만(`Workspace.allow_collection`), `POST /api/xml/adopt`의 `make_default=true`(서버 전체 기본 규격·표준 등록)도 `admin`만(`routes.documents`, 수집과 같은 등급).
+- 핸들러 안의 추가 검사: `GET /api/identity`와 `GET /api/audit`은 팀 모드에서 `admin`만, 채팅의 AWS 수집 도구도 `admin`만(`Workspace.allow_collection`), `POST /api/xml/adopt`의 `make_default=true`(서버 전체 기본 규격·표준 등록, 데이터 디렉터리에 저장)도 `admin`만(`routes.documents`, 수집과 같은 등급), `DELETE /api/standards/{name}`도 핸들러가 다시 `admin`을 확인한다(다른 앱에 붙였을 때 대비). `GET /api/standards`는 모든 역할.
+- 화면(`static/js/ui.js`의 `setControls`)은 같은 규칙으로 버튼만 끈다: `viewer`는 draw.io XML 가져오기·정렬·채택 버튼이 꺼지고, `서버 기본 규격으로 지정`은 `admin`(로컬 모드 포함)만 켜지며, 사내 표준 `삭제`는 `admin`에게만 보인다. `scripts/verify_team.py`가 viewer 화면을 확인한다.
 
 ## OpenID Connect (`oidc.py`)
 - 설정(`load_config`): `issuer`, `client_id`, `redirect_uri`, `role_claim`, `role_map` 필수. `client_secret` 대신 `client_secret_env`(환경 변수 이름)를 쓸 수 있다. `issuer`·`redirect_uri`는 https(루프백 `localhost`·`127.0.0.1`만 http 허용, `secure_url`). `role_map` 값과 `default_role`은 `viewer`·`editor`·`admin` 중 하나.
@@ -62,6 +63,7 @@ updated: 2026-10-19
 - 한 줄: `{"time": UTC ISO 8601, "user", "action", "target", "result", "client", ...extra}`. 예: 미들웨어 항목은 `action="POST /api/snapshots"`, `result=201`; 수집은 `action="collection"`, `result="complete"`, `snapshot`, `via`(`sdk`, `sso:<역할>`, 브라우저 egress면 `/browser` 접미사).
 - 제외: `/api/login`·`/api/logout`(핸들러가 `login`·`logout`으로 기록), `/api/relay/*`. 비밀번호는 기록하지 않는다. OIDC 실패 이유는 200자로 자른다.
 - `tail(limit)`은 파일 끝에서부터 읽어 최신 항목부터 돌려주고, 쓰다 끊긴(해석할 수 없는) 줄은 건너뛴다. `GET /api/audit`이 쓴다. 로컬 모드에서도 기록된다(사용자 `local`, `test_local_mode_is_unchanged_and_audited`).
+- 웹 앱: 팀 모드 `admin`의 프로필 메뉴 `감사 로그`가 최근 200개를 표(시간, 사용자, 작업, 대상, 결과)로 보인다(`static/js/signin.js`). 로컬 모드와 `viewer`·`editor`에는 메뉴가 없고, 서버도 그들에게 403이다. `scripts/verify_team.py`가 admin에게 보이고 viewer에게 없음을 확인한다.
 
 ## 저장하지 않는 것
 - AWS 키·세션 토큰: 수집은 SDK 인증 체인이나 Identity Center 역할 자격 증명(서버 메모리)으로 하고 앱 데이터에 쓰지 않는다. SSO의 client secret·device code·액세스 토큰도 서버 메모리에만 둔다(`SECURITY.md` 보안 모델 표).

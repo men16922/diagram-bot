@@ -1,13 +1,13 @@
 ---
 title: HTTP API 레퍼런스
-summary: create_app이 조립하는 모든 HTTP 엔드포인트(페이지·정적 파일·session·snapshots·documents·agent·aws 라우터)의 요청 모델, 응답, 상태 코드, 역할, 감사 기록.
-sources: [src/diagram_bot/server.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/routes/session.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/routes/documents.py, src/diagram_bot/routes/agent.py, src/diagram_bot/routes/aws.py, src/diagram_bot/auth.py, src/diagram_bot/egress.py, tests/test_server.py, tests/test_team.py, tests/test_agent.py]
+summary: create_app이 조립하는 모든 HTTP 엔드포인트(페이지·정적 파일·session·snapshots·documents·standards·agent·aws 라우터)의 요청 모델, 응답, 상태 코드, 역할, 감사 기록.
+sources: [src/diagram_bot/server.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/routes/session.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/routes/documents.py, src/diagram_bot/routes/standards.py, src/diagram_bot/routes/agent.py, src/diagram_bot/routes/aws.py, src/diagram_bot/auth.py, src/diagram_bot/egress.py, tests/test_server.py, tests/test_team.py, tests/test_agent.py, tests/test_standards.py]
 related: [team-mode-security, storage, web-app, chat-agent, browser-egress, aws-access-and-sso, views, cloudformation, porting-guide]
 updated: 2026-10-19
 ---
 # HTTP API 레퍼런스
 
-> `server.create_app()`이 `routes.Context` 하나 위에 라우터 다섯 개(`session`, `snapshots`, `documents`, `agent`, `aws`)와 페이지·편집기·정적 파일을 묶는다. 모든 응답 본문은 JSON이고, 오류는 `{"detail": "사용자에게 보일 한국어 메시지"}` 형태다.
+> `server.create_app()`이 `routes.Context` 하나 위에 라우터 여섯 개(`session`, `snapshots`, `documents`, `standards`, `agent`, `aws`)와 페이지·편집기·정적 파일을 묶는다. 모든 응답 본문은 JSON이고, 오류는 `{"detail": "사용자에게 보일 한국어 메시지"}` 형태다.
 
 ## 핵심
 - 공통 규칙은 `server.create_app`의 `protect_mutations` 미들웨어에 있다(자세한 보안 의미는 [[team-mode-security]]).
@@ -16,7 +16,7 @@ updated: 2026-10-19
   - 변경 요청 본문이 15 MiB(`server.MAX_BODY`)를 넘으면 413 `파일은 최대 15 MiB입니다.` `Content-Length`로 먼저 거부하고, 없으면 상한까지만 읽는다.
   - `errors.InputError`(사용자가 고칠 입력: 스냅샷 형식, 통합할 수 없는 스냅샷 조합)는 `install_error_handlers`가 422로 바꾼다.
   - 팀 모드(`context.auth`가 있음)에서 `PUBLIC`(`/login`, `/api/login`, `/auth/oidc/start`, `/auth/oidc/callback`) 밖의 경로는 세션 쿠키가 필요하다. 없으면 `/api/*`는 401, 그 밖(페이지·`/static`·`/editor` 포함)은 303 → `/login`.
-  - 역할 검사는 `auth.allowed(role, method, path)`: `GET`/`HEAD`와 `/api/logout`은 모두 허용, `/api/collections`·`/api/sso`로 시작하는 변경은 `admin`만, 나머지 변경은 `editor`·`admin`. 거부는 403과 감사 기록(`result="denied"`).
+  - 역할 검사는 `auth.allowed(role, method, path)`: `GET`/`HEAD`와 `/api/logout`은 모두 허용, `/api/collections`·`/api/sso`·`/api/standards`로 시작하는 변경은 `admin`만, 나머지 변경은 `editor`·`admin`. 거부는 403과 감사 기록(`result="denied"`).
 - 로컬 모드(팀 모드 아님)에서는 `request.state.user = "local"`이고 `routes.role()`은 `admin`을 돌려준다.
 - 예외 처리기(`routes.install_error_handlers`): `store.NotFound` → 404, `store.Conflict` → 409, `errors.InputError` → 422(draw.io XML·규격 입력 오류 포함), 메시지는 예외 문자열 그대로. pydantic 검증 실패는 FastAPI 기본 422.
 - `FastAPI(docs_url=None, redoc_url=None)`이라 `/docs`·`/redoc`는 없다.
@@ -32,7 +32,7 @@ updated: 2026-10-19
 | 메서드·경로 | 응답 | 비고 |
 | --- | --- | --- |
 | `GET /` | `static/app.html` | `Cache-Control: no-store`, `X-Frame-Options: DENY` |
-| `GET /api/bootstrap` | `{token, editor_ready, editor_version, profiles, version, team, egress, user: {name, role}}` | `profiles`는 `boto3.Session().available_profiles`(실패 시 `[]`), `editor_ready`는 `<editor>/js/app.min.js` 존재 여부 |
+| `GET /api/bootstrap` | `{token, editor_ready, editor_version, profiles, version, team, egress, presets, user: {name, role}}` (`presets`: `drawio_spec.PRESETS` 이름) | `profiles`는 `boto3.Session().available_profiles`(실패 시 `[]`), `editor_ready`는 `<editor>/js/app.min.js` 존재 여부 |
 | `GET /editor/js/app.min.js` | draw.io `app.min.js` + `\n` + `static/editor-bridge.js` | 없으면 503 `diagram-bot setup-editor를 먼저 실행하세요.`, `Cache-Control: public, max-age=3600` |
 | `/static/*` | 패키지 `diagram_bot/static` (`StaticFiles`) | `app.js`, `app.css`, `js/*.js` |
 | `/editor/*` | 고정 버전 draw.io 디렉터리 (`StaticFiles(html=True)`) | `create_app` 시점에 디렉터리가 있을 때만 마운트 |
@@ -66,7 +66,7 @@ updated: 2026-10-19
 
 ## documents 라우터 (`routes/documents.py`)
 
-문서 네 엔드포인트 모두 보기 쿼리를 받는다: `view`(`overview`·`detail`·`focus`), `vpc`, `resource`, `references: bool`, `routes`(상세 보기의 로드 밸런서·대상 그룹 노드 ID), `spec`(`default`·`clean`·`enterprise`·`enterprise-clean`·`mxcell` 프리셋 이름만; 파일 경로·XML은 422, `drawio_spec.request_spec`, [[drawio-format-and-alignment]]). `views.view_graph`가 `ValueError`를 내면 422. 정해진 `(kind, vpc, resource, references, routes)`가 문서 키가 된다.
+문서 네 엔드포인트 모두 보기 쿼리를 받는다: `view`(`overview`·`detail`·`focus`), `vpc`, `resource`, `references: bool`, `routes`(상세 보기의 로드 밸런서·대상 그룹 노드 ID), `spec`(`default`·`clean`·`enterprise`·`enterprise-clean`·`mxcell` 프리셋 이름 또는 admin이 기본 규격으로 채택한 사내 표준 이름(`drawio_spec.COMPANY_SPECS` 조회); 파일 경로·XML·모르는 이름은 422, `drawio_spec.request_spec`, [[drawio-format-and-alignment]]). `views.view_graph`가 `ValueError`를 내면 422. 정해진 `(kind, vpc, resource, references, routes)`가 문서 키가 된다.
 
 | 메서드·경로 | 본문 | 동작 |
 | --- | --- | --- |
@@ -76,11 +76,21 @@ updated: 2026-10-19
 | `POST /api/snapshots/{id}/document/restore` | `RestoreRequest{revision, from_revision}` | 보관된 리비전을 복원(`v<n> 복원 전`으로 현재본 보관), 없으면 404 |
 | `POST /api/xml/align` | `XmlAlignRequest{xml: ≤10 MiB, mode: Literal["preserve", "rebuild"], spec: 프리셋 이름 \| 객체 \| None, reparent, route_edges, normalize_styles}` | 모든 페이지를 정렬해 `{xml, before, after, pages: [{name, status, before, after, kept_wrappers}]}` 반환. 나빠지는 페이지는 `status: "reverted"`로 원래 배치 유지([[drawio-format-and-alignment]]) |
 | `POST /api/xml/import` | `XmlImportRequest{xml: ≤10 MiB, title: ≤200자?, region: REGION 형식, save=True}` | 모든 페이지를 `Snapshot`으로 가져와 저장하고 `{id, snapshot}` 반환. `snapshot.metadata.import`에 셀 ID → 리소스 ID 맵, 페이지, 미대응 셀, 합성한 것 |
-| `POST /api/xml/adopt` | `XmlAdoptRequest{xml: ≤10 MiB(XML 본문만, 경로 불가), name: ≤60자, title: ≤200자?, region: REGION 형식, make_default=False, save=True}` | 회사 `drawio.xml`에서 `DrawioSpec` 추출, 정렬, 가져오기 결과를 이 요청에만 돌려줌: `{id, name, default, spec, aligned_xml, standardized_xml, before, after}`. `make_default=true`는 admin만(아니면 403): 프로세스 기본 규격 설정 + `Design` 표준 등록, 기본 표준 이름과 겹치면 422 |
+| `POST /api/xml/adopt` | `XmlAdoptRequest{xml: ≤10 MiB(XML 본문만, 경로 불가), name: ≤60자, title: ≤200자?, region: REGION 형식, make_default=False, save=True}` | 회사 `drawio.xml`에서 `DrawioSpec` 추출, 정렬, 가져오기 결과를 이 요청에만 돌려줌: `{id, name, default, spec, aligned_xml, standardized_xml, before, after}`. `make_default=true`는 admin만(아니면 403): 프로세스 기본 규격 설정 + `Design` 표준 등록 + `standards/<이름>.json` 저장(`routes.standards.remember`, 재시작 뒤 복원), 기본 표준·프리셋 이름과 겹치면 422 |
 
 XML 입력은 모두 `drawio_spec.read_document`를 지난다(크기, defusedxml, 압축 페이지 해제, 셀 10,000개, 좌표 유한성, 부모 순환·깊이). 실패는 422. 감사 로그는 미들웨어가 변경 요청마다 한 줄 쓴다(라우트가 따로 쓰지 않음).
 
 응답(`describe`)은 `{xml, revision, saved_at, view, counts, visible, routes, history: [{revision, saved_at, reason}]}`(미리보기는 `preview: true`도). `routes`에서는 `path`를 뺀다. 리비전·이력 규칙은 [[storage]].
+
+## standards 라우터 (`routes/standards.py`)
+
+| 메서드·경로 | 요청 | 응답·상태 |
+| --- | --- | --- |
+| `GET /api/standards` | — | 모든 역할. 기본 표준(`designer.STANDARDS`: `title`=이름, `snapshot_id`=`sample-<이름>`, `company: false`)과 이 프로세스에 등록된 사내 표준(`designer.COMPANY_STANDARDS`)의 `[{name, title, description, created_at, default, snapshot_id, company, spec, adopted_by}]`. 사내 표준의 `title`·`created_at`·`default`·`snapshot_id`·`adopted_by`는 저장된 기록에서, `spec`은 규격 이름으로 쓸 수 있는지(`COMPANY_SPECS`) |
+| `DELETE /api/standards/{name}` | — | admin만(`auth.allowed`와 핸들러 모두; 아니면 403과 감사 `denied`). `{deleted, default_cleared}`. 기본 표준 이름은 422, 저장된 기록이 없으면 404. `Design` 표준과 규격 이름을 지우고, 기본 규격이던 표준이면 기본 규격을 내장 기본값으로 돌린다 |
+
+- 저장 형식과 위치는 [[storage]]의 `StandardStore`. `create_app`은 시드 직후 `standards.restore(context.standards)`로 저장된 표준을 모두 다시 등록하고, 기본이던 것의 규격을 `set_default_spec`으로 되살린다. 검증에 실패한 기록은 로그만 남기고 건너뛴다.
+- `routes.Context(standards=None)`이면(다른 앱에 붙일 때 기본값) 채택 결과를 저장하지 않고 목록은 메모리의 사내 표준만 보인다.
 
 ## agent 라우터 (`routes/agent.py`)
 
@@ -123,16 +133,16 @@ XML 입력은 모두 `drawio_spec.read_document`를 지난다(크기, defusedxml
 - `/api/relay/*`는 `--aws-egress browser`일 때만 동작하고 아니면 404. 브라우저 쪽 반복은 `static/js/relay.js`([[web-app]], [[browser-egress]]).
 
 ## 다른 FastAPI 앱에 붙이기
-`routes/__init__.py` docstring: `routes.Context(snapshots, documents, aws, audit, ...)`를 만들고 필요한 라우터만 `app.include_router(snapshots.router(context))`처럼 붙인다. 조건은 두 가지다. 자체 인증 미들웨어가 `request.state.user`를 넣어야 하고(팀 모드라면 `request.state.role`도), `install_error_handlers(app)`를 호출해야 한다. `aws.router(context)`가 돌려주는 라우터의 `executor`는 앱 종료 때 직접 `shutdown`한다(`create_app`의 `lifespan` 참고). 페이지 토큰·Origin·본문 제한은 `create_app`의 미들웨어에 있으므로 붙이는 쪽이 따로 구현해야 한다.
+`routes/__init__.py` docstring: `routes.Context(snapshots, documents, aws, audit, ..., standards=StandardStore(...))`를 만들고 필요한 라우터만 `app.include_router(snapshots.router(context))`처럼 붙인다. 조건은 두 가지다. 자체 인증 미들웨어가 `request.state.user`를 넣어야 하고(팀 모드라면 `request.state.role`도), `install_error_handlers(app)`를 호출해야 한다. `aws.router(context)`가 돌려주는 라우터의 `executor`는 앱 종료 때 직접 `shutdown`한다(`create_app`의 `lifespan` 참고). 페이지 토큰·Origin·본문 제한은 `create_app`의 미들웨어에 있으므로 붙이는 쪽이 따로 구현해야 한다.
 
 ## 바꿀 때 주의
-- 새 변경 엔드포인트는 `allowed()`의 경로 접두사 규칙에 자동으로 걸린다. `admin` 전용이면 `/api/collections`·`/api/sso` 아래에 두거나 핸들러에서 `role(request)`를 검사한다(`/api/identity`, `/api/audit` 예).
-- 응답 형태를 바꾸면 `static/app.js`와 `tests/test_server.py`, `tests/test_team.py`, `tests/test_agent.py`(스트림 이벤트 순서)를 같이 고친다.
+- 새 변경 엔드포인트는 `allowed()`의 경로 접두사 규칙에 자동으로 걸린다. `admin` 전용이면 `/api/collections`·`/api/sso`·`/api/standards` 아래에 두거나 핸들러에서 `role(request)`를 검사한다(`/api/identity`, `/api/audit` 예).
+- 응답 형태를 바꾸면 `static/app.js`·`static/js/*.js`와 `tests/test_server.py`, `tests/test_team.py`, `tests/test_agent.py`(스트림 이벤트 순서), `tests/test_standards.py`를 같이 고친다.
 
 ## 관련
 - [[team-mode-security]] — 미들웨어·쿠키·역할·감사의 보안 근거.
 - [[storage]] — 스냅샷·문서 저장과 리비전 충돌.
-- [[web-app]] — 이 API를 부르는 프런트엔드.
+- [[web-app]] — 이 API를 부르는 프런트엔드(draw.io XML·감사 로그 대화상자, 규격 내보내기).
 - [[chat-agent]] — 채팅 턴과 스트림 이벤트를 만드는 쪽.
 - [[browser-egress]] — `/api/relay/*`의 서버 쪽 동작.
 - [[aws-access-and-sso]] — `/api/identity`·`/api/sso/*`·수집 세션 뒤의 `AwsAccess`.

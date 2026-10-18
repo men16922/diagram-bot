@@ -1,8 +1,8 @@
 ---
 title: 회사 draw.io 규격(DrawioSpec)과 기존 XML 진단·정렬·가져오기
 summary: drawio_spec.py의 검증된 회사 규격(DrawioSpec, spec_from_xml, request_spec)·입력 관문(read_document)·공용 분류표(classify_cell)와 xml_align.py의 진단(inspect), 품질 보호 정렬(align_report), 여러 페이지 가져오기(import), 템플릿 채택(adopt)과 그 HTTP·CLI 진입점.
-sources: [src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/drawio.py, src/diagram_bot/layout/, src/diagram_bot/designer.py, src/diagram_bot/api.py, src/diagram_bot/routes/documents.py, src/diagram_bot/cli.py, tests/test_xml_align.py, tests/test_xml_robustness.py]
-related: [porting-guide, layout-and-drawio, snapshot-model, http-api, cli, team-mode-security]
+sources: [src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/drawio.py, src/diagram_bot/layout/, src/diagram_bot/designer.py, src/diagram_bot/api.py, src/diagram_bot/routes/documents.py, src/diagram_bot/routes/standards.py, src/diagram_bot/static/js/xml.js, src/diagram_bot/cli.py, tests/test_xml_align.py, tests/test_xml_robustness.py, tests/test_standards.py]
+related: [porting-guide, layout-and-drawio, snapshot-model, http-api, web-app, storage, cli, team-mode-security]
 updated: 2026-10-19
 ---
 # 회사 draw.io 규격(`DrawioSpec`)과 기존 XML 진단·정렬·가져오기
@@ -15,7 +15,7 @@ updated: 2026-10-19
 - 입력은 모두 `drawio_spec.read_document` 한 곳을 지난다. 이 함수는 10 MiB 제한, defusedxml 파싱, 루트 태그 확인, 압축 페이지 해제, 셀 10,000개 제한을 맡는다. 실패는 `errors.InputError`이고, HTTP는 422(`routes.install_error_handlers`), CLI는 종료 코드 2와 한 줄 메시지(트레이스백 없음)로 답한다.
 - 좌표가 `inf`·`nan`이거나 숫자가 아니면 `InputError`다. 절댓값이 `1e7`을 넘거나 너비·높이가 음수여도, 부모가 순환하거나 64단계보다 깊어도 마찬가지다(`xml_align._number`, `_compute_abs`는 반복문).
 - 압축된 `<diagram>`(base64 → raw deflate → URL 인코딩)은 풀어서 읽는다. 해제 총량도 10 MiB로 제한한다. 출력은 항상 비압축이고 `compressed="false"`다. 저장하는 편집본(`drawio.validate_document`)만 압축 페이지를 거부한다.
-- HTTP의 `spec`에는 프리셋 이름이나 인라인 JSON 객체만 넣을 수 있다(`request_spec`). 파일 경로와 XML은 CLI·라이브러리(`resolve_spec`)만 받는다. 요청 데이터로 서버 파일을 읽지 않는다.
+- HTTP의 `spec`에는 프리셋 이름, admin이 기본 규격으로 채택한 사내 표준 이름(`COMPANY_SPECS` 사전 조회, `register_spec`), 인라인 JSON 객체만 넣을 수 있다(`request_spec`). 파일 경로와 XML은 CLI·라이브러리(`resolve_spec`)만 받는다. 요청 데이터로 서버 파일을 읽지 않는다(사내 표준 이름도 파일 이름으로 쓰지 않는다).
 - `DrawioSpec`은 생성할 때 모든 필드를 검증한다(`__post_init__`).
   - `cell_wrapper`는 `object`·`UserObject`·`mxCell` 중 하나이고, 대소문자를 구분하지 않고 정규화한다.
   - `attribute_map` 값은 XML 이름이어야 하고 draw.io 예약 이름(`id`, `parent`, `style`, `vertex`, `edge`, `source`, `target`, `label`, `value` 등)은 쓸 수 없다.
@@ -75,8 +75,8 @@ updated: 2026-10-19
   - 래퍼, 배너(`heading`·`scope`), Cloud/Region/AZ 상자 유무, 서브넷 라벨 표기(`compact`/`full`).
   - 역할별 컨테이너 스타일, 종류별 리소스 스타일, 글꼴·색, 화살표.
   - `isolated_subnet_distinct`는 템플릿에 격리 서브넷이 따로 칠해져 있을 때만 참이다. 규격이 받지 않는 값(예: 새 draw.io의 `light-dark()` 색)은 배우지 않는다.
-- `adopt_company_xml(xml_or_path, name=..., set_default=False, register=True, allow_path=True, save_spec=None)`은 진단 → 규격 추출 → 정렬 → 가져오기 → 표준 등록(`register`) → 회사 규격 렌더링(`standardized_xml`) 순서로 처리한다. 기본 표준 이름(`three-tier` 등)과 겹치면 `InputError`다.
-- HTTP `POST /api/xml/adopt`는 요청마다 결과만 돌려준다(editor). `make_default: true`는 admin만 쓸 수 있고, 프로세스 기본 규격 설정과 `Design` 표준 등록을 함께 한다. 이 설정은 메모리에만 있어 재시작하면 사라진다.
+- `adopt_company_xml(xml_or_path, name=..., set_default=False, register=True, allow_path=True, save_spec=None)`은 진단 → 규격 추출 → 정렬 → 가져오기 → 표준 등록(`register`) → 회사 규격 렌더링(`standardized_xml`) 순서로 처리한다. 등록할 때 기본 표준 이름(`three-tier` 등)이나 규격 프리셋 이름(`clean` 등; 프리셋이 먼저 풀려 사내 규격이 가려진다)과 겹치면 `InputError`다.
+- HTTP `POST /api/xml/adopt`는 요청마다 결과만 돌려준다(editor). `make_default: true`는 admin만 쓸 수 있고, 프로세스 기본 규격 설정과 `Design` 표준 등록, 규격 이름 등록을 함께 한다. 서버는 이 표준을 데이터 디렉터리의 `standards/<이름>.json`(규격 `to_dict()`, 가져온 스냅샷, 저장된 스냅샷 ID, 제목, 채택 시각·채택자, 기본 여부)에 저장하고 시작할 때 되살린다(`routes.standards`, [[storage]]). 기본 규격은 마지막으로 지정한 하나다. `DELETE /api/standards/{name}`(admin)이 표준을 지우고, 기본이던 것이면 내장 기본 규격으로 돌린다. 라이브러리·CLI의 `adopt_company_xml`은 여전히 그 프로세스에만 적용된다.
 - 앱이 저장·편집하는 문서는 기본 규격이 `mxCell`이거나 속성 이름을 바꿔도 `object` 래퍼와 `resourceId`/`relationId`를 유지한다(`DrawioSpec.for_editor`). 편집기 브리지가 이 속성으로 선택하기 때문이다. `GET document?spec=`은 저장할 수 없는 내보내기 미리보기다(`revision: null`, `preview: true`).
 
 ```python
@@ -90,17 +90,19 @@ xml = api.render(snapshot, spec=spec)
 ```
 
 ## 진입점
+- 웹 앱([[web-app]]): 사이드 내비 `도구 › draw.io XML` 대화상자가 `.drawio`·`.xml` 하나로 가져오기(가져오기 보고), 자동 정렬(전후 지표, `reverted` 페이지 안내, 정렬본 다운로드), 사내 표준 채택(`서버 기본 규격으로 지정`은 admin)과 사내 표준 목록(열기, admin 삭제)을 한다. 다운로드 대화상자의 `규격` 선택이 `GET document?spec=` 미리보기로 .drawio·PNG를 내보낸다(수동 편집 없음, 저장하지 않음).
 - Python(`api.py`): `inspect_xml`, `align_xml`, `align_report`, `import_xml`, `adopt_xml`, `spec_from_xml`, `resolve_spec`, `set_default_spec`, `DrawioSpec`.
 - HTTP(`routes/documents.py`, [[http-api]]):
   - `POST /api/xml/align` → `{xml, before, after, pages}`.
   - `POST /api/xml/import` → `{id, snapshot}`.
   - `POST /api/xml/adopt` → `{id, name, default, spec, aligned_xml, standardized_xml, before, after}`.
   - 세 엔드포인트 모두 editor 이상이고, `make_default`는 admin이다.
+  - `GET /api/standards`(모든 역할), `DELETE /api/standards/{name}`(admin).
 - CLI(`cli.py`, [[cli]]): `align-xml`(`--spec`은 프리셋·JSON·회사 `.drawio`; 되돌린 페이지와 남긴 래퍼를 표준 오류에 출력), `import-xml`, `adopt-template`. XML 입력 오류는 종료 코드 2다.
 
 ## 바꿀 때 주의
 - 새 입력 경로는 반드시 `read_document`를 지나게 한다. `fromstring`을 직접 부르면 크기·압축·셀 제한과 422 매핑이 빠진다.
-- 요청 데이터를 `resolve_spec`에 넘기지 않는다. 라우트는 `request_spec`만 쓴다. `adopt_company_xml`에는 `allow_path=False`를 넘긴다.
+- 요청 데이터를 `resolve_spec`에 넘기지 않는다. 라우트는 `request_spec`만 쓴다. `adopt_company_xml`에는 `allow_path=False`를 넘긴다. 사내 표준 이름은 `COMPANY_SPECS` 조회로만 풀고, 저장된 규격은 `DrawioSpec(**기록)`으로 다시 검증한다(`test_a_new_default_takes_the_flag_and_names_never_read_files`).
 - 분류 규칙은 `classify_cell` 한 곳에서만 바꾼다. 서브넷 계층 단어는 `layout.tier_rank`에 있다. `test_subnet_tiers_match_layout_tier_rank_on_own_output`와 `test_align_on_own_output_is_a_no_op_or_an_improvement`가 렌더러와의 일치를 지킨다.
 - 엣지 중간점을 읽거나 쓰는 코드는 엣지 부모의 원점을 더하거나 뺀다(`test_edge_inside_a_group_is_routed_in_its_parent_frame`).
 - 정렬기 격자는 `layout.SLOT`, `ROW`, `ICON`, `LANE_TOP`, `SUBNET_HEADER`, `AZ_HEADER`, `VPC_HEADER`를 쓴다. 값을 따로 두지 않는다.
@@ -111,6 +113,8 @@ xml = api.render(snapshot, spec=spec)
 - [[porting-guide]] — 회사 저장소로 옮길 때의 단계별 파일 목록.
 - [[layout-and-drawio]] — `layout/` 패키지의 격자·계층·경로 규칙(정렬기가 따르는 기준).
 - [[snapshot-model]] — 가져오기가 만드는 `Snapshot` 구조.
-- [[http-api]] — `/api/xml/*`와 문서 `spec` 미리보기 계약.
+- [[http-api]] — `/api/xml/*`, `/api/standards`와 문서 `spec` 미리보기 계약.
+- [[web-app]] — draw.io XML 대화상자와 규격 내보내기 화면.
+- [[storage]] — 채택한 사내 표준이 저장되는 `standards/` 디렉터리.
 - [[cli]] — `align-xml`, `import-xml`, `adopt-template` 옵션과 종료 코드.
 - [[team-mode-security]] — 역할(viewer·editor·admin)과 감사 로그.

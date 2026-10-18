@@ -18,8 +18,10 @@
        │
        ▼  api.adopt_xml("company_standard.drawio", name="company-std", set_default=True)
           (또는 CLI: diagram-bot adopt-template company_standard.drawio -o reports/company;
-           HTTP는 요청마다 결과만, 서버 기본값 변경은 admin의 make_default=true)
-  ① 회사 XML(모든 페이지)의 포맷(래퍼 태그, Cloud/Region/AZ 상자 유무, 서브넷 라벨 표기, 컨테이너·리소스별 스타일·폰트·화살표) 추출 → 이 프로세스의 기본값으로 설정(재시작하면 사라짐)
+           HTTP는 요청마다 결과만, 서버 기본값 변경은 admin의 make_default=true;
+           웹 앱은 도구 › draw.io XML › 사내 표준으로 채택)
+  ① 회사 XML(모든 페이지)의 포맷(래퍼 태그, Cloud/Region/AZ 상자 유무, 서브넷 라벨 표기, 컨테이너·리소스별 스타일·폰트·화살표) 추출 → 기본값으로 설정
+     (라이브러리·CLI는 그 프로세스에만; 서버에서 admin이 기본 규격으로 지정한 표준은 데이터 디렉터리에 저장되어 재시작 뒤에도 유지)
   ② 원본 XML의 도형 겹침·컨테이너 경계·AZ 서브넷 계층·직교 배선을 자동 교정한 aligned.drawio 생성!
   ③ 회사 템플릿을 사내 표준 아키텍처("company-std")로 자동 등록 → Design.apply_standard("company-std")로 불러와
      리소스를 추가·변경해도 항상 회사 포맷 + 자동 레이아웃으로 출력!
@@ -51,6 +53,11 @@
        ├──▶ api.diff_snapshots(before, after)    : 아키텍처 변경점 비교
        └──▶ api.cloudformation(snapshot)         : 배포 가능한 CloudFormation(JSON) 템플릿 초안 생성
 ```
+
+**웹 앱에서 바로 쓰기 (코드 없이):** 방식 0·A·C는 API·CLI만이 아니라 화면에도 있습니다. `diagram-bot serve`로 연 앱의 사이드 내비 `도구 › draw.io XML`에서
+회사 `.drawio` 파일 하나를 골라 `스냅샷으로 가져오기`(방식 C), `자동 정렬`(방식 A, 전후 지표와 정렬본 다운로드), `사내 표준으로 채택`(방식 0, 관리자는
+서버 기본 규격으로 지정)을 누르면 됩니다. 채택한 사내 표준은 같은 대화상자 목록에서 열거나 지울 수 있고, `다운로드 › 규격`에서 프리셋·사내 표준 규격으로
+.drawio·PNG를 내보내며(방식 B), AI 어시스턴트에서 "corp-web 표준으로 설계해줘"처럼 불러옵니다. 팀 모드 관리자는 프로필 메뉴 `감사 로그`로 누가 무엇을 했는지 봅니다.
 
 ---
 
@@ -154,6 +161,6 @@ diagram-bot의 AI 아키텍처 설계 에이전트(agent.py, designer.py)를 우
 ### Phase 3. 엔터프라이즈 지능화 (2~4주): 사내 표준 카탈로그 & CI/CD 아키텍처 게이트
 - **목표**: 단순 그리기를 넘어 **설계 자동화 → 사내 보안 규정 검증 → IaC 코드 생성 → 운영 드리프트 감시**의 전체 수명주기 완성.
 - **실행**:
-  1. **사내 표준 아키텍처 카탈로그화**: 사내 표준 `drawio.xml`들을 `api.import_xml`로 불러오거나 `samples/` 패키지에 사내 표준 패턴(예: 사내 금융망 3-Tier, 사내 프라이빗 EKS 표준 등)으로 등록해 AI 채팅에서 `"사내 금융망 표준 불러와서 Redis 추가해줘"` 한 줄로 즉시 설계.
+  1. **사내 표준 아키텍처 카탈로그화**: 사내 표준 `drawio.xml`들을 웹 앱 `도구 › draw.io XML`(관리자 채택은 서버에 저장)이나 `api.import_xml`로 불러오거나 `samples/` 패키지에 사내 표준 패턴(예: 사내 금융망 3-Tier, 사내 프라이빗 EKS 표준 등)으로 등록해 AI 채팅에서 `"사내 금융망 표준 불러와서 Redis 추가해줘"` 한 줄로 즉시 설계.
   2. **사내 보안·컴플라이언스 규칙 추가** ([[howto-add-review-rule]]): `findings.py`의 47개 AWS Well-Architected 규칙 위에 사내 전용 규칙(예: 필수 비용 태그 누락, 사내 보안 프록시 미경유, 금지된 인스턴스 패밀리 등)을 추가해 다이어그램 화면에서 즉시 빨간색/주황색 배지로 시각화.
   3. **배포 파이프라인(CI/CD) 아키텍처 게이트** ([[cli]]): 인프라 변경 전후에 `diagram-bot review --fail-on high`(종료 코드 3)와 `diagram-bot diff --fail-on-change`(종료 코드 4)를 실행해 단일 장애점(SPOF)이나 보안 위반이 생겼을 때 PR 단계에서 자동 알림·차단.

@@ -5,6 +5,13 @@
 ## [Unreleased]
 
 ### Added
+- **draw.io XML 기능을 화면으로:** 사이드 내비 `도구 › draw.io XML` 대화상자에서 `.drawio`·`.xml` 파일 하나(최대 10 MiB)를 스냅샷으로 가져오기
+  (가져오기 보고: 페이지·대응 셀·미대응 도형·합성 항목), 자동 정렬(전후 겹침·범위 이탈·선 충돌 등, 원본 유지 안내, 정렬본 다운로드), 사내 표준 채택
+  (`서버 기본 규격으로 지정`은 관리자)과 사내 표준 목록(열기, 관리자 삭제). 다운로드 대화상자의 `규격` 선택으로 .drawio·PNG를 프리셋이나 사내 표준
+  규격으로 새로 그려 내보냅니다(수동 편집 없음, 편집본에 저장하지 않음). 팀 모드 관리자에게 프로필 메뉴 `감사 로그` 표. viewer는 가져오기·정렬·채택이 꺼집니다.
+- **사내 표준 저장:** 관리자가 기본 규격으로 채택한 표준을 데이터 디렉터리 `standards/<이름>.json`에 저장하고 서버 시작 때 표준·규격 이름·기본 규격을
+  되살립니다. `GET /api/standards`(모든 역할), `DELETE /api/standards/{name}`(관리자, 기본이던 것이면 기본 규격 해제), `?spec=<사내 표준 이름>`
+  (이름 조회만, 파일을 읽지 않음), bootstrap의 `presets`. 프리셋 이름(`clean` 등)은 사내 표준 이름으로 쓸 수 없습니다.
 - **사내 draw.io 규격과 기존 XML 정렬·가져오기:** `DrawioSpec`(프리셋 `clean`·`mxcell`, `spec_from_xml`), 기존 `drawio.xml`의 검사(`inspect_drawio_xml`)·제자리 정렬과
   직교 배선(`align_drawio_xml`)·스냅샷 역변환(`import_drawio_xml`), 템플릿 채택(`/api/xml/adopt`), CLI `align-xml`·`import-xml`·`adopt-template`, 사내 표준 등록
   (`designer.register_standard`, 채팅 `list_standard_architectures`에도 표시). 모든 페이지와 압축 페이지를 읽고, 가져오기는 draw.io 셀 id → 리소스 id 표를 돌려줍니다.

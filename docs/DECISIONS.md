@@ -68,7 +68,9 @@ Last Updated: 2026-10-19
 - Company draw.io XML (2026-10-19, review of 6622915): request data never names server files. HTTP `spec` is a preset or
   an inline object (`request_spec`), adopt takes XML text; paths are for the CLI, library and `DIAGRAM_BOT_SPEC` only.
   `DrawioSpec` is a validated model. `/api/xml/adopt` answers per request for editors; only an admin's `make_default`
-  changes the process default spec and registers a Design standard (in memory, like the existing default). Documents the
+  changes the process default spec and registers a Design standard. Since 2026-10-19 (user request: the features on screen)
+  those standards persist under `<data-dir>/standards/` and come back at startup; `spec` may also name one (a lookup, never a
+  path), and only an admin deletes one (`DELETE /api/standards/{name}`). Documents the
   app edits keep the `object` wrapper and `resourceId`/`relationId` whatever the default exports (`for_editor`).
 - Alignment never returns a page with more overlaps, out-of-bounds cells or edge-icon collisions than its input (the
   page is kept and reported `reverted`); a page without issues is untouched, so Diagram Bot's own output is a no-op.
