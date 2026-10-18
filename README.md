@@ -31,7 +31,7 @@ diagram-bot serve
 
 `setup-editor`는 최초 한 번 공식 draw.io **32.4.1** 배포물(약 48 MB)을 다운로드하고 고정 SHA-256을 확인합니다. 이후 구성도 편집과 PNG 생성은 로컬에서 수행합니다. 오프라인 설치에는 동일 버전의 공식 `draw.war`를 준비해 `diagram-bot setup-editor --archive /path/to/draw.war`를 사용합니다. [배포물 출처와 라이선스](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
-[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 11종](examples/samples/README.md) · [사례 아키텍처 기준](docs/ARCHITECTURE.md) · [열린 제품 제안](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
+[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 11종](examples/samples/README.md) · [사례 아키텍처 기준](docs/ARCHITECTURE.md) · [열린 제품 제안](docs/PLAN.md) · [개발 안내](CONTRIBUTING.md)
 
 ## 시연 버전에서 할 수 있는 것
 
@@ -232,6 +232,8 @@ python -m playwright install chromium
 # diagram-bot serve --data-dir reports/browser-check
 python scripts/verify_demo.py
 ```
+
+커밋 게이트(`make check`), 브랜치·PR 절차, CI 범위와 overnight harness는 [개발 안내](CONTRIBUTING.md)에 있습니다.
 
 자동 테스트 **90개**(AWS API 에뮬레이터 통합 테스트·팀 모드·SSO 포함)와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
 
