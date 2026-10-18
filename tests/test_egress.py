@@ -227,6 +227,8 @@ def test_the_app_collects_through_the_browser_relay_api(environment, tmp_path): 
                 break
             time.sleep(0.05)
         stop.set()
+        loop.join(5)  # its last poll ends within the relay's 0.2 s; a poll still open when the client closes hangs the portal
+        assert not loop.is_alive()
         assert job["status"] in ("complete", "partial") and job.get("snapshot_id"), job
         snapshot = client.get(f"/api/snapshots/{job['snapshot_id']}").json()
         assert any(n["kind"] == "vpc" and not n["reference_only"] for n in snapshot["graph"]["nodes"])
