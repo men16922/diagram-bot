@@ -782,6 +782,9 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         if not subnets:
             status = next((c["status"] for c in snapshot["coverage"] if c["operation"] == "describe_subnets"), "unavailable")
             text = "이 VPC에서 조회된 서브넷이 없습니다." if status == "complete" else "서브넷 조회가 완료되지 않아 배치를 확인할 수 없습니다."
+            if focus and any(n["kind"] == "subnet" and vpc_of.get(k) == vpc["id"] for k, n in nodes.items()):
+                # A focus view draws only the subnets its resources sit in; the VPC's other subnets are hidden, not missing.
+                text = "선택 리소스와 직접 관계된 서브넷 없음 · 서브넷은 상세 구성에서 확인"
             canvas.add(cell_id(vpc["id"] + "/empty"), vid, gutters[0], y, 420, 40, "caption", text)
             y += 56
         metrics, arranged = {}, {}
@@ -883,8 +886,11 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
 
     inside = [n for n in others if not outside_vpc(n)]
     if inside:
-        cursor += place_box("references", "references", "VPC 밖 리전 리소스 · 배치 미확인 · 참조만 확인 (점선 = 참조)",
-                            "region", 20, cursor, inside, width)["h"] + 36
+        # Routes to the box come down the VPCs' gutters. Starting the box right of the left gutter, those routes enter
+        # from its side below the caption; the two-line caption ends before the first gutter between AZ columns.
+        inset = max([g["gutters"][0][1] - g["gutters"][0][0] for g in lanes.values() if len(g["gutters"]) > 1] + [0])
+        cursor += place_box("references", "references", "VPC 밖 리전 리소스 · 배치 미확인\n참조만 확인 (점선 = 참조)",
+                            "region", 20 + inset, cursor, inside, width)["h"] + 36
     region["w"] = max([sh["x"] + sh["w"] for sh in canvas.shapes if sh["parent"] == "region"] + [400]) + 20
     region["h"] = cursor
     cloud["w"], cloud["h"] = region["x"] + region["w"] + 20, region["y"] + region["h"] + 20
