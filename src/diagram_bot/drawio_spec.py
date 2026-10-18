@@ -13,7 +13,7 @@ draw.io convention without modifying `layout.py` or `drawio.py`:
 """
 import base64
 import binascii
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 import math
 import os
@@ -311,6 +311,14 @@ class DrawioSpec:
         if self.edge_end_arrow != "none":
             style = patch_style(style, endArrow=self.edge_end_arrow, endFill="1" if self.edge_end_fill else "0")
         return style
+
+    def for_editor(self):
+        """This spec for documents the app's editor opens: the editor bridge selects cells by their resourceId/relationId
+        wrapper attributes, so a company spec that exports bare <mxCell> or renamed attributes keeps them in the app."""
+        wrapper = "object" if self.cell_wrapper == "mxCell" else self.cell_wrapper
+        if wrapper == self.cell_wrapper and self.attribute_map == DEFAULT_ATTRIBUTE_MAP:
+            return self
+        return replace(self, cell_wrapper=wrapper, attribute_map=dict(DEFAULT_ATTRIBUTE_MAP))
 
     def to_dict(self):
         data = {name: getattr(self, name) for name in self.__dataclass_fields__}

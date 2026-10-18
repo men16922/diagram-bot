@@ -20,7 +20,7 @@ from pathlib import Path
 import re
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-from .designer import register_standard
+from .designer import STANDARDS, register_standard, slug
 from .drawio import ICONS, RESOURCE_ICONS, generate_document
 from .drawio_spec import (format_style, iter_cells, parse_style, patch_style, read_document, resolve_spec, set_default_spec,
                           spec_from_xml)
@@ -1148,6 +1148,7 @@ def adopt_company_xml(
     set_default=False,
     save_spec=None,
     allow_path=True,
+    register=True,
 ) -> dict:
     """Adopt a company standard architecture `drawio.xml` file or string as both a `DrawioSpec` and a `Design` standard.
 
@@ -1158,6 +1159,9 @@ def adopt_company_xml(
        `designer.COMPANY_STANDARDS` under `name` so `Design().apply_standard(name)` loads and extends it.
     4. Renders a standardized `drawio.xml` from the imported snapshot using the extracted company `DrawioSpec`.
     5. Optionally sets the extracted `DrawioSpec` as the process-wide default (`set_default=True`) and/or saves it as JSON (`save_spec`).
+
+    `register=False` skips step 3's registration (the HTTP route registers only for an admin's make_default); a name that
+    collides with a built-in standard is refused. `allow_path=False` accepts XML text only (request data).
     """
     if not allow_path and not (isinstance(xml_or_path, str) and xml_or_path.lstrip().startswith("<")):
         raise InputError("draw.io XML 본문이 필요합니다 (파일 경로는 CLI·라이브러리에서만).")
@@ -1169,12 +1173,19 @@ def adopt_company_xml(
     else:
         xml_text = str(xml_or_path)
 
+    try:
+        std_key = slug(name)
+    except ValueError as exc:
+        raise InputError(str(exc)) from exc
+    if register and std_key in STANDARDS:
+        raise InputError(f"기본 표준 아키텍처와 같은 이름은 쓸 수 없습니다: {std_key}")
     before = inspect_drawio_xml(xml_text)
     spec = spec_from_xml(xml_text, name=name)
     aligned_xml = align_drawio_xml(xml_text, spec=spec, mode="preserve")
     after = inspect_drawio_xml(aligned_xml)
     snapshot = import_drawio_xml(aligned_xml, title=title or f"사내 표준 ({name})", region=region, account=account)
-    std_key = register_standard(name, lambda: copy.deepcopy(snapshot), description=title or f"사내 표준 아키텍처 ({name})")
+    if register:
+        register_standard(std_key, lambda: copy.deepcopy(snapshot), description=title or f"사내 표준 아키텍처 ({name})")
 
     vpc_id = snapshot["raw"]["vpcs"][0]["VpcId"] if snapshot["raw"].get("vpcs") else None
     standardized_xml = generate_document(snapshot, view="detail" if vpc_id else "overview", vpc_id=vpc_id, spec=spec)

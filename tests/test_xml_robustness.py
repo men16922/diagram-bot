@@ -1,5 +1,6 @@
 """Regression tests for the company draw.io XML feature: hostile input, spec validation, coordinate frames, roles."""
 import base64
+import json
 import subprocess
 import sys
 import urllib.parse
@@ -249,3 +250,68 @@ def test_inspect_reads_nested_edge_points_in_the_parent_frame():
     absolute_in_group = mx(cells + [route.format(p="vpc", x=266, y1=450, y2=500)])  # page coordinates under a group: wrong
     assert api.inspect_xml(relative)["unrouted_edges"] == []
     assert api.inspect_xml(absolute_in_group)["unrouted_edges"] == ["x"]
+
+
+# --- d. adopt is per request unless an admin makes it the default; roles; one audit line per mutation ----------------
+
+@pytest.fixture
+def team(tmp_path):
+    from diagram_bot.auth import hash_password
+    users = {name: {"name": name, "password_hash": hash_password("pw-" + name), "role": name} for name in ("viewer", "editor", "admin")}
+    app = create_app(tmp_path / "data", users=users)
+
+    def login(name):
+        c = TestClient(app)
+        assert c.post("/api/login", json={"name": name, "password": "pw-" + name}).status_code == 200
+        c.headers["X-Diagram-Bot"] = c.get("/api/bootstrap").json()["token"]
+        return c
+    try:
+        yield login, tmp_path / "data" / "audit.log"
+    finally:
+        api.set_default_spec(None)
+        for key in ("corp-team-std", "editor-std"):
+            api.COMPANY_STANDARDS.pop(key, None)
+
+
+MXCELL_TEMPLATE = mx([v("vpc", "corp-vpc (10.9.0.0/16)", VPC, 0, 0, 400, 300),
+                      v("s", "app-subnet (10.9.1.0/24)", PRIV, 20, 50, 300, 200, "vpc"), v("i", "web-1", EC2, 40, 60, 52, 52, "s")])
+
+
+def audit_actions(path, since):
+    return [json.loads(line)["action"] for line in path.read_text().splitlines()[since:]]
+
+
+def test_xml_routes_follow_the_snapshot_and_collection_roles(team):
+    login, audit = team
+    viewer, editor, admin = login("viewer"), login("editor"), login("admin")
+    sid = viewer.get("/api/snapshots").json()[0]["id"]
+    assert viewer.get(f"/api/snapshots/{sid}/document", params={"spec": "clean"}).status_code == 200  # read-only preview
+    for path in ("/api/xml/align", "/api/xml/import", "/api/xml/adopt"):
+        assert viewer.post(path, json={"xml": MESSY_COMPANY_XML, "save": False}).status_code == 403, path
+
+    since = len(audit.read_text().splitlines())
+    res = editor.post("/api/xml/import", json={"xml": MESSY_COMPANY_XML})
+    assert res.status_code == 200 and res.json()["id"]
+    assert audit_actions(audit, since) == ["POST /api/xml/import"]
+
+    doc_before = viewer.get(f"/api/snapshots/{sid}/document", params={"reset": True}).json()["xml"]
+    since = len(audit.read_text().splitlines())
+    res = editor.post("/api/xml/adopt", json={"xml": MXCELL_TEMPLATE, "name": "editor-std"})
+    assert res.status_code == 200 and res.json()["default"] is False
+    assert audit_actions(audit, since) == ["POST /api/xml/adopt"]
+    assert api.get_default_spec() is api.DEFAULT_SPEC and "editor-std" not in api.COMPANY_STANDARDS
+    assert viewer.get(f"/api/snapshots/{sid}/document", params={"reset": True}).json()["xml"] == doc_before
+    assert editor.post("/api/xml/adopt", json={"xml": MXCELL_TEMPLATE, "make_default": True}).status_code == 403
+    assert api.get_default_spec() is api.DEFAULT_SPEC
+
+    res = admin.post("/api/xml/adopt", json={"xml": MXCELL_TEMPLATE, "name": "corp-team-std", "make_default": True, "save": False})
+    assert res.status_code == 200 and res.json()["default"] is True
+    assert api.get_default_spec().cell_wrapper == "mxCell" and "corp-team-std" in api.COMPANY_STANDARDS
+    # The app's own documents keep the wrapper attributes the editor selects by; an explicit preview is the export.
+    doc = viewer.get(f"/api/snapshots/{sid}/document", params={"reset": True}).json()["xml"]
+    assert doc.count("resourceId=") == doc_before.count("resourceId=") > 0
+    assert admin.post("/api/xml/adopt", json={"xml": MXCELL_TEMPLATE, "name": "three-tier", "make_default": True}).status_code == 422
+    for bad in ({"region": "../etc"}, {"name": "x" * 61}, {"title": "t" * 201}):
+        assert editor.post("/api/xml/adopt", json={"xml": MXCELL_TEMPLATE, **bad}).status_code == 422, bad
+    assert editor.post("/api/xml/import", json={"xml": MXCELL_TEMPLATE, "region": "nowhere"}).status_code == 422
+    assert editor.post("/api/xml/align", json={"xml": MXCELL_TEMPLATE, "mode": "shuffle"}).status_code == 422

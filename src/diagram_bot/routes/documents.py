@@ -1,10 +1,14 @@
 """draw.io documents of a snapshot view: read (generated on first use), save, relayout, restore, and XML align/import/adopt."""
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..drawio import carry_annotations, generate_document, validate_document
-from ..drawio_spec import request_spec
+from ..drawio_spec import get_default_spec, request_spec
+from ..validation import REGION
 from ..views import view_graph
+from . import role
 from ..xml_align import adopt_company_xml, align_drawio_xml, import_drawio_xml, inspect_drawio_xml
 
 
@@ -23,7 +27,7 @@ class RestoreRequest(RevisionRequest):
 
 class XmlAlignRequest(BaseModel):
     xml: str = Field(max_length=10 * 1024 * 1024)
-    mode: str = "preserve"
+    mode: Literal["preserve", "rebuild"] = "preserve"
     spec: str | dict | None = Field(default=None, description="preset name or inline spec object; never a path")
     reparent: bool = True
     route_edges: bool = True
@@ -32,17 +36,17 @@ class XmlAlignRequest(BaseModel):
 
 class XmlImportRequest(BaseModel):
     xml: str = Field(max_length=10 * 1024 * 1024)
-    title: str | None = None
-    region: str = "ap-northeast-2"
+    title: str | None = Field(default=None, max_length=200)
+    region: str = Field(default="ap-northeast-2", pattern=REGION, max_length=50)
     save: bool = True
 
 
 class XmlAdoptRequest(BaseModel):
     xml: str = Field(max_length=10 * 1024 * 1024)
-    name: str = "company-standard"
-    title: str | None = None
-    region: str = "ap-northeast-2"
-    set_default: bool = True
+    name: str = Field(default="company-standard", max_length=60)
+    title: str | None = Field(default=None, max_length=200)
+    region: str = Field(default="ap-northeast-2", pattern=REGION, max_length=50)
+    make_default: bool = False  # admin only: server-wide default spec and a registered company standard
     save: bool = True
 
 
@@ -62,8 +66,11 @@ def describe(document, selection, history):
             "history": [{k: h[k] for k in ("revision", "saved_at", "reason")} for h in history]}
 
 
-def generate(snapshot, scope, spec=None):
-    return generate_document(snapshot, scope[1], scope[3], scope[0], scope[2], scope[4], spec=request_spec(spec))
+def generate(snapshot, scope, spec=None, editor=True):
+    """XML of a view. Documents the app stores and edits keep the wrapper attributes the editor selects by (for_editor);
+    an explicit spec preview is the export as the company spec writes it."""
+    cfg = request_spec(spec) or get_default_spec()
+    return generate_document(snapshot, scope[1], scope[3], scope[0], scope[2], scope[4], spec=cfg.for_editor() if editor else cfg)
 
 
 def router(context):
@@ -117,26 +124,26 @@ def router(context):
         return {"xml": aligned, "before": before, "after": after}
 
     @api.post("/api/xml/import")
-    def import_xml_endpoint(payload: XmlImportRequest, request: Request):
-        """Import an arbitrary AWS draw.io XML document as a Diagram Bot Snapshot."""
+    def import_xml_endpoint(payload: XmlImportRequest):
+        """Import an arbitrary AWS draw.io XML document as a Diagram Bot Snapshot (editor, like any snapshot import)."""
         snapshot = import_drawio_xml(payload.xml, title=payload.title, region=payload.region)
-        identifier = snapshots.save(snapshot) if payload.save else None
-        if identifier and context.audit:
-            context.audit.write(getattr(request.state, "user", "local"), "xml import", target=identifier)
-        return {"id": identifier, "snapshot": snapshot}
+        return {"id": snapshots.save(snapshot) if payload.save else None, "snapshot": snapshot}
 
     @api.post("/api/xml/adopt")
     def adopt_xml_endpoint(payload: XmlAdoptRequest, request: Request):
-        """Adopt a company draw.io XML template as both the default DrawioSpec and a registered Design standard."""
+        """Extract a company template's DrawioSpec, align it and import it, for this request only (editor).
+
+        make_default (admin, like collection): the spec becomes this process's default and the template a Design standard."""
+        if payload.make_default and role(request) != "admin":
+            raise HTTPException(403, "서버 기본 규격 변경(make_default)은 admin 역할만 할 수 있습니다.")
         result = adopt_company_xml(payload.xml, name=payload.name, title=payload.title, region=payload.region,
-                                   set_default=payload.set_default, allow_path=False)
+                                   set_default=payload.make_default, register=payload.make_default, allow_path=False)
         identifier = snapshots.save(result["snapshot"]) if payload.save else None
-        if identifier and context.audit:
-            context.audit.write(getattr(request.state, "user", "local"), "xml adopt", target=identifier, standard=result["name"])
         return {
             "id": identifier,
             "name": result["name"],
             "spec": result["spec"].to_dict(),
+            "default": payload.make_default,
             "aligned_xml": result["aligned_xml"],
             "standardized_xml": result["standardized_xml"],
             "before": result["before"],
