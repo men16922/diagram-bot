@@ -58,6 +58,31 @@ def test_single_az_and_unencrypted_resources_are_reported():
     assert ("REL-RDS-SINGLE-AZ", "catalog-db-ro") not in found
 
 
+def test_edge_address_and_routing_rules_need_their_inputs():
+    """WAF, CloudFront origin exposure, idle Elastic IPs and TGW blackhole routes are judged only from collected fields."""
+    from fixtures import edge_snapshot
+    snapshot = edge_snapshot()
+    found = {(f["rule"], f["resource_name"]): f for f in findings(snapshot)}
+    edge_rules = {key for key in found if key[0] in ("SEC-ALB-WAF", "SEC-CF-ORIGIN-OPEN", "COST-EIP-IDLE", "REL-TGW-BLACKHOLE")}
+    # shop-alb: internet-facing, fronted by CloudFront without a web ACL. web-alb: CloudFront with WAF in front, but its
+    # security group still admits 0.0.0.0/0, so the edge can be bypassed (configuration only, no reachability test).
+    assert edge_rules == {("SEC-ALB-WAF", "shop-alb"), ("SEC-CF-ORIGIN-OPEN", "web-alb"), ("COST-EIP-IDLE", "203.0.113.82"),
+                          ("REL-TGW-BLACKHOLE", "edge-spokes")}
+    assert all(found[key]["severity"] == "low" for key in edge_rules) and found[("COST-EIP-IDLE", "203.0.113.82")]["pillar"] == "cost"
+    assert "10.99.0.0/16 (static)" in found[("REL-TGW-BLACKHOLE", "edge-spokes")]["evidence"]
+    assert "shop.example.org" in found[("SEC-ALB-WAF", "shop-alb")]["evidence"]
+    assert "sg-edge-alb: tcp 443-443 ← 0.0.0.0/0" in found[("SEC-CF-ORIGIN-OPEN", "web-alb")]["evidence"]
+    # Without a complete regional WAF listing for the ALB's account and region, nothing is said about WAF.
+    for coverage in (
+            [c for c in snapshot["coverage"] if c["service"] != "wafv2"],
+            [{**c, "status": "unavailable"} if c["service"] == "wafv2" and c["parameters"]["Scope"] == "REGIONAL" else c for c in snapshot["coverage"]],
+            [{**c, "region": "us-east-1"} if c["service"] == "wafv2" else c for c in snapshot["coverage"]]):
+        assert not any(f["rule"] == "SEC-ALB-WAF" for f in review(build_graph(snapshot), coverage))
+    # An ALB origin whose security groups were not all collected is not judged.
+    snapshot["raw"]["security_groups"] = [g for g in snapshot["raw"]["security_groups"] if g["GroupId"] != "sg-edge-alb"]
+    assert not any(f["rule"] == "SEC-CF-ORIGIN-OPEN" for f in findings(snapshot))
+
+
 def test_security_group_exposure_rules():
     snapshot = demo_snapshot()
     groups = snapshot["raw"]["security_groups"]

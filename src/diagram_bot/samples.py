@@ -11,7 +11,7 @@ from .combine import combine_snapshots
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
 # Bumped whenever a sample's architecture changes; the server replaces stored samples of another version.
-SAMPLE_VERSION = 4
+SAMPLE_VERSION = 5
 
 
 class Sample:
@@ -87,12 +87,14 @@ class Sample:
         return str(ipaddress.ip_network(cidr)[offset])
 
     def security_group(self, key, vpc, name, ingress, egress=("0.0.0.0/0",)):
-        """Rules as (port, source): a CIDR, another group's ID or "self"; port None allows all traffic.
+        """Rules as (port, source): a CIDR, another group's ID, a prefix list ID or "self"; port None allows all traffic.
 
         Egress is a list of sources with all traffic allowed (the default is AWS's 0.0.0.0/0)."""
         def rule(port, source):
             source = key if source == "self" else source
             ports = {"IpProtocol": "-1"} if port is None else {"IpProtocol": "tcp", "FromPort": port, "ToPort": port}
+            if source.startswith("pl-"):
+                return {**ports, "PrefixListIds": [{"PrefixListId": source}]}
             return {**ports, **({"UserIdGroupPairs": [{"GroupId": source}]} if source.startswith("sg-") else {"IpRanges": [{"CidrIp": source}]})}
         self.raw["security_groups"].append({"GroupId": key, "GroupName": name, "VpcId": vpc,
                                             "IpPermissions": [rule(port, source) for port, source in ingress],
@@ -351,6 +353,92 @@ class Sample:
             "VpcConfig": {"Subnets": list(subnets), "SecurityGroupIds": []},
             **({"Orchestrator": {"Eks": {"ClusterArn": f"arn:aws:eks:{self.region}:{self.account}:cluster/{eks}"}}} if eks else {})})
 
+    # --- Edge, Elastic IPs, Transit Gateway routing domains and Direct Connect --------------------------------------
+    # Their raw collections exist only in samples that use them, so other samples report no such coverage.
+    def digest(self, *parts):
+        return hashlib.sha256("/".join(map(str, parts)).encode()).hexdigest()
+
+    def uuid(self, *parts):
+        """A deterministic UUID-shaped ID (WAF web ACLs, Direct Connect gateways)."""
+        h = self.digest(*parts)
+        return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
+    def elastic_ip(self, key, ip, name, nat=None, balancer=None, subnet=None):
+        """An Elastic IP on a NAT gateway, or on a network load balancer's subnet (one static address per AZ)."""
+        eni = "eni-" + self.digest(key)[:17]
+        self.raw.setdefault("elastic_ips", []).append({"AllocationId": key, "PublicIp": ip, "Domain": "vpc", "NetworkInterfaceId": eni,
+                                                       "AssociationId": "eipassoc-" + self.digest(key, "assoc")[:17], "Tags": self.tags(name)})
+        if nat:
+            gateway = next(g for g in self.raw["nat_gateways"] if g["NatGatewayId"] == nat)
+            gateway.setdefault("NatGatewayAddresses", []).append({"AllocationId": key, "PublicIp": ip, "NetworkInterfaceId": eni, "IsPrimary": True})
+        if balancer:
+            zone = next(z for b in self.raw["load_balancers"] if b["LoadBalancerArn"] == balancer for z in b["AvailabilityZones"] if z["SubnetId"] == subnet)
+            zone.setdefault("LoadBalancerAddresses", []).append({"IpAddress": ip, "AllocationId": key})
+
+    def web_acl(self, name, scope="REGIONAL", resources=()):
+        """AWS WAF web ACL: REGIONAL ones list the load balancers they protect, CLOUDFRONT ones are named by distributions."""
+        ident = self.uuid(name, scope)
+        where = "us-east-1:{}:global" if scope == "CLOUDFRONT" else f"{self.region}:{{}}:regional"
+        arn = f"arn:aws:wafv2:{where.format(self.account)}/webacl/{name}/{ident}"
+        self.raw.setdefault("waf_web_acls", []).append({"Name": name, "Id": ident, "ARN": arn, "LockToken": ident, "Scope": scope,
+                                                        **({"ResourceArns": list(resources)} if scope == "REGIONAL" else {})})
+        return arn
+
+    def cloudfront(self, key, alias, origins, web_acl=""):
+        """A CloudFront distribution; origins are load balancer ARNs (matched by DNS name) or S3 bucket names."""
+        items = []
+        for origin in origins:
+            balancer = next((b for b in self.raw["load_balancers"] if b["LoadBalancerArn"] == origin), None)
+            if balancer:
+                balancer.setdefault("DNSName", f"{balancer['LoadBalancerName']}-{int(self.digest(origin)[:8], 16)}.{self.region}.elb.amazonaws.com")
+                items.append({"Id": f"alb-{balancer['LoadBalancerName']}", "DomainName": balancer["DNSName"],
+                              "CustomOriginConfig": {"HTTPPort": 80, "HTTPSPort": 443, "OriginProtocolPolicy": "https-only"}})
+            else:
+                items.append({"Id": f"s3-{origin}", "DomainName": f"{origin}.s3.{self.region}.amazonaws.com", "S3OriginConfig": {"OriginAccessIdentity": ""},
+                              "OriginAccessControlId": "E" + self.digest(origin).upper()[:13]})
+        self.raw.setdefault("cloudfront_distributions", []).append({
+            "Id": key, "ARN": f"arn:aws:cloudfront::{self.account}:distribution/{key}", "Status": "Deployed", "Enabled": True,
+            "DomainName": f"d{self.digest(key)[:13]}.cloudfront.net", "Aliases": {"Quantity": 1, "Items": [alias]}, "Comment": alias,
+            "Origins": {"Quantity": len(items), "Items": items}, "PriceClass": "PriceClass_200", "HttpVersion": "http2and3",
+            "DefaultCacheBehavior": {"TargetOriginId": items[0]["Id"], "ViewerProtocolPolicy": "redirect-to-https"}, "WebACLId": web_acl})
+
+    def tgw_route_table(self, key, gateway, name, associate=(), propagate=(), routes=()):
+        """A Transit Gateway route table. Attachments are (attachment ID, resource type, resource ID); routes are
+        (destination, attachments), with no attachments meaning a static blackhole route."""
+        entry = lambda item: {"TransitGatewayAttachmentId": item[0], "ResourceType": item[1], "ResourceId": item[2], "TransitGatewayRouteTableId": key}
+        self.raw.setdefault("transit_gateway_route_tables", []).append({
+            "TransitGatewayRouteTableId": key, "TransitGatewayId": gateway, "State": "available", "DefaultAssociationRouteTable": False,
+            "DefaultPropagationRouteTable": False, "Tags": self.tags(name)})
+        self.raw.setdefault("transit_gateway_route_table_associations", []).extend({**entry(a), "State": "associated"} for a in associate)
+        self.raw.setdefault("transit_gateway_route_table_propagations", []).extend({**entry(p), "State": "enabled"} for p in propagate)
+        self.raw.setdefault("transit_gateway_routes", []).extend({
+            "DestinationCidrBlock": destination, "TransitGatewayRouteTableId": key, "Type": "propagated" if targets else "static",
+            "State": "active" if targets else "blackhole",
+            "TransitGatewayAttachments": [{"TransitGatewayAttachmentId": t[0], "ResourceType": t[1], "ResourceId": t[2]} for t in targets]}
+            for destination, targets in routes)
+
+    def dx_gateway(self, name, tgw=None, vgw=None, prefixes=()):
+        """A Direct Connect gateway associated with a Transit Gateway (transit VIFs) or a virtual private gateway."""
+        key = self.uuid("dxgw", name)
+        self.raw.setdefault("dx_gateways", []).append({"directConnectGatewayId": key, "directConnectGatewayName": name, "amazonSideAsn": 64513,
+                                                       "ownerAccount": self.account, "directConnectGatewayState": "available"})
+        self.raw.setdefault("dx_gateway_associations", []).append({
+            "directConnectGatewayId": key, "associationState": "associated", "associationId": self.uuid("assoc", name),
+            "associatedGateway": {"id": tgw or vgw, "type": "transitGateway" if tgw else "virtualPrivateGateway", "ownerAccount": self.account,
+                                  "region": self.region},
+            "allowedPrefixesToDirectConnectGateway": [{"cidr": cidr} for cidr in prefixes]})
+        return key
+
+    def direct_connect(self, key, name, location, gateway, vlan, bandwidth="10Gbps"):
+        """A dedicated connection at a Direct Connect location with a transit VIF (BGP up) to a Direct Connect gateway."""
+        self.raw.setdefault("dx_connections", []).append({"connectionId": key, "connectionName": name, "location": location, "bandwidth": bandwidth,
+                                                          "connectionState": "available", "region": self.region, "ownerAccount": self.account})
+        self.raw.setdefault("dx_virtual_interfaces", []).append({
+            "virtualInterfaceId": "dxvif-" + self.digest(key)[:8], "virtualInterfaceName": f"{name}-transit", "virtualInterfaceType": "transit",
+            "connectionId": key, "vlan": vlan, "asn": 65010, "amazonSideAsn": 64513, "directConnectGatewayId": gateway,
+            "virtualInterfaceState": "available", "region": self.region, "ownerAccount": self.account,
+            "bgpPeers": [{"bgpPeerId": "dxpeer-" + self.digest(key, "bgp")[:8], "addressFamily": "ipv4", "bgpPeerState": "available", "bgpStatus": "up"}]})
+
     def network(self, vpc, prefix, azs, public, private, nat_per_az=True):
         """Internet gateway, NAT in public subnets, and one route table per tier (private per AZ)."""
         igw = self.internet_gateway(f"igw-{prefix}", vpc, f"{prefix}-igw")
@@ -403,14 +491,29 @@ class Sample:
                                                     ("sagemaker", "list_clusters", "sagemaker_clusters"))]
         coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
                       "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in self.raw["target_health"]]
+        # Edge, Elastic IP, TGW routing and Direct Connect calls appear only in samples that use them.
+        coverage += [{"service": service, "operation": operation, "parameters": params, "status": "complete", "pages": 1,
+                      "items": sum(1 for x in self.raw[key] if all(x.get(k) == v for k, v in params.items()))}
+                     for service, operation, key, params in (
+                         ("ec2", "describe_addresses", "elastic_ips", {}),
+                         ("ec2", "describe_transit_gateway_route_tables", "transit_gateway_route_tables", {}),
+                         ("cloudfront", "list_distributions", "cloudfront_distributions", {}),
+                         ("wafv2", "list_web_acls", "waf_web_acls", {"Scope": "REGIONAL"}),
+                         ("wafv2", "list_web_acls", "waf_web_acls", {"Scope": "CLOUDFRONT"}),
+                         ("directconnect", "describe_connections", "dx_connections", {}),
+                         ("directconnect", "describe_virtual_interfaces", "dx_virtual_interfaces", {}),
+                         ("directconnect", "describe_direct_connect_gateways", "dx_gateways", {}),
+                         ("directconnect", "describe_direct_connect_gateway_associations", "dx_gateway_associations", {}))
+                     if key in self.raw]
         return {"schema_version": 1, "metadata": {
             "account_id": self.account, "region": self.region, "partition": "aws", "started_at": timestamp, "finished_at": timestamp,
             "status": "complete", "demo": True, "sample": self.key, "sample_version": SAMPLE_VERSION, "title": self.title, "practices": self.practices,
             "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway", "NatGateway",
                       "RouteTable", "RDS", "AutoScalingGroup", "VpcEndpoint", "TransitGateway", "EKS", "MSK", "ElastiCache", "Lambda",
-                      "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN"],
+                      "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN", "ElasticIP", "TransitGatewayRouteTable", "CloudFront", "WAF",
+                      "DirectConnect"],
             "limitations": ["AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-                            "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+                            "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
                             "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."]},
             "coverage": coverage, "raw": self.raw}
 
@@ -424,7 +527,9 @@ def three_tier():
         "웹·앱 계층은 Auto Scaling 그룹(ELB 헬스 체크)으로 AZ에 분산",
         "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개), 읽기는 세 번째 AZ의 읽기 전용 복제본",
         "S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM·SSM Messages·EC2 Messages 엔드포인트의 Session Manager(배스천 없음)",
-        "도형 밖 권고: CloudFront(정적 콘텐츠는 S3)·AWS WAF·Route 53 헬스 체크를 진입점 앞에 (REL02-BP01, 수집 범위 밖)"])
+        "진입점 앞에 CloudFront(정적 콘텐츠는 S3 오리진)와 CloudFront용 AWS WAF 웹 ACL, ALB 보안 그룹은 CloudFront origin-facing 접두사 목록만 허용 (REL02-BP01)",
+        "NAT 게이트웨이마다 Elastic IP: 외부 파트너의 허용 목록에 올릴 고정 출구 IP",
+        "도형 밖 권고: Route 53 헬스 체크·Shield Advanced (수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60001", "10.10.0.0/16", "prod-web", Environment="production")
     public, web, app, data = [], [], [], []
     for i, az in enumerate("abc"):
@@ -442,8 +547,8 @@ def three_tier():
     s.auto_scaling_group("prod-web-asg", webs, web, [web_tg], 3, 9)
     s.auto_scaling_group("prod-app-asg", apps, app, [app_tg], 3, 12)
     s.database("prod-orders-db", vpc, data, "a", "mysql", "db.r6g.large", standby="b", replica="c")
-    # Each tier admits only the tier in front of it; only the public ALB is open to the internet.
-    s.security_group("sg-public-alb", vpc, "prod-public-alb", [(443, "0.0.0.0/0")])
+    # Each tier admits only the tier in front of it; the public ALB admits only CloudFront (origin-facing prefix list).
+    s.security_group("sg-public-alb", vpc, "prod-public-alb", [(443, "pl-22a6434b")])
     s.security_group("sg-web", vpc, "prod-web", [(443, "sg-public-alb")])
     s.security_group("sg-internal-alb", vpc, "prod-internal-alb", [(8080, "sg-web")])
     s.security_group("sg-app", vpc, "prod-app", [(8080, "sg-internal-alb")])
@@ -452,6 +557,11 @@ def three_tier():
     # Session Manager needs ssm, ssmmessages and ec2messages to reach instances without a NAT path.
     for service in ("ssm", "ssmmessages", "ec2messages"):
         s.interface_endpoint(f"vpce-prod-{service}", vpc, service, app)
+    # Edge: CloudFront with a WAF web ACL in front of the public ALB, static assets from S3; Elastic IPs on the NAT gateways.
+    acl = s.web_acl("prod-edge-acl", "CLOUDFRONT")
+    s.cloudfront("E2PRODWEB000001", "www.example.com", [public_alb, "prod-web-static"], acl)
+    for i, az in enumerate("abc"):
+        s.elastic_ip(f"eipalloc-0prod0nat{az}000001", f"203.0.113.{101 + i}", f"prod-nat-{az}-eip", nat=f"nat-prod-{az}")
     return s.snapshot()
 
 
@@ -496,7 +606,8 @@ def static_ip_front():
         "TCP 서비스는 NLB 대상 그룹으로 직접 연결",
         "두 AZ에 대상을 분산하고 교차 영역 구성",
         "관리 접근은 배스천 대신 Session Manager 사용 (인스턴스 퍼블릭 IP 없음)",
-        "도형 밖 권고: NLB 고정 IP는 AZ마다 Elastic IP, ALB에는 AWS WAF, 대안으로 Global Accelerator (수집 범위 밖)"])
+        "NLB 고정 IP는 AZ마다 Elastic IP (파트너 방화벽 허용 목록), ALB에는 AWS WAF 웹 ACL",
+        "도형 밖 권고: 대안으로 Global Accelerator (수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60003", "10.30.0.0/16", "partner-gateway", Environment="production")
     public = [s.subnet(f"subnet-gw-pub-{az}", vpc, az, f"10.30.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ac")]
     private = [s.subnet(f"subnet-gw-app-{az}", vpc, az, f"10.30.{10 + i}.0/24", f"app-{az}", "app") for i, az in enumerate("ac")]
@@ -511,6 +622,10 @@ def static_ip_front():
     s.auto_scaling_group("partner-api-asg", api, private, [api_tg])
     s.auto_scaling_group("mqtt-broker-asg", mqtt, private, [mqtt_tg])
     s.interface_endpoint("vpce-partner-ssm", vpc, "ssm", private)
+    # Static entry: one Elastic IP per AZ on the NLB; the ALB behind it carries a regional WAF web ACL.
+    for i, (az, subnet) in enumerate(zip("ac", public)):
+        s.elastic_ip(f"eipalloc-0partner0nlb{az}0001", f"203.0.113.{121 + i}", f"partner-nlb-{az}-eip", balancer=nlb, subnet=subnet)
+    s.web_acl("partner-api-acl", "REGIONAL", [alb])
     return s.snapshot()
 
 
@@ -567,8 +682,10 @@ def hybrid():
         "VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시",
         "클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크",
         "내부 ALB로 사내망 전용 노출",
-        "온프레미스 대역(192.168.0.0/16)은 Transit Gateway의 Site-to-Site VPN 2개로 연결: 고객 게이트웨이(장비·ISP) 2개, 각각 터널 2개, BGP (REL02-BP02)",
-        "도형 밖 권고: 운영 주 연결은 Direct Connect(다중 위치), VPN은 백업. 하이브리드 DNS는 Route 53 Resolver 엔드포인트 (수집 범위 밖)"])
+        "주 연결은 Direct Connect: 서로 다른 위치 2곳의 전용 연결 2개, 각각 transit VIF로 Direct Connect 게이트웨이 → Transit Gateway "
+        "(Direct Connect 복원력 권고 High resiliency)",
+        "백업 연결은 Transit Gateway의 Site-to-Site VPN 2개: 고객 게이트웨이(장비·ISP) 2개, 각각 터널 2개, BGP (REL02-BP02)",
+        "도형 밖 권고: 하이브리드 DNS는 Route 53 Resolver 엔드포인트 (수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60005", "10.50.0.0/16", "migration-hub", Environment="production")
     app = [s.subnet(f"subnet-hy-app-{az}", vpc, az, f"10.50.{10 + i}.0/24", f"app-{az}", "app") for i, az in enumerate("ab")]
     cloud = [s.instance(f"i-erp{az}0000000000005", app[i], f"erp-cloud-{az}", "r6i.large", sg="sg-erp") for i, az in enumerate("ab")]
@@ -586,6 +703,11 @@ def hybrid():
     s.auto_scaling_group("erp-cloud-asg", cloud, app, [erp])
     s.target_group("erp-onprem", vpc, "HTTPS", 443, [("192.168.20.11", 443, "all"), ("192.168.20.12", 443, "all")],
                    [alb], target_type="ip")
+    # Primary path: two dedicated connections at two Direct Connect locations, each with a transit VIF to one Direct
+    # Connect gateway associated with the Transit Gateway (advertising the VPC range); the VPNs above are the backup.
+    dxgw = s.dx_gateway("hybrid-dxgw", tgw=hub, prefixes=["10.50.0.0/16"])
+    s.direct_connect("dxcon-hybrid01", "seoul-dx-1", "seoul-location-a", dxgw, 101)
+    s.direct_connect("dxcon-hybrid02", "seoul-dx-2", "seoul-location-b", dxgw, 102)
     return s.snapshot()
 
 
@@ -644,7 +766,8 @@ def data_platform():
         "EFS(리전 클래스)는 AZ마다 마운트 타깃을 두어 AZ 장애에도 같은 AZ 경로로 접근",
         "분석 VPC는 Redshift Multi-AZ(서브넷 3개, AZ당 2노드)와 DocumentDB writer/reader",
         "두 VPC와 사내 데이터 센터를 Transit Gateway 하나로 연결 (피어링은 비전이적이라 다른 VPC의 VPN을 쓸 수 없음)",
-        "사내 데이터 센터는 고객 게이트웨이 2개(장비·ISP 분리)의 Site-to-Site VPN, 각각 터널 2개 (REL02-BP02)"])
+        "사내 데이터 센터는 고객 게이트웨이 2개(장비·ISP 분리)의 Site-to-Site VPN, 각각 터널 2개 (REL02-BP02)",
+        "TGW 라우팅 테이블로 도메인 분리: 스포크 테이블(두 VPC)은 VPC와 사내망 경로를, 사내망 테이블(VPN)은 VPC 경로만 학습"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60007", "10.70.0.0/16", "data-platform", Environment="production")
     azs = "abc"
     public = [s.subnet(f"subnet-dp-pub-{az}", vpc, az, f"10.70.{i}.0/24", f"public-{az}", "public") for i, az in enumerate(azs)]
@@ -682,6 +805,13 @@ def data_platform():
     s.vpn("vpn-dp-corp-2", "cgw-corp-dc-2", "198.51.100.20", "corp-dc-cgw-2", tgw=hub)
     s.redshift("warehouse", analytics, warehouse, "a", "b", "ra3.4xlarge", 4)  # Multi-AZ: two or more nodes per AZ
     s.aurora("profiles-docdb", analytics, warehouse, "a", ["b"], engine="docdb", size="db.r6g.large")
+    # Routing domains: the VPCs share a spoke table that learns both VPCs and on premises; the VPN attachments use an
+    # on-premises table that learns only the VPC ranges.
+    spokes = [("tgw-attach-dp", "vpc", vpc), ("tgw-attach-an", "vpc", analytics)]
+    vpns = [("tgw-attach-vpn-dp-1", "vpn", "vpn-dp-corp-1"), ("tgw-attach-vpn-dp-2", "vpn", "vpn-dp-corp-2")]
+    vpc_routes = [("10.70.0.0/16", spokes[:1]), ("10.71.0.0/16", spokes[1:])]
+    s.tgw_route_table("tgw-rtb-dp-spokes", hub, "dp-spokes", spokes, spokes + vpns, vpc_routes + [("192.168.0.0/16", vpns)])
+    s.tgw_route_table("tgw-rtb-dp-onprem", hub, "dp-onprem", vpns, spokes, vpc_routes)
     return s.snapshot()
 
 

@@ -103,7 +103,8 @@ def test_three_tier_template_matches_the_design():
     assert counts["AWS::ElasticLoadBalancingV2::LoadBalancer"] == counts["AWS::ElasticLoadBalancingV2::Listener"] == 2
     assert counts["AWS::AutoScaling::AutoScalingGroup"] == counts["AWS::EC2::LaunchTemplate"] == 2
     assert counts["AWS::RDS::DBInstance"] == 2 and counts["AWS::EC2::VPCEndpoint"] == 4
-    assert result["Metadata"]["DiagramBot"]["Unsupported"] == []
+    # Only the edge is left out: CloudFront is global and the WAF rules are not collected.
+    assert [u["Type"] for u in result["Metadata"]["DiagramBot"]["Unsupported"]] == ["CloudFrontDistribution", "WafWebAcl"]
     resources = result["Resources"]
     # Data subnets used the main table implicitly; CloudFormation gets explicit associations instead.
     isolated = [r for r in resources.values() if r["Type"] == "AWS::EC2::SubnetRouteTableAssociation"
@@ -234,7 +235,7 @@ def test_cli_exports_files_and_stdout(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr("sys.argv", ["diagram-bot", "export-cfn", str(single)])
     assert cli.main() == 0
     out, err = capsys.readouterr()
-    assert json.loads(out)["AWSTemplateFormatVersion"] == "2010-09-09" and "미지원 0개" in err
+    assert json.loads(out)["AWSTemplateFormatVersion"] == "2010-09-09" and "미지원 2개" in err
     monkeypatch.setattr("sys.argv", ["diagram-bot", "export-cfn", str(combined), "--output", str(tmp_path / "out" / "landing.json")])
     assert cli.main() == 0
     assert sorted(p.name for p in (tmp_path / "out").iterdir()) == [f"landing-{a}-ap-northeast-2.json" for a in ("111111111111", "222222222222", "333333333333")]
@@ -269,7 +270,11 @@ def test_emulated_stack_creates_the_resources(emulated_account, key):
               "dbs": len(session.client("rds").describe_db_instances()["DBInstances"]),
               "asgs": len(session.client("autoscaling").describe_auto_scaling_groups()["AutoScalingGroups"]), "services": services()}
     stacks = session.client("cloudformation")
-    stacks.create_stack(StackName=f"diagram-bot-{key}", TemplateBody=json.dumps(result),
+    # moto's SecurityGroupIngress needs a CIDR or group source; a managed prefix list (CloudFront origin-facing, valid in
+    # CloudFormation and checked by cfn-lint above) is dropped from the emulated stack only.
+    body = {**result, "Resources": {k: r for k, r in result["Resources"].items()
+                                    if not (r["Type"] == "AWS::EC2::SecurityGroupIngress" and "SourcePrefixListId" in r["Properties"])}}
+    stacks.create_stack(StackName=f"diagram-bot-{key}", TemplateBody=json.dumps(body),
                         Parameters=[{"ParameterKey": k, "ParameterValue": v} for k, v in values.items()])
     assert stacks.describe_stacks(StackName=f"diagram-bot-{key}")["Stacks"][0]["StackStatus"] == "CREATE_COMPLETE"
     counts = kinds(result)
@@ -300,3 +305,23 @@ def test_api_downloads_the_template_per_account(tmp_path):
         assert client.get("/api/snapshots/sample-multi-account/cloudformation?part=3").status_code == 422
         assert client.get("/api/snapshots/missing/cloudformation").status_code == 404
 
+
+
+def test_routing_domains_edge_and_dedicated_links_are_drafted_or_listed():
+    """TGW route tables become routing domains; CloudFront, WAF rules and Direct Connect are listed, never invented."""
+    platform = template(SAMPLES["data-platform"]())
+    types = kinds(platform)
+    raw = SAMPLES["data-platform"]()["raw"]
+    custom = [t for t in raw["transit_gateway_route_tables"] if not t.get("DefaultAssociationRouteTable")]
+    assert types["AWS::EC2::TransitGatewayRouteTable"] == len(custom) == 2
+    vpc_links = [a for a in raw["transit_gateway_route_table_associations"] if a["ResourceType"] == "vpc"]
+    assert types["AWS::EC2::TransitGatewayRouteTableAssociation"] == len(vpc_links)
+    # VPN attachments are implicit in CloudFormation: their association is listed, not referenced by a made-up ID.
+    skipped = {u["Type"] for u in platform["Metadata"]["DiagramBot"]["Unsupported"]}
+    assert "TransitGatewayRouteTableAssociation" in skipped
+    assert not any("기본 연결·전파를 씁니다" in a for a in platform["Metadata"]["DiagramBot"]["Assumptions"])
+    hybrid = template(SAMPLES["hybrid"]())["Metadata"]["DiagramBot"]["Unsupported"]
+    assert {"DirectConnectConnection", "DirectConnectVirtualInterface", "DirectConnectGateway"} <= {u["Type"] for u in hybrid}
+    edge = template(SAMPLES["three-tier"]())
+    assert {"CloudFrontDistribution", "WafWebAcl"} <= {u["Type"] for u in edge["Metadata"]["DiagramBot"]["Unsupported"]}
+    assert not any(r["Type"].startswith("AWS::CloudFront") for r in edge["Resources"].values())

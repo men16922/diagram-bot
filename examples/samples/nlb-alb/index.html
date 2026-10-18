@@ -22,19 +22,20 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:32.073310+00:00",
-    "finished_at": "2026-10-17T21:52:32.073310+00:00",
+    "started_at": "2026-10-18T09:28:58.213545+00:00",
+    "finished_at": "2026-10-18T09:28:58.213545+00:00",
     "status": "complete",
     "demo": true,
     "sample": "nlb-alb",
-    "sample_version": 3,
+    "sample_version": 4,
     "title": "고정 IP가 필요한 진입점 (NLB → ALB)",
     "practices": [
       "고정 IP·PrivateLink가 필요한 진입점은 NLB, L7 라우팅은 뒤의 ALB (alb 대상 유형)",
       "TCP 서비스는 NLB 대상 그룹으로 직접 연결",
       "두 AZ에 대상을 분산하고 교차 영역 구성",
       "관리 접근은 배스천 대신 Session Manager 사용 (인스턴스 퍼블릭 IP 없음)",
-      "도형 밖 권고: NLB 고정 IP는 AZ마다 Elastic IP, ALB에는 AWS WAF, 대안으로 Global Accelerator (수집 범위 밖)"
+      "NLB 고정 IP는 AZ마다 Elastic IP (파트너 방화벽 허용 목록), ALB에는 AWS WAF 웹 ACL",
+      "도형 밖 권고: 대안으로 Global Accelerator (수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -59,11 +60,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -328,6 +334,34 @@
       "status": "complete",
       "pages": 1,
       "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_addresses",
+      "parameters": {},
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "wafv2",
+      "operation": "list_web_acls",
+      "parameters": {
+        "Scope": "REGIONAL"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "wafv2",
+      "operation": "list_web_acls",
+      "parameters": {
+        "Scope": "CLOUDFRONT"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 0
     }
   ],
   "raw": {
@@ -593,11 +627,23 @@
         "AvailabilityZones": [
           {
             "ZoneName": "ap-northeast-2a",
-            "SubnetId": "subnet-gw-pub-a"
+            "SubnetId": "subnet-gw-pub-a",
+            "LoadBalancerAddresses": [
+              {
+                "IpAddress": "203.0.113.121",
+                "AllocationId": "eipalloc-0partner0nlba0001"
+              }
+            ]
           },
           {
             "ZoneName": "ap-northeast-2c",
-            "SubnetId": "subnet-gw-pub-c"
+            "SubnetId": "subnet-gw-pub-c",
+            "LoadBalancerAddresses": [
+              {
+                "IpAddress": "203.0.113.122",
+                "AllocationId": "eipalloc-0partner0nlbc0001"
+              }
+            ]
           }
         ],
         "SecurityGroups": []
@@ -976,7 +1022,47 @@
     "placement_groups": [],
     "fsx_file_systems": [],
     "sagemaker_endpoints": [],
-    "sagemaker_clusters": []
+    "sagemaker_clusters": [],
+    "elastic_ips": [
+      {
+        "AllocationId": "eipalloc-0partner0nlba0001",
+        "PublicIp": "203.0.113.121",
+        "Domain": "vpc",
+        "NetworkInterfaceId": "eni-4930170da5e87cc12",
+        "AssociationId": "eipassoc-298b95f6ab088c40b",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-nlb-a-eip"
+          }
+        ]
+      },
+      {
+        "AllocationId": "eipalloc-0partner0nlbc0001",
+        "PublicIp": "203.0.113.122",
+        "Domain": "vpc",
+        "NetworkInterfaceId": "eni-45f25239d6c3d9364",
+        "AssociationId": "eipassoc-32e98b005ebfe7dc9",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "partner-nlb-c-eip"
+          }
+        ]
+      }
+    ],
+    "waf_web_acls": [
+      {
+        "Name": "partner-api-acl",
+        "Id": "d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+        "ARN": "arn:aws:wafv2:ap-northeast-2:111122223333:regional/webacl/partner-api-acl/d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+        "LockToken": "d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+        "Scope": "REGIONAL",
+        "ResourceArns": [
+          "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002"
+        ]
+      }
+    ]
   },
   "graph": {
     "nodes": [
@@ -1247,6 +1333,54 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0partner0nlba0001",
+        "resource_id": "eipalloc-0partner0nlba0001",
+        "kind": "elastic_ip",
+        "name": "partner-nlb-a-eip",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AllocationId": "eipalloc-0partner0nlba0001",
+          "PublicIp": "203.0.113.121",
+          "Domain": "vpc",
+          "NetworkInterfaceId": "eni-4930170da5e87cc12",
+          "AssociationId": "eipassoc-298b95f6ab088c40b",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-nlb-a-eip"
+            }
+          ],
+          "DisplayName": "203.0.113.121"
+        },
+        "reference_only": false,
+        "source": "DescribeAddresses"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0partner0nlbc0001",
+        "resource_id": "eipalloc-0partner0nlbc0001",
+        "kind": "elastic_ip",
+        "name": "partner-nlb-c-eip",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AllocationId": "eipalloc-0partner0nlbc0001",
+          "PublicIp": "203.0.113.122",
+          "Domain": "vpc",
+          "NetworkInterfaceId": "eni-45f25239d6c3d9364",
+          "AssociationId": "eipassoc-32e98b005ebfe7dc9",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "partner-nlb-c-eip"
+            }
+          ],
+          "DisplayName": "203.0.113.122"
+        },
+        "reference_only": false,
+        "source": "DescribeAddresses"
+      },
+      {
         "id": "111122223333/ap-northeast-2/internet_gateway/igw-partner",
         "resource_id": "igw-partner",
         "kind": "internet_gateway",
@@ -1299,7 +1433,17 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeLoadBalancers"
+        "source": "DescribeLoadBalancers",
+        "waf": [
+          "partner-api-acl"
+        ],
+        "waf_acl": "111122223333/ap-northeast-2/waf_web_acl/arn:aws:wafv2:ap-northeast-2:111122223333:regional/webacl/partner-api-acl/d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+        "properties": [
+          [
+            "AWS WAF 웹 ACL",
+            "partner-api-acl"
+          ]
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
@@ -1317,17 +1461,33 @@
           "AvailabilityZones": [
             {
               "ZoneName": "ap-northeast-2a",
-              "SubnetId": "subnet-gw-pub-a"
+              "SubnetId": "subnet-gw-pub-a",
+              "LoadBalancerAddresses": [
+                {
+                  "IpAddress": "203.0.113.121",
+                  "AllocationId": "eipalloc-0partner0nlba0001"
+                }
+              ]
             },
             {
               "ZoneName": "ap-northeast-2c",
-              "SubnetId": "subnet-gw-pub-c"
+              "SubnetId": "subnet-gw-pub-c",
+              "LoadBalancerAddresses": [
+                {
+                  "IpAddress": "203.0.113.122",
+                  "AllocationId": "eipalloc-0partner0nlbc0001"
+                }
+              ]
             }
           ],
           "SecurityGroups": []
         },
         "reference_only": false,
-        "source": "DescribeLoadBalancers"
+        "source": "DescribeLoadBalancers",
+        "elastic_ips": [
+          "203.0.113.121",
+          "203.0.113.122"
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/nat_gateway/nat-partner-a",
@@ -1885,6 +2045,27 @@
         },
         "reference_only": false,
         "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/waf_web_acl/arn:aws:wafv2:ap-northeast-2:111122223333:regional/webacl/partner-api-acl/d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+        "resource_id": "arn:aws:wafv2:ap-northeast-2:111122223333:regional/webacl/partner-api-acl/d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+        "kind": "waf_web_acl",
+        "name": "partner-api-acl",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "Name": "partner-api-acl",
+          "Id": "d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+          "ARN": "arn:aws:wafv2:ap-northeast-2:111122223333:regional/webacl/partner-api-acl/d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+          "LockToken": "d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+          "Scope": "REGIONAL",
+          "ResourceArns": [
+            "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002"
+          ],
+          "DisplayName": "partner-api-acl"
+        },
+        "reference_only": false,
+        "source": "ListWebACLs"
       }
     ],
     "edges": [
@@ -2175,6 +2356,26 @@
         "details": {},
         "inferred": false,
         "id": "rel-ba044e3660f07431c6a5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0partner0nlba0001",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "relation": "eip_associated",
+        "evidence": "DescribeAddresses.AllocationId = DescribeLoadBalancers.AvailabilityZones[].LoadBalancerAddresses[].AllocationId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a4ee0c81beb2fbb77425"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0partner0nlbc0001",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/net/partner-nlb/0000000000000001",
+        "relation": "eip_associated",
+        "evidence": "DescribeAddresses.AllocationId = DescribeLoadBalancers.AvailabilityZones[].LoadBalancerAddresses[].AllocationId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fbba04307e0a1322be24"
       },
       {
         "source": "111122223333/ap-northeast-2/internet_gateway/igw-partner",
@@ -2663,6 +2864,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-54d03fcbdd83a46445e8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/waf_web_acl/arn:aws:wafv2:ap-northeast-2:111122223333:regional/webacl/partner-api-acl/d75bf762-31c9-1cc4-705a-33d27ffc91cb",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/partner-alb/0000000000000002",
+        "relation": "waf_protects",
+        "evidence": "ListResourcesForWebACL.ResourceArns[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-259ffcdd4b1146f10747"
       }
     ]
   }

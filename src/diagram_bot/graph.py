@@ -2,6 +2,7 @@
 import hashlib
 import ipaddress
 import json
+import re
 
 # Fields that distinguish two configured relations between the same resources. Health state and
 # other volatile description fields are deliberately excluded so IDs survive re-collection.
@@ -33,6 +34,8 @@ def upgrade_graph(graph):
 
 # Resources one account can see that another owns: a Transit Gateway shared through RAM, a cross-account peering.
 SHARED_KINDS = {"transit_gateway", "vpc_peering"}
+# Resources of the whole account rather than one region (global APIs).
+GLOBAL_KINDS = {"cloudfront_distribution", "dx_gateway"}
 
 
 def merge_graphs(graphs):
@@ -71,7 +74,10 @@ def build_graph(snapshot):
     prefix = f"{account}/{region}/"
 
     def node(kind, resource_id, attrs=None, source=None, reference=False):
-        key = prefix + kind + "/" + resource_id
+        # Account-global resources (CloudFront, its web ACLs, Direct Connect gateways) get the same ID from every
+        # region's collection, so a combined view shows them once.
+        scope = "global" if kind in GLOBAL_KINDS or ":global/" in resource_id else region
+        key = f"{account}/{scope}/{kind}/{resource_id}"
         if key not in nodes or not reference:
             attrs = attrs or {}
             tags = {t["Key"]: t.get("Value", "") for t in attrs.get("Tags", [])}
@@ -80,7 +86,7 @@ def build_graph(snapshot):
                           or attrs.get("DBInstanceIdentifier") or attrs.get("AutoScalingGroupName") or attrs.get("FunctionName")
                           or attrs.get("CacheClusterId") or attrs.get("ClusterName") or attrs.get("serviceName")
                           or attrs.get("DomainName") or attrs.get("ClusterIdentifier") or attrs.get("GroupName") or resource_id,
-                          "account": account, "region": region, "attributes": attrs,
+                          "account": account, "region": scope, "attributes": attrs,
                           "reference_only": reference, "source": source}
         return key
 
@@ -158,6 +164,10 @@ def build_graph(snapshot):
     more_services(raw, prefix, nodes, node, link)
     connectivity(raw, prefix, nodes, node, link)
     ai_infrastructure(raw, prefix, nodes, node, link)
+    elastic_ips(raw, nodes, node, link)
+    transit_routing(raw, nodes, node, link, edges)
+    edge_services(raw, nodes, node, link)
+    direct_connect(raw, region, nodes, node, link)
     classify_subnets(raw, prefix, nodes, link)
     return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
             "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
@@ -539,6 +549,199 @@ def connectivity(raw, prefix, nodes, node, link):
     for customer in customers.values():
         node("customer_gateway", customer["CustomerGatewayId"], {**customer, "VpnTunnels": tunnels.get(customer["CustomerGatewayId"], [])},
              "DescribeCustomerGateways", reference="IpAddress" not in customer)
+
+
+def elastic_ips(raw, nodes, node, link):
+    """Elastic IPs joined to the NAT gateway, load balancer, instance or network interface the APIs name. They are shown
+    on that resource's label and in the inspector, not as shapes of their own."""
+    nat = {a["AllocationId"]: g["NatGatewayId"] for g in raw.get("nat_gateways", []) for a in g.get("NatGatewayAddresses", [])
+           if a.get("AllocationId")}
+    balancer = {a["AllocationId"]: b["LoadBalancerArn"] for b in raw.get("load_balancers", []) for z in b.get("AvailabilityZones", [])
+                for a in z.get("LoadBalancerAddresses", []) if a.get("AllocationId")}
+    for address in raw.get("elastic_ips", []):
+        allocation = address.get("AllocationId")
+        key = node("elastic_ip", allocation or address["PublicIp"], {**address, "DisplayName": address.get("PublicIp")}, "DescribeAddresses")
+        if allocation in nat:
+            owner = ("nat_gateway", nat[allocation], "DescribeAddresses.AllocationId = DescribeNatGateways.NatGatewayAddresses[].AllocationId")
+        elif allocation in balancer:
+            owner = ("load_balancer", balancer[allocation],
+                     "DescribeAddresses.AllocationId = DescribeLoadBalancers.AvailabilityZones[].LoadBalancerAddresses[].AllocationId")
+        elif address.get("InstanceId"):
+            owner = ("ec2", address["InstanceId"], "DescribeAddresses.InstanceId")
+        elif address.get("NetworkInterfaceId"):
+            owner = ("network_interface", address["NetworkInterfaceId"], "DescribeAddresses.NetworkInterfaceId")
+        else:
+            continue  # not associated: listed in the inventory and the review (an idle public IPv4 address is billed)
+        link(key, owner[0], owner[1], "eip_associated", owner[2])
+        target = nodes[node(owner[0], owner[1], reference=True)]
+        target["elastic_ips"] = sorted({*target.get("elastic_ips", []), address.get("PublicIp")} - {None})
+
+
+def properties(item, *pairs):
+    """Derived facts for the inspector, as [label, value] pairs; empty values are left out."""
+    item.setdefault("properties", []).extend([label, value] for label, value in pairs if value not in (None, "", []))
+
+
+def transit_routing(raw, nodes, node, link, edges):
+    """Transit Gateway route tables: the attachments associated with each table (its routing domain), the attachments
+    that propagate into it and its routes. Shown on the gateway, the attachments and the VPC cards, not as shapes."""
+    attachments = {a["TransitGatewayAttachmentId"] for a in raw.get("transit_gateway_attachments", [])}
+
+    def attachment(item):
+        ident = item["TransitGatewayAttachmentId"]
+        if ident in attachments:
+            return node("tgw_attachment", ident, reference=True)
+        # A VPN, Direct Connect gateway, peering or Connect attachment: known only from the route table APIs.
+        return node("tgw_attachment", ident, {"TransitGatewayAttachmentId": ident, "ResourceType": item.get("ResourceType"),
+                                              "ResourceId": item.get("ResourceId"),
+                                              "DisplayName": f"{item.get('ResourceType', '')} {item.get('ResourceId', ident)}".strip()},
+                    "GetTransitGatewayRouteTableAssociations.ResourceId", reference=True)
+
+    tables = []
+    for table in raw.get("transit_gateway_route_tables", []):
+        ident = table["TransitGatewayRouteTableId"]
+        mine = lambda collection: [x for x in raw.get(collection, []) if x.get("TransitGatewayRouteTableId") == ident]
+        associations = [a for a in mine("transit_gateway_route_table_associations") if a.get("State") in (None, "associating", "associated")]
+        propagations = [p for p in mine("transit_gateway_route_table_propagations") if p.get("State") in (None, "enabling", "enabled")]
+        routes = mine("transit_gateway_routes")
+        key = node("tgw_route_table", ident, {**table, "Associations": associations, "Propagations": propagations, "Routes": routes},
+                   "DescribeTransitGatewayRouteTables")
+        gateway = node("transit_gateway", table.get("TransitGatewayId"), reference=True) if table.get("TransitGatewayId") else None
+        link(key, "transit_gateway", table.get("TransitGatewayId"), "route_table_of", "DescribeTransitGatewayRouteTables.TransitGatewayId")
+        for relation, items, api in (("tgw_rt_association", associations, "GetTransitGatewayRouteTableAssociations"),
+                                     ("tgw_rt_propagation", propagations, "GetTransitGatewayRouteTablePropagations")):
+            for item in items:
+                attachment(item)
+                link(key, "tgw_attachment", item["TransitGatewayAttachmentId"], relation, f"{api}.TransitGatewayAttachmentId",
+                     {"ResourceType": item.get("ResourceType"), "ResourceId": item.get("ResourceId"), "State": item.get("State")})
+        for route in routes:
+            for target in route.get("TransitGatewayAttachments") or []:
+                attachment(target)
+                link(key, "tgw_attachment", target["TransitGatewayAttachmentId"], "tgw_route",
+                     "SearchTransitGatewayRoutes.Routes[].TransitGatewayAttachments[].TransitGatewayAttachmentId",
+                     {"Type": route.get("Type"), "State": route.get("State")},
+                     {"destination": route.get("DestinationCidrBlock") or route.get("PrefixListId")})
+        tables.append((key, gateway, associations, propagations, routes))
+    # Derived facts after every node exists (a node re-added as collected would drop them).
+    name = lambda item: nodes[node("tgw_attachment", item["TransitGatewayAttachmentId"], reference=True)]["name"]
+    for key, gateway, associations, propagations, routes in tables:
+        table = nodes[key]
+        blackholes = [r.get("DestinationCidrBlock") or r.get("PrefixListId") for r in routes if r.get("State") == "blackhole"]
+        properties(table, ("연결 attachment (라우팅 도메인)", ", ".join(sorted(map(name, associations)))),
+                   ("전파 attachment", ", ".join(sorted(map(name, propagations)))), ("경로", f"{len(routes)}개"),
+                   ("blackhole 경로", ", ".join(blackholes)))
+        for item in associations:
+            nodes[node("tgw_attachment", item["TransitGatewayAttachmentId"], reference=True)]["tgw_route_table"] = table["name"]
+        if gateway:
+            nodes[gateway].setdefault("route_tables", []).append(table["name"])
+            properties(nodes[gateway], (f"라우팅 테이블 {table['name']}", f"연결 {len(associations)} · 전파 {len(propagations)} · 경로 {len(routes)}"
+                                        + (f" · blackhole {len(blackholes)}" if blackholes else "")))
+    for item in nodes.values():
+        if item["kind"] == "tgw_attachment" and item.get("tgw_route_table"):
+            learned = sorted(nodes[e["source"]]["name"] for e in edges.values() if e["relation"] == "tgw_rt_propagation" and e["target"] == item["id"])
+            properties(item, ("TGW 라우팅 테이블 (연결)", item["tgw_route_table"]), ("경로 전파 대상 테이블", ", ".join(learned)))
+        if item["kind"] == "transit_gateway" and item.get("route_tables"):
+            item["route_tables"].sort()
+
+
+S3_ORIGIN = re.compile(r"^(.+?)\.s3([.-][a-z0-9-]+)*\.amazonaws\.com(\.cn)?$")
+
+
+def edge_services(raw, nodes, node, link):
+    """CloudFront distributions with origins resolved to collected load balancers by DNS name, and AWS WAF web ACLs with
+    the load balancers (ListResourcesForWebACL) and distributions (ListDistributions.WebACLId) they protect."""
+    by_dns = {str(b["DNSName"]).lower().removeprefix("dualstack."): b["LoadBalancerArn"] for b in raw.get("load_balancers", []) if b.get("DNSName")}
+    # WAFv2 ARNs end in .../webacl/<name>/<id>; a classic WAF WebACLId is a bare ID.
+    acl_name = lambda arn: arn.split("/")[-2] if arn.startswith("arn:") and "/webacl/" in arn else arn
+    protected = {}
+    for acl in raw.get("waf_web_acls", []):
+        key = node("waf_web_acl", acl["ARN"], {**acl, "DisplayName": acl.get("Name")}, "ListWebACLs")
+        for arn in acl.get("ResourceArns", []):
+            link(key, "load_balancer", arn, "waf_protects", "ListResourcesForWebACL.ResourceArns[]")
+            protected.setdefault(node("load_balancer", arn, reference=True), {})[acl.get("Name") or acl_name(acl["ARN"])] = key
+    for dist in raw.get("cloudfront_distributions", []):
+        aliases = (dist.get("Aliases") or {}).get("Items") or []
+        key = node("cloudfront_distribution", dist["Id"], {**dist, "DisplayName": aliases[0] if aliases else dist.get("Comment") or dist.get("DomainName")},
+                   "ListDistributions")
+        origins = []
+        for origin in (dist.get("Origins") or {}).get("Items", []):
+            domain = str(origin.get("DomainName", "")).lower()
+            bucket = S3_ORIGIN.match(domain)
+            if domain.removeprefix("dualstack.") in by_dns:
+                arn = by_dns[domain.removeprefix("dualstack.")]
+                link(key, "load_balancer", arn, "cloudfront_origin", "ListDistributions.Origins.Items[].DomainName = DescribeLoadBalancers.DNSName",
+                     {"OriginId": origin.get("Id"), "DomainName": origin.get("DomainName")}, {"destination": origin.get("Id")})
+                origins.append(["ELB", nodes[node("load_balancer", arn, reference=True)]["name"]])
+            elif (origin.get("VpcOriginConfig") or {}).get("VpcOriginId"):
+                origins.append(["VPC origin", origin["VpcOriginConfig"]["VpcOriginId"]])
+            elif bucket:
+                origins.append(["S3", bucket.group(1)])
+            else:
+                origins.append(["custom", origin.get("DomainName")])  # e.g. a CNAME in front of an ALB: never resolved by guessing
+        nodes[key]["origins"] = origins
+        acl = dist.get("WebACLId")
+        if acl:
+            source = node("waf_web_acl", acl, {"ARN": acl, "Scope": "CLOUDFRONT", "DisplayName": acl_name(acl)}, "ListDistributions.WebACLId", reference=True)
+            link(source, "cloudfront_distribution", dist["Id"], "waf_protects", "ListDistributions.WebACLId")
+            protected.setdefault(key, {})[nodes[source]["name"]] = source
+        properties(nodes[key], ("도메인", ", ".join([dist.get("DomainName"), *aliases])), ("오리진", " · ".join(f"{t} {n}" for t, n in origins)),
+                   ("기본 동작 오리진", (dist.get("DefaultCacheBehavior") or {}).get("TargetOriginId")),
+                   ("뷰어 프로토콜", (dist.get("DefaultCacheBehavior") or {}).get("ViewerProtocolPolicy")), ("가격 등급", dist.get("PriceClass")))
+    for key, acls in protected.items():
+        nodes[key]["waf"] = sorted(acls)
+        nodes[key]["waf_acl"] = acls[min(acls)]  # the badge opens this web ACL in the inspector
+        properties(nodes[key], ("AWS WAF 웹 ACL", ", ".join(sorted(acls))))
+
+
+def direct_connect(raw, region, nodes, node, link):
+    """Direct Connect connections, virtual interfaces to a virtual private gateway or a Direct Connect gateway, and the
+    gateway's associations with virtual private gateways and Transit Gateways."""
+    for connection in raw.get("dx_connections", []):
+        if connection.get("connectionState") not in ("deleted", "deleting", "rejected"):
+            node("dx_connection", connection["connectionId"], {**connection, "DisplayName": connection.get("connectionName")}, "DescribeConnections")
+    for gateway in raw.get("dx_gateways", []):
+        if gateway.get("directConnectGatewayState") not in ("deleted", "deleting"):
+            node("dx_gateway", gateway["directConnectGatewayId"], {**gateway, "DisplayName": gateway.get("directConnectGatewayName")},
+                 "DescribeDirectConnectGateways")
+    interfaces, elsewhere = {}, {}
+    for vif in raw.get("dx_virtual_interfaces", []):
+        if vif.get("virtualInterfaceState") in ("deleted", "deleting", "rejected"):
+            continue
+        if vif.get("virtualGatewayId"):
+            hub, field = ("vpn_gateway", vif["virtualGatewayId"]), "virtualGatewayId"
+        elif vif.get("directConnectGatewayId"):
+            hub, field = ("dx_gateway", vif["directConnectGatewayId"]), "directConnectGatewayId"
+        else:
+            continue  # a public VIF reaches AWS public endpoints: no gateway on the AWS side to draw
+        # A hosted VIF's connection belongs to the partner: known here only by its ID.
+        connection = node("dx_connection", vif["connectionId"], {"connectionId": vif["connectionId"], "DisplayName": vif["connectionId"]},
+                          "DescribeVirtualInterfaces.connectionId", reference=True)
+        peers = vif.get("bgpPeers") or []
+        up = sum(1 for p in peers if p.get("bgpStatus") == "up")
+        link(node(*hub, reference=True), "dx_connection", vif["connectionId"], "dx_virtual_interface",
+             f"DescribeVirtualInterfaces.{field} + connectionId",
+             {"VirtualInterfaceId": vif.get("virtualInterfaceId"), "Name": vif.get("virtualInterfaceName"), "Type": vif.get("virtualInterfaceType"),
+              "Vlan": vif.get("vlan"), "State": vif.get("virtualInterfaceState"), "BGP": f"{up}/{len(peers)} up"},
+             {"destination": vif.get("virtualInterfaceId")})
+        interfaces.setdefault(connection, []).append(f"{vif.get('virtualInterfaceType', '')} VIF VLAN {vif.get('vlan', '?')} · BGP {up}/{len(peers)} up")
+    for association in raw.get("dx_gateway_associations", []):
+        if association.get("associationState") in ("disassociating", "disassociated"):
+            continue
+        gateway = association.get("associatedGateway") or {}
+        kind = {"virtualPrivateGateway": "vpn_gateway", "transitGateway": "transit_gateway"}.get(gateway.get("type"))
+        source = node("dx_gateway", association["directConnectGatewayId"], reference=True)
+        if kind and gateway.get("region") not in (None, region):
+            # A gateway of another region is not in this collection: listed, not drawn.
+            elsewhere.setdefault(source, []).append(f"{gateway.get('id')} ({gateway['region']})")
+        elif kind:
+            link(source, kind, gateway.get("id"), "dx_gateway_association", "DescribeDirectConnectGatewayAssociations.associatedGateway.id",
+                 {"State": association.get("associationState"),
+                  "AllowedPrefixes": [p.get("cidr") for p in association.get("allowedPrefixesToDirectConnectGateway", [])]})
+    for key, items in interfaces.items():
+        nodes[key]["virtual_interfaces"] = sorted(items)
+        properties(nodes[key], ("가상 인터페이스", " / ".join(sorted(items))))
+    for key, items in elsewhere.items():
+        properties(nodes[key], ("다른 리전의 연결 게이트웨이", ", ".join(sorted(items))))
 
 
 def classify_subnets(raw, prefix, nodes, link):

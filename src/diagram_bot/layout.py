@@ -9,7 +9,8 @@ subnet or an icon. Identical input and options always yield identical coordinate
 import hashlib
 import re
 
-from .views import AUXILIARY, GROUP_TARGETS, GROUPS, HUB_ORDER, REGIONAL, UNDRAWN_KINDS, containment, overview_links
+from .views import (AUXILIARY, EDGE, GROUP_TARGETS, GROUPS, HUB_ORDER, REGIONAL, REMOTE, SITE_KINDS, UNDRAWN_KINDS, containment, edge_links,
+                    overview_links)
 
 ENGINE, VERSION = "diagram-bot-layered", 2
 ICON, LINE, MAX_LINES = 52, 15, 4
@@ -193,14 +194,31 @@ def resource_label(node):
         capacity = {"capacity-block": "Capacity Block", "spot": "spot"}.get(attrs.get("InstanceLifecycle")) \
             or ("ODCR" if attrs.get("CapacityReservationId") else None)
         group = (attrs.get("Placement") or {}).get("GroupName")
+        eip = node.get("elastic_ips") or []
         # One fact group per line so a 140 px label never cuts EFA or the capacity source.
         return lines(name, attrs.get("InstanceType"),
-                     " · ".join(filter(None, ("GPU" if GPU.match(instance_family(node)) else None, "EFA" if efa else None))),
+                     " · ".join(filter(None, ("GPU" if GPU.match(instance_family(node)) else None, "EFA" if efa else None,
+                                              f"EIP {eip[0]}" if eip else None))),
                      " · ".join(filter(None, (capacity, f"PG {group}" if group else None))))
     if kind == "load_balancer" and attrs.get("Type"):
         short = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
         zones = len(attrs.get("AvailabilityZones", []))
-        return lines(name, f"{short} · {attrs.get('Scheme', '')}".rstrip(" ·"), f"AZ {zones}개" if zones else None)
+        eips = len(node.get("elastic_ips") or [])
+        facts = " · ".join(filter(None, (f"AZ {zones}개" if zones else None, f"EIP {eips}" if eips else None, "WAF" if node.get("waf") else None)))
+        return lines(name, f"{short} · {attrs.get('Scheme', '')}".rstrip(" ·"), facts)
+    if kind == "cloudfront_distribution":
+        kinds = [t for t, _ in node.get("origins") or []]
+        origins = " · ".join(f"{t} {kinds.count(t)}" for t in dict.fromkeys(kinds))
+        return lines(name, "CloudFront" + ("" if attrs.get("Enabled", True) else " · 비활성"),
+                     attrs.get("DomainName") if attrs.get("DomainName") != name else None, f"오리진 {origins}" if origins else None)
+    if kind == "dx_gateway":
+        return lines(name, "Direct Connect gateway", f"ASN {attrs['amazonSideAsn']}" if attrs.get("amazonSideAsn") else None)
+    if kind == "dx_connection":
+        vifs = node.get("virtual_interfaces") or []
+        if node["reference_only"]:
+            return lines(name, "Direct Connect 연결 (참조)", f"VIF {len(vifs)}" if vifs else None)
+        return lines(name, f"Direct Connect · {attrs.get('bandwidth', '')}".rstrip(" ·"), attrs.get("location"),
+                     " · ".join(filter(None, (f"VIF {len(vifs)}" if vifs else None, attrs.get("connectionState")))))
     if kind == "internet_gateway":
         return lines(name, "Internet gateway")
     if kind == "vpn_gateway":
@@ -220,9 +238,12 @@ def resource_label(node):
         return lines(name, "TGW attachment")
     if kind == "transit_gateway":
         asn = (attrs.get("Options") or {}).get("AmazonSideAsn")
-        return lines(name, "Transit Gateway", f"ASN {asn}" if asn else None)
+        tables = node.get("route_tables") or []
+        return lines(name, "Transit Gateway", " · ".join(filter(None, (f"ASN {asn}" if asn else None,
+                                                                         f"라우팅 테이블 {len(tables)}" if tables else None))))
     if kind == "nat_gateway":
-        address = next((a.get("PublicIp") for a in attrs.get("NatGatewayAddresses", []) if a.get("PublicIp")), None)
+        eip = node.get("elastic_ips") or []
+        address = f"EIP {eip[0]}" if eip else next((a.get("PublicIp") for a in attrs.get("NatGatewayAddresses", []) if a.get("PublicIp")), None)
         return lines(name, "NAT gateway", address or ("private NAT" if attrs.get("ConnectivityType") == "private" else None))
     if kind == "eks_cluster":
         config = attrs.get("resourcesVpcConfig") or {}
@@ -394,6 +415,7 @@ def glance_label(key, members, standby, grouped):
     elif key in ("alb", "nlb", "gwlb"):
         internal = sum(a(n).get("Scheme") == "internal" for n in members)
         detail = "내부" if internal == len(members) else "인터넷" if not internal else f"인터넷 {len(members) - internal} · 내부 {internal}"
+        detail += " · WAF" if any(n.get("waf") for n in members) else ""
     elif key in ("rds", "aurora", "documentdb", "neptune"):
         detail = "Multi-AZ" if standby or len(members) > 1 else "Single-AZ"
     elif key == "endpoint":
@@ -465,7 +487,11 @@ def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
     vpcs = sorted((n for n in nodes.values() if n["kind"] == "vpc"), key=lambda n: (n["name"], n["id"]))
     links = overview_links(graph, nodes)
     to_hub = [(e, a, b) for e, a, b in links if nodes[a]["kind"] == "vpc"]
-    to_site = [(e, a, b) for e, a, b in links if nodes[b]["kind"] == "customer_gateway"]
+    to_site = [(e, a, b) for e, a, b in links if nodes[b]["kind"] in SITE_KINDS]
+    to_peer = [(e, a, b) for e, a, b in links if (e, a, b) not in to_hub and (e, a, b) not in to_site]
+    fronted = edge_links(graph, nodes, vpc_of)
+    distributions = sorted((n for n in nodes.values() if n["kind"] == "cloudfront_distribution" and not n["reference_only"]),
+                           key=lambda n: (n["name"], n["id"]))
     # Connected VPCs come first so their cards sit in the rows right above the network hubs.
     connected = {a for _, a, _ in to_hub}
     combined = bool(snapshot["metadata"].get("combined"))
@@ -476,9 +502,11 @@ def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
     width = 32 + columns * (card_w + gap)
     meta = snapshot["metadata"]
     cloud = canvas.add("cloud", "1", 24, 112, width + 40, 0, "cloud", cloud_label(meta))
-    group = canvas.add("region", "cloud", 20, 44, width, 0, "region",
+    dx = any(e["relation"] in ("dx_virtual_interface", "dx_gateway_association") for e, _, _ in links)
+    drawn = ["TGW·피어링·VPN" if links else "", "Direct Connect" if dx else "", "CloudFront 오리진" if fronted else ""]
+    group = canvas.add("region", "cloud", edge_offset(distributions, fronted), 44, width, 0, "region",
                        f"Region · {meta['region']} · VPC {len(vpcs)}개 · 요약 카드를 선택하면 상세 구성으로 이동"
-                       + (" · 연결선은 TGW·피어링·VPN 설정" if links else ""))
+                       + (f" · 연결선은 {'·'.join(filter(None, drawn))} 설정" if any(drawn) else ""))
     members = {}
     for key, vpc in vpc_of.items():
         members.setdefault(vpc, []).append(nodes[key])
@@ -489,7 +517,10 @@ def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
         azs = sorted({n["attributes"].get("AvailabilityZone") for n in inside if n["kind"] == "subnet"} - {None})
         subnets = sum(n["kind"] == "subnet" for n in inside)
         where = (f"\n계정 {vpc['account']}" + (f" · {vpc['region']}" if len(snapshot["metadata"]["regions"]) > 1 else "")) if combined else ""
+        # The Transit Gateway route table its attachment is associated with: the VPC's routing domain.
+        domains = sorted({n["tgw_route_table"] for n in inside if n["kind"] == "tgw_attachment" and n.get("tgw_route_table")})
         label = (f"VPC · {fit_label(vpc['name'], 250, 1)}{where}\n{vpc['attributes'].get('CidrBlock', '')} · AZ {len(azs)}개 · 서브넷 {subnets}개"
+                 + (f"\n{fit_label('TGW 라우팅 테이블 · ' + ', '.join(domains), 280, 1)}" if domains else "")
                  + ("" if inside else "\n조회된 리소스 없음"))
         glances[vpc["id"]] = vpc_glance(vpc, nodes, graph, vpc_of, subnet_of)
         heads[vpc["id"]] = 22 + 15 * (label.count("\n") + 1)
@@ -501,7 +532,8 @@ def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
     # Logical groups (DB cluster, replication group, file system…) are drawn through their members, and on-premises
     # IP targets are outside every VPC by design: neither is an unplaced resource.
     outside = [n for n in nodes.values() if n["kind"] not in ("vpc", "lambda_function", "sagemaker_endpoint", "security_group",
-                                                               "transit_gateway", "customer_gateway", "vpn_gateway", "vpc_peering", *UNDRAWN_KINDS)
+                                                               "transit_gateway", "customer_gateway", "vpn_gateway", "vpc_peering",
+                                                               "cloudfront_distribution", "dx_gateway", *UNDRAWN_KINDS)
                and n["id"] not in vpc_of and not n["reference_only"] and not outside_vpc(n)]
     if regional:
         kinds = " · ".join(f"{label} {count}개" for label, kind in (("Lambda", "lambda_function"), ("SageMaker 엔드포인트", "sagemaker_endpoint"))
@@ -519,6 +551,8 @@ def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
     def fill():
         for shape in [s for s in canvas.shapes if s["role"] == "summary" and s.get("resource") in glances]:
             draw_glance(canvas, shape, glances[shape["resource"]], heads[shape["resource"]])
+        cloud["w"] = group["x"] + group["w"] + 20
+        overview_edge(canvas, nodes, cloud, distributions, fronted, glances)
     if not to_hub and not combined:
         for i, (label, resource, empty) in enumerate(cards):
             canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + gap),
@@ -530,11 +564,102 @@ def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
         return
     account_of = {v["id"]: v["account"] for v in vpcs} if combined else None
     network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, len(vpcs) if combined else len(connected), to_hub, to_site,
-            account_of)
+            account_of, to_peer)
     fill()
 
 
-def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, top_count, to_hub, to_site, account_of=None):
+# The edge: CloudFront distributions in a column inside the AWS Cloud, left of the Region box. Their routes run down a
+# corridor of their own between the column and the Region, then along a lane above the target's row.
+EDGE_COLUMN = BOTTOM_LABEL + 10
+EDGE_SLOT = ICON + 8 + MAX_LINES * LINE + 16
+
+
+def edge_offset(distributions, routes):
+    """Region x inside the cloud: past the edge column and one corridor lane per route."""
+    return 20 + (EDGE_COLUMN + 12 + 6 * len(routes) + 12 if distributions else 0)
+
+
+def waf_badge(canvas, shape, node):
+    """AWS WAF marker in the corner of a resource icon protected by a web ACL (child cell: moves with the icon)."""
+    if node.get("waf"):
+        canvas.add(cell_id(node["id"] + "/waf"), shape["id"], ICON - 18, ICON - 18, 18, 18, "badge", "", resource=node.get("waf_acl"),
+                   tooltip="AWS WAF · " + ", ".join(node["waf"]))
+
+
+def edge_column(canvas, nodes, cloud, distributions):
+    """CloudFront icons stacked in the edge column; returns their shapes."""
+    if not distributions:
+        return {}
+    canvas.add(cell_id("edge/caption"), "cloud", 20, 44, EDGE_COLUMN, 20, "caption", "엣지 · CloudFront (리전 밖)")
+    shapes = {}
+    for i, n in enumerate(distributions):
+        shapes[n["id"]] = canvas.add(cell_id(n["id"]), "cloud", 20 + (BOTTOM_LABEL - ICON) / 2, 72 + i * EDGE_SLOT, ICON, ICON, "resource",
+                                     icon_label(n, "bottom"), resource=n["id"], kind=n["kind"], reference=n["reference_only"],
+                                     label_side="bottom", tooltip=n["name"], variant=icon_variant(n))
+        waf_badge(canvas, shapes[n["id"]], n)
+    cloud["h"] = max(cloud["h"], 72 + len(distributions) * EDGE_SLOT + 4)
+    return shapes
+
+
+def align_edge(canvas, column, lanes):
+    """Move each CloudFront icon level with its first route's lane (never above the column top or onto the icon before
+    it), so a route leaves straight. `lanes` maps a distribution to its routes' lanes (absolute y) in route order;
+    returns each route's exit fraction on the icon's right side."""
+    cloud = next(s for s in canvas.shapes if s["id"] == "cloud")
+    top = canvas.abs["cloud"][1] + 72
+    exits = {}
+    for key in sorted(column, key=lambda k: (min(lanes.get(k) or [float("inf")]), k)):
+        shape, wanted = column[key], lanes.get(key) or []
+        y = max(top, wanted[0] - ICON / 2) if wanted else top
+        dy = y - canvas.abs[shape["id"]][1]
+        shape["y"] += dy
+        for cell in [shape] + [s for s in canvas.shapes if s["parent"] == shape["id"]]:
+            canvas.abs[cell["id"]] = (canvas.abs[cell["id"]][0], canvas.abs[cell["id"]][1] + dy)
+        top = y + EDGE_SLOT
+        exits[key] = ([min(0.85, max(0.15, (wanted[0] - y) / ICON))] if len(wanted) == 1
+                      else [(i + 1) / (len(wanted) + 1) for i in range(len(wanted))])
+    cloud["h"] = max(cloud["h"], top - canvas.abs["cloud"][1] - 12)
+    return exits
+
+
+def edge_path(sx, exit_y, corridor_x, lane, end, end_y):
+    """CloudFront route: right from the icon, down its corridor lane when the exit is not level with the lane, then
+    along the lane to above the target and down into it."""
+    if abs(exit_y - lane) < 0.5:
+        return [(sx, lane), (end, lane), (end, end_y)]
+    return [(sx, exit_y), (corridor_x, exit_y), (corridor_x, lane), (end, lane), (end, end_y)]
+
+
+def overview_edge(canvas, nodes, cloud, distributions, fronted, glances):
+    """CloudFront -> VPC card of its load balancer origin, entering the card's top above the load balancer's glance icon."""
+    shapes = edge_column(canvas, nodes, cloud, distributions)
+    cards = {s["resource"]: s for s in canvas.shapes if s["role"] == "summary" and s.get("resource")}
+    routes = sorted((link for link in fronted if link[2] in cards),
+                    key=lambda link: ([n["id"] for n in distributions].index(link[1]), link[0]["id"]))
+    entering, rows, lanes = {}, {}, {}
+    for link in routes:
+        entering.setdefault(link[2], []).append(link)
+    plan = []
+    for e, source, vpc, balancer in routes:
+        cx, cy = canvas.abs[cards[vpc]["id"]]
+        # Above the load balancer's glance icon (its column in the card), else the card's middle.
+        slot = next((i for row in glances.get(vpc, []) for i, (members, _, _) in enumerate(row) if any(m["id"] == balancer for m in members)), None)
+        here = entering[vpc].index((e, source, vpc, balancer))
+        ex = cx + (GLANCE_LEFT + (slot % 3) * SLOT_W + SLOT_W / 2 if slot is not None else cards[vpc]["w"] / 2) + 6 * here
+        lane = cy - 6 - 4 * (rows.setdefault(cy, [0])[0] % 3)
+        rows[cy][0] += 1
+        lanes.setdefault(source, []).append(lane)
+        plan.append((e, source, vpc, cx, cy, ex, lane))
+    exits = align_edge(canvas, shapes, lanes)
+    corridor = canvas.abs["cloud"][0] + 20 + EDGE_COLUMN + 12
+    for k, (e, source, vpc, cx, cy, ex, lane) in enumerate(plan):
+        sx, sy = canvas.abs[shapes[source]["id"]]
+        exit_y = exits[source][lanes[source].index(lane)]
+        path = edge_path(sx + ICON, sy + ICON * exit_y, corridor + 6 * k, lane, ex, cy)
+        canvas.edges.append(edge_between(e, source, vpc, path, f"exitX=1;exitY={exit_y:.3f};entryX={(ex - cx) / cards[vpc]['w']:.3f};entryY=0;"))
+
+
+def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, top_count, to_hub, to_site, account_of=None, to_peer=None):
     """Overview with connections: connected VPC cards in rows, a band of network hubs (Transit Gateway,
     VPN gateway, peering) below them, the customer gateways in a data center box right of the AWS Cloud,
     and the remaining cards under the hubs.
@@ -557,7 +682,9 @@ def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, top_cou
             rows.append(members[i:i + columns])
             row_block.append(b)
     head = 34 if account_of else 0
-    hubs = sorted({b for _, _, b in to_hub} | {a for _, a, _ in to_site}, key=lambda k: (HUB_ORDER.get(nodes[k]["kind"], 9), nodes[k]["name"], k))
+    to_peer = to_peer or []
+    hubs = sorted({b for _, _, b in to_hub} | {a for _, a, _ in to_site} | {k for _, a, b in to_peer for k in (a, b)},
+                  key=lambda k: (HUB_ORDER.get(nodes[k]["kind"], 9), nodes[k]["name"], k))
     sites = sorted({b for _, _, b in to_site}, key=lambda k: (nodes[k]["name"], k))
     hub_index = {k: i for i, k in enumerate(hubs)}
     order = lambda link: (hub_index[link[2]], link[0]["id"])
@@ -603,10 +730,18 @@ def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, top_cou
     for link in sorted(to_hub, key=order):
         entering.setdefault(link[2], []).append(link)
     entry_x = {link[0]["id"]: (i + 1) / (len(group_) + 1) for group_ in entering.values() for i, link in enumerate(group_)}
+    # A hub's bottom edge carries its links to other hubs (ordered by the other hub's position) and then its links to
+    # on-premises sites, each from its own point.
     leaving = {}
+    for link in sorted(to_peer, key=lambda link: (hub_index[link[2]], link[0]["id"])):
+        leaving.setdefault(link[1], []).append((link, "from"))
+    for link in sorted(to_peer, key=lambda link: (hub_index[link[1]], link[0]["id"])):
+        leaving.setdefault(link[2], []).append((link, "to"))
+    for hub in leaving:
+        leaving[hub].sort(key=lambda item: hub_index[item[0][2] if item[1] == "from" else item[0][1]])
     for link in sorted(to_site, key=lambda link: (hub_index[link[1]], link[0]["id"])):
-        leaving.setdefault(link[1], []).append(link)
-    exit_x = {link[0]["id"]: (i + 1) / (len(group_) + 1) for group_ in leaving.values() for i, link in enumerate(group_)}
+        leaving.setdefault(link[1], []).append((link, "from"))
+    exit_x = {(link[0]["id"], end): (i + 1) / (len(group_) + 1) for group_ in leaving.values() for i, (link, end) in enumerate(group_)}
     lane = 0
     gap_slot = [0] * columns
     row_slot = [0] * len(rows)
@@ -628,23 +763,33 @@ def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, top_cou
             else:
                 path = [(sx, sy), (sx, ly), (tx, ly), (tx, hy)]
             canvas.edges.append(edge_between(e, vpc, hub, path, f"exitX={fx:.3f};exitY=1;entryX={entry_x[e['id']]:.3f};entryY=0;"))
-    site_lanes = hub_y + ICON + 16
-    next_y = site_lanes + 6 * len(to_site) + (24 if to_site else 0)
+    # Hub to hub (Direct Connect gateway association): down from both hubs to a lane of its own under the hub band.
+    peer_lanes = hub_y + ICON + 16
+    for k, (e, a, b) in enumerate(sorted(to_peer, key=lambda link: (hub_index[link[1]], hub_index[link[2]], link[0]["id"]))):
+        (ax, ay), (bx, _) = canvas.abs[hub_shapes[a]["id"]], canvas.abs[hub_shapes[b]["id"]]
+        fa, fb = exit_x[(e["id"], "from")], exit_x[(e["id"], "to")]
+        ly = oy + peer_lanes + 6 * k
+        path = [(ax + ICON * fa, ay + ICON), (ax + ICON * fa, ly), (bx + ICON * fb, ly), (bx + ICON * fb, ay + ICON)]
+        canvas.edges.append(edge_between(e, a, b, path, f"exitX={fa:.3f};exitY=1;entryX={fb:.3f};entryY=1;"))
+    site_lanes = peer_lanes + (6 * len(to_peer) + 10 if to_peer else 0)
+    next_y = site_lanes + 6 * len(to_site) + (24 if to_site or to_peer else 0)
     for i, (label, resource, empty) in enumerate(rest):
         canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + 24),
                    next_y + (i // columns) * (card_h + 24), card_w, card_h, "summary", label, resource=resource, empty=empty)
     width = max(grid_width, start + band + 24, 32 + columns * (card_w + 24) if rest else 0)
     group["w"] = width
     group["h"] = next_y + (-(-len(rest) // columns) * (card_h + 24) if rest else 0) + 6
-    cloud["w"] = width + 40
+    cloud["w"] = group["x"] + width + 20
     cloud["h"] = group["y"] + group["h"] + 20
     if not to_site:
         return
-    # Customer gateways stacked in a data center box right of the AWS Cloud, each entered from the left.
+    # Customer gateways and Direct Connect connections stacked in a data center box right of the AWS Cloud, each
+    # entered from the left.
     corridor = cloud["x"] + cloud["w"] + 12
     box_x = corridor + 6 * len(to_site) + 24
+    dx = any(nodes[k]["kind"] == "dx_connection" for k in sites)
     box = canvas.add("onprem", "1", box_x, cloud["y"], SIDE_SLOT + 40, 44 + len(sites) * (ICON + 40), "onprem",
-                     "Corporate data center · 고객 게이트웨이")
+                     "Corporate data center · 고객 게이트웨이" + ("·DX" if dx else ""))
     site_shapes = {key: canvas.add(cell_id(key), box["id"], 20, 44 + i * (ICON + 40), ICON, ICON, "resource",
                                    icon_label(nodes[key], "right"), resource=key, kind=nodes[key]["kind"],
                                    reference=nodes[key]["reference_only"], label_side="right", tooltip=nodes[key]["name"],
@@ -653,11 +798,11 @@ def network(canvas, nodes, cloud, group, cards, card_w, card_h, columns, top_cou
     for k, (e, hub, site) in enumerate(sorted(to_site, key=lambda link: (hub_index[link[1]], link[0]["id"]))):
         hx, hy = canvas.abs[hub_shapes[hub]["id"]]
         cx, cy = canvas.abs[site_shapes[site]["id"]]
-        sx = hx + ICON * exit_x[e["id"]]
+        sx = hx + ICON * exit_x[(e["id"], "from")]
         ly = oy + site_lanes + 6 * k
         x = corridor + 6 * k
         path = [(sx, hy + ICON), (sx, ly), (x, ly), (x, cy + ICON / 2), (cx, cy + ICON / 2)]
-        canvas.edges.append(edge_between(e, hub, site, path, f"exitX={exit_x[e['id']]:.3f};exitY=1;entryX=0;entryY=0.5;"))
+        canvas.edges.append(edge_between(e, hub, site, path, f"exitX={exit_x[(e['id'], 'from')]:.3f};exitY=1;entryX=0;entryY=0.5;"))
 
 
 def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
@@ -678,9 +823,12 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         subject = next((nodes[k] for k in visible if nodes[k]["kind"] == "vpc"), None) or nodes.get(focus)
         if subject:
             meta = {**meta, "combined": False, "account_id": subject["account"], "region": subject["region"]}
-    # AWS Architecture Icons nesting: AWS Cloud > Region > VPC > Availability Zone > subnet.
+    # AWS Architecture Icons nesting: AWS Cloud > Region > VPC > Availability Zone > subnet; CloudFront at the edge,
+    # outside the Region.
+    distributions = sorted((nodes[k] for k in visible if nodes[k]["kind"] == "cloudfront_distribution"), key=lambda n: (n["name"], n["id"]))
     cloud = canvas.add("cloud", "1", 24, 112, 0, 0, "cloud", cloud_label(meta))
-    region = canvas.add("region", "cloud", 20, 44, 0, 0, "region", f"Region · {meta['region']}")
+    region = canvas.add("region", "cloud", edge_offset(distributions, [e for e in drawn_edges if e["relation"] in EDGE]), 44, 0, 0, "region",
+                        f"Region · {meta['region']}")
     cursor = 46
     tg_order = {}
 
@@ -690,6 +838,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                            reference=n["reference_only"], label_side=side, emphasis=key == focus, tooltip=n["name"],
                            outside_vpc=outside_vpc(n), variant=icon_variant(n))
         placed[key] = shape
+        waf_badge(canvas, shape, n)
         return shape
 
     subnet_at = {}  # subnet -> (cell, AZ column) for placement routes
@@ -753,7 +902,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                     demand[0].add(e["source"])
                     demand[last].add(e["source"])
                     refs_votes.setdefault(e["target"], []).append(g == last and last > 0)
-            elif e["relation"] in AUXILIARY | REGIONAL and e["relation"] != "vpn_connection" and vpc_of.get(e["source"]) == vpc["id"]:
+            elif e["relation"] in AUXILIARY | REGIONAL and e["relation"] not in REMOTE and vpc_of.get(e["source"]) == vpc["id"]:
                 demand[column.get(e["source"], 0)].add(e["id"])
             elif e["relation"] == "in_subnet" and e["source"] in lb_index and e["target"] in children:
                 placements.append(e["id"])
@@ -878,7 +1027,7 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         lanes[vpc["id"]] = geometry
         cursor += y + 36
     # Auto Scaling groups and ECS services with placed tasks are drawn only as frames around their members.
-    others = sorted((nodes[k] for k in visible if k not in placed and nodes[k]["kind"] not in {"vpc", "subnet", *GROUPS}),
+    others = sorted((nodes[k] for k in visible if k not in placed and nodes[k]["kind"] not in {"vpc", "subnet", "cloudfront_distribution", *GROUPS}),
                     key=lambda n: (KIND_ORDER.get(n["kind"], 9), n["name"], n["id"]))
     width = max([sh["w"] for sh in canvas.shapes if sh["role"] == "vpc"] + [5 * SLOT + 60])
 
@@ -907,10 +1056,11 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     region["w"] = max([sh["x"] + sh["w"] for sh in canvas.shapes if sh["parent"] == "region"] + [400]) + 20
     region["h"] = cursor
     cloud["w"], cloud["h"] = region["x"] + region["w"] + 20, region["y"] + region["h"] + 20
+    placed.update(edge_column(canvas, nodes, cloud, distributions))
     remote = [n for n in others if outside_vpc(n)]
     if remote:
         # Beside the AWS Cloud: routes leave the VPC's right margin above the load balancer row.
-        place_box("onprem", "onprem", "Corporate data center · 고객 게이트웨이 · AvailabilityZone=all 로 등록된 VPC 밖 대상", "1",
+        place_box("onprem", "onprem", "Corporate data center · 고객 게이트웨이·DX · AvailabilityZone=all 로 등록된 VPC 밖 대상", "1",
                   cloud["x"] + cloud["w"] + 48, cloud["y"], remote, 520)
     route(canvas, [e for e in drawn_edges if e["id"] not in suppressed], vpc_of, placed, lanes, tg_order, subnet_at, frames_at)
 
@@ -941,9 +1091,14 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
     specs, plain = {}, []
     for e in sorted(drawn_edges, key=lambda e: e["id"]):
         geometry = lanes.get(vpc_of.get(e["source"]))
-        if e["relation"] == "vpn_connection" and e["source"] in placed and e["target"] in placed and placed[e["target"]]["parent"] == "onprem":
-            # Site-to-Site VPN: from the gateway's row lane to a corridor right of the AWS Cloud, then into the data center box.
+        if e["relation"] in REMOTE and e["source"] in placed and e["target"] in placed and placed[e["target"]]["parent"] == "onprem":
+            # Site-to-Site VPN or Direct Connect VIF: from the gateway's row lane to a corridor right of the AWS Cloud,
+            # then into the data center box.
             specs[e["id"]] = {"edge": e, "kind": "remote", "geometry": None, "turn_left": False}
+            continue
+        if e["relation"] in EDGE and e["source"] in placed and e["target"] in placed and placed[e["source"]]["parent"] == "cloud":
+            # CloudFront: down a corridor left of the Region, then along the lane above the load balancer row.
+            specs[e["id"]] = {"edge": e, "kind": "edge", "geometry": None, "turn_left": False}
             continue
         if e["relation"] in GROUP_TARGETS and e["target"] in placed and e["source"] in frames_at \
                 and lanes.get(vpc_of.get(e["target"])):
@@ -982,7 +1137,7 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
     # from the lane above their load balancer to the channel; that leg is a shallow slot in gutter 0.
     groups = {}
     for spec in specs.values():
-        if spec["kind"] in ("lb", "remote"):
+        if spec["kind"] in ("lb", "remote", "edge"):
             continue
         groups.setdefault((id(spec["geometry"]), spec["gutter"]), {}).setdefault(spec["group"], []).append(spec)
         if spec["kind"] == "place":
@@ -1007,10 +1162,15 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
     cloud_right = canvas.abs["cloud"][0] + shapes["cloud"]["w"]
     for i, spec in enumerate(sorted((s for s in specs.values() if s["kind"] == "remote"), key=lambda s: s["edge"]["id"])):
         spec["x"] = cloud_right + 14 + 8 * i
+    # CloudFront routes: one corridor lane each, leaving their distribution's right side from separate points.
+    edge_specs = sorted((s for s in specs.values() if s["kind"] == "edge"), key=lambda s: (position(s["edge"]["source"])[1], s["edge"]["id"]))
+    corridor = canvas.abs["cloud"][0] + 20 + EDGE_COLUMN + 12
+    for i, spec in enumerate(edge_specs):
+        spec["x"] = corridor + 6 * i
     # Entry points per target, then lanes per icon row.
     entering = {}
     for spec in specs.values():
-        if spec["kind"] in ("bus", "aux", "remote"):
+        if spec["kind"] in ("bus", "aux", "remote", "edge"):
             entering.setdefault(spec["edge"]["target"], []).append(spec)
     for members in entering.values():
         members.sort(key=lambda s: (s["x"] if not s["turn_left"] else -s["x"], s["edge"]["id"]))
@@ -1019,7 +1179,7 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
             spec["entry"] = 1 - fraction if spec["turn_left"] else fraction
     rows, leaving = {}, {}
     for spec in specs.values():
-        if spec["kind"] in ("bus", "aux", "remote"):
+        if spec["kind"] in ("bus", "aux", "remote", "edge"):
             tx, ty = position(spec["edge"]["target"])
             spec["end"] = tx + spec["entry"] * ICON
             rows.setdefault((placed[spec["edge"]["target"]]["parent"], ty), []).append(("in", spec, spec["end"], placed[spec["edge"]["target"]]))
@@ -1040,6 +1200,14 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
         lane_top = members[0][3].get("lane_top", LANE_TOP)
         for i, (direction, spec, _, _) in enumerate(members):
             spec["lane_in" if direction == "in" else "lane_out"] = top - lane_top + 4 + 4 * (i % ((lane_top - 8) // 4))
+    # CloudFront icons move level with the lane their route takes above the load balancer row.
+    wanted = {}
+    for spec in sorted(edge_specs, key=lambda s: (s["lane_in"], s["edge"]["id"])):
+        wanted.setdefault(spec["edge"]["source"], []).append(spec["lane_in"])
+    exits = align_edge(canvas, {k: s for k, s in placed.items() if s["parent"] == "cloud"}, wanted) if edge_specs else {}
+    for spec in edge_specs:
+        source = spec["edge"]["source"]
+        spec["exit"] = exits[source][wanted[source].index(spec["lane_in"])]
     framed = {}
     for spec in specs.values():
         if spec["kind"] == "frame":
@@ -1066,6 +1234,10 @@ def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frame
             path = [(spec["stub"], sy), (spec["stub"], spec["lane_out"]), (spec["x"], spec["lane_out"]), (spec["x"], spec["lane_in"]),
                     (spec["end"], spec["lane_in"]), (spec["end"], ty)]
             canvas.edges.append(edge_entry(e, path, f"exitX={spec['exit']:.3f};exitY=0;entryX={spec['entry']:.3f};entryY=0;"))
+            continue
+        if spec["kind"] == "edge":
+            path = edge_path(sx + ICON, sy + spec["exit"] * ICON, spec["x"], spec["lane_in"], spec["end"], position(e["target"])[1])
+            canvas.edges.append(edge_entry(e, path, f"exitX=1;exitY={spec['exit']:.3f};entryX={spec['entry']:.3f};entryY=0;"))
             continue
         if spec["kind"] == "place":
             x, y, h = spec["subnet"]
@@ -1112,8 +1284,8 @@ def tg_stroke(tg_order, tg):
 
 
 def outside_vpc(node):
-    """On premises: a target registered with AvailabilityZone=all, or a VPN customer gateway."""
-    return node["kind"] == "customer_gateway" or \
+    """On premises: a target registered with AvailabilityZone=all, a VPN customer gateway or a Direct Connect connection."""
+    return node["kind"] in SITE_KINDS or \
         node["kind"] == "registered_target" and node["attributes"].get("Target", {}).get("AvailabilityZone") == "all"
 
 
@@ -1126,4 +1298,4 @@ def edge_entry(e, path, constraints, label=""):
     return {"id": cell_id("edge/" + e["id"]), "relation_id": e["id"], "relation": e["relation"],
             "source": cell_id(e["source"]), "target": cell_id(e["target"]), "evidence": e["evidence"],
             "points": path[1:-1], "path": path, "constraints": constraints, "label": label,
-            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer", *GROUP_TARGETS, *REGIONAL}}
+            "auxiliary": e["relation"] not in {"registered_target", "associated_load_balancer", *GROUP_TARGETS, *REGIONAL, *EDGE}}

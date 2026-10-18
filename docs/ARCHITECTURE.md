@@ -22,8 +22,8 @@ Last Updated: 2026-10-18
 
 | 구분 | 서비스 |
 | --- | --- |
-| 수집·도형화 가능 | VPC, 서브넷, 라우팅 테이블, IGW, NAT, VPC 엔드포인트, TGW·attachment, 피어링, VGW·CGW·Site-to-Site VPN, ELB(ALB/NLB/GWLB)·대상 그룹, EC2·ASG, ECS, EKS·노드 그룹, Lambda, RDS·Aurora·DocumentDB, ElastiCache, MSK, OpenSearch, EFS, Redshift, 보안 그룹, **AI/ML: FSx(Lustre 등), SageMaker 실시간 엔드포인트, SageMaker HyperPod, 클러스터 배치 그룹, EC2의 EFA 인터페이스·Capacity Block·용량 예약** |
-| 수집 안 함 (도형 불가) | CloudFront, AWS WAF, Shield, Route 53(Resolver 포함), Global Accelerator, Network Firewall, Direct Connect, Elastic IP, TGW 라우팅 테이블, NACL, 리스너 규칙, Organizations(계정·OU), S3, DynamoDB, Bedrock 설정(Guardrails·호출 로깅·Knowledge Base), SageMaker 학습 작업·노트북, Kubernetes 객체(Karpenter·KEDA·device plugin) |
+| 수집·도형화 가능 | VPC, 서브넷, 라우팅 테이블, IGW, NAT, VPC 엔드포인트, TGW·attachment, 피어링, VGW·CGW·Site-to-Site VPN, ELB(ALB/NLB/GWLB)·대상 그룹, EC2·ASG, ECS, EKS·노드 그룹, Lambda, RDS·Aurora·DocumentDB, ElastiCache, MSK, OpenSearch, EFS, Redshift, 보안 그룹, **AI/ML: FSx(Lustre 등), SageMaker 실시간 엔드포인트, SageMaker HyperPod, 클러스터 배치 그룹, EC2의 EFA 인터페이스·Capacity Block·용량 예약**, **엣지·연결(2026-10-18, 4.1절): CloudFront(리전 밖 엣지 열), AWS WAF 웹 ACL(WAF 표식), Elastic IP(붙은 리소스 라벨), TGW 라우팅 테이블(라우팅 도메인), Direct Connect 연결·VIF·DX 게이트웨이** |
+| 수집 안 함 (도형 불가) | Shield, Route 53(Resolver 포함), Global Accelerator, Network Firewall, NACL, 리스너 규칙, Organizations(계정·OU), S3, DynamoDB, Bedrock 설정(Guardrails·호출 로깅·Knowledge Base), SageMaker 학습 작업·노트북, Kubernetes 객체(Karpenter·KEDA·device plugin) |
 | 여러 계정 | 수집은 계정 × 리전 단위. `diagram-bot combine`·앱의 `계정 통합 보기`로 합치면 전체 구성에 AWS 계정 프레임과 공유 TGW·계정 간 피어링을 그린다 (`multi-account` 사례) |
 
 ## 2. 공통 원칙 (모든 사례)
@@ -58,7 +58,7 @@ Last Updated: 2026-10-18
 | NAT | AZ마다 | REC | AZ마다 | 충족 |
 | DB | Multi-AZ + 읽기 복제본 | HIGH | MySQL Multi-AZ + 3번째 AZ 복제본 | 충족 |
 | SSM 엔드포인트 | `ssm` · `ssmmessages` · `ec2messages` | REC | 세 엔드포인트 | 충족 (2026-10-18 반영) |
-| 엣지 | CloudFront(+S3 정적 콘텐츠) · WAF · Route 53 | REC | practices 문구 | P (반영) / X |
+| 엣지 | CloudFront(+S3 정적 콘텐츠) · WAF · Route 53 | REC | CloudFront(+WAF, S3 오리진), ALB SG는 CloudFront 접두사 목록만, NAT별 EIP | 충족 (2026-10-18, 4.1절; Route 53은 문구) |
 
 ### 3.2 microservices — ALB 경로 라우팅 (EC2 ASG + ECS Fargate)
 
@@ -81,8 +81,8 @@ Last Updated: 2026-10-18
 | 같은 VPC·계정 | NLB와 ALB는 같은 VPC | MUST | 충족 | 충족 |
 | 리스너 | `alb` 대상 그룹은 TCP 리스너, 포트 = ALB 리스너 포트 | MUST | TCP 443 → ALB 443 | 충족 |
 | AZ 일치 | NLB와 ALB에 같은 AZ | REC | NLB는 퍼블릭 a/c, ALB는 프라이빗 a/c | 충족 |
-| 고정 IP | AZ마다 Elastic IP | REC | EIP 미표시 | **X** (EIP 수집 시 라벨) / P |
-| WAF | ALB에 WAF | REC | 없음 | **P** |
+| 고정 IP | AZ마다 Elastic IP | REC | NLB AZ별 EIP (`EIP 2` 라벨) | 충족 (2026-10-18) |
+| WAF | ALB에 WAF | REC | ALB에 리전 WAF 웹 ACL | 충족 (2026-10-18) |
 | 대안 | Global Accelerator(애니캐스트 고정 IP 2개) | OPT | — | P |
 
 ### 3.4 environments — 환경 분리 (운영 · 스테이징 · 공용)
@@ -109,7 +109,7 @@ Direct Connect Resiliency Recommendations, ALB target groups(IP 대상).
 | VPN 종단 | TGW (ECMP 지원, 터널당 1.25 Gbps) | REC | TGW | 충족 |
 | 이중화 | 두 번째 CGW(가능하면 다른 ISP)로 두 번째 VPN, 같은 대역 BGP 광고, 장비 이중화 | HIGH | CGW 2, VPN 2(각 터널 2) | 충족 (반영) |
 | 터널 | CGW에서 두 터널 모두 사용 | MUST(실무) | 터널 2개 UP | 충족 |
-| 주 연결 | 운영은 Direct Connect, VPN은 백업 | REC | VPN만 | **X** / P |
+| 주 연결 | 운영은 Direct Connect, VPN은 백업 | REC | 위치 2곳 DX 연결 2개 · transit VIF → DX 게이트웨이 → TGW, VPN 2개는 백업 | 충족 (2026-10-18) |
 | IP 대상 | RFC1918/RFC6598만, DX·VPN 경유 온프레미스 허용 | MUST | 192.168.20.0/24 | 충족 |
 | DNS | Route 53 Resolver 엔드포인트 | OPT | 없음 | P |
 
@@ -163,8 +163,30 @@ Multi-VPC 백서(VPC peering, VPN).
 | 6 | 전 사례 | practices 문구에 그릴 수 없는 권고(CloudFront·WAF·Route 53·DX·계정 분리·TGW 라우팅 테이블) 명시 | — |
 | 7 | 선택 | microservices 3 AZ, eks Aurora reader 추가·/28 클러스터 서브넷, environments egress VPC (완료) | OPT |
 
-수집 범위 확장 후보(별도 승인 필요): CloudFront·WAF(엣지), Elastic IP(NLB 고정 IP), TGW 라우팅 테이블(환경 격리),
-Direct Connect. 다중 계정 구성도는 계정 통합 보기로 구현했다(2026-10-18).
+수집 범위 확장 후보였던 CloudFront·WAF(엣지), Elastic IP(NLB 고정 IP), TGW 라우팅 테이블(환경 격리), Direct Connect는
+소유자 승인으로 2026-10-18 수집·도형화했다(4.1절). 다중 계정 구성도는 계정 통합 보기로 구현했다(2026-10-18).
+
+### 4.1 수집 범위 확장: 엣지·고정 IP·라우팅 도메인·전용 연결 (2026-10-18)
+
+| 대상 | 수집 API | 구성도 | 사례 반영 |
+| --- | --- | --- | --- |
+| Elastic IP | `ec2:DescribeAddresses` (NAT·NLB는 AllocationId, EC2는 InstanceId, 그 밖은 ENI로 연결) | 붙은 리소스 라벨(`EIP 203.0.113.101`, NLB `EIP 2`), 별도 도형 없음 | three-tier NAT 3개, nlb-alb NLB AZ별 |
+| TGW 라우팅 테이블 | `DescribeTransitGatewayRouteTables`, `GetTransitGatewayRouteTableAssociations`·`Propagations`, `SearchTransitGatewayRoutes`(state active·blackhole) | TGW 라벨(`라우팅 테이블 n`), VPC 카드(`TGW 라우팅 테이블 · 이름`), 속성 패널(연결·전파·경로·blackhole). 선으로 그리지 않음 | data-platform: `dp-spokes`(두 VPC, VPC·사내망 학습) / `dp-onprem`(VPN, VPC만 학습) |
+| CloudFront | `cloudfront:ListDistributions`(전역) — 오리진 DomainName이 수집한 ELB의 DNSName과 같을 때만 연결, S3·사용자 지정(CNAME 포함)은 속성 | 리전 상자 밖 AWS Cloud 안의 엣지 열 → ALB(상세)·VPC 카드(전체) | three-tier: ALB + S3 정적 오리진 |
+| AWS WAF | `wafv2:ListWebACLs`(REGIONAL: 수집 리전, CLOUDFRONT: us-east-1), `ListResourcesForWebACL`(ALB), `ListDistributions.WebACLId` | 보호 대상 아이콘 모서리의 WAF 표식(누르면 웹 ACL 속성), ALB 라벨·카드에 `WAF` | three-tier CloudFront ACL, nlb-alb ALB ACL |
+| Direct Connect | `DescribeConnections`·`DescribeVirtualInterfaces`·`DescribeDirectConnectGateways`·`DescribeDirectConnectGatewayAssociations` | 연결은 VPN 고객 게이트웨이와 같은 데이터 센터 상자, VIF는 VGW·DX 게이트웨이까지, DX 게이트웨이 → TGW·VGW는 허브 줄 아래 전용 차선. 다른 리전 게이트웨이와의 연결은 속성으로만 | hybrid: 위치 2곳 전용 연결 2개, transit VIF → DX 게이트웨이 → TGW (VPN은 백업) |
+
+검토 규칙 (모두 설정 근거만, 실제 접근·트래픽은 확인하지 않음):
+
+| 규칙 | 심각도 | 판정 | 근거 |
+| --- | --- | --- | --- |
+| SEC-ALB-WAF | low | 인터넷 ALB에 리전 WAF 웹 ACL이 없고, 앞단 CloudFront에도 WebACLId가 없음. 그 계정·리전의 REGIONAL `ListWebACLs`·`ListResourcesForWebACL`이 모두 완료일 때만 | C6 (REC → low) |
+| SEC-CF-ORIGIN-OPEN | low | CloudFront 오리진으로 연결된 ALB의 보안 그룹(모두 수집된 경우만)이 0.0.0.0/0·::/0 허용 → CloudFront·WAF 우회 가능한 설정 | CloudFront origin-facing 접두사 목록·VPC 오리진 권고 |
+| COST-EIP-IDLE | low (비용) | AssociationId·InstanceId·NetworkInterfaceId가 없고 어느 리소스와도 연결되지 않은 Elastic IP | 퍼블릭 IPv4 시간당 과금 |
+| REL-TGW-BLACKHOLE | low | 라우팅 테이블에 state = blackhole 경로 | 스포크 간 격리(REC)일 수 있어 정보 수준, 삭제된 attachment의 잔여 경로면 정리 |
+
+3.1 three-tier `엣지`, 3.3 nlb-alb `고정 IP`·`WAF`, 3.5 hybrid `주 연결`은 이 확장으로 충족한다. 3.4 environments의 TGW 격리는 이제 그릴 수 있지만
+그 사례에는 아직 반영하지 않았다(라우팅 도메인 예시는 data-platform).
 
 AI/GPU 워크로드 관련 변경안(신규 AI 사례, GPU 아이콘, 검토 규칙)은 5.5–5.9절에 따로 둔다.
 

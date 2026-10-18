@@ -41,6 +41,19 @@
   API `routes=`). 다른 로드 밸런서·대상 그룹과 그것으로만 그려지던 대상(IP·미조회 대상, 참조)은 숨기고 숨김 수에 포함(`counts.filtered`),
   나머지 배치 리소스는 흐리게 남깁니다. 문서 머리말에 필터·숨긴 수·생략한 관계 수를 적고, 필터한 보기는 별도 편집본으로 저장됩니다.
   100개 리소스 합성 VPC에서 대상 그룹 하나로 좁히면 연결선 교차 376 → 0(테스트로 고정).
+- **수집 범위 확장 (엣지·고정 IP·라우팅 도메인·전용 연결):** Elastic IP(`ec2:DescribeAddresses`), TGW 라우팅 테이블
+  (`ec2:DescribeTransitGatewayRouteTables`·`GetTransitGatewayRouteTableAssociations`·`GetTransitGatewayRouteTablePropagations`·`SearchTransitGatewayRoutes`),
+  CloudFront(`cloudfront:ListDistributions`, 전역), AWS WAF(`wafv2:ListWebACLs` REGIONAL·CLOUDFRONT(us-east-1), `wafv2:ListResourcesForWebACL`),
+  Direct Connect(`directconnect:DescribeConnections`·`DescribeVirtualInterfaces`·`DescribeDirectConnectGateways`·`DescribeDirectConnectGatewayAssociations`).
+  거부·부분 조회는 기존처럼 필요한 IAM 액션과 함께 표시(경로가 1,000개를 넘으면 `AdditionalRoutesAvailable` 부분 조회). 읽기 전용 정책·역할 템플릿에 추가.
+- 구성도: CloudFront는 리전 밖 엣지 열에서 오리진 ALB(전체 구성은 VPC 카드)로 연결, WAF 웹 ACL이 붙은 CloudFront·ALB에 WAF 표식.
+  Direct Connect 연결은 데이터 센터 상자에서 VIF로 VGW·DX 게이트웨이에, DX 게이트웨이는 TGW·VGW에 연결(전체 구성 허브 줄 아래 전용 차선).
+  Elastic IP는 NAT·EC2·NLB 라벨, TGW 라우팅 테이블은 TGW 라벨·VPC 카드·속성 패널(연결·전파·경로·blackhole)에 표시. CloudFront·WAF(CloudFront용)·DX 게이트웨이는
+  계정 전역 ID(`<계정>/global/…`)라 여러 리전을 합쳐도 하나로 그립니다.
+- 검토 규칙(모두 low): `SEC-ALB-WAF`(인터넷 ALB에 WAF 없음, WAF가 붙은 CloudFront 뒤면 제외, WAF 조회가 완전할 때만), `SEC-CF-ORIGIN-OPEN`
+  (CloudFront 오리진 ALB의 보안 그룹이 0.0.0.0/0 허용 — 설정 근거만), `COST-EIP-IDLE`(연결 안 된 Elastic IP, 새 `비용` 영역), `REL-TGW-BLACKHOLE`.
+- 샘플(`SAMPLE_VERSION` 4): three-tier에 CloudFront(+WAF, S3 정적 오리진)·NAT Elastic IP·ALB SG는 CloudFront 접두사 목록만, nlb-alb에 NLB AZ별 Elastic IP와
+  ALB WAF, hybrid에 Direct Connect 2개 위치·transit VIF·DX 게이트웨이(VPN은 백업), data-platform에 TGW 라우팅 테이블 2개(스포크·사내망).
 
 ### Changed
 - CI는 테스트 의존성을 `.[test]`에서 설치합니다(직접 적은 목록에 `strands-agents`가 빠져 2026-10-17 이후 실패). Actions를 Node 24 버전으로 올림.

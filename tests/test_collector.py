@@ -4,7 +4,7 @@ import boto3
 import pytest
 from botocore.stub import Stubber
 
-from diagram_bot.collector import collect, query
+from diagram_bot.collector import OPERATIONS, collect, query
 
 
 def client(service):
@@ -55,7 +55,8 @@ def test_elbv2_marker_pagination():
 class Session:
     def __init__(self):
         self.clients = {name: client(name) for name in ("sts", "ec2", "elbv2", "rds", "autoscaling", "elasticache", "kafka", "lambda", "eks",
-                                                                  "opensearch", "ecs", "efs", "redshift", "fsx", "sagemaker")}
+                                                                  "opensearch", "ecs", "efs", "redshift", "fsx", "sagemaker", "cloudfront", "wafv2",
+                                                                  "directconnect")}
 
     def client(self, name, **kwargs):
         return self.clients[name]
@@ -120,6 +121,14 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
                                                                          "EndpointStatus": "InService"}]}, {})
         stubs["sagemaker"].add_response("list_clusters", {"ClusterSummaries": [{"ClusterName": "hp", "ClusterArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:cluster/hp",
                                                                                "CreationTime": "2026-01-01T00:00:00Z", "ClusterStatus": "InService"}]}, {})
+        stubs["ec2"].add_response("describe_addresses", {"Addresses": []}, {})
+        stubs["ec2"].add_response("describe_transit_gateway_route_tables", {"TransitGatewayRouteTables": []}, {})
+        stubs["cloudfront"].add_response("list_distributions", EMPTY[("cloudfront", "list_distributions")], {})
+        stubs["directconnect"].add_response("describe_connections", {"connections": []}, {})
+        stubs["directconnect"].add_response("describe_virtual_interfaces", {"virtualInterfaces": []}, {})
+        stubs["directconnect"].add_response("describe_direct_connect_gateways", {"directConnectGateways": []}, {})
+        stubs["wafv2"].add_response("list_web_acls", {"WebACLs": []}, {"Scope": "REGIONAL", "Limit": 100})
+        stubs["wafv2"].add_response("list_web_acls", {"WebACLs": []}, {"Scope": "CLOUDFRONT", "Limit": 100})
         stubs["eks"].add_response("describe_cluster", {"cluster": {"name": "platform", "resourcesVpcConfig": {"vpcId": "vpc-a", "subnetIds": ["subnet-a"]}}}, {"name": "platform"})
         stubs["eks"].add_response("list_nodegroups", {"nodegroups": ["general"]}, {"clusterName": "platform"})
         stubs["eks"].add_response("describe_nodegroup", {"nodegroup": {"nodegroupName": "general", "resources": {"autoScalingGroups": [{"name": "eks-general"}]}}},
@@ -179,6 +188,106 @@ def test_full_collection_flags_undiscovered_targets_and_flattens_instances():
         assert result["raw"]["efs_mount_targets"][0]["SubnetId"] == "subnet-0000000a"
         for stub in stubs.values():
             stub.assert_no_pending_responses()
+
+
+EMPTY = {("cloudfront", "list_distributions"): {"DistributionList": {"Marker": "", "MaxItems": 100, "IsTruncated": False, "Quantity": 0}}}
+
+
+def stub_listing(stubs, overrides):
+    """Every first-phase call answers empty unless overridden with a response, or an error code (denied)."""
+    for service, operation, key, _ in OPERATIONS:
+        value = overrides.get((service, operation), EMPTY.get((service, operation), {key: []}))
+        if isinstance(value, str):
+            stubs[service].add_client_error(operation, value, expected_params={})
+        else:
+            stubs[service].add_response(operation, value, {})
+
+
+def test_edge_routing_and_direct_connect_calls_keep_partial_and_denied_results():
+    """Elastic IPs, TGW route tables (associations, propagations, routes), CloudFront, WAF (both scopes, marker pages)
+    and Direct Connect: each call's rows, and denied or truncated calls marked with the IAM action to grant."""
+    import json
+    from pathlib import Path
+    session = Session()
+    acl = lambda name, scope: {"Name": name, "Id": name + "-id", "ARN": f"arn:aws:wafv2:us-east-1:111122223333:{scope}/webacl/{name}/{name}-id",
+                               "LockToken": "t"}
+    route = lambda cidr, state, attachments: {"DestinationCidrBlock": cidr, "Type": "static" if not attachments else "propagated", "State": state,
+                                              "TransitGatewayAttachments": [{"TransitGatewayAttachmentId": a, "ResourceId": "vpc-a", "ResourceType": "vpc"}
+                                                                            for a in attachments]}
+    with ExitStack() as stack:
+        stubs = {name: stack.enter_context(Stubber(c)) for name, c in session.clients.items()}
+        stub_identity(stubs["sts"])
+        stub_listing(stubs, {
+            ("ec2", "describe_addresses"): {"Addresses": [{"AllocationId": "eipalloc-nat", "PublicIp": "203.0.113.5", "AssociationId": "eipassoc-1"},
+                                                          {"AllocationId": "eipalloc-idle", "PublicIp": "203.0.113.6"}]},
+            ("ec2", "describe_transit_gateway_route_tables"): {"TransitGatewayRouteTables": [
+                {"TransitGatewayRouteTableId": "tgw-rtb-a", "TransitGatewayId": "tgw-a"}, {"TransitGatewayRouteTableId": "tgw-rtb-b", "TransitGatewayId": "tgw-a"}]},
+            ("cloudfront", "list_distributions"): {"DistributionList": {
+                "Marker": "", "MaxItems": 100, "IsTruncated": False, "Quantity": 1,
+                "Items": [{"Id": "E1", "ARN": "arn:aws:cloudfront::111122223333:distribution/E1", "Status": "Deployed",
+                           "LastModifiedTime": "2026-01-01T00:00:00Z", "DomainName": "d1.cloudfront.net", "Aliases": {"Quantity": 0},
+                           "Origins": {"Quantity": 1, "Items": [{"Id": "o", "DomainName": "origin.example.com"}]},
+                           "DefaultCacheBehavior": {"TargetOriginId": "o", "ViewerProtocolPolicy": "https-only"},
+                           "CacheBehaviors": {"Quantity": 0}, "CustomErrorResponses": {"Quantity": 0}, "Comment": "", "PriceClass": "PriceClass_All",
+                           "Enabled": True, "ViewerCertificate": {}, "Restrictions": {"GeoRestriction": {"RestrictionType": "none", "Quantity": 0}},
+                           "WebACLId": "", "HttpVersion": "http2", "IsIPV6Enabled": True, "Staging": False}]}},
+            ("directconnect", "describe_connections"): {"connections": [{"connectionId": "dxcon-a", "connectionName": "dc-1", "connectionState": "available"}]},
+            ("directconnect", "describe_virtual_interfaces"): "DirectConnectClientException",
+            ("directconnect", "describe_direct_connect_gateways"): {"directConnectGateways": [{"directConnectGatewayId": "dxgw-a", "directConnectGatewayName": "core"}]},
+        })
+        ec2, waf = stubs["ec2"], stubs["wafv2"]
+        ec2.add_response("get_transit_gateway_route_table_associations", {"Associations": [
+            {"TransitGatewayAttachmentId": "tgw-attach-a", "ResourceId": "vpc-a", "ResourceType": "vpc", "State": "associated"}]},
+            {"TransitGatewayRouteTableId": "tgw-rtb-a"})
+        ec2.add_response("get_transit_gateway_route_table_propagations", {"TransitGatewayRouteTablePropagations": [
+            {"TransitGatewayAttachmentId": "tgw-attach-a", "ResourceId": "vpc-a", "ResourceType": "vpc", "State": "enabled"}]},
+            {"TransitGatewayRouteTableId": "tgw-rtb-a"})
+        search = lambda table: {"TransitGatewayRouteTableId": table, "Filters": [{"Name": "state", "Values": ["active", "blackhole"]}]}
+        ec2.add_response("search_transit_gateway_routes", {"Routes": [route("10.0.0.0/16", "active", ["tgw-attach-a"]), route("10.9.0.0/16", "blackhole", [])],
+                                                           "AdditionalRoutesAvailable": True}, search("tgw-rtb-a"))
+        ec2.add_client_error("get_transit_gateway_route_table_associations", "UnauthorizedOperation", expected_params={"TransitGatewayRouteTableId": "tgw-rtb-b"})
+        ec2.add_response("get_transit_gateway_route_table_propagations", {"TransitGatewayRouteTablePropagations": []}, {"TransitGatewayRouteTableId": "tgw-rtb-b"})
+        ec2.add_response("search_transit_gateway_routes", {"Routes": []}, search("tgw-rtb-b"))
+        # Regional web ACLs over two marker pages; the second ACL's resources are denied.
+        waf.add_response("list_web_acls", {"WebACLs": [acl("app", "regional")], "NextMarker": "page-2"}, {"Scope": "REGIONAL", "Limit": 100})
+        waf.add_response("list_web_acls", {"WebACLs": [acl("api", "regional")]}, {"Scope": "REGIONAL", "Limit": 100, "NextMarker": "page-2"})
+        alb = "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/web/1"
+        waf.add_response("list_resources_for_web_acl", {"ResourceArns": [alb]},
+                         {"WebACLArn": acl("app", "regional")["ARN"], "ResourceType": "APPLICATION_LOAD_BALANCER"})
+        waf.add_client_error("list_resources_for_web_acl", "WAFNonexistentItemException",
+                             expected_params={"WebACLArn": acl("api", "regional")["ARN"], "ResourceType": "APPLICATION_LOAD_BALANCER"})
+        waf.add_response("list_web_acls", {"WebACLs": [acl("edge", "global")]}, {"Scope": "CLOUDFRONT", "Limit": 100})
+        stubs["directconnect"].add_response("describe_direct_connect_gateway_associations", {"directConnectGatewayAssociations": [
+            {"directConnectGatewayId": "dxgw-a", "associationState": "associated",
+             "associatedGateway": {"id": "tgw-a", "type": "transitGateway", "ownerAccount": "111122223333", "region": "ap-northeast-2"}}]},
+            {"directConnectGatewayId": "dxgw-a"})
+        result = collect("ap-northeast-2", session=session)
+        for stub in stubs.values():
+            stub.assert_no_pending_responses()
+    raw, coverage = result["raw"], result["coverage"]
+    assert [a["AllocationId"] for a in raw["elastic_ips"]] == ["eipalloc-nat", "eipalloc-idle"]
+    assert raw["transit_gateway_route_table_associations"] == [{"TransitGatewayAttachmentId": "tgw-attach-a", "ResourceId": "vpc-a", "ResourceType": "vpc",
+                                                                "State": "associated", "TransitGatewayRouteTableId": "tgw-rtb-a"}]
+    assert [(r["DestinationCidrBlock"], r["State"], r["TransitGatewayRouteTableId"]) for r in raw["transit_gateway_routes"]] == [
+        ("10.0.0.0/16", "active", "tgw-rtb-a"), ("10.9.0.0/16", "blackhole", "tgw-rtb-a")]
+    assert raw["cloudfront_distributions"][0]["Id"] == "E1"
+    assert [(a["Name"], a["Scope"], a.get("ResourceArns")) for a in raw["waf_web_acls"]] == [
+        ("app", "REGIONAL", [alb]), ("api", "REGIONAL", []), ("edge", "CLOUDFRONT", None)]
+    assert raw["dx_gateway_associations"][0]["associatedGateway"]["id"] == "tgw-a" and raw["dx_virtual_interfaces"] == []
+    rows = lambda operation: [c for c in coverage if c["operation"] == operation]
+    truncated = rows("search_transit_gateway_routes")[0]
+    assert truncated["status"] == "partial" and truncated["error_code"] == "AdditionalRoutesAvailable" and truncated["items"] == 2
+    assert truncated["permission"] == "ec2:SearchTransitGatewayRoutes"
+    denied = rows("get_transit_gateway_route_table_associations")[1]
+    assert denied["status"] == "unavailable" and denied["permission"] == "ec2:GetTransitGatewayRouteTableAssociations"
+    vifs = rows("describe_virtual_interfaces")[0]
+    assert vifs["status"] == "unavailable" and vifs["permission"] == "directconnect:DescribeVirtualInterfaces"
+    assert rows("list_web_acls")[0]["pages"] == 2 and rows("list_web_acls")[0]["permission"] == "wafv2:ListWebACLs"
+    assert rows("list_resources_for_web_acl")[1]["permission"] == "wafv2:ListResourcesForWebACL"
+    assert result["metadata"]["status"] == "partial"
+    # Every call the collector makes is granted by the read-only policy.
+    policy = set(json.loads((Path(__file__).resolve().parents[1] / "readonly-policy.json").read_text())["Statement"][0]["Action"])
+    assert {c["permission"] for c in coverage if c.get("permission")} <= policy
 
 
 def test_target_health_error_is_scoped_to_group():
@@ -242,7 +351,7 @@ def test_deploy_template_grants_exactly_the_collector_actions():
     granted = set(role["Policies"][0]["PolicyDocument"]["Statement"][0]["Action"])
     assert granted == policy | {"sts:GetCallerIdentity"}
     assert {permission(service, operation) for service, operation, *_ in OPERATIONS} <= policy
-    assert all(a.split(":")[1].startswith(("Describe", "List", "Get")) for a in granted)
+    assert all(a.split(":")[1].startswith(("Describe", "List", "Get", "Search")) for a in granted)
     assert "sts:ExternalId" in json.dumps(role["AssumeRolePolicyDocument"])
 
 

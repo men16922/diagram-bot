@@ -22,12 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:31.848934+00:00",
-    "finished_at": "2026-10-17T21:52:31.848934+00:00",
+    "started_at": "2026-10-18T09:28:58.084687+00:00",
+    "finished_at": "2026-10-18T09:28:58.084687+00:00",
     "status": "complete",
     "demo": true,
     "sample": "three-tier",
-    "sample_version": 3,
+    "sample_version": 4,
     "title": "3계층 웹 애플리케이션 (3 AZ)",
     "practices": [
       "세 AZ에 같은 구성을 배치해 AZ 장애를 견딤 (Reliability)",
@@ -37,7 +37,9 @@
       "웹·앱 계층은 Auto Scaling 그룹(ELB 헬스 체크)으로 AZ에 분산",
       "데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개), 읽기는 세 번째 AZ의 읽기 전용 복제본",
       "S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM·SSM Messages·EC2 Messages 엔드포인트의 Session Manager(배스천 없음)",
-      "도형 밖 권고: CloudFront(정적 콘텐츠는 S3)·AWS WAF·Route 53 헬스 체크를 진입점 앞에 (REL02-BP01, 수집 범위 밖)"
+      "진입점 앞에 CloudFront(정적 콘텐츠는 S3 오리진)와 CloudFront용 AWS WAF 웹 ACL, ALB 보안 그룹은 CloudFront origin-facing 접두사 목록만 허용 (REL02-BP01)",
+      "NAT 게이트웨이마다 Elastic IP: 외부 파트너의 허용 목록에 올릴 고정 출구 IP",
+      "도형 밖 권고: Route 53 헬스 체크·Shield Advanced (수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -62,11 +64,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -321,6 +328,42 @@
       "status": "complete",
       "pages": 1,
       "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_addresses",
+      "parameters": {},
+      "status": "complete",
+      "pages": 1,
+      "items": 3
+    },
+    {
+      "service": "cloudfront",
+      "operation": "list_distributions",
+      "parameters": {},
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "wafv2",
+      "operation": "list_web_acls",
+      "parameters": {
+        "Scope": "REGIONAL"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "wafv2",
+      "operation": "list_web_acls",
+      "parameters": {
+        "Scope": "CLOUDFRONT"
+      },
+      "status": "complete",
+      "pages": 1,
+      "items": 1
     }
   ],
   "raw": {
@@ -823,7 +866,8 @@
         ],
         "SecurityGroups": [
           "sg-public-alb"
-        ]
+        ],
+        "DNSName": "prod-public-alb-1232334529.ap-northeast-2.elb.amazonaws.com"
       },
       {
         "LoadBalancerArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-internal-alb/0000000000000002",
@@ -971,6 +1015,14 @@
             "Key": "Name",
             "Value": "prod-nat-a"
           }
+        ],
+        "NatGatewayAddresses": [
+          {
+            "AllocationId": "eipalloc-0prod0nata000001",
+            "PublicIp": "203.0.113.101",
+            "NetworkInterfaceId": "eni-49a6199e454c5059c",
+            "IsPrimary": true
+          }
         ]
       },
       {
@@ -984,6 +1036,14 @@
             "Key": "Name",
             "Value": "prod-nat-b"
           }
+        ],
+        "NatGatewayAddresses": [
+          {
+            "AllocationId": "eipalloc-0prod0natb000001",
+            "PublicIp": "203.0.113.102",
+            "NetworkInterfaceId": "eni-0d947353ffe5fd69f",
+            "IsPrimary": true
+          }
         ]
       },
       {
@@ -996,6 +1056,14 @@
           {
             "Key": "Name",
             "Value": "prod-nat-c"
+          }
+        ],
+        "NatGatewayAddresses": [
+          {
+            "AllocationId": "eipalloc-0prod0natc000001",
+            "PublicIp": "203.0.113.103",
+            "NetworkInterfaceId": "eni-d1a02b0b6a483efe6",
+            "IsPrimary": true
           }
         ]
       }
@@ -1414,9 +1482,9 @@
             "IpProtocol": "tcp",
             "FromPort": 443,
             "ToPort": 443,
-            "IpRanges": [
+            "PrefixListIds": [
               {
-                "CidrIp": "0.0.0.0/0"
+                "PrefixListId": "pl-22a6434b"
               }
             ]
           }
@@ -1544,7 +1612,102 @@
     "placement_groups": [],
     "fsx_file_systems": [],
     "sagemaker_endpoints": [],
-    "sagemaker_clusters": []
+    "sagemaker_clusters": [],
+    "waf_web_acls": [
+      {
+        "Name": "prod-edge-acl",
+        "Id": "798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+        "ARN": "arn:aws:wafv2:us-east-1:111122223333:global/webacl/prod-edge-acl/798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+        "LockToken": "798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+        "Scope": "CLOUDFRONT"
+      }
+    ],
+    "cloudfront_distributions": [
+      {
+        "Id": "E2PRODWEB000001",
+        "ARN": "arn:aws:cloudfront::111122223333:distribution/E2PRODWEB000001",
+        "Status": "Deployed",
+        "Enabled": true,
+        "DomainName": "d51c6fc9e49bc6.cloudfront.net",
+        "Aliases": {
+          "Quantity": 1,
+          "Items": [
+            "www.example.com"
+          ]
+        },
+        "Comment": "www.example.com",
+        "Origins": {
+          "Quantity": 2,
+          "Items": [
+            {
+              "Id": "alb-prod-public-alb",
+              "DomainName": "prod-public-alb-1232334529.ap-northeast-2.elb.amazonaws.com",
+              "CustomOriginConfig": {
+                "HTTPPort": 80,
+                "HTTPSPort": 443,
+                "OriginProtocolPolicy": "https-only"
+              }
+            },
+            {
+              "Id": "s3-prod-web-static",
+              "DomainName": "prod-web-static.s3.ap-northeast-2.amazonaws.com",
+              "S3OriginConfig": {
+                "OriginAccessIdentity": ""
+              },
+              "OriginAccessControlId": "E311B3E37F4F54"
+            }
+          ]
+        },
+        "PriceClass": "PriceClass_200",
+        "HttpVersion": "http2and3",
+        "DefaultCacheBehavior": {
+          "TargetOriginId": "alb-prod-public-alb",
+          "ViewerProtocolPolicy": "redirect-to-https"
+        },
+        "WebACLId": "arn:aws:wafv2:us-east-1:111122223333:global/webacl/prod-edge-acl/798973f6-cf32-6d6e-c130-b1b6bb39a18a"
+      }
+    ],
+    "elastic_ips": [
+      {
+        "AllocationId": "eipalloc-0prod0nata000001",
+        "PublicIp": "203.0.113.101",
+        "Domain": "vpc",
+        "NetworkInterfaceId": "eni-49a6199e454c5059c",
+        "AssociationId": "eipassoc-4288278db2a633f3a",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-nat-a-eip"
+          }
+        ]
+      },
+      {
+        "AllocationId": "eipalloc-0prod0natb000001",
+        "PublicIp": "203.0.113.102",
+        "Domain": "vpc",
+        "NetworkInterfaceId": "eni-0d947353ffe5fd69f",
+        "AssociationId": "eipassoc-ac37a3cee09cc9c68",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-nat-b-eip"
+          }
+        ]
+      },
+      {
+        "AllocationId": "eipalloc-0prod0natc000001",
+        "PublicIp": "203.0.113.103",
+        "Domain": "vpc",
+        "NetworkInterfaceId": "eni-d1a02b0b6a483efe6",
+        "AssociationId": "eipassoc-023ac43b3b59ed478",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-nat-c-eip"
+          }
+        ]
+      }
+    ]
   },
   "graph": {
     "nodes": [
@@ -2035,6 +2198,78 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0prod0nata000001",
+        "resource_id": "eipalloc-0prod0nata000001",
+        "kind": "elastic_ip",
+        "name": "prod-nat-a-eip",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AllocationId": "eipalloc-0prod0nata000001",
+          "PublicIp": "203.0.113.101",
+          "Domain": "vpc",
+          "NetworkInterfaceId": "eni-49a6199e454c5059c",
+          "AssociationId": "eipassoc-4288278db2a633f3a",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-nat-a-eip"
+            }
+          ],
+          "DisplayName": "203.0.113.101"
+        },
+        "reference_only": false,
+        "source": "DescribeAddresses"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0prod0natb000001",
+        "resource_id": "eipalloc-0prod0natb000001",
+        "kind": "elastic_ip",
+        "name": "prod-nat-b-eip",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AllocationId": "eipalloc-0prod0natb000001",
+          "PublicIp": "203.0.113.102",
+          "Domain": "vpc",
+          "NetworkInterfaceId": "eni-0d947353ffe5fd69f",
+          "AssociationId": "eipassoc-ac37a3cee09cc9c68",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-nat-b-eip"
+            }
+          ],
+          "DisplayName": "203.0.113.102"
+        },
+        "reference_only": false,
+        "source": "DescribeAddresses"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0prod0natc000001",
+        "resource_id": "eipalloc-0prod0natc000001",
+        "kind": "elastic_ip",
+        "name": "prod-nat-c-eip",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "AllocationId": "eipalloc-0prod0natc000001",
+          "PublicIp": "203.0.113.103",
+          "Domain": "vpc",
+          "NetworkInterfaceId": "eni-d1a02b0b6a483efe6",
+          "AssociationId": "eipassoc-023ac43b3b59ed478",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "prod-nat-c-eip"
+            }
+          ],
+          "DisplayName": "203.0.113.103"
+        },
+        "reference_only": false,
+        "source": "DescribeAddresses"
+      },
+      {
         "id": "111122223333/ap-northeast-2/internet_gateway/igw-prod",
         "resource_id": "igw-prod",
         "kind": "internet_gateway",
@@ -2122,7 +2357,8 @@
           ],
           "SecurityGroups": [
             "sg-public-alb"
-          ]
+          ],
+          "DNSName": "prod-public-alb-1232334529.ap-northeast-2.elb.amazonaws.com"
         },
         "reference_only": false,
         "source": "DescribeLoadBalancers"
@@ -2145,10 +2381,21 @@
               "Key": "Name",
               "Value": "prod-nat-a"
             }
+          ],
+          "NatGatewayAddresses": [
+            {
+              "AllocationId": "eipalloc-0prod0nata000001",
+              "PublicIp": "203.0.113.101",
+              "NetworkInterfaceId": "eni-49a6199e454c5059c",
+              "IsPrimary": true
+            }
           ]
         },
         "reference_only": false,
-        "source": "DescribeNatGateways"
+        "source": "DescribeNatGateways",
+        "elastic_ips": [
+          "203.0.113.101"
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
@@ -2168,10 +2415,21 @@
               "Key": "Name",
               "Value": "prod-nat-b"
             }
+          ],
+          "NatGatewayAddresses": [
+            {
+              "AllocationId": "eipalloc-0prod0natb000001",
+              "PublicIp": "203.0.113.102",
+              "NetworkInterfaceId": "eni-0d947353ffe5fd69f",
+              "IsPrimary": true
+            }
           ]
         },
         "reference_only": false,
-        "source": "DescribeNatGateways"
+        "source": "DescribeNatGateways",
+        "elastic_ips": [
+          "203.0.113.102"
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
@@ -2191,10 +2449,21 @@
               "Key": "Name",
               "Value": "prod-nat-c"
             }
+          ],
+          "NatGatewayAddresses": [
+            {
+              "AllocationId": "eipalloc-0prod0natc000001",
+              "PublicIp": "203.0.113.103",
+              "NetworkInterfaceId": "eni-d1a02b0b6a483efe6",
+              "IsPrimary": true
+            }
           ]
         },
         "reference_only": false,
-        "source": "DescribeNatGateways"
+        "source": "DescribeNatGateways",
+        "elastic_ips": [
+          "203.0.113.103"
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/network_interface/eni-appa000000000001",
@@ -2609,9 +2878,9 @@
               "IpProtocol": "tcp",
               "FromPort": 443,
               "ToPort": 443,
-              "IpRanges": [
+              "PrefixListIds": [
                 {
-                  "CidrIp": "0.0.0.0/0"
+                  "PrefixListId": "pl-22a6434b"
                 }
               ]
             }
@@ -3279,6 +3548,118 @@
         },
         "reference_only": false,
         "source": "DescribeVpcEndpoints"
+      },
+      {
+        "id": "111122223333/global/cloudfront_distribution/E2PRODWEB000001",
+        "resource_id": "E2PRODWEB000001",
+        "kind": "cloudfront_distribution",
+        "name": "www.example.com",
+        "account": "111122223333",
+        "region": "global",
+        "attributes": {
+          "Id": "E2PRODWEB000001",
+          "ARN": "arn:aws:cloudfront::111122223333:distribution/E2PRODWEB000001",
+          "Status": "Deployed",
+          "Enabled": true,
+          "DomainName": "d51c6fc9e49bc6.cloudfront.net",
+          "Aliases": {
+            "Quantity": 1,
+            "Items": [
+              "www.example.com"
+            ]
+          },
+          "Comment": "www.example.com",
+          "Origins": {
+            "Quantity": 2,
+            "Items": [
+              {
+                "Id": "alb-prod-public-alb",
+                "DomainName": "prod-public-alb-1232334529.ap-northeast-2.elb.amazonaws.com",
+                "CustomOriginConfig": {
+                  "HTTPPort": 80,
+                  "HTTPSPort": 443,
+                  "OriginProtocolPolicy": "https-only"
+                }
+              },
+              {
+                "Id": "s3-prod-web-static",
+                "DomainName": "prod-web-static.s3.ap-northeast-2.amazonaws.com",
+                "S3OriginConfig": {
+                  "OriginAccessIdentity": ""
+                },
+                "OriginAccessControlId": "E311B3E37F4F54"
+              }
+            ]
+          },
+          "PriceClass": "PriceClass_200",
+          "HttpVersion": "http2and3",
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "alb-prod-public-alb",
+            "ViewerProtocolPolicy": "redirect-to-https"
+          },
+          "WebACLId": "arn:aws:wafv2:us-east-1:111122223333:global/webacl/prod-edge-acl/798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+          "DisplayName": "www.example.com"
+        },
+        "reference_only": false,
+        "source": "ListDistributions",
+        "origins": [
+          [
+            "ELB",
+            "prod-public-alb"
+          ],
+          [
+            "S3",
+            "prod-web-static"
+          ]
+        ],
+        "properties": [
+          [
+            "도메인",
+            "d51c6fc9e49bc6.cloudfront.net, www.example.com"
+          ],
+          [
+            "오리진",
+            "ELB prod-public-alb · S3 prod-web-static"
+          ],
+          [
+            "기본 동작 오리진",
+            "alb-prod-public-alb"
+          ],
+          [
+            "뷰어 프로토콜",
+            "redirect-to-https"
+          ],
+          [
+            "가격 등급",
+            "PriceClass_200"
+          ],
+          [
+            "AWS WAF 웹 ACL",
+            "prod-edge-acl"
+          ]
+        ],
+        "waf": [
+          "prod-edge-acl"
+        ],
+        "waf_acl": "111122223333/global/waf_web_acl/arn:aws:wafv2:us-east-1:111122223333:global/webacl/prod-edge-acl/798973f6-cf32-6d6e-c130-b1b6bb39a18a"
+      },
+      {
+        "id": "111122223333/global/waf_web_acl/arn:aws:wafv2:us-east-1:111122223333:global/webacl/prod-edge-acl/798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+        "resource_id": "arn:aws:wafv2:us-east-1:111122223333:global/webacl/prod-edge-acl/798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+        "kind": "waf_web_acl",
+        "name": "prod-edge-acl",
+        "account": "111122223333",
+        "region": "global",
+        "attributes": {
+          "Name": "prod-edge-acl",
+          "Id": "798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+          "ARN": "arn:aws:wafv2:us-east-1:111122223333:global/webacl/prod-edge-acl/798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+          "LockToken": "798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+          "Scope": "CLOUDFRONT",
+          "DisplayName": "prod-edge-acl"
+        },
+        "reference_only": false,
+        "source": "ListWebACLs"
       }
     ],
     "edges": [
@@ -3779,6 +4160,36 @@
         "details": {},
         "inferred": false,
         "id": "rel-b62dee95c4458c2f6fa8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0prod0nata000001",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
+        "relation": "eip_associated",
+        "evidence": "DescribeAddresses.AllocationId = DescribeNatGateways.NatGatewayAddresses[].AllocationId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-33ac6f310ae1100de06c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0prod0natb000001",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
+        "relation": "eip_associated",
+        "evidence": "DescribeAddresses.AllocationId = DescribeNatGateways.NatGatewayAddresses[].AllocationId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6f94b09e0e519cdbbc7a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/elastic_ip/eipalloc-0prod0natc000001",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
+        "relation": "eip_associated",
+        "evidence": "DescribeAddresses.AllocationId = DescribeNatGateways.NatGatewayAddresses[].AllocationId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-040e5df387b1f6988e50"
       },
       {
         "source": "111122223333/ap-northeast-2/internet_gateway/igw-prod",
@@ -4687,6 +5098,31 @@
         "details": {},
         "inferred": false,
         "id": "rel-29d4e21aa481b27c6667"
+      },
+      {
+        "source": "111122223333/global/cloudfront_distribution/E2PRODWEB000001",
+        "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-public-alb/0000000000000001",
+        "relation": "cloudfront_origin",
+        "evidence": "ListDistributions.Origins.Items[].DomainName = DescribeLoadBalancers.DNSName",
+        "qualifiers": {
+          "destination": "alb-prod-public-alb"
+        },
+        "details": {
+          "OriginId": "alb-prod-public-alb",
+          "DomainName": "prod-public-alb-1232334529.ap-northeast-2.elb.amazonaws.com"
+        },
+        "inferred": false,
+        "id": "rel-9e12c2b1dff151d9d5f5"
+      },
+      {
+        "source": "111122223333/global/waf_web_acl/arn:aws:wafv2:us-east-1:111122223333:global/webacl/prod-edge-acl/798973f6-cf32-6d6e-c130-b1b6bb39a18a",
+        "target": "111122223333/global/cloudfront_distribution/E2PRODWEB000001",
+        "relation": "waf_protects",
+        "evidence": "ListDistributions.WebACLId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-06a6662348c587976c32"
       }
     ]
   }

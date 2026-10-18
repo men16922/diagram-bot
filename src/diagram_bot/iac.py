@@ -140,7 +140,7 @@ class Template:
         for step in (self.network, self.gateways, self.nat_gateways, self.security_group_resources, self.route_tables, self.endpoints,
                      self.security_group_rules, self.placement_groups, self.load_balancers, self.auto_scaling, self.standalone_instances,
                      self.targets, self.databases, self.caches, self.kafka, self.search, self.file_systems, self.warehouse, self.kubernetes,
-                     self.containers, self.vpn, self.not_expressible):
+                     self.containers, self.vpn, self.tgw_routing, self.elastic_ips, self.not_expressible):
             step()
         for resource in self.resources.values():
             policy = STATEFUL.get(resource["Type"])
@@ -238,8 +238,8 @@ class Template:
                 **{key: options.get(key) for key in ("AutoAcceptSharedAttachments", "DefaultRouteTableAssociation",
                                                     "DefaultRouteTablePropagation", "DnsSupport", "VpnEcmpSupport")},
                 "Tags": self.tags(gateway)}, physical=gid)
-        if self.raw.get("transit_gateways"):
-            self.assume("Transit Gateway 라우팅 테이블은 수집 범위 밖이라 기본 연결·전파를 씁니다 (환경별 분리가 필요하면 추가하세요).")
+        if self.raw.get("transit_gateways") and not self.raw.get("transit_gateway_route_tables"):
+            self.assume("Transit Gateway 라우팅 테이블이 수집되지 않아 기본 연결·전파를 씁니다 (환경별 분리가 필요하면 추가하세요).")
         for attachment in self.raw.get("transit_gateway_attachments", []):
             aid, gateway = attachment["TransitGatewayAttachmentId"], attachment.get("TransitGatewayId")
             if attachment.get("State") in GONE:
@@ -1044,7 +1044,89 @@ class Template:
                              {"VpnConnectionId": {"Ref": logical}, "DestinationCidrBlock": route["DestinationCidrBlock"]})
             self.assume("VPN 터널 사전 공유 키·내부 CIDR은 수집하지 않아 AWS가 생성합니다. 고객 게이트웨이 장비 설정을 새로 받으세요.")
 
+    def tgw_routing(self):
+        """Transit Gateway route tables (routing domains): their VPC associations and propagations and static routes.
+        Propagated routes follow from the propagations; the gateway's own default table is created by the gateway."""
+        tables = {}
+        for table in self.raw.get("transit_gateway_route_tables", []):
+            tid, gateway = table["TransitGatewayRouteTableId"], table.get("TransitGatewayId")
+            if table.get("State") in GONE:
+                continue
+            if table.get("DefaultAssociationRouteTable") or table.get("DefaultPropagationRouteTable"):
+                self.assume(f"Transit Gateway 기본 라우팅 테이블 {name_of(table, tid)}은 게이트웨이가 만들며 템플릿에서 참조할 수 없어, 그 연결·전파는 게이트웨이 기본값을 따릅니다.")
+                continue
+            if gateway not in self.ids or self.ids[gateway] in self.parameters:
+                self.skip("TransitGatewayRouteTable", tid, "Transit Gateway가 템플릿에 없거나 다른 계정 소유입니다 (라우팅 테이블은 소유 계정에서 관리).", name_of(table))
+                continue
+            tables[tid] = self.add(self.logical("TgwRouteTable", name_of(table), tid), "AWS::EC2::TransitGatewayRouteTable",
+                                   {"TransitGatewayId": self.ref(gateway), "Tags": self.tags(table)}, physical=tid)
+        for kind, key, resource in (("Association", "transit_gateway_route_table_associations", "AWS::EC2::TransitGatewayRouteTableAssociation"),
+                                    ("Propagation", "transit_gateway_route_table_propagations", "AWS::EC2::TransitGatewayRouteTablePropagation")):
+            for entry in self.raw.get(key, []):
+                tid, aid = entry.get("TransitGatewayRouteTableId"), entry.get("TransitGatewayAttachmentId")
+                if tid not in tables or entry.get("State") in GONE + ("disassociated", "disabled"):
+                    continue
+                if aid not in self.ids:
+                    # VPN and Direct Connect attachments are created implicitly; CloudFormation does not return their IDs.
+                    self.skip(f"TransitGatewayRouteTable{kind}", f"{tid}/{aid}", f"{entry.get('ResourceType', '연결')} 연결의 TGW 연결 ID를 템플릿에서 참조할 수 없습니다 "
+                              "(VPN·Direct Connect 연결은 배포 후 라우팅 테이블에 연결하세요).")
+                    continue
+                self.add(self.logical(tables[tid] + kind, name_of(self.attachment_item(aid), aid)), resource,
+                         {"TransitGatewayAttachmentId": self.ref(aid), "TransitGatewayRouteTableId": {"Ref": tables[tid]}})
+        for route in self.raw.get("transit_gateway_routes", []):
+            tid, destination = route.get("TransitGatewayRouteTableId"), route.get("DestinationCidrBlock")
+            if tid not in tables or route.get("Type") != "static" or not destination:
+                continue
+            props = {"TransitGatewayRouteTableId": {"Ref": tables[tid]}, "DestinationCidrBlock": destination}
+            if route.get("State") == "blackhole":
+                props["Blackhole"] = True
+            else:
+                targets = [t.get("TransitGatewayAttachmentId") for t in route.get("TransitGatewayAttachments", [])]
+                if len(targets) != 1 or targets[0] not in self.ids:
+                    self.skip("TransitGatewayRoute", f"{tid}/{destination}", "정적 경로의 대상 연결이 템플릿에 없습니다.")
+                    continue
+                props["TransitGatewayAttachmentId"] = self.ref(targets[0])
+            self.add(self.logical(tables[tid] + "Route", destination.replace("/", "m")), "AWS::EC2::TransitGatewayRoute", props)
+
+    def attachment_item(self, aid):
+        return next((a for a in self.raw.get("transit_gateway_attachments", []) if a.get("TransitGatewayAttachmentId") == aid), {})
+
+    def elastic_ips(self):
+        """NAT and NLB addresses are re-allocated with their owners; an instance's address gets a new EIP and association."""
+        owned = {a.get("AllocationId") for g in self.raw.get("nat_gateways", []) for a in g.get("NatGatewayAddresses", [])} \
+            | {a.get("AllocationId") for b in self.raw.get("load_balancers", []) for z in b.get("AvailabilityZones", [])
+               for a in z.get("LoadBalancerAddresses", [])}
+        for address in self.raw.get("elastic_ips", []):
+            allocation = address.get("AllocationId") or address.get("PublicIp")
+            if allocation in owned:
+                continue
+            instance = address.get("InstanceId")
+            if instance and instance in self.ids:
+                logical = self.add(self.logical("Eip", name_of(address, ""), instance), "AWS::EC2::EIP",
+                                   {"Domain": "vpc", "Tags": self.tags(address)}, physical=allocation)
+                self.add(f"{logical}Association", "AWS::EC2::EIPAssociation",
+                         {"AllocationId": {"Fn::GetAtt": [logical, "AllocationId"]}, "InstanceId": self.ref(instance)})
+                self.assume("인스턴스의 Elastic IP는 새로 할당합니다 (수집된 공인 IP 주소는 이어받지 않음; 같은 주소가 필요하면 기존 할당을 연결하세요).")
+            elif not (address.get("AssociationId") or address.get("NetworkInterfaceId")):
+                self.skip("ElasticIp", allocation, "어디에도 연결되지 않은 Elastic IP입니다 (요금만 발생; COST-EIP-IDLE).", address.get("PublicIp"))
+            else:
+                self.skip("ElasticIp", allocation, "템플릿에 없는 네트워크 인터페이스·인스턴스에 연결된 주소입니다.", address.get("PublicIp"))
+
     def not_expressible(self):
+        for distribution in self.raw.get("cloudfront_distributions", []):
+            self.skip("CloudFrontDistribution", distribution.get("Id"), "전역 서비스라 리전 템플릿과 따로 배포합니다 (ACM 인증서는 us-east-1). "
+                      "캐시 정책·동작 전체는 수집하지 않습니다.", (distribution.get("Aliases") or {}).get("Items", [None])[0])
+        for acl in self.raw.get("waf_web_acls", []):
+            self.skip("WafWebAcl", acl.get("ARN") or acl.get("Name"), "규칙 본문(GetWebACL)은 수집하지 않습니다. 보호 대상 연결만 구성도에 있습니다.", acl.get("Name"))
+        for connection in self.raw.get("dx_connections", []):
+            self.skip("DirectConnectConnection", connection.get("connectionId"), "물리 회선은 Direct Connect 위치에서 주문·교차 연결하며 CloudFormation으로 만들 수 없습니다.",
+                      connection.get("connectionName"))
+        for interface in self.raw.get("dx_virtual_interfaces", []):
+            self.skip("DirectConnectVirtualInterface", interface.get("virtualInterfaceId"), "가상 인터페이스는 회선에 종속되어 CloudFormation 리소스가 없습니다.",
+                      interface.get("virtualInterfaceName"))
+        for gateway in self.raw.get("dx_gateways", []):
+            self.skip("DirectConnectGateway", gateway.get("directConnectGatewayId"), "Direct Connect 게이트웨이는 CloudFormation 리소스가 없습니다 (콘솔·CLI로 만들고 연결).",
+                      gateway.get("directConnectGatewayName"))
         for function in self.raw.get("lambda_functions", []):
             self.skip("LambdaFunction", function.get("FunctionName"), "함수 코드 패키지와 실행 역할은 조회하지 않습니다 (SAM·CDK 등 배포 파이프라인에서 관리).")
         for endpoint in self.raw.get("sagemaker_endpoints", []):
