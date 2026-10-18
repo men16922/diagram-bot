@@ -250,6 +250,43 @@ def _fraction(value):
     return number if math.isfinite(number) else None
 
 
+class _Grid:
+    """Uniform-grid index over boxes (x1, y1, x2, y2): a query visits only the boxes in the cells it covers.
+
+    Boxes or queries spanning more than SPAN cells (huge containers, page-long segments) fall back to a scan."""
+    SIZE, SPAN = 160.0, 1024
+
+    def __init__(self, boxes):
+        self.boxes, self.cells, self.wide = boxes, {}, []
+        self.checks = 0  # candidate boxes visited, for tests that bound the work rather than the time
+        for key, box in boxes.items():
+            span = self._span(box)
+            if span is None:
+                self.wide.append(key)
+            else:
+                for cell in span:
+                    self.cells.setdefault(cell, []).append(key)
+
+    def _span(self, box):
+        x1, y1, x2, y2 = (int(math.floor(c / self.SIZE)) for c in box)
+        if (x2 - x1 + 1) * (y2 - y1 + 1) > self.SPAN:
+            return None
+        return ((gx, gy) for gx in range(x1, x2 + 1) for gy in range(y1, y2 + 1))
+
+    def near(self, box):
+        """Keys of the boxes that may intersect `box` (a superset), each once, in insertion order."""
+        span = self._span(box)
+        if span is None:
+            keys = list(self.boxes)
+        else:
+            seen = dict.fromkeys(self.wide)
+            for cell in span:
+                seen.update(dict.fromkeys(self.cells.get(cell, ())))
+            keys = list(seen)
+        self.checks += len(keys)
+        return keys
+
+
 def _boxes_overlap(a, b, pad=0.0):
     return (a[0] + pad) < (b[2] - pad) and (b[0] + pad) < (a[2] - pad) and (a[1] + pad) < (b[3] - pad) and (b[1] + pad) < (a[3] - pad)
 
@@ -273,15 +310,12 @@ def inspect_drawio_xml(xml_text) -> dict:
         by_parent.setdefault(v["parent"], []).append(cid)
 
     for members in by_parent.values():
-        for i, a_id in enumerate(members):
-            ax, ay = abs_pos[a_id]
-            va = vertices[a_id]
-            box_a = (ax, ay, ax + va["w"], ay + va["h"])
-            for b_id in members[i + 1:]:
-                bx, by = abs_pos[b_id]
-                vb = vertices[b_id]
-                box_b = (bx, by, bx + vb["w"], by + vb["h"])
-                if _boxes_overlap(box_a, box_b, pad=0.5):
+        boxes = {cid: (abs_pos[cid][0], abs_pos[cid][1], abs_pos[cid][0] + vertices[cid]["w"], abs_pos[cid][1] + vertices[cid]["h"])
+                 for cid in members}
+        order, grid = {cid: i for i, cid in enumerate(members)}, _Grid(boxes)
+        for a_id in members:
+            for b_id in grid.near(boxes[a_id]):
+                if order[b_id] > order[a_id] and _boxes_overlap(boxes[a_id], boxes[b_id], pad=0.5):
                     overlaps.append((a_id, b_id))
 
     out_of_bounds = []
@@ -298,12 +332,15 @@ def inspect_drawio_xml(xml_text) -> dict:
     for cid, v in vertices.items():
         if v["role"] == "az":
             az_by_vpc.setdefault(v["parent"], []).append(cid)
+    subnets_of = {}
+    for s in vertices.values():
+        if s["role"] == "subnet":
+            subnets_of.setdefault(s["parent"], []).append(s)
     for az_ids in az_by_vpc.values():
         tier_subnets = {}
         for az_id in az_ids:
-            for s in vertices.values():
-                if s["parent"] == az_id and s["role"] == "subnet":
-                    tier_subnets.setdefault(s["tier"], []).append(s)
+            for s in subnets_of.get(az_id, ()):
+                tier_subnets.setdefault(s["tier"], []).append(s)
         for subs in tier_subnets.values():
             if len(subs) > 1:
                 y0, h0 = subs[0]["y"], subs[0]["h"]
@@ -317,6 +354,7 @@ def inspect_drawio_xml(xml_text) -> dict:
         cid: (abs_pos[cid][0] + 2, abs_pos[cid][1] + 2, abs_pos[cid][0] + v["w"] - 2, abs_pos[cid][1] + v["h"] - 2)
         for cid, v in vertices.items() if v["role"] == "resource"
     }
+    resource_grid = _Grid(resource_boxes)
 
     for e in edges:
         src, dst = e["source"], e["target"]
@@ -343,8 +381,8 @@ def inspect_drawio_xml(xml_text) -> dict:
                     unrouted_edges.append(e["id"])
                 break
             seg = (min(x1, x2), min(y1, y2), max(x1, x2) + 0.1, max(y1, y2) + 0.1)
-            for rid, rbox in resource_boxes.items():
-                if rid not in (src, dst) and _boxes_overlap(seg, rbox):
+            for rid in resource_grid.near(seg):
+                if rid not in (src, dst) and _boxes_overlap(seg, resource_boxes[rid]):
                     edge_collisions.append((e["id"], rid))
 
     extracted = spec_from_xml(xml_text)
@@ -710,17 +748,21 @@ def _route_edges_orthogonally(vertices, edges):
             return (round(x, 1), round(y + frac * h, 1)), (0.0, frac)
         return (round(x + w, 1), round(y + frac * h, 1)), (1.0, frac)
 
+    grid = _Grid(obstacles)
+
     def hits_obstacle(p1, p2, ignore_ids):
         seg = (min(p1[0], p2[0]), min(p1[1], p2[1]), max(p1[0], p2[0]) + 0.1, max(p1[1], p2[1]) + 0.1)
-        for oid, obox in obstacles.items():
-            if oid not in ignore_ids and _boxes_overlap(seg, obox):
-                return True
-        return False
+        return any(oid not in ignore_ids and _boxes_overlap(seg, obstacles[oid]) for oid in grid.near(seg))
 
     def path_clear(pts, ignore_ids):
         return all(not hits_obstacle(a, b, ignore_ids) for a, b in zip(pts, pts[1:]))
 
-    used_mid_lines = []
+    # Horizontal mid lines already taken, bucketed by 6 px: a candidate within 6 px of one is skipped.
+    def line_taken(y):
+        bucket = math.floor(y / 6.0)
+        return any(abs(y - u) < 6.0 for b in (bucket - 1, bucket, bucket + 1) for u in used_buckets.get(b, ()))
+
+    used_buckets = {}
     for idx, e in enumerate(valid_edges):
         src, dst = e["source"], e["target"]
         exit_face, entry_face = e["_faces"]
@@ -736,7 +778,7 @@ def _route_edges_orthogonally(vertices, edges):
             for step in range(0, 18):
                 for sign in (1, -1):
                     cand_y = round(base_mid_y + sign * step * 10.0, 1)
-                    if any(abs(cand_y - uy) < 6.0 for uy in used_mid_lines):
+                    if line_taken(cand_y):
                         continue
                     cand_pts = [p_start, (p_start[0], cand_y), (p_end[0], cand_y), p_end]
                     if path_clear(cand_pts, ignore):
@@ -745,7 +787,7 @@ def _route_edges_orthogonally(vertices, edges):
                 else:
                     continue
                 break
-            used_mid_lines.append(chosen_y)
+            used_buckets.setdefault(math.floor(chosen_y / 6.0), set()).add(chosen_y)
             waypoints = [(p_start[0], chosen_y), (p_end[0], chosen_y)]
             if not path_clear([p_start, *waypoints, p_end], ignore):
                 # Bypass around obstacles via an outer vertical gutter X

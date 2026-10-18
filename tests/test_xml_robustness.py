@@ -347,3 +347,19 @@ def test_relayout_keeps_notes_and_skips_id_less_cells(client):
     assert res.status_code == 200, res.text
     assert "no id" not in res.json()["xml"] and 'label="note"' in res.json()["xml"]
     assert fromstring(api.carry_annotations(edited, doc["xml"])).find(".//UserObject[@id='n1']/mxCell") is not None
+
+
+# --- h. work grows linearly with the drawing, not with its square ----------------------------------------------------
+
+def test_align_and_inspect_do_linear_work(monkeypatch):
+    from diagram_bot import xml_align
+    calls = []
+    original = xml_align._boxes_overlap
+    monkeypatch.setattr(xml_align, "_boxes_overlap", lambda *a, **k: calls.append(1) or original(*a, **k))
+    for n in (300, 1200):
+        cells = [v("vpc", "vpc-x (10.0.0.0/16)", VPC, 0, 0, 2000, 2000), v("s", "app-subnet", PRIV, 20, 50, 1900, 1900, "vpc")]
+        cells += [v(f"i{k}", f"web-{k}", EC2, (k % 30) * 60, (k // 30) * 60, 52, 52, "s") for k in range(n)]
+        cells += [e(f"e{k}", f"i{k}", f"i{(k * 7 + 3) % n}") for k in range(n)]
+        calls.clear()
+        api.inspect_xml(api.align_xml(mx(cells)))
+        assert len(calls) < 200 * n, (n, len(calls))  # the pairwise scan made ~20,000 checks per shape at n=1,600
