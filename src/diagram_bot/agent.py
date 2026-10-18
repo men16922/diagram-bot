@@ -60,7 +60,7 @@ class Workspace:
     def __init__(self, save, session_factory=None, region=None, allow_collection=True, default_account=None, load=None):
         self.save, self.load, self.allow_collection = save, load, allow_collection
         self.current_snapshot = None  # the snapshot open in the app when the user sent the message
-        self.model_session = None  # browser egress: () -> the user's boto3 session for Bedrock (see server.default_chat)
+        self.model_session = None  # browser egress: () -> the user's boto3 session for Bedrock (see routes.agent.default_chat)
         # Expected account for collections: AWS_ACCOUNT_ID (e.g. from --env-file) guards against the wrong account.
         self.default_account = default_account or (lambda: os.environ.get("AWS_ACCOUNT_ID"))
         self.session_factory = session_factory or (lambda region: boto3.Session(region_name=region))

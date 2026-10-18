@@ -141,7 +141,7 @@ def test_background_collection_result_and_failure(client, monkeypatch, fail):
         if fail:
             raise ValueError('Account mismatch')
         return demo_snapshot()
-    monkeypatch.setattr('diagram_bot.server.collect', collect)
+    monkeypatch.setattr("diagram_bot.routes.aws.collect", collect)
     result = client.post('/api/collections', json={'region': 'ap-northeast-2', 'profile': 'demo-sso', 'expected_account': '111122223333'})
     assert result.status_code == 202
     for _ in range(100):
@@ -220,7 +220,7 @@ def test_identity_reports_the_signed_in_credentials(client, monkeypatch):
             if self.profile == "broken":
                 raise RuntimeError("no credentials")
             return Sts()
-    monkeypatch.setattr("diagram_bot.server.boto3.Session", Session)
+    monkeypatch.setattr("diagram_bot.routes.aws.boto3.Session", Session)
     assert client.get('/api/identity').json() == {"account": "123456789012", "arn": "arn:aws:iam::123456789012:user/architect", "profile": None}
     assert client.get('/api/identity?profile=dev').json()["profile"] == "dev"
     failed = client.get('/api/identity?profile=broken')

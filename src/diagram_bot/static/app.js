@@ -1,11 +1,10 @@
-'use strict';
+import {names, relationNames, routeClasses, statuses, viewNames} from './js/labels.js';
+import {createClient} from './js/http.js';
+import {startRelay} from './js/relay.js';
 const $ = id => document.getElementById(id);
-const names = {vpc:'VPC',subnet:'Subnet',ec2:'EC2',load_balancer:'Load balancer',target_group:'Target group',registered_target:'등록 대상',security_group:'Security group',network_interface:'Network interface',volume:'EBS volume',internet_gateway:'Internet gateway',nat_gateway:'NAT gateway',route_table:'Route table',db_instance:'RDS DB instance',db_standby:'RDS standby',auto_scaling_group:'Auto Scaling group',vpc_endpoint:'VPC endpoint',transit_gateway:'Transit Gateway',tgw_attachment:'TGW attachment',eks_cluster:'EKS cluster',lambda_function:'Lambda function',msk_cluster:'MSK cluster',msk_broker:'MSK brokers',cache_node:'ElastiCache node',cache_replication_group:'ElastiCache replication group',db_cluster:'Aurora/RDS cluster',opensearch_domain:'OpenSearch domain',search_node:'OpenSearch nodes',ecs_service:'ECS service',ecs_task:'ECS task',efs_file_system:'EFS file system',efs_mount_target:'EFS mount target',redshift_cluster:'Redshift cluster',vpc_peering:'VPC peering',vpn_gateway:'Virtual private gateway',customer_gateway:'Customer gateway',placement_group:'Placement group',fsx_file_system:'FSx file system',sagemaker_endpoint:'SageMaker endpoint',sagemaker_cluster:'SageMaker HyperPod cluster',elastic_ip:'Elastic IP',tgw_route_table:'TGW route table',cloudfront_distribution:'CloudFront distribution',waf_web_acl:'AWS WAF web ACL',dx_connection:'Direct Connect connection',dx_gateway:'Direct Connect gateway'};
-const relationNames = {in_vpc:'VPC 소속',in_subnet:'서브넷 배치',associated_load_balancer:'로드밸런서 연결',registered_target:'대상 등록',uses_security_group:'보안 그룹 연결',attached_interface:'ENI 장착',attached_volume:'EBS 장착',associated_subnet:'라우팅 테이블 연결',routes_to:'라우팅 경로',standby_of:'Multi-AZ 대기',asg_member:'Auto Scaling 인스턴스',asg_target_group:'Auto Scaling 대상 그룹',endpoint_subnet:'엔드포인트 서브넷',endpoint_route_table:'엔드포인트 라우팅 테이블',attachment_subnet:'TGW 연결 서브넷',attached_transit_gateway:'Transit Gateway 연결',cluster_member:'DB 클러스터 멤버',cache_member_of:'캐시 복제 그룹',broker_of:'MSK 클러스터',lambda_subnet:'Lambda 서브넷',eks_subnet:'EKS 서브넷',eks_nodegroup:'EKS 노드 그룹',read_replica_of:'읽기 전용 복제본',ecs_target_group:'ECS 서비스 대상 그룹',service_task:'ECS 서비스 태스크',service_subnet:'ECS 서비스 서브넷',node_of:'OpenSearch 도메인',mount_target_of:'EFS 파일 시스템',peer_vpc:'피어링 상대 VPC',vpn_connection:'Site-to-Site VPN',eip_associated:'Elastic IP 연결',route_table_of:'TGW 라우팅 테이블',tgw_rt_association:'TGW 라우팅 테이블 연결',tgw_rt_propagation:'TGW 경로 전파',tgw_route:'TGW 경로',waf_protects:'AWS WAF 보호',cloudfront_origin:'CloudFront 오리진',dx_virtual_interface:'Direct Connect 가상 인터페이스',dx_gateway_association:'Direct Connect 게이트웨이 연결'};
-const routeClasses = {public:'퍼블릭 · 0.0.0.0/0 → IGW',nat:'프라이빗 · 0.0.0.0/0 → NAT',tgw:'프라이빗 · 0.0.0.0/0 → TGW',vgw:'프라이빗 · 0.0.0.0/0 → VGW',isolated:'격리 · 인터넷 경로 없음'};
-const statuses = {complete:'조회 완료',partial:'부분 조회',unavailable:'조회 불가',not_discovered:'미발견 범위'};
-const viewNames = {overview:'전체 구성',detail:'상세 구성',focus:'선택 리소스'};
 const state = {token:null,snapshot:null,snapshotId:null,view:'overview',vpc:null,focus:null,references:false,routes:null,revision:0,xml:null,history:[],visible:null,counts:null,ready:false,loading:true,dirty:false,busy:false,mode:'diagram',selected:null};
+const {api, streamApi} = createClient(() => state.token);
+window.diagramBot = {state};  // for browser checks (scripts/verify_demo.py) and debugging
 const pending = new Map();
 let editorTimer, toastTimer, pngWaiter = null;
 const emptyDetail=document.querySelector('#detail-body .empty-detail');
@@ -13,13 +12,6 @@ function el(tag, text, className) { const element=document.createElement(tag); i
 // Notices describe the current diagram; a new snapshot or view drops them (errors stay until they time out).
 function clearNotice() { if($('toast').className!=='error'){$('toast').hidden=true;clearTimeout(toastTimer);} }
 function toast(message, error=false) { $('toast').textContent=message; $('toast').className=error?'error':''; $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true,error?8500:4000); }
-async function api(path, options={}) {
-  const response=await fetch(path,{...options,headers:{'Content-Type':'application/json','X-Diagram-Bot':state.token,...options.headers}});
-  if(response.status===401){location.href='/login';throw new Error('로그인이 필요합니다.');}
-  const data=await response.json();
-  if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'요청 값을 확인하세요.');
-  return data;
-}
 function post(message) { $('editor').contentWindow.postMessage(JSON.stringify(message),location.origin); }
 const node = id => state.snapshot.graph.nodes.find(n=>n.id===id);
 const vpcNode = resourceId => state.snapshot.graph.nodes.find(n=>n.kind==='vpc'&&n.resource_id===resourceId);
@@ -478,41 +470,6 @@ async function openChat() {
   $('chat-model').replaceChildren(...info.models.map(m=>new Option(m.label+(m.key===info.default?' (기본)':''),m.key)));$('chat-model').value=info.default;
   if(!info.ready)chatMessage('system',"채팅 에이전트가 설치되지 않았습니다. pip install -e '.[agent]' 후 다시 시작하세요.");
 }
-// Browser egress (serve --aws-egress browser): the server signs each AWS request it makes for this user and this page sends
-// it from the PC's address, then returns the response. The server never hands out keys: only per-request signatures.
-const AWS_API=/^https:\/\/[a-z0-9.-]+\.amazonaws\.com(\.cn)?\//;
-function base64(bytes){let text='';for(let i=0;i<bytes.length;i+=0x8000)text+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(text);}
-async function relayOne(r){
-  if(!AWS_API.test(r.url))return {status:0,error:'AWS API 주소가 아닙니다.'};
-  try{
-    const res=await fetch(r.url,{method:r.method,headers:r.headers,body:r.body?Uint8Array.from(atob(r.body),c=>c.charCodeAt(0)):undefined,
-      mode:'cors',credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer'});
-    const headers={};res.headers.forEach((value,name)=>{headers[name]=value;});
-    return {status:res.status,headers,body:base64(new Uint8Array(await res.arrayBuffer()))};
-  }catch(error){return {status:0,error:String(error)};}
-}
-async function relayLoop(){
-  for(;;){
-    try{
-      const {requests}=await api('/api/relay/next');
-      state.relayed=(state.relayed||0)+requests.length;
-      await Promise.all(requests.map(async r=>api(`/api/relay/${r.id}`,{method:'POST',body:JSON.stringify(await relayOne(r))}).catch(()=>{})));
-    }catch(error){await new Promise(resolve=>setTimeout(resolve,3000));}
-  }
-}
-async function streamApi(path, body, onEvent) {
-  // NDJSON progress events; the last line is {type:'done', ...result} or {type:'error', detail}.
-  const response=await fetch(path,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json','X-Diagram-Bot':state.token}});
-  if(response.status===401){location.href='/login';throw new Error('로그인이 필요합니다.');}
-  if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(typeof data.detail==='string'?data.detail:'요청 값을 확인하세요.');}
-  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',last=null;
-  for(;;){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});
-    const lines=buffer.split('\n');buffer=lines.pop();
-    for(const line of lines)if(line.trim()){last=JSON.parse(line);onEvent(last);}
-    if(done)break;}
-  if(!last||last.type==='error')throw new Error(last?last.detail:'응답이 중간에 끊겼습니다.');
-  return last;
-}
 $('chat-form').onsubmit=async event=>{
   event.preventDefault();const message=$('chat-input').value.trim();if(!message||state.chatBusy)return;
   if(state.dirty)await saveDocument(false);
@@ -545,7 +502,7 @@ window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefa
 async function start() {
   const boot=await api('/api/bootstrap');state.token=boot.token;state.role=boot.user.role;
   state.team=boot.team;state.egress=boot.egress;
-  if(boot.egress==='browser'){relayLoop();$('egress-note').hidden=false;}
+  if(boot.egress==='browser'){startRelay(api,{onRequests:n=>{state.relayed=(state.relayed||0)+n;}});$('egress-note').hidden=false;}
   if(boot.team){const name=boot.user.name;$('user-avatar').textContent=name.slice(0,2).toUpperCase();$('user-avatar').title=`${name} · ${boot.user.role}`;
     $('user-role').textContent=`${name} · ${{viewer:'보기 전용',editor:'편집',admin:'관리자'}[boot.user.role]}`;$('user-role').hidden=false;$('logout-button').hidden=false;}
   bind('logout-button',async()=>{await api('/api/logout',{method:'POST'});location.href='/login';});

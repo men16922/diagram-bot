@@ -21,7 +21,7 @@ agent = ["strands-agents>=1.61,<2"]
 diagram-bot = "diagram_bot.cli:main"
 
 [tool.setuptools.package-data]
-diagram_bot = ["viewer.html", "static/*"]
+diagram_bot = ["viewer.html", "static/*", "static/js/*"]
 
 [tool.ruff]
 line-length = 200

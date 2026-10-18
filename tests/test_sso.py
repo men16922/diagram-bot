@@ -133,7 +133,7 @@ def test_sso_collection_through_the_api(tmp_path, monkeypatch, egress):
                 prepare(session).client("sts", region_name="us-east-1").get_caller_identity()
         from diagram_bot.demo import demo_snapshot
         return demo_snapshot()
-    monkeypatch.setattr("diagram_bot.server.collect", fake_collect)
+    monkeypatch.setattr("diagram_bot.routes.aws.collect", fake_collect)
     logins = SsoLogins(client=fake)
     with TestClient(create_app(tmp_path / "data", tmp_path / "no-editor", sso=logins, egress=egress,
                                sso_start=("https://d-1234567890.awsapps.com/start", "us-east-1"))) as client:

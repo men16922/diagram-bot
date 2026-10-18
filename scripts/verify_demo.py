@@ -267,7 +267,7 @@ def main():
         expect(page.locator('#view-scope')).to_contain_text('경로 필터')
         expect(page.locator('#environment-title')).to_have_text('commerce-services')
         expect(frame.get_by_text(starts('catalog-svc'))).to_have_count(0)
-        filtered_xml = page.evaluate('() => state.xml')
+        filtered_xml = page.evaluate('() => window.diagramBot.state.xml')
         assert 'routes="' in filtered_xml and '경로 필터: 대상 그룹 cart-svc-ecs' in filtered_xml and 'opacity=30' in filtered_xml
         shot('route-filter.png')
         frame.get_by_text(starts('cart-svc-ecs')).first.click()
