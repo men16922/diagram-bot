@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from diagram_bot import cli
-from diagram_bot.auth import hash_password, load_users, save_user, verify_password
+from diagram_bot.auth import CLIENT_FAILURE_LIMIT, Authenticator, hash_password, load_users, save_user, verify_password
 from diagram_bot.demo import demo_snapshot
 from diagram_bot.server import create_app
 
@@ -57,7 +57,19 @@ def test_login_cookie_is_locked_down_and_failures_are_throttled(team):
     for _ in range(5):
         assert client.post("/api/login", json={"name": "vera", "password": "wrong password"}).status_code == 401
     assert client.post("/api/login", json={"name": "vera", "password": PASSWORD}).status_code == 429
+    # Behind an authenticating proxy every user comes from one address: Vera's lockout is not Eddie's.
+    assert client.post("/api/login", json={"name": "eddie", "password": PASSWORD}).status_code == 200
     assert client.post("/api/login", json={"name": "ghost", "password": PASSWORD}, headers={"Origin": "https://evil.example"}).status_code == 403
+
+
+def test_guessing_across_many_names_hits_the_looser_per_client_cap():
+    auth = Authenticator({"vera": {"name": "vera", "role": "viewer", "password_hash": hash_password(PASSWORD)}})
+    auth.dummy = hash_password("x", iterations=1)  # unknown names cost one hash; keep the test fast
+    for i in range(CLIENT_FAILURE_LIMIT - 1):
+        assert not auth.throttled("10.0.0.1", f"guess{i}") and auth.login(f"guess{i}", "wrong", "10.0.0.1") is None
+    assert not auth.throttled("10.0.0.1", "vera") and not auth.throttled("10.0.0.2", "vera")
+    assert auth.login("nobody", "wrong", "10.0.0.1") is None
+    assert auth.throttled("10.0.0.1", "vera") and not auth.throttled("10.0.0.2", "vera")
 
 
 def test_roles_limit_what_each_user_can_change(team):

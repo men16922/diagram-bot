@@ -17,7 +17,7 @@
 | 자격 증명 | boto3 SDK 인증 체인(SSO·프로파일·환경 변수·역할)을 그대로 씁니다. 키·토큰을 앱 데이터·보고서·로그에 저장하지 않습니다. |
 | 계정 확인 | 수집 전 `sts:GetCallerIdentity`의 계정과 예상 계정(또는 역할 ARN의 계정)이 다르면 중단합니다. |
 | 네트워크 노출 | 기본은 `127.0.0.1`에만 바인딩합니다. 다른 주소는 팀 모드(사용자 파일 + TLS + 허용 호스트)로만 열리며, 인증 없는 네트워크 노출 옵션은 없습니다. Host 헤더 허용 목록으로 DNS 리바인딩을 막습니다. |
-| 인증·권한 (팀 모드) | PBKDF2-SHA256(600,000회, salt) 비밀번호, 이름 존재 여부가 응답 시간에 드러나지 않게 처리, 주소별 로그인 실패 제한, HttpOnly·Secure·SameSite=Strict 세션 쿠키(8시간), HSTS, viewer/editor/admin 역할을 서버에서 검사. |
+| 인증·권한 (팀 모드) | PBKDF2-SHA256(600,000회, salt) 비밀번호, 이름 존재 여부가 응답 시간에 드러나지 않게 처리, (주소, 사용자 이름)별 로그인 실패 제한과 느슨한 주소별 상한, HttpOnly·Secure·SameSite=Strict 세션 쿠키(8시간), HSTS, viewer/editor/admin 역할을 서버에서 검사. |
 | SSO (팀 모드) | OpenID Connect Authorization Code + PKCE(S256), 브라우저 쿠키로 대조하는 state, nonce·issuer·aud·만료 확인, discovery issuer 일치 확인, 제공자 엔드포인트 https 강제, 그룹→역할 매핑(매핑 없으면 거부). |
 | 감사 | 로그인·로그아웃·변경 요청·수집 결과를 사용자·주소·결과와 함께 `audit.log`에 남깁니다. 비밀번호는 기록하지 않습니다. |
 | 요청 위조 | 변경 요청은 페이지마다 발급되는 토큰 헤더와 같은 출처(Origin)일 때만 받습니다. 요청 본문은 15 MiB로 제한합니다. |

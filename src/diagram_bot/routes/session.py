@@ -88,7 +88,7 @@ def router(context):
         client = client_of(request)
         if not auth:
             raise HTTPException(404, "팀 모드가 아닙니다.")
-        if auth.throttled(client):
+        if auth.throttled(client, credentials.name):
             audit.write(credentials.name, "login", result="throttled", client=client)
             raise HTTPException(429, "로그인 실패가 많습니다. 15분 후 다시 시도하세요.")
         session = auth.login(credentials.name, credentials.password, client)

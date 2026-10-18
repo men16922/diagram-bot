@@ -19,7 +19,9 @@ from .fileio import atomic_write
 ROLES = ("viewer", "editor", "admin")
 ITERATIONS = 600_000
 SESSION_SECONDS = 8 * 3600
-FAILURE_WINDOW, FAILURE_LIMIT = 15 * 60, 5
+# Failed logins in the window: per (client, name), and looser per client. Behind an authenticating proxy every user
+# shares one client address, so the per-client cap only stops guessing across many names.
+FAILURE_WINDOW, FAILURE_LIMIT, CLIENT_FAILURE_LIMIT = 15 * 60, 5, 50
 
 
 def hash_password(password, salt=None, iterations=ITERATIONS):
@@ -87,21 +89,29 @@ class Authenticator:
         # Unknown names still cost one hash, so response time does not reveal which names exist.
         self.dummy = hash_password(secrets.token_urlsafe(16))
 
-    def throttled(self, client):
+    def recent_failures(self, key, now):
+        recent = [t for t in self.failures.get(key, []) if now - t < FAILURE_WINDOW]
+        if recent:
+            self.failures[key] = recent
+        else:
+            self.failures.pop(key, None)
+        return len(recent)
+
+    def throttled(self, client, name):
         now = time.monotonic()
         with self.lock:
-            recent = [t for t in self.failures.get(client, []) if now - t < FAILURE_WINDOW]
-            self.failures[client] = recent
-            return len(recent) >= FAILURE_LIMIT
+            return (self.recent_failures((client, name), now) >= FAILURE_LIMIT
+                    or self.recent_failures(client, now) >= CLIENT_FAILURE_LIMIT)
 
     def login(self, name, password, client):
         user = self.users.get(name)
         ok = verify_password(password, user["password_hash"] if user else self.dummy) and user is not None
         with self.lock:
             if not ok:
-                self.failures.setdefault(client, []).append(time.monotonic())
+                for key in ((client, name), client):
+                    self.failures.setdefault(key, []).append(time.monotonic())
                 return None
-            self.failures.pop(client, None)
+            self.failures.pop((client, name), None)
             token = secrets.token_urlsafe(32)
             self.sessions[token] = {"name": name, "role": user["role"], "expires": time.monotonic() + SESSION_SECONDS}
             return token
