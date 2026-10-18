@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "overnight-harness": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/men16922/claude-overnight-harness.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "overnight-harness@overnight-harness": true
+  }
+}

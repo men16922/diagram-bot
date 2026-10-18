@@ -44,3 +44,6 @@ docs/test/history/*-overnight-review-checklist.md
 !examples/samples/*/review.md
 !examples/samples/*/index.html
 !examples/samples/*/topology.drawio
+
+# Agent worktrees (Claude Code isolation)
+.claude/worktrees/
