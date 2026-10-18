@@ -311,12 +311,13 @@ def services(raw, prefix, nodes, node, link):
         for subnet in subnets:
             # ListNodes names each broker's subnet; without it MSK's even spread over client subnets is shown.
             ids = listed.get(subnet)
-            per_subnet = len(ids) if listed else provisioned.get("NumberOfBrokerNodes", 0) // max(1, len(subnets))
+            # A subnet ListNodes does not name (partial answer, broker replacement) shows no broker and stays estimated.
+            per_subnet = len(ids or []) if listed else provisioned.get("NumberOfBrokerNodes", 0) // max(1, len(subnets))
             broker = node("msk_broker", cluster["ClusterArn"] + "#" + subnet,
                           {"ClusterName": cluster.get("ClusterName"), "Brokers": per_subnet, "InstanceType": brokers.get("InstanceType"),
-                           "BrokerIds": sorted(ids or []), "Estimated": not listed,
+                           "BrokerIds": sorted(ids or []), "Estimated": ids is None,
                            "KafkaVersion": (provisioned.get("CurrentBrokerSoftwareInfo") or {}).get("KafkaVersion")},
-                          "ListNodes.BrokerNodeInfo.ClientSubnet" if listed else "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
+                          "ListNodes.BrokerNodeInfo.ClientSubnet" if ids is not None else "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
             link(broker, "vpc", subnet_vpc.get(subnet), "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
             link(broker, "subnet", subnet, "in_subnet", "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
             link(broker, "msk_cluster", cluster["ClusterArn"], "broker_of", "ListClustersV2.ClusterArn")

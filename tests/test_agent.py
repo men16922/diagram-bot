@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 
@@ -426,6 +427,15 @@ def test_start_from_current_uses_the_open_snapshot_then_the_last_collection():
     assert workspace.context_note().startswith("\n\n[현재 화면] 수집한 구성 '") and "진행 중인 설계가 이 스냅샷에서 시작함" in workspace.context_note()
     workspace.current_snapshot = None
     assert workspace.context_note() == ""
+    # Collected snapshots carry no title: another one on screen is not the one the design started from.
+    stored["other"] = copy.deepcopy(stored["open"])
+    for snapshot in stored.values():
+        snapshot["metadata"].pop("title", None)
+    workspace.start_from_snapshot("open")
+    workspace.current_snapshot = "other"
+    assert "시작함" not in workspace.context_note()
+    workspace.current_snapshot = "open"
+    assert "시작함" in workspace.context_note()
     tools = {t.tool_spec["name"] for t in build_tools(workspace)}
     assert {"start_from_current", "add_subnet_tier"} <= tools and len(tools) == 29
 

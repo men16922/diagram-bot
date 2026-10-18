@@ -6,6 +6,7 @@ keep superseded revisions so an explicit relayout, overwrite or restore never lo
 """
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -13,6 +14,8 @@ from pathlib import Path
 from uuid import uuid4
 
 from .collector import now
+from .errors import InputError
+from .fileio import atomic_write
 from .graph import build_graph, upgrade_graph
 
 HISTORY = 20  # archived revisions kept per document
@@ -24,9 +27,7 @@ def data_path():
 
 
 def atomic_json(path, value):
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, default=str), encoding="utf-8")
-    temporary.replace(path)
+    atomic_write(path, json.dumps(value, ensure_ascii=False, default=str))
 
 
 def read_json(path, default=None):
@@ -43,13 +44,13 @@ class Conflict(RuntimeError):
 
 def validate_snapshot(snapshot):
     if snapshot.get("schema_version") != 1:
-        raise ValueError("지원하지 않는 스냅샷 버전입니다.")
+        raise InputError("지원하지 않는 스냅샷 버전입니다.")
     metadata = snapshot["metadata"]
     for name in ("account_id", "region", "started_at", "finished_at", "status"):
         if not isinstance(metadata.get(name), str):
-            raise ValueError(f"스냅샷 metadata.{name} 필드가 필요합니다.")
+            raise InputError(f"스냅샷 metadata.{name} 필드가 필요합니다.")
     if not isinstance(snapshot.get("coverage"), list) or not isinstance(snapshot.get("raw"), dict):
-        raise ValueError("스냅샷 coverage/raw 형식이 잘못되었습니다.")
+        raise InputError("스냅샷 coverage/raw 형식이 잘못되었습니다.")
 
 
 class SnapshotStore:
@@ -74,24 +75,38 @@ class SnapshotStore:
         if not path.is_file():
             raise NotFound("스냅샷을 찾을 수 없습니다.")
         key = (identifier, path.stat().st_mtime_ns)
-        if key not in self.cache:
+        # Read once: another request may evict the key (a re-saved snapshot) between a check and a lookup.
+        snapshot = self.cache.get(key)
+        if snapshot is None:
             snapshot = json.loads(path.read_text(encoding="utf-8"))
             upgrade_graph(snapshot["graph"])
             with self.lock:
                 for old in [k for k in self.cache if k[0] == identifier] + list(self.cache)[:max(0, len(self.cache) - 7)]:
                     self.cache.pop(old, None)
                 self.cache[key] = snapshot
-        return self.cache[key]
+        return snapshot
 
     def list(self):
         """Newest first: id, metadata and resource count of every stored snapshot."""
-        result = []
+        result, keys = [], set()
         for path in self.directory.glob("*.json"):
             key = (path.stem, path.stat().st_mtime_ns)
             if key not in self.summaries:
-                snapshot = json.loads(path.read_text(encoding="utf-8"))
-                self.summaries[key] = {"id": path.stem, "metadata": snapshot["metadata"], "resource_count": len(snapshot["graph"]["nodes"])}
+                try:
+                    snapshot = json.loads(path.read_text(encoding="utf-8"))
+                    row = {"id": path.stem, "metadata": snapshot["metadata"], "resource_count": len(snapshot["graph"]["nodes"])}
+                    if not isinstance(row["metadata"].get("finished_at"), str):
+                        raise TypeError("metadata.finished_at")
+                except (OSError, ValueError, LookupError, TypeError, AttributeError):
+                    # One unreadable file must not hide every other snapshot.
+                    logging.getLogger(__name__).warning("Skipping unreadable snapshot file %s", path.name, exc_info=True)
+                    continue
+                self.summaries[key] = row
+            keys.add(key)
             result.append(self.summaries[key])
+        with self.lock:
+            for stale in set(self.summaries) - keys:
+                self.summaries.pop(stale, None)
         return sorted(result, key=lambda row: row["metadata"]["finished_at"], reverse=True)
 
     def seed(self, demo, samples, version):

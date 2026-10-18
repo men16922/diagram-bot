@@ -10,6 +10,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..egress import RelayError
+from ..errors import error_code
+from ..sso import SsoError
 from . import role, user
 
 
@@ -31,11 +33,10 @@ def default_chat(workspace, model):
 
 
 def chat_error(exc):
-    if isinstance(exc, RelayError):
+    if isinstance(exc, (RelayError, SsoError)):
         return str(exc)
     if isinstance(exc, (BotoCoreError, ClientError)):
-        code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
-        return f"Bedrock 호출 실패({code}): 모델 액세스·리전·자격 증명을 확인하세요."
+        return f"Bedrock 호출 실패({error_code(exc)}): 모델 액세스·리전·자격 증명을 확인하세요."
     # The model provider's own errors are surfaced to the user, the chat stays usable.
     return f"에이전트 응답 실패: {type(exc).__name__}: {str(exc)[:300]}"
 
@@ -78,10 +79,13 @@ def router(context):
                     workspace = Workspace(publish, session_factory=session_for, allow_collection=can_collect, load=context.snapshots.get,
                                           default_account=lambda: aws.chosen_account(who) or os.environ.get("AWS_ACCOUNT_ID"))
                     if aws.relay:
-                        workspace.model_session = lambda: session_for("us-east-1")
+                        # Refreshing credentials: the chat outlives one role session, and building it calls no AWS.
+                        workspace.model_session = lambda: aws.model_session(who, "us-east-1")
                     current = chats[who] = {"chat": chat_factory(workspace, model), "model": model}
                 except ImportError as exc:
                     raise HTTPException(503, "채팅 에이전트를 쓰려면 pip install -e '.[agent]'로 strands-agents를 설치하세요.") from exc
+                except SsoError as exc:
+                    raise HTTPException(409, str(exc)) from exc
             current["chat"].workspace.current_snapshot = params.snapshot
         return current["chat"]
 
@@ -90,6 +94,8 @@ def router(context):
         chat = chat_for(params, request)
         try:
             return chat.ask(params.message)
+        except SsoError as exc:  # the Identity Center sign-in expired: the user signs in again, the chat is kept
+            raise HTTPException(409, str(exc)) from exc
         except Exception as exc:  # noqa: BLE001 - see chat_error
             raise HTTPException(502, chat_error(exc)) from exc
 

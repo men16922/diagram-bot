@@ -62,9 +62,6 @@ def router(context):
     def combine(params: CombineRequest):
         """One snapshot from several account × region snapshots: the overview draws the network across accounts."""
         from ..combine import combine_snapshots
-        try:
-            return {"id": store.save(combine_snapshots([store.get(i) for i in params.ids], params.title))}
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
+        return {"id": store.save(combine_snapshots([store.get(i) for i in params.ids], params.title))}  # InputError: 422
 
     return api

@@ -10,7 +10,7 @@ import threading
 import boto3
 
 from .egress import BrowserRelay
-from .sso import SsoLogins, discover_start_url
+from .sso import SsoError, SsoLogins, discover_start_url, refreshing_session
 
 
 class AwsAccess:
@@ -53,6 +53,20 @@ class AwsAccess:
         session = self.sso.session(choice[0], user, choice[1], choice[2], region) if choice else boto3.Session(region_name=region)
         return self.outbound(session, user)
 
+    def model_session(self, user, region):
+        """The user's session for a long-lived client (the chat's Bedrock model). With an Identity Center role the
+        credentials are fetched on first use and again before they expire, for the role the user has chosen by then,
+        so a chat outlives the role session and picks up a new sign-in; building it makes no AWS call."""
+        if user not in self.choices:
+            return self.outbound(boto3.Session(region_name=region), user)
+
+        def fetch():
+            choice = self.choices.get(user)
+            if not choice:
+                raise SsoError("SSO 로그인이 완료되지 않았거나 만료됐습니다. 다시 로그인하세요.")
+            return self.sso.credentials(choice[0], user, choice[1], choice[2])
+        return self.outbound(refreshing_session(fetch, region), user)
+
     def collection_session(self, user, login, account, role, region):
         """Session for a collection request: an Identity Center role (remembered for the chat), else None (profile/SDK chain)."""
         if not login:
@@ -86,5 +100,7 @@ class AwsAccess:
             # Discovery calls sso-admin from the server, which browser egress assumes cannot reach AWS.
             if not rows and not self.relay and (found := discover_start_url()):
                 rows.append({"name": "Identity Center", **found})
+            if not rows:
+                return []  # nothing found (no config, discovery failed): look again next time instead of caching the miss
             self._defaults = rows
         return self._defaults

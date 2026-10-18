@@ -7,11 +7,14 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import secrets
 import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+
+from .fileio import atomic_write
 
 ROLES = ("viewer", "editor", "admin")
 ITERATIONS = 600_000
@@ -26,22 +29,30 @@ def hash_password(password, salt=None, iterations=ITERATIONS):
     return f"pbkdf2_sha256${iterations}${encode(salt)}${encode(digest)}"
 
 
-def verify_password(password, stored):
+def parse_hash(stored):
+    """(iterations, salt, digest) of a stored hash, or None when it is not a well-formed pbkdf2_sha256 hash."""
     try:
         scheme, iterations, salt, digest = stored.split("$")
-    except (AttributeError, ValueError):
+        if scheme == "pbkdf2_sha256" and iterations.isdigit() and int(iterations) > 0:
+            return int(iterations), base64.b64decode(salt, validate=True), base64.b64decode(digest, validate=True)
+    except (AttributeError, ValueError):  # binascii.Error is a ValueError
+        pass
+    return None
+
+
+def verify_password(password, stored):
+    parsed = parse_hash(stored)
+    if not parsed:
         return False
-    if scheme != "pbkdf2_sha256":
-        return False
-    candidate = hashlib.pbkdf2_hmac("sha256", password.encode(), base64.b64decode(salt), int(iterations))
-    return hmac.compare_digest(candidate, base64.b64decode(digest))
+    iterations, salt, digest = parsed
+    return hmac.compare_digest(hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations), digest)
 
 
 def load_users(path):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     users = {u["name"]: u for u in data.get("users", [])}
     for user in users.values():
-        if user.get("role") not in ROLES or not str(user.get("password_hash", "")).startswith("pbkdf2_sha256$"):
+        if user.get("role") not in ROLES or not parse_hash(user.get("password_hash")):
             raise ValueError(f"사용자 {user.get('name')}: role 또는 password_hash가 잘못되었습니다.")
     if not users:
         raise ValueError("사용자 파일에 사용자가 없습니다. diagram-bot user add로 추가하세요.")
@@ -52,10 +63,7 @@ def save_user(path, name, role, password):
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"users": []}
     data["users"] = [u for u in data["users"] if u["name"] != name] + [{"name": name, "role": role, "password_hash": hash_password(password)}]
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    temporary.chmod(0o600)
-    temporary.replace(path)
+    atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def remove_user(path, name):
@@ -65,7 +73,7 @@ def remove_user(path, name):
     if len(remaining) == len(data["users"]):
         raise ValueError(f"사용자 {name}이(가) 없습니다.")
     data["users"] = remaining
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 class Authenticator:
@@ -141,7 +149,22 @@ class AuditLog:
             handle.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
 
     def tail(self, limit=200):
+        """Newest first. Reads only the end of the file; a torn line (a crash mid-write) is skipped, not fatal."""
         if not self.path.exists():
             return []
-        lines = self.path.read_text(encoding="utf-8").splitlines()[-limit:]
-        return [json.loads(line) for line in reversed(lines)]
+        with self.path.open("rb") as handle:
+            position, data = handle.seek(0, os.SEEK_END), b""
+            while position and data.count(b"\n") <= limit:
+                step = min(position, 64 * 1024)
+                position -= step
+                handle.seek(position)
+                data = handle.read(step) + data
+        entries = []
+        for line in reversed(data.splitlines()[-limit:]):
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(entry, dict):
+                entries.append(entry)
+        return entries

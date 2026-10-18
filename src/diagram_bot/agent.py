@@ -66,7 +66,8 @@ class Workspace:
         self.session_factory = session_factory or (lambda region: boto3.Session(region_name=region))
         self.region = region or os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
         self.design = Design(region=self.region)
-        self.collected = None
+        self.collected = self.collected_id = None
+        self.started_from = None  # id of the snapshot the current brownfield design started from
         self.changes = []  # snapshot ids saved during the current turn
         self.on_publish = None  # set while a streamed turn runs, so each saved snapshot can be shown at once
         self.lock = threading.Lock()
@@ -94,7 +95,7 @@ class Workspace:
         snapshot = collect(region, session=self.session_factory(region), expected_account=expected)
         graph = build_graph(snapshot)
         snapshot["graph"] = graph
-        self.collected = snapshot
+        self.collected, self.collected_id = snapshot, self.publish(snapshot)
         kinds = {}
         for node in graph["nodes"]:
             if not node["reference_only"]:
@@ -103,7 +104,7 @@ class Workspace:
                     for c in snapshot["coverage"] if c["status"] != "complete"]
         return {"account": snapshot["metadata"]["account_id"], "region": region, "status": snapshot["metadata"]["status"],
                 "resources": kinds, "incomplete_calls": problems, "findings": summary(review(graph, snapshot["coverage"])),
-                "snapshot_id": self.publish(snapshot)}
+                "snapshot_id": self.collected_id}
 
     def find_collected_resources(self, kind=None, search=None, vpc=None, limit=30):
         if not self.collected:
@@ -146,26 +147,30 @@ class Workspace:
             except Exception as exc:  # noqa: BLE001 - the server's 404 becomes a message the model can act on
                 raise ValueError(f"스냅샷을 찾을 수 없습니다: {identifier}") from exc
         elif self.collected:
-            snapshot = self.collected
+            snapshot, identifier = self.collected, self.collected_id
         else:
             raise ValueError("시작할 스냅샷이 없습니다. 앱에서 스냅샷을 열거나 collect_aws_resources로 먼저 수집하세요.")
-        return self.publish_design(self.design.start_from_snapshot(snapshot))
+        result = self.design.start_from_snapshot(snapshot)
+        self.started_from = identifier
+        return self.publish_design(result)
 
     def context_note(self):
         """What the user is looking at, appended to their message so "this configuration" has a referent."""
-        snapshot = None
+        snapshot, shown = None, self.current_snapshot
         if self.current_snapshot and self.load:
             try:
                 snapshot = self.load(self.current_snapshot)
             except Exception:  # noqa: BLE001 - a missing snapshot only means no note
                 snapshot = None
-        snapshot = snapshot or self.collected
+        if not snapshot:
+            snapshot, shown = self.collected, self.collected_id
         if not snapshot:
             return ""
         meta = snapshot["metadata"]
         kind = "설계안" if meta.get("design") else "수집한 구성"
         name = meta.get("title") or f"{meta.get('account_id')} {meta.get('region')}"
-        started = " · 진행 중인 설계가 이 스냅샷에서 시작함" if self.design.base and self.design.base.get("title") == meta.get("title") else ""
+        # By snapshot id: collected snapshots have no title, so titles would match any two of them.
+        started = " · 진행 중인 설계가 이 스냅샷에서 시작함" if self.design.base and shown and self.started_from == shown else ""
         return f"\n\n[현재 화면] {kind} '{name}' ({meta.get('region')}, VPC {len(snapshot['raw'].get('vpcs', []))}개){started}"
 
     def new_design(self, title, region=None):

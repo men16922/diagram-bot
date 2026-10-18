@@ -27,6 +27,10 @@ class RelayError(ConnectionError):
     """The browser could not carry a request: not connected, timed out, or blocked (network, CORS)."""
 
 
+class RelayDisconnected(RelayError):
+    """No browser is carrying this user's requests (page closed or not answering): every later call would fail too."""
+
+
 class Body:
     def __init__(self, data):
         self.data = data
@@ -80,7 +84,7 @@ class BrowserRelay:
 
     def send(self, owner, request):
         if not self.connected(owner):
-            raise RelayError("브라우저 중계가 연결되어 있지 않습니다. 앱 화면을 연 채로 다시 시도하세요 (AWS 호출은 브라우저에서 나갑니다).")
+            raise RelayDisconnected("브라우저 중계가 연결되어 있지 않습니다. 앱 화면을 연 채로 다시 시도하세요 (AWS 호출은 브라우저에서 나갑니다).")
         identifier = secrets.token_urlsafe(12)
         item = {"owner": owner, "request": outgoing(request), "done": threading.Event(), "result": None}
         with self.ready:
@@ -91,7 +95,7 @@ class BrowserRelay:
             self.pending.pop(identifier, None)
         result = item["result"]
         if not finished or result is None:
-            raise RelayError("브라우저가 AWS 요청을 시간 안에 전달하지 못했습니다.")
+            raise RelayDisconnected("브라우저가 AWS 요청을 시간 안에 전달하지 못했습니다.")
         if not result.get("status"):
             raise RelayError(f"브라우저에서 AWS 호출이 막혔습니다 (네트워크·CORS·프록시): {str(result.get('error') or '')[:200]}")
         return AWSResponse(request.url, int(result["status"]), result.get("headers") or {},
