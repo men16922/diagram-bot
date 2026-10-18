@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:32.525650+00:00",
-    "finished_at": "2026-10-17T21:52:32.525650+00:00",
+    "started_at": "2026-10-18T09:28:58.460898+00:00",
+    "finished_at": "2026-10-18T09:28:58.460898+00:00",
     "status": "complete",
     "demo": true,
     "sample": "data-platform",
-    "sample_version": 3,
+    "sample_version": 4,
     "title": "데이터 플랫폼 (ECS · OpenSearch · RDS · ElastiCache · EFS · Redshift · DocumentDB)",
     "practices": [
       "ECS Fargate 서비스는 세 AZ 프라이빗 서브넷에 태스크를 분산하고 ALB가 태스크 IP를 대상으로 등록",
@@ -19,7 +19,8 @@
       "EFS(리전 클래스)는 AZ마다 마운트 타깃을 두어 AZ 장애에도 같은 AZ 경로로 접근",
       "분석 VPC는 Redshift Multi-AZ(서브넷 3개, AZ당 2노드)와 DocumentDB writer/reader",
       "두 VPC와 사내 데이터 센터를 Transit Gateway 하나로 연결 (피어링은 비전이적이라 다른 VPC의 VPN을 쓸 수 없음)",
-      "사내 데이터 센터는 고객 게이트웨이 2개(장비·ISP 분리)의 Site-to-Site VPN, 각각 터널 2개 (REL02-BP02)"
+      "사내 데이터 센터는 고객 게이트웨이 2개(장비·ISP 분리)의 Site-to-Site VPN, 각각 터널 2개 (REL02-BP02)",
+      "TGW 라우팅 테이블로 도메인 분리: 스포크 테이블(두 VPC)은 VPC와 사내망 경로를, 사내망 테이블(VPN)은 VPC 경로만 학습"
     ],
     "scope": [
       "VPC",
@@ -44,11 +45,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -293,6 +299,14 @@
       "status": "complete",
       "pages": 1,
       "items": 3
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_transit_gateway_route_tables",
+      "parameters": {},
+      "status": "complete",
+      "pages": 1,
+      "items": 2
     }
   ],
   "raw": {
@@ -1764,7 +1778,181 @@
     "placement_groups": [],
     "fsx_file_systems": [],
     "sagemaker_endpoints": [],
-    "sagemaker_clusters": []
+    "sagemaker_clusters": [],
+    "transit_gateway_route_tables": [
+      {
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "TransitGatewayId": "tgw-dp0000000000007",
+        "State": "available",
+        "DefaultAssociationRouteTable": false,
+        "DefaultPropagationRouteTable": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "dp-spokes"
+          }
+        ]
+      },
+      {
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+        "TransitGatewayId": "tgw-dp0000000000007",
+        "State": "available",
+        "DefaultAssociationRouteTable": false,
+        "DefaultPropagationRouteTable": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "dp-onprem"
+          }
+        ]
+      }
+    ],
+    "transit_gateway_route_table_associations": [
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-dp",
+        "ResourceType": "vpc",
+        "ResourceId": "vpc-0a1b2c3d4e5f60007",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "State": "associated"
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-an",
+        "ResourceType": "vpc",
+        "ResourceId": "vpc-0a1b2c3d4e5f60008",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "State": "associated"
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-1",
+        "ResourceType": "vpn",
+        "ResourceId": "vpn-dp-corp-1",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+        "State": "associated"
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-2",
+        "ResourceType": "vpn",
+        "ResourceId": "vpn-dp-corp-2",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+        "State": "associated"
+      }
+    ],
+    "transit_gateway_route_table_propagations": [
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-dp",
+        "ResourceType": "vpc",
+        "ResourceId": "vpc-0a1b2c3d4e5f60007",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "State": "enabled"
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-an",
+        "ResourceType": "vpc",
+        "ResourceId": "vpc-0a1b2c3d4e5f60008",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "State": "enabled"
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-1",
+        "ResourceType": "vpn",
+        "ResourceId": "vpn-dp-corp-1",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "State": "enabled"
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-2",
+        "ResourceType": "vpn",
+        "ResourceId": "vpn-dp-corp-2",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "State": "enabled"
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-dp",
+        "ResourceType": "vpc",
+        "ResourceId": "vpc-0a1b2c3d4e5f60007",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+        "State": "enabled"
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-an",
+        "ResourceType": "vpc",
+        "ResourceId": "vpc-0a1b2c3d4e5f60008",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+        "State": "enabled"
+      }
+    ],
+    "transit_gateway_routes": [
+      {
+        "DestinationCidrBlock": "10.70.0.0/16",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "Type": "propagated",
+        "State": "active",
+        "TransitGatewayAttachments": [
+          {
+            "TransitGatewayAttachmentId": "tgw-attach-dp",
+            "ResourceType": "vpc",
+            "ResourceId": "vpc-0a1b2c3d4e5f60007"
+          }
+        ]
+      },
+      {
+        "DestinationCidrBlock": "10.71.0.0/16",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "Type": "propagated",
+        "State": "active",
+        "TransitGatewayAttachments": [
+          {
+            "TransitGatewayAttachmentId": "tgw-attach-an",
+            "ResourceType": "vpc",
+            "ResourceId": "vpc-0a1b2c3d4e5f60008"
+          }
+        ]
+      },
+      {
+        "DestinationCidrBlock": "192.168.0.0/16",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+        "Type": "propagated",
+        "State": "active",
+        "TransitGatewayAttachments": [
+          {
+            "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-1",
+            "ResourceType": "vpn",
+            "ResourceId": "vpn-dp-corp-1"
+          },
+          {
+            "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-2",
+            "ResourceType": "vpn",
+            "ResourceId": "vpn-dp-corp-2"
+          }
+        ]
+      },
+      {
+        "DestinationCidrBlock": "10.70.0.0/16",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+        "Type": "propagated",
+        "State": "active",
+        "TransitGatewayAttachments": [
+          {
+            "TransitGatewayAttachmentId": "tgw-attach-dp",
+            "ResourceType": "vpc",
+            "ResourceId": "vpc-0a1b2c3d4e5f60007"
+          }
+        ]
+      },
+      {
+        "DestinationCidrBlock": "10.71.0.0/16",
+        "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+        "Type": "propagated",
+        "State": "active",
+        "TransitGatewayAttachments": [
+          {
+            "TransitGatewayAttachmentId": "tgw-attach-an",
+            "ResourceType": "vpc",
+            "ResourceId": "vpc-0a1b2c3d4e5f60008"
+          }
+        ]
+      }
+    ]
   },
   "graph": {
     "nodes": [
@@ -3620,7 +3808,18 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeTransitGatewayVpcAttachments"
+        "source": "DescribeTransitGatewayVpcAttachments",
+        "tgw_route_table": "dp-spokes",
+        "properties": [
+          [
+            "TGW 라우팅 테이블 (연결)",
+            "dp-spokes"
+          ],
+          [
+            "경로 전파 대상 테이블",
+            "dp-onprem, dp-spokes"
+          ]
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
@@ -3647,7 +3846,298 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeTransitGatewayVpcAttachments"
+        "source": "DescribeTransitGatewayVpcAttachments",
+        "tgw_route_table": "dp-spokes",
+        "properties": [
+          [
+            "TGW 라우팅 테이블 (연결)",
+            "dp-spokes"
+          ],
+          [
+            "경로 전파 대상 테이블",
+            "dp-onprem, dp-spokes"
+          ]
+        ]
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-vpn-dp-1",
+        "resource_id": "tgw-attach-vpn-dp-1",
+        "kind": "tgw_attachment",
+        "name": "vpn vpn-dp-corp-1",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-1",
+          "ResourceType": "vpn",
+          "ResourceId": "vpn-dp-corp-1",
+          "DisplayName": "vpn vpn-dp-corp-1"
+        },
+        "reference_only": true,
+        "source": "GetTransitGatewayRouteTableAssociations.ResourceId",
+        "tgw_route_table": "dp-onprem",
+        "properties": [
+          [
+            "TGW 라우팅 테이블 (연결)",
+            "dp-onprem"
+          ],
+          [
+            "경로 전파 대상 테이블",
+            "dp-spokes"
+          ]
+        ]
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-vpn-dp-2",
+        "resource_id": "tgw-attach-vpn-dp-2",
+        "kind": "tgw_attachment",
+        "name": "vpn vpn-dp-corp-2",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-2",
+          "ResourceType": "vpn",
+          "ResourceId": "vpn-dp-corp-2",
+          "DisplayName": "vpn vpn-dp-corp-2"
+        },
+        "reference_only": true,
+        "source": "GetTransitGatewayRouteTableAssociations.ResourceId",
+        "tgw_route_table": "dp-onprem",
+        "properties": [
+          [
+            "TGW 라우팅 테이블 (연결)",
+            "dp-onprem"
+          ],
+          [
+            "경로 전파 대상 테이블",
+            "dp-spokes"
+          ]
+        ]
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-onprem",
+        "resource_id": "tgw-rtb-dp-onprem",
+        "kind": "tgw_route_table",
+        "name": "dp-onprem",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+          "TransitGatewayId": "tgw-dp0000000000007",
+          "State": "available",
+          "DefaultAssociationRouteTable": false,
+          "DefaultPropagationRouteTable": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "dp-onprem"
+            }
+          ],
+          "Associations": [
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-1",
+              "ResourceType": "vpn",
+              "ResourceId": "vpn-dp-corp-1",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+              "State": "associated"
+            },
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-2",
+              "ResourceType": "vpn",
+              "ResourceId": "vpn-dp-corp-2",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+              "State": "associated"
+            }
+          ],
+          "Propagations": [
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-dp",
+              "ResourceType": "vpc",
+              "ResourceId": "vpc-0a1b2c3d4e5f60007",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+              "State": "enabled"
+            },
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-an",
+              "ResourceType": "vpc",
+              "ResourceId": "vpc-0a1b2c3d4e5f60008",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+              "State": "enabled"
+            }
+          ],
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.70.0.0/16",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+              "Type": "propagated",
+              "State": "active",
+              "TransitGatewayAttachments": [
+                {
+                  "TransitGatewayAttachmentId": "tgw-attach-dp",
+                  "ResourceType": "vpc",
+                  "ResourceId": "vpc-0a1b2c3d4e5f60007"
+                }
+              ]
+            },
+            {
+              "DestinationCidrBlock": "10.71.0.0/16",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-onprem",
+              "Type": "propagated",
+              "State": "active",
+              "TransitGatewayAttachments": [
+                {
+                  "TransitGatewayAttachmentId": "tgw-attach-an",
+                  "ResourceType": "vpc",
+                  "ResourceId": "vpc-0a1b2c3d4e5f60008"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayRouteTables",
+        "properties": [
+          [
+            "연결 attachment (라우팅 도메인)",
+            "vpn vpn-dp-corp-1, vpn vpn-dp-corp-2"
+          ],
+          [
+            "전파 attachment",
+            "analytics-attachment, data-platform-attachment"
+          ],
+          [
+            "경로",
+            "2개"
+          ]
+        ]
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "resource_id": "tgw-rtb-dp-spokes",
+        "kind": "tgw_route_table",
+        "name": "dp-spokes",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+          "TransitGatewayId": "tgw-dp0000000000007",
+          "State": "available",
+          "DefaultAssociationRouteTable": false,
+          "DefaultPropagationRouteTable": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "dp-spokes"
+            }
+          ],
+          "Associations": [
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-dp",
+              "ResourceType": "vpc",
+              "ResourceId": "vpc-0a1b2c3d4e5f60007",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "State": "associated"
+            },
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-an",
+              "ResourceType": "vpc",
+              "ResourceId": "vpc-0a1b2c3d4e5f60008",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "State": "associated"
+            }
+          ],
+          "Propagations": [
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-dp",
+              "ResourceType": "vpc",
+              "ResourceId": "vpc-0a1b2c3d4e5f60007",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "State": "enabled"
+            },
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-an",
+              "ResourceType": "vpc",
+              "ResourceId": "vpc-0a1b2c3d4e5f60008",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "State": "enabled"
+            },
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-1",
+              "ResourceType": "vpn",
+              "ResourceId": "vpn-dp-corp-1",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "State": "enabled"
+            },
+            {
+              "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-2",
+              "ResourceType": "vpn",
+              "ResourceId": "vpn-dp-corp-2",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "State": "enabled"
+            }
+          ],
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.70.0.0/16",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "Type": "propagated",
+              "State": "active",
+              "TransitGatewayAttachments": [
+                {
+                  "TransitGatewayAttachmentId": "tgw-attach-dp",
+                  "ResourceType": "vpc",
+                  "ResourceId": "vpc-0a1b2c3d4e5f60007"
+                }
+              ]
+            },
+            {
+              "DestinationCidrBlock": "10.71.0.0/16",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "Type": "propagated",
+              "State": "active",
+              "TransitGatewayAttachments": [
+                {
+                  "TransitGatewayAttachmentId": "tgw-attach-an",
+                  "ResourceType": "vpc",
+                  "ResourceId": "vpc-0a1b2c3d4e5f60008"
+                }
+              ]
+            },
+            {
+              "DestinationCidrBlock": "192.168.0.0/16",
+              "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",
+              "Type": "propagated",
+              "State": "active",
+              "TransitGatewayAttachments": [
+                {
+                  "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-1",
+                  "ResourceType": "vpn",
+                  "ResourceId": "vpn-dp-corp-1"
+                },
+                {
+                  "TransitGatewayAttachmentId": "tgw-attach-vpn-dp-2",
+                  "ResourceType": "vpn",
+                  "ResourceId": "vpn-dp-corp-2"
+                }
+              ]
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayRouteTables",
+        "properties": [
+          [
+            "연결 attachment (라우팅 도메인)",
+            "analytics-attachment, data-platform-attachment"
+          ],
+          [
+            "전파 attachment",
+            "analytics-attachment, data-platform-attachment, vpn vpn-dp-corp-1, vpn vpn-dp-corp-2"
+          ],
+          [
+            "경로",
+            "3개"
+          ]
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
@@ -3668,7 +4158,21 @@
           ]
         },
         "reference_only": false,
-        "source": "DescribeTransitGateways"
+        "source": "DescribeTransitGateways",
+        "route_tables": [
+          "dp-onprem",
+          "dp-spokes"
+        ],
+        "properties": [
+          [
+            "라우팅 테이블 dp-spokes",
+            "연결 2 · 전파 4 · 경로 3"
+          ],
+          [
+            "라우팅 테이블 dp-onprem",
+            "연결 2 · 전파 2 · 경로 2"
+          ]
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60007",
@@ -5425,6 +5929,256 @@
         "details": {},
         "inferred": false,
         "id": "rel-7a7390de060f6c264cd3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-onprem",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "route_table_of",
+        "evidence": "DescribeTransitGatewayRouteTables.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7b283120c817d4c8c62f"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-onprem",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "relation": "tgw_route",
+        "evidence": "SearchTransitGatewayRoutes.Routes[].TransitGatewayAttachments[].TransitGatewayAttachmentId",
+        "qualifiers": {
+          "destination": "10.71.0.0/16"
+        },
+        "details": {
+          "Type": "propagated",
+          "State": "active"
+        },
+        "inferred": false,
+        "id": "rel-412271c125beb5540dfd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-onprem",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "relation": "tgw_route",
+        "evidence": "SearchTransitGatewayRoutes.Routes[].TransitGatewayAttachments[].TransitGatewayAttachmentId",
+        "qualifiers": {
+          "destination": "10.70.0.0/16"
+        },
+        "details": {
+          "Type": "propagated",
+          "State": "active"
+        },
+        "inferred": false,
+        "id": "rel-4fd6a84925a7c25539ca"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-onprem",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-vpn-dp-1",
+        "relation": "tgw_rt_association",
+        "evidence": "GetTransitGatewayRouteTableAssociations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpn",
+          "ResourceId": "vpn-dp-corp-1",
+          "State": "associated"
+        },
+        "inferred": false,
+        "id": "rel-63f8fa7a97bc1d0fe75e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-onprem",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-vpn-dp-2",
+        "relation": "tgw_rt_association",
+        "evidence": "GetTransitGatewayRouteTableAssociations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpn",
+          "ResourceId": "vpn-dp-corp-2",
+          "State": "associated"
+        },
+        "inferred": false,
+        "id": "rel-3d135e6e678e68215b94"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-onprem",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "relation": "tgw_rt_propagation",
+        "evidence": "GetTransitGatewayRouteTablePropagations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpc",
+          "ResourceId": "vpc-0a1b2c3d4e5f60008",
+          "State": "enabled"
+        },
+        "inferred": false,
+        "id": "rel-3c74ea54ef309de1eca4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-onprem",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "relation": "tgw_rt_propagation",
+        "evidence": "GetTransitGatewayRouteTablePropagations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpc",
+          "ResourceId": "vpc-0a1b2c3d4e5f60007",
+          "State": "enabled"
+        },
+        "inferred": false,
+        "id": "rel-0b88d5a68eb2d1af2a8c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",
+        "relation": "route_table_of",
+        "evidence": "DescribeTransitGatewayRouteTables.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0602de85d82a51f057b7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "relation": "tgw_route",
+        "evidence": "SearchTransitGatewayRoutes.Routes[].TransitGatewayAttachments[].TransitGatewayAttachmentId",
+        "qualifiers": {
+          "destination": "10.71.0.0/16"
+        },
+        "details": {
+          "Type": "propagated",
+          "State": "active"
+        },
+        "inferred": false,
+        "id": "rel-1f02069de66ce626cf78"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "relation": "tgw_route",
+        "evidence": "SearchTransitGatewayRoutes.Routes[].TransitGatewayAttachments[].TransitGatewayAttachmentId",
+        "qualifiers": {
+          "destination": "10.70.0.0/16"
+        },
+        "details": {
+          "Type": "propagated",
+          "State": "active"
+        },
+        "inferred": false,
+        "id": "rel-f680a68cac61ee9b977b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-vpn-dp-1",
+        "relation": "tgw_route",
+        "evidence": "SearchTransitGatewayRoutes.Routes[].TransitGatewayAttachments[].TransitGatewayAttachmentId",
+        "qualifiers": {
+          "destination": "192.168.0.0/16"
+        },
+        "details": {
+          "Type": "propagated",
+          "State": "active"
+        },
+        "inferred": false,
+        "id": "rel-be6e4914eebdaac3b528"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-vpn-dp-2",
+        "relation": "tgw_route",
+        "evidence": "SearchTransitGatewayRoutes.Routes[].TransitGatewayAttachments[].TransitGatewayAttachmentId",
+        "qualifiers": {
+          "destination": "192.168.0.0/16"
+        },
+        "details": {
+          "Type": "propagated",
+          "State": "active"
+        },
+        "inferred": false,
+        "id": "rel-e49a5a69f497a8d5787e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "relation": "tgw_rt_association",
+        "evidence": "GetTransitGatewayRouteTableAssociations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpc",
+          "ResourceId": "vpc-0a1b2c3d4e5f60008",
+          "State": "associated"
+        },
+        "inferred": false,
+        "id": "rel-ad34cf697f0d5c5366fa"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "relation": "tgw_rt_association",
+        "evidence": "GetTransitGatewayRouteTableAssociations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpc",
+          "ResourceId": "vpc-0a1b2c3d4e5f60007",
+          "State": "associated"
+        },
+        "inferred": false,
+        "id": "rel-a834e4fcbfbfd422e7f5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-an",
+        "relation": "tgw_rt_propagation",
+        "evidence": "GetTransitGatewayRouteTablePropagations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpc",
+          "ResourceId": "vpc-0a1b2c3d4e5f60008",
+          "State": "enabled"
+        },
+        "inferred": false,
+        "id": "rel-64876eae4260685338ac"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-dp",
+        "relation": "tgw_rt_propagation",
+        "evidence": "GetTransitGatewayRouteTablePropagations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpc",
+          "ResourceId": "vpc-0a1b2c3d4e5f60007",
+          "State": "enabled"
+        },
+        "inferred": false,
+        "id": "rel-021adecc8db08b42c6a7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-vpn-dp-1",
+        "relation": "tgw_rt_propagation",
+        "evidence": "GetTransitGatewayRouteTablePropagations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpn",
+          "ResourceId": "vpn-dp-corp-1",
+          "State": "enabled"
+        },
+        "inferred": false,
+        "id": "rel-c896bfee68795098fa80"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_route_table/tgw-rtb-dp-spokes",
+        "target": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-vpn-dp-2",
+        "relation": "tgw_rt_propagation",
+        "evidence": "GetTransitGatewayRouteTablePropagations.TransitGatewayAttachmentId",
+        "qualifiers": {},
+        "details": {
+          "ResourceType": "vpn",
+          "ResourceId": "vpn-dp-corp-2",
+          "State": "enabled"
+        },
+        "inferred": false,
+        "id": "rel-e8284b873dab6abc4e51"
       },
       {
         "source": "111122223333/ap-northeast-2/transit_gateway/tgw-dp0000000000007",

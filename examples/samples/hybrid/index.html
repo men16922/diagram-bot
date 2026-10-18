@@ -22,20 +22,21 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:32.300035+00:00",
-    "finished_at": "2026-10-17T21:52:32.300035+00:00",
+    "started_at": "2026-10-18T09:28:58.335636+00:00",
+    "finished_at": "2026-10-18T09:28:58.335636+00:00",
     "status": "complete",
     "demo": true,
     "sample": "hybrid",
-    "sample_version": 3,
+    "sample_version": 4,
     "title": "하이브리드 대상 (온프레미스 IP 포함)",
     "practices": [
       "점진 이전 중 온프레미스 서버를 IP 대상으로 함께 등록 (AvailabilityZone=all)",
       "VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시",
       "클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크",
       "내부 ALB로 사내망 전용 노출",
-      "온프레미스 대역(192.168.0.0/16)은 Transit Gateway의 Site-to-Site VPN 2개로 연결: 고객 게이트웨이(장비·ISP) 2개, 각각 터널 2개, BGP (REL02-BP02)",
-      "도형 밖 권고: 운영 주 연결은 Direct Connect(다중 위치), VPN은 백업. 하이브리드 DNS는 Route 53 Resolver 엔드포인트 (수집 범위 밖)"
+      "주 연결은 Direct Connect: 서로 다른 위치 2곳의 전용 연결 2개, 각각 transit VIF로 Direct Connect 게이트웨이 → Transit Gateway (Direct Connect 복원력 권고 High resiliency)",
+      "백업 연결은 Transit Gateway의 Site-to-Site VPN 2개: 고객 게이트웨이(장비·ISP) 2개, 각각 터널 2개, BGP (REL02-BP02)",
+      "도형 밖 권고: 하이브리드 DNS는 Route 53 Resolver 엔드포인트 (수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -60,11 +61,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -319,6 +325,38 @@
       "status": "complete",
       "pages": 1,
       "items": 2
+    },
+    {
+      "service": "directconnect",
+      "operation": "describe_connections",
+      "parameters": {},
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "directconnect",
+      "operation": "describe_virtual_interfaces",
+      "parameters": {},
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "directconnect",
+      "operation": "describe_direct_connect_gateways",
+      "parameters": {},
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "directconnect",
+      "operation": "describe_direct_connect_gateway_associations",
+      "parameters": {},
+      "status": "complete",
+      "pages": 1,
+      "items": 1
     }
   ],
   "raw": {
@@ -738,7 +776,98 @@
     "placement_groups": [],
     "fsx_file_systems": [],
     "sagemaker_endpoints": [],
-    "sagemaker_clusters": []
+    "sagemaker_clusters": [],
+    "dx_gateways": [
+      {
+        "directConnectGatewayId": "5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "directConnectGatewayName": "hybrid-dxgw",
+        "amazonSideAsn": 64513,
+        "ownerAccount": "111122223333",
+        "directConnectGatewayState": "available"
+      }
+    ],
+    "dx_gateway_associations": [
+      {
+        "directConnectGatewayId": "5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "associationState": "associated",
+        "associationId": "47469e76-6771-0523-bea8-46ec386c1d52",
+        "associatedGateway": {
+          "id": "tgw-hybrid00000005",
+          "type": "transitGateway",
+          "ownerAccount": "111122223333",
+          "region": "ap-northeast-2"
+        },
+        "allowedPrefixesToDirectConnectGateway": [
+          {
+            "cidr": "10.50.0.0/16"
+          }
+        ]
+      }
+    ],
+    "dx_connections": [
+      {
+        "connectionId": "dxcon-hybrid01",
+        "connectionName": "seoul-dx-1",
+        "location": "seoul-location-a",
+        "bandwidth": "10Gbps",
+        "connectionState": "available",
+        "region": "ap-northeast-2",
+        "ownerAccount": "111122223333"
+      },
+      {
+        "connectionId": "dxcon-hybrid02",
+        "connectionName": "seoul-dx-2",
+        "location": "seoul-location-b",
+        "bandwidth": "10Gbps",
+        "connectionState": "available",
+        "region": "ap-northeast-2",
+        "ownerAccount": "111122223333"
+      }
+    ],
+    "dx_virtual_interfaces": [
+      {
+        "virtualInterfaceId": "dxvif-08a30a7e",
+        "virtualInterfaceName": "seoul-dx-1-transit",
+        "virtualInterfaceType": "transit",
+        "connectionId": "dxcon-hybrid01",
+        "vlan": 101,
+        "asn": 65010,
+        "amazonSideAsn": 64513,
+        "directConnectGatewayId": "5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "virtualInterfaceState": "available",
+        "region": "ap-northeast-2",
+        "ownerAccount": "111122223333",
+        "bgpPeers": [
+          {
+            "bgpPeerId": "dxpeer-19b422d9",
+            "addressFamily": "ipv4",
+            "bgpPeerState": "available",
+            "bgpStatus": "up"
+          }
+        ]
+      },
+      {
+        "virtualInterfaceId": "dxvif-3328f51d",
+        "virtualInterfaceName": "seoul-dx-2-transit",
+        "virtualInterfaceType": "transit",
+        "connectionId": "dxcon-hybrid02",
+        "vlan": 102,
+        "asn": 65010,
+        "amazonSideAsn": 64513,
+        "directConnectGatewayId": "5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "virtualInterfaceState": "available",
+        "region": "ap-northeast-2",
+        "ownerAccount": "111122223333",
+        "bgpPeers": [
+          {
+            "bgpPeerId": "dxpeer-9eee5a8b",
+            "addressFamily": "ipv4",
+            "bgpPeerState": "available",
+            "bgpStatus": "up"
+          }
+        ]
+      }
+    ]
   },
   "graph": {
     "nodes": [
@@ -826,6 +955,64 @@
         },
         "reference_only": false,
         "source": "DescribeCustomerGateways"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/dx_connection/dxcon-hybrid01",
+        "resource_id": "dxcon-hybrid01",
+        "kind": "dx_connection",
+        "name": "seoul-dx-1",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "connectionId": "dxcon-hybrid01",
+          "connectionName": "seoul-dx-1",
+          "location": "seoul-location-a",
+          "bandwidth": "10Gbps",
+          "connectionState": "available",
+          "region": "ap-northeast-2",
+          "ownerAccount": "111122223333",
+          "DisplayName": "seoul-dx-1"
+        },
+        "reference_only": false,
+        "source": "DescribeConnections",
+        "virtual_interfaces": [
+          "transit VIF VLAN 101 · BGP 1/1 up"
+        ],
+        "properties": [
+          [
+            "가상 인터페이스",
+            "transit VIF VLAN 101 · BGP 1/1 up"
+          ]
+        ]
+      },
+      {
+        "id": "111122223333/ap-northeast-2/dx_connection/dxcon-hybrid02",
+        "resource_id": "dxcon-hybrid02",
+        "kind": "dx_connection",
+        "name": "seoul-dx-2",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "connectionId": "dxcon-hybrid02",
+          "connectionName": "seoul-dx-2",
+          "location": "seoul-location-b",
+          "bandwidth": "10Gbps",
+          "connectionState": "available",
+          "region": "ap-northeast-2",
+          "ownerAccount": "111122223333",
+          "DisplayName": "seoul-dx-2"
+        },
+        "reference_only": false,
+        "source": "DescribeConnections",
+        "virtual_interfaces": [
+          "transit VIF VLAN 102 · BGP 1/1 up"
+        ],
+        "properties": [
+          [
+            "가상 인터페이스",
+            "transit VIF VLAN 102 · BGP 1/1 up"
+          ]
+        ]
       },
       {
         "id": "111122223333/ap-northeast-2/ec2/i-erpa0000000000005",
@@ -1277,6 +1464,24 @@
         },
         "reference_only": false,
         "source": "DescribeVpcs"
+      },
+      {
+        "id": "111122223333/global/dx_gateway/5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "resource_id": "5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "kind": "dx_gateway",
+        "name": "hybrid-dxgw",
+        "account": "111122223333",
+        "region": "global",
+        "attributes": {
+          "directConnectGatewayId": "5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+          "directConnectGatewayName": "hybrid-dxgw",
+          "amazonSideAsn": 64513,
+          "ownerAccount": "111122223333",
+          "directConnectGatewayState": "available",
+          "DisplayName": "hybrid-dxgw"
+        },
+        "reference_only": false,
+        "source": "DescribeDirectConnectGateways"
       }
     ],
     "edges": [
@@ -1737,6 +1942,59 @@
         },
         "inferred": false,
         "id": "rel-736bc2e50c4fe7807bdb"
+      },
+      {
+        "source": "111122223333/global/dx_gateway/5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-hybrid00000005",
+        "relation": "dx_gateway_association",
+        "evidence": "DescribeDirectConnectGatewayAssociations.associatedGateway.id",
+        "qualifiers": {},
+        "details": {
+          "State": "associated",
+          "AllowedPrefixes": [
+            "10.50.0.0/16"
+          ]
+        },
+        "inferred": false,
+        "id": "rel-dfb527aebc06357b3316"
+      },
+      {
+        "source": "111122223333/global/dx_gateway/5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "target": "111122223333/ap-northeast-2/dx_connection/dxcon-hybrid01",
+        "relation": "dx_virtual_interface",
+        "evidence": "DescribeVirtualInterfaces.directConnectGatewayId + connectionId",
+        "qualifiers": {
+          "destination": "dxvif-08a30a7e"
+        },
+        "details": {
+          "VirtualInterfaceId": "dxvif-08a30a7e",
+          "Name": "seoul-dx-1-transit",
+          "Type": "transit",
+          "Vlan": 101,
+          "State": "available",
+          "BGP": "1/1 up"
+        },
+        "inferred": false,
+        "id": "rel-3c3ee40014c47da50a08"
+      },
+      {
+        "source": "111122223333/global/dx_gateway/5b2136a0-e0d2-acb5-e3cc-2d7eeba3bc75",
+        "target": "111122223333/ap-northeast-2/dx_connection/dxcon-hybrid02",
+        "relation": "dx_virtual_interface",
+        "evidence": "DescribeVirtualInterfaces.directConnectGatewayId + connectionId",
+        "qualifiers": {
+          "destination": "dxvif-3328f51d"
+        },
+        "details": {
+          "VirtualInterfaceId": "dxvif-3328f51d",
+          "Name": "seoul-dx-2-transit",
+          "Type": "transit",
+          "Vlan": 102,
+          "State": "available",
+          "BGP": "1/1 up"
+        },
+        "inferred": false,
+        "id": "rel-355c193ba600554ca396"
       }
     ]
   }

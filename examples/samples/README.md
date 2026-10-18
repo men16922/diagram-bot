@@ -34,7 +34,9 @@ VPC 1 · 서브넷 12 · EC2 6 · 로드밸런서 2 · 대상 그룹 2 · NAT 3 
 - 웹·앱 계층은 Auto Scaling 그룹(ELB 헬스 체크)으로 AZ에 분산
 - 데이터 계층은 인터넷 경로 없는 격리 서브넷의 RDS Multi-AZ (암호화, 비공개), 읽기는 세 번째 AZ의 읽기 전용 복제본
 - S3는 게이트웨이 엔드포인트로 NAT를 거치지 않고, 관리 접근은 SSM·SSM Messages·EC2 Messages 엔드포인트의 Session Manager(배스천 없음)
-- 도형 밖 권고: CloudFront(정적 콘텐츠는 S3)·AWS WAF·Route 53 헬스 체크를 진입점 앞에 (REL02-BP01, 수집 범위 밖)
+- 진입점 앞에 CloudFront(정적 콘텐츠는 S3 오리진)와 CloudFront용 AWS WAF 웹 ACL, ALB 보안 그룹은 CloudFront origin-facing 접두사 목록만 허용 (REL02-BP01)
+- NAT 게이트웨이마다 Elastic IP: 외부 파트너의 허용 목록에 올릴 고정 출구 IP
+- 도형 밖 권고: Route 53 헬스 체크·Shield Advanced (수집 범위 밖)
 
 ![three-tier prod-web.png](three-tier/prod-web.png)
 
@@ -60,7 +62,8 @@ VPC 1 · 서브넷 4 · EC2 4 · 로드밸런서 2 · 대상 그룹 3 · NAT 2 �
 - TCP 서비스는 NLB 대상 그룹으로 직접 연결
 - 두 AZ에 대상을 분산하고 교차 영역 구성
 - 관리 접근은 배스천 대신 Session Manager 사용 (인스턴스 퍼블릭 IP 없음)
-- 도형 밖 권고: NLB 고정 IP는 AZ마다 Elastic IP, ALB에는 AWS WAF, 대안으로 Global Accelerator (수집 범위 밖)
+- NLB 고정 IP는 AZ마다 Elastic IP (파트너 방화벽 허용 목록), ALB에는 AWS WAF 웹 ACL
+- 도형 밖 권고: 대안으로 Global Accelerator (수집 범위 밖)
 
 ![nlb-alb partner-gateway.png](nlb-alb/partner-gateway.png)
 
@@ -88,8 +91,9 @@ VPC 1 · 서브넷 2 · EC2 2 · 로드밸런서 1 · 대상 그룹 2 · Auto Sc
 - VPC 밖 대상은 서브넷에 넣지 않고 별도 영역에 표시
 - 클라우드 대상과 온프레미스 대상을 같은 대상 그룹에서 헬스 체크
 - 내부 ALB로 사내망 전용 노출
-- 온프레미스 대역(192.168.0.0/16)은 Transit Gateway의 Site-to-Site VPN 2개로 연결: 고객 게이트웨이(장비·ISP) 2개, 각각 터널 2개, BGP (REL02-BP02)
-- 도형 밖 권고: 운영 주 연결은 Direct Connect(다중 위치), VPN은 백업. 하이브리드 DNS는 Route 53 Resolver 엔드포인트 (수집 범위 밖)
+- 주 연결은 Direct Connect: 서로 다른 위치 2곳의 전용 연결 2개, 각각 transit VIF로 Direct Connect 게이트웨이 → Transit Gateway (Direct Connect 복원력 권고 High resiliency)
+- 백업 연결은 Transit Gateway의 Site-to-Site VPN 2개: 고객 게이트웨이(장비·ISP) 2개, 각각 터널 2개, BGP (REL02-BP02)
+- 도형 밖 권고: 하이브리드 DNS는 Route 53 Resolver 엔드포인트 (수집 범위 밖)
 
 ![hybrid migration-hub.png](hybrid/migration-hub.png)
 
@@ -119,6 +123,7 @@ VPC 2 · 서브넷 12 · 로드밸런서 1 · 대상 그룹 1 · NAT 3 · RDS/Au
 - 분석 VPC는 Redshift Multi-AZ(서브넷 3개, AZ당 2노드)와 DocumentDB writer/reader
 - 두 VPC와 사내 데이터 센터를 Transit Gateway 하나로 연결 (피어링은 비전이적이라 다른 VPC의 VPN을 쓸 수 없음)
 - 사내 데이터 센터는 고객 게이트웨이 2개(장비·ISP 분리)의 Site-to-Site VPN, 각각 터널 2개 (REL02-BP02)
+- TGW 라우팅 테이블로 도메인 분리: 스포크 테이블(두 VPC)은 VPC와 사내망 경로를, 사내망 테이블(VPN)은 VPC 경로만 학습
 
 ![data-platform analytics.png](data-platform/analytics.png)
 ![data-platform data-platform.png](data-platform/data-platform.png)

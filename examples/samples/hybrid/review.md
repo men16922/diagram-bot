@@ -2,7 +2,7 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T21:52:32.300035+00:00 ~ 2026-10-17T21:52:32.300035+00:00
+- 수집 구간: 2026-10-18T09:28:58.335636+00:00 ~ 2026-10-18T09:28:58.335636+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
@@ -43,6 +43,10 @@
 - sagemaker / list_clusters: complete, 0개, 오류 없음; 범위 {}
 - elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/erp-cloud/0000000000000001"}
 - elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/erp-onprem/0000000000000002"}
+- directconnect / describe_connections: complete, 2개, 오류 없음; 범위 {}
+- directconnect / describe_virtual_interfaces: complete, 2개, 오류 없음; 범위 {}
+- directconnect / describe_direct_connect_gateways: complete, 1개, 오류 없음; 범위 {}
+- directconnect / describe_direct_connect_gateway_associations: complete, 1개, 오류 없음; 범위 {}
 
 ## 아키텍처 검토 결과
 
@@ -53,7 +57,7 @@
 ## 해석 범위
 
 - AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.
-- 리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).
+- 리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).
 - 설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다.
 
 ## 검토할 항목
