@@ -314,6 +314,52 @@ def test_hundred_resource_layout_is_readable_and_fast():
         assert_no_shared_segments(layout)
 
 
+def crossings(layout):
+    """Points where two different routes cross at right angles."""
+    parts = [(e["id"], s) for e in layout["edges"] for s in segments(e)]
+    count = 0
+    for i, (a, (axis, c, lo, hi)) in enumerate(parts):
+        for b, (axis2, c2, lo2, hi2) in parts[i + 1:]:
+            count += a != b and axis != axis2 and lo < c2 < hi and lo2 < c < hi2
+    return count
+
+
+def test_route_filter_keeps_dense_views_readable():
+    """About 100 resources (≈40 routes, hundreds of crossings): filtered to one target group the detail view draws only
+    that group's routes without a single crossing; filtered to one load balancer, a tenth of the crossings or fewer."""
+    snapshot = scale_snapshot()
+    graph = build_graph(snapshot)
+    full = layout_document(snapshot, "detail", "vpc-scale-0", None, False, graph)
+    assert crossings(full) > 300
+    vpc = [n for n in graph["nodes"] if n["attributes"].get("VpcId") == "vpc-scale-0"]
+    for node in (n for n in vpc if n["kind"] in ("target_group", "load_balancer")):
+        layout = layout_document(snapshot, "detail", "vpc-scale-0", None, False, graph, node["id"])
+        assert_readable(layout)
+        assert_no_shared_segments(layout)
+        assert_routed(layout)
+        assert_captions_clear(layout)
+        assert layout["width"] <= full["width"] and layout["height"] <= full["height"]
+        if node["kind"] == "target_group":
+            registrations = [e for e in graph["edges"] if e["source"] == node["id"] and e["relation"] in ("registered_target", "associated_load_balancer")]
+            assert sorted(e["relation_id"] for e in layout["edges"]) == sorted(e["id"] for e in registrations)
+            assert crossings(layout) == 0
+        else:
+            assert crossings(layout) * 10 <= crossings(full) and len(layout["edges"]) * 2 < len(full["edges"])
+    # The document states the filter and keeps the off-path resources, dimmed.
+    lb = next(n["id"] for n in vpc if n["name"] == "scale-0-2")
+    root = validate_document(generate_document(snapshot, "vpc-scale-0", False, "detail", None, lb))
+    scope = root.find(".//object[@id='scope']")
+    assert scope.get("routes") == lb and "경로 필터: 로드 밸런서 scale-0-2" in scope.get("label") and "숨김" in scope.get("label")
+    assert any("opacity=30" in c.get("style", "") for c in root.iter("mxCell"))
+    # 300 instances and 18 target groups in one VPC: one target group's routes still never cross.
+    dense = scale_snapshot(vpcs=1, instances_per_subnet=100, load_balancers=6, groups_per_lb=3)
+    groups = [n for n in build_graph(dense)["nodes"] if n["kind"] == "target_group"][:3]
+    for group in groups:
+        layout = layout_document(dense, "detail", "vpc-scale-0", None, False, None, group["id"])
+        assert_readable(layout)
+        assert crossings(layout) == 0 and len(layout["edges"]) <= 20
+
+
 def test_large_vpc_and_account_scale():
     """300 instances and 18 target groups in one VPC stay readable; a 2,500-resource account renders in seconds."""
     dense = scale_snapshot(vpcs=1, instances_per_subnet=100, load_balancers=6, groups_per_lb=3)

@@ -228,25 +228,27 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         return cache[key]
 
     def doc_path(identifier, scope):
-        view, vpc, resource, references = scope
-        # Detail views keep the pre-view key so documents saved by earlier versions stay attached.
+        view, vpc, resource, references, routes = scope
+        # Detail views keep the pre-view key so documents saved by earlier versions stay attached;
+        # a route-filtered detail view is its own document.
         key = (f"{identifier}|{vpc}|{references}" if view == "detail"
-               else f"{identifier}|{view}|{vpc}|{resource}|{references}")
+               else f"{identifier}|{view}|{vpc}|{resource}|{references}") + (f"|routes={routes}" if routes else "")
         return documents / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
 
     def read_json(path, default=None):
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
 
-    def view_scope(snapshot, view, vpc, resource, references):
+    def view_scope(snapshot, view, vpc, resource, references, routes=None):
         try:
-            selection = view_graph(snapshot["graph"], view, vpc, resource, references)
+            selection = view_graph(snapshot["graph"], view, vpc, resource, references, routes)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         v = selection["view"]
-        return (v["kind"], v["vpc"], v["resource"], v["references"]), selection
+        return (v["kind"], v["vpc"], v["resource"], v["references"], v["routes"]), selection
 
     def describe(document, selection, history):
-        return {**document, "view": selection["view"], "counts": selection["counts"], "visible": selection["nodes"],
+        routes = selection["routes"] and {k: v for k, v in selection["routes"].items() if k != "path"}
+        return {**document, "view": selection["view"], "counts": selection["counts"], "visible": selection["nodes"], "routes": routes,
                 "history": [{k: h[k] for k in ("revision", "saved_at", "reason")} for h in history]}
 
     def archive(path, saved, reason):
@@ -456,22 +458,22 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
 
     @app.get("/api/snapshots/{identifier}/document")
     def read_document(identifier: str, view: str | None = None, vpc: str | None = None, resource: str | None = None,
-                      references: bool = False, reset: bool = False):
+                      references: bool = False, reset: bool = False, routes: str | None = None):
         snapshot = get_snapshot(identifier)
-        scope, selection = view_scope(snapshot, view, vpc, resource, references)
+        scope, selection = view_scope(snapshot, view, vpc, resource, references, routes)
         path = doc_path(identifier, scope)
         saved = read_json(path)
         history = read_json(path.with_suffix(".history.json"), [])
         if saved and not reset:
             return describe(saved, selection, history)
-        xml = generate_document(snapshot, scope[1], scope[3], scope[0], scope[2])
+        xml = generate_document(snapshot, scope[1], scope[3], scope[0], scope[2], scope[4])
         return describe({"xml": xml, "revision": saved["revision"] if saved else 0, "saved_at": None}, selection, history)
 
     @app.put("/api/snapshots/{identifier}/document")
     def save_document(identifier: str, document: DocumentRequest, view: str | None = None, vpc: str | None = None,
-                      resource: str | None = None, references: bool = False):
+                      resource: str | None = None, references: bool = False, routes: str | None = None):
         snapshot = get_snapshot(identifier)
-        scope, selection = view_scope(snapshot, view, vpc, resource, references)
+        scope, selection = view_scope(snapshot, view, vpc, resource, references, routes)
         try:
             validate_document(document.xml)
         except Exception as exc:
@@ -490,12 +492,12 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
 
     @app.post("/api/snapshots/{identifier}/document/relayout")
     def relayout_document(identifier: str, request: RevisionRequest, view: str | None = None, vpc: str | None = None,
-                          resource: str | None = None, references: bool = False):
+                          resource: str | None = None, references: bool = False, routes: str | None = None):
         """Explicit automatic layout: archive the current edit, regenerate, keep user-added notes."""
         snapshot = get_snapshot(identifier)
-        scope, selection = view_scope(snapshot, view, vpc, resource, references)
+        scope, selection = view_scope(snapshot, view, vpc, resource, references, routes)
         path = doc_path(identifier, scope)
-        xml = generate_document(snapshot, scope[1], scope[3], scope[0], scope[2])
+        xml = generate_document(snapshot, scope[1], scope[3], scope[0], scope[2], scope[4])
         with mutex:
             saved = read_json(path, {"revision": 0})
             if saved["revision"] != request.revision:
@@ -509,9 +511,9 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
 
     @app.post("/api/snapshots/{identifier}/document/restore")
     def restore_document(identifier: str, request: RestoreRequest, view: str | None = None, vpc: str | None = None,
-                         resource: str | None = None, references: bool = False):
+                         resource: str | None = None, references: bool = False, routes: str | None = None):
         snapshot = get_snapshot(identifier)
-        scope, selection = view_scope(snapshot, view, vpc, resource, references)
+        scope, selection = view_scope(snapshot, view, vpc, resource, references, routes)
         path = doc_path(identifier, scope)
         with mutex:
             saved = read_json(path, {"revision": 0})

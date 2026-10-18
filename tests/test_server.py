@@ -65,6 +65,23 @@ def test_document_persistence_conflict_and_scope(client, tmp_path):
     assert client.get('/api/snapshots/demo/document?view=sideways').status_code == 422
 
 
+def test_route_filtered_detail_is_its_own_document(client):
+    from diagram_bot.demo import TG_WEB
+    url = '/api/snapshots/demo/document?view=detail&vpc=vpc-demo'
+    full = client.get(url).json()
+    filtered = client.get(url + '&routes=' + TG_WEB).json()
+    assert filtered['routes']['name'] == 'demo-web' and filtered['routes']['kind'] == 'target_group' and 'path' not in filtered['routes']
+    assert filtered['view']['routes'].endswith(TG_WEB) and full['routes'] is None and full['view']['routes'] is None
+    assert filtered['counts']['hidden'] == full['counts']['hidden'] + filtered['counts']['filtered'] and filtered['counts']['filtered'] > 0
+    assert 'routes="' in filtered['xml'] and '경로 필터: 대상 그룹 demo-web' in filtered['xml']
+    # Saving the filtered view leaves the unfiltered detail document alone (and the legacy detail key unchanged).
+    assert client.put(url + '&routes=' + TG_WEB, json={'xml': filtered['xml'], 'revision': 0}).json()['revision'] == 1
+    assert client.get(url).json()['revision'] == 0 and client.get(url + '&routes=' + TG_WEB).json()['revision'] == 1
+    assert client.post(url.replace('/document?', '/document/relayout?') + '&routes=' + TG_WEB, json={'revision': 1}).json()['revision'] == 2
+    assert client.get(url + '&routes=i-demo-a').status_code == 422
+    assert client.get('/api/snapshots/demo/document?view=overview&routes=' + TG_WEB).status_code == 422
+
+
 def test_views_are_isolated_documents(client):
     urls = ['/api/snapshots/demo/document?view=overview', '/api/snapshots/demo/document?view=detail&vpc=vpc-demo',
             '/api/snapshots/demo/document?view=detail&vpc=vpc-staging', '/api/snapshots/demo/document?view=focus&resource=i-demo-a',

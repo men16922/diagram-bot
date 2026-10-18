@@ -158,7 +158,7 @@ def page(file, layout, name):
     for shape in layout["shapes"]:
         attrs = {"id": shape["id"], "label": shape["label"]}
         for key, attr in (("resource", "resourceId"), ("tooltip", "tooltip"), ("layout", "layout"), ("view", "view"),
-                          ("vpc", "vpc"), ("focus", "focus"), ("references", "references")):
+                          ("vpc", "vpc"), ("focus", "focus"), ("references", "references"), ("routes", "routes")):
             if shape.get(key) not in (None, ""):
                 attrs[attr] = str(shape[key])
         if shape["role"] == "summary":
@@ -171,6 +171,9 @@ def page(file, layout, name):
             style += "dashed=1;strokeColor=#9AA8BC;fontColor=#62748A;"
         if shape.get("emphasis") and shape["role"] != "resource":
             style += "strokeColor=#E0A100;strokeWidth=3;"
+        if shape.get("muted"):
+            # Off the route filter's path: kept in place for context, dimmed.
+            style += "opacity=30;textOpacity=45;"
         obj = SubElement(root, "object", attrs)
         cell = SubElement(obj, "mxCell", {"vertex": "1", "parent": shape["parent"], "style": style})
         SubElement(cell, "mxGeometry", {"x": f"{shape['x']:g}", "y": f"{shape['y']:g}", "width": f"{shape['w']:g}",
@@ -194,17 +197,19 @@ def page(file, layout, name):
                 SubElement(points, "mxPoint", {"x": f"{x:g}", "y": f"{y:g}"})
 
 
-def layout_document(snapshot, view=None, vpc_id=None, resource=None, include_references=False, graph=None):
+def layout_document(snapshot, view=None, vpc_id=None, resource=None, include_references=False, graph=None, routes=None):
     graph = graph or build_graph(snapshot)
-    return layout_view(snapshot, graph, view_graph(graph, view, vpc_id, resource, include_references))
+    return layout_view(snapshot, graph, view_graph(graph, view, vpc_id, resource, include_references, routes))
 
 
-def generate_document(snapshot, vpc_id=None, include_references=False, view=None, resource=None):
-    """One page for an explicit view; without a view, an overview page plus one detail page per VPC."""
+def generate_document(snapshot, vpc_id=None, include_references=False, view=None, resource=None, routes=None):
+    """One page for an explicit view; without a view, an overview page plus one detail page per VPC.
+
+    `routes` narrows a detail page to one load balancer's or target group's routes (views.route_filter)."""
     graph = build_graph(snapshot)
     file = Element("mxfile", {"host": "Diagram Bot", "version": "2", "compressed": "false"})
     if view or vpc_id or resource:
-        layout = layout_document(snapshot, view, vpc_id, resource, include_references, graph)
+        layout = layout_document(snapshot, view, vpc_id, resource, include_references, graph, routes)
         focus = next((n["name"] for n in graph["nodes"] if n["id"] == layout["view"]["resource"]), None)
         name = {"overview": "전체 구성", "detail": vpc_id, "focus": focus}[layout["view"]["kind"]]
         page(file, layout, name or "AWS")

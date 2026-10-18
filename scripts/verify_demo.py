@@ -241,6 +241,34 @@ def main():
         frame.get_by_text(starts('platform-events')).first.click()
         expect(detail).to_contain_text('MSK 클러스터')
         shot('eks-platform.png')
+        # 8b. Route filter: the microservices detail (one ALB, four target groups) narrowed to one target group's routes;
+        # the others are hidden and counted, off-path resources dimmed; the inspector switches back and forth.
+        page.locator('#snapshot-select').select_option('sample-microservices')
+        ready()
+        expect(page.locator('#view-detail')).to_have_class('view-button active')
+        expect(page.locator('#route-filter-label')).to_be_visible()
+        expect(frame.get_by_text(starts('catalog-svc'))).to_have_count(1)
+        page.locator('#route-filter').select_option(label='cart-svc-ecs')
+        ready()
+        expect(page.locator('#view-scope')).to_contain_text('경로 필터')
+        expect(page.locator('#environment-title')).to_have_text('commerce-services')
+        expect(frame.get_by_text(starts('catalog-svc'))).to_have_count(0)
+        filtered_xml = page.evaluate('() => state.xml')
+        assert 'routes="' in filtered_xml and '경로 필터: 대상 그룹 cart-svc-ecs' in filtered_xml and 'opacity=30' in filtered_xml
+        shot('route-filter.png')
+        frame.get_by_text(starts('cart-svc-ecs')).first.click()
+        detail.get_by_role('button', name='모든 경로 보기').click()
+        ready()
+        expect(page.locator('#route-filter')).to_have_value('')
+        expect(page.locator('#view-scope')).not_to_contain_text('경로 필터')
+        frame.get_by_text(starts('orders-svc')).first.click()
+        detail.get_by_role('button', name='이 경로만 보기').click()
+        ready()
+        expect(page.locator('#route-filter')).to_have_value(re.compile('targetgroup/orders-svc/'))
+        expect(frame.get_by_text(starts('cart-svc-ecs'))).to_have_count(0)
+        page.locator('#view-overview').click()
+        ready()
+        expect(page.locator('#route-filter-label')).to_be_hidden()
         # 9. Data platform: ECS service frame, OpenSearch per-AZ nodes, read replica, then the TGW VPNs from the analytics VPC.
         page.locator('#snapshot-select').select_option('sample-data-platform')
         ready()
@@ -446,6 +474,7 @@ def main():
                          'JSON/CSV/review CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
                          'single-VPC sample opens in detail; infrastructure sample: ASG frame, RDS standby, route-classified subnet',
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
+                         'route filter: detail narrowed to one target group (hidden + counted, off-path dimmed), inspector back to all routes and to one route',
                          'network overview (TGW, customer gateways); data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
                          'AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review',
                          'GPU training: EFA, Capacity Block, placement group, FSx for Lustre, HyperPod; GenAI RAG: SageMaker endpoint',

@@ -104,6 +104,39 @@ def test_view_contract_counts_and_scope():
     assert view_graph(graph)["view"]["kind"] == "overview"
 
 
+def test_route_filter_narrows_detail_to_one_path():
+    """A detail view filtered to one target group or load balancer: only its routes, others hidden and counted."""
+    from diagram_bot.demo import ALB
+    graph = build_graph(demo_snapshot())
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    full = view_graph(graph, "detail", "vpc-demo")
+    web = view_graph(graph, "detail", "vpc-demo", routes=TG_WEB)
+    tg = next(k for k, n in nodes.items() if n["resource_id"] == TG_WEB)
+    assert web["view"]["routes"] == tg and web["routes"]["kind"] == "target_group" and web["routes"]["target_groups"] == 1
+    assert web["edges"] and all(e["source"] == tg for e in web["edges"])
+    assert {e["id"] for e in web["edges"]} < {e["id"] for e in full["edges"]}
+    # Honest counts: everything not shown is in the hidden count, and the filter says how much of it is its own doing.
+    counts = web["counts"]
+    assert counts["visible"] + counts["hidden"] == len(graph["nodes"]) == len(web["nodes"]) + counts["hidden"]
+    assert counts["hidden"] - full["counts"]["hidden"] == counts["filtered"] == web["routes"]["hidden"] > 0
+    assert web["routes"]["hidden_relations"] == len(full["edges"]) - len(web["edges"])
+    # Only other load balancing (load balancers, target groups, their IP and unqueried targets) is hidden; placed resources stay.
+    gone = set(full["nodes"]) - set(web["nodes"])
+    assert all(nodes[k]["kind"] in ("load_balancer", "target_group", "registered_target") or nodes[k]["reference_only"] for k in gone)
+    assert {k for k in full["nodes"] if nodes[k]["kind"] in ("ec2", "subnet") and not nodes[k]["reference_only"]} <= set(web["nodes"])
+    assert set(web["routes"]["path"]) <= set(web["nodes"]) and tg in web["routes"]["path"]
+    # A node ID addresses the same filter; a load balancer brings all of its target groups.
+    assert view_graph(graph, "detail", "vpc-demo", routes=tg)["nodes"] == web["nodes"]
+    alb = view_graph(graph, "detail", "vpc-demo", routes=ALB)
+    groups = [g for g in demo_snapshot()["raw"]["target_groups"] if ALB in g["LoadBalancerArns"]]
+    assert alb["routes"]["target_groups"] == len(groups) and {e["id"] for e in web["edges"]} <= {e["id"] for e in alb["edges"]}
+    for kwargs in ({"view": "focus", "resource": "i-demo-a"}, {"view": "detail", "vpc": "vpc-staging"}, {"view": "overview"}):
+        with pytest.raises(ValueError):
+            view_graph(graph, routes=TG_WEB, **kwargs)
+    with pytest.raises(ValueError, match="로드 밸런서나 대상 그룹"):
+        view_graph(graph, "detail", "vpc-demo", routes="i-demo-a")
+
+
 def test_html_json_and_csv_share_data_and_escape_resource_tags(tmp_path):
     snapshot = demo_snapshot()
     malicious = '</script><script>window.injected=true</script>'

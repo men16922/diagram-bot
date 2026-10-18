@@ -5,7 +5,7 @@ const relationNames = {in_vpc:'VPC 소속',in_subnet:'서브넷 배치',associat
 const routeClasses = {public:'퍼블릭 · 0.0.0.0/0 → IGW',nat:'프라이빗 · 0.0.0.0/0 → NAT',tgw:'프라이빗 · 0.0.0.0/0 → TGW',vgw:'프라이빗 · 0.0.0.0/0 → VGW',isolated:'격리 · 인터넷 경로 없음'};
 const statuses = {complete:'조회 완료',partial:'부분 조회',unavailable:'조회 불가',not_discovered:'미발견 범위'};
 const viewNames = {overview:'전체 구성',detail:'상세 구성',focus:'선택 리소스'};
-const state = {token:null,snapshot:null,snapshotId:null,view:'overview',vpc:null,focus:null,references:false,revision:0,xml:null,history:[],visible:null,counts:null,ready:false,loading:true,dirty:false,busy:false,mode:'diagram',selected:null};
+const state = {token:null,snapshot:null,snapshotId:null,view:'overview',vpc:null,focus:null,references:false,routes:null,revision:0,xml:null,history:[],visible:null,counts:null,ready:false,loading:true,dirty:false,busy:false,mode:'diagram',selected:null};
 const pending = new Map();
 let editorTimer, toastTimer, pngWaiter = null;
 const emptyDetail=document.querySelector('#detail-body .empty-detail');
@@ -26,6 +26,7 @@ const vpcNode = resourceId => state.snapshot.graph.nodes.find(n=>n.kind==='vpc'&
 function documentUrl(suffix='', reset=false) {
   const query=new URLSearchParams({view:state.view,references:String(state.references)});
   if(state.view==='detail')query.set('vpc',state.vpc);
+  if(state.view==='detail'&&state.routes)query.set('routes',state.routes);
   if(state.view==='focus')query.set('resource',state.focus);
   if(reset)query.set('reset','true');
   return `/api/snapshots/${state.snapshotId}/document${suffix}?${query}`;
@@ -33,7 +34,7 @@ function documentUrl(suffix='', reset=false) {
 function setControls() {
   for(const id of ['save-button','export-button','note-button','reset-button'])$(id).disabled=!state.ready||state.loading||state.busy;
   $('restore-button').disabled=!state.ready||state.loading||state.busy||!state.history.length;
-  for(const id of ['snapshot-select','references','import-button'])$(id).disabled=state.busy||(state.ready&&state.loading);
+  for(const id of ['snapshot-select','references','route-filter','import-button'])$(id).disabled=state.busy||(state.ready&&state.loading);
   // Team mode roles: viewers read only, editors edit and import, admins also collect from AWS.
   if(state.role==='viewer')for(const id of ['save-button','note-button','reset-button','restore-button','import-button','combine-button'])$(id).disabled=true;
   $('collection-button').disabled=state.role!=='admin';$('signin-button').disabled=state.role!=='admin';$('chat-button').disabled=state.role==='viewer';
@@ -102,7 +103,7 @@ async function loadSnapshot(id) {
   // The overview shows how VPCs connect; with one VPC and no TGW, peering or VPN it is a single card, so open its detail.
   const graphNodes=state.snapshot.graph.nodes,vpcs=graphNodes.filter(n=>n.kind==='vpc');
   const linked=graphNodes.some(n=>['transit_gateway','vpc_peering','vpn_gateway','customer_gateway'].includes(n.kind));
-  state.view=vpcs.length===1&&!linked?'detail':'overview';state.vpc=vpcs[0]?.resource_id||null;state.focus=null;state.selected=null;
+  state.view=vpcs.length===1&&!linked?'detail':'overview';state.vpc=vpcs[0]?.resource_id||null;state.focus=null;state.selected=null;state.routes=null;
   $('snapshot-select').value=id;
   // A selection from the previous snapshot must not linger in the inspector.
   $('detail-body').replaceChildren(emptyDetail.cloneNode(true));
@@ -135,7 +136,18 @@ function renderSummary() {
 function applyDocument(document) {
   state.xml=document.xml;state.revision=document.revision;state.history=document.history||[];state.visible=new Set(document.visible||[]);state.counts=document.counts;
   const c=document.counts;
-  $('view-scope').textContent=c?`표시 ${c.visible}개 / 수집 ${c.collected}개 · 참조 ${c.references}개 · 이 보기에서 숨김 ${c.hidden}개`:'';
+  $('view-scope').textContent=c?`표시 ${c.visible}개 / 수집 ${c.collected}개 · 참조 ${c.references}개 · 이 보기에서 숨김 ${c.hidden}개`+(c.filtered?` (경로 필터 ${c.filtered}개 포함)`:''):'';
+}
+// Detail views can be narrowed to one load balancer's or target group's routes; the options are this VPC's.
+function renderRouteFilter() {
+  const vpc=state.view==='detail'?vpcNode(state.vpc):null;
+  const inVpc=new Set(vpc?state.snapshot.graph.edges.filter(e=>e.relation==='in_vpc'&&e.target===vpc.id).map(e=>e.source):[]);
+  const options=kind=>state.snapshot.graph.nodes.filter(n=>n.kind===kind&&inVpc.has(n.id)).sort((a,b)=>a.name.localeCompare(b.name));
+  const lbs=options('load_balancer'),groups=options('target_group');
+  $('route-filter-label').hidden=!lbs.length&&!groups.length;
+  $('route-filter').replaceChildren(new Option('모든 경로',''));
+  for(const [label,items] of [['로드 밸런서',lbs],['대상 그룹',groups]]){if(!items.length)continue;const group=el('optgroup');group.label=label;for(const n of items)group.append(new Option(n.name,n.id));$('route-filter').append(group);}
+  $('route-filter').value=state.routes||'';
 }
 async function loadView() {
   state.loading=true;setControls();
@@ -151,13 +163,15 @@ function documentActive() {
   $('all-environments').classList.toggle('active',state.view==='overview');
   document.querySelectorAll('[data-vpc]').forEach(b=>b.classList.toggle('active',state.view==='detail'&&b.dataset.vpc===state.vpc));
   for(const view of Object.keys(viewNames))$('view-'+view).classList.toggle('active',state.view===view);
-  setControls();renderInventory();
+  renderRouteFilter();setControls();renderInventory();
 }
 async function switchView(view, options={}) {
   if(state.loading||state.busy)return;
   clearNotice();
   try{
     if(state.dirty)await saveDocument(false);
+    // A route filter belongs to one VPC's detail view.
+    if(view!=='detail'||(options.vpc&&options.vpc!==state.vpc))state.routes=null;
     state.view=view;if(options.vpc)state.vpc=options.vpc;if(options.focus)state.focus=options.focus;
     await loadView();
   }catch(error){toast(error.message,true);}
@@ -234,6 +248,9 @@ function showResource(id, select=true) {
   if(item.kind==='vpc'&&!(state.view==='detail'&&state.vpc===item.resource_id))actions.append(actionButton('상세 구성 보기',()=>switchView('detail',{vpc:item.resource_id})));
   if(item.kind!=='vpc'&&!(state.view==='focus'&&state.focus===id))actions.append(actionButton('선택 리소스 보기',()=>switchView('focus',{focus:id})));
   if(state.view==='focus')actions.append(actionButton('상세 구성으로 돌아가기',()=>switchView('detail',{vpc:vpcOf(state.focus)||state.vpc})));
+  if(state.view==='detail'&&['load_balancer','target_group'].includes(item.kind)&&state.routes!==id&&vpcOf(id)===state.vpc)
+    actions.append(actionButton('이 경로만 보기',async()=>{if(state.loading||state.busy)return;if(state.dirty)await saveDocument(false);state.routes=id;await loadView();}));
+  if(state.view==='detail'&&state.routes)actions.append(actionButton('모든 경로 보기',async()=>{if(state.loading||state.busy)return;if(state.dirty)await saveDocument(false);state.routes=null;await loadView();}));
   const related=relationsOf(id).map(e=>e.id);
   if(related.length&&state.view!=='overview')actions.append(actionButton('직접 관계 강조',()=>post({action:'diagramBotSelect',resourceId:id,relations:related})));
   if(actions.children.length)body.append(actions);
@@ -262,7 +279,7 @@ function showRelation(id, index) {
 function download(name, content, type) {
   const url=URL.createObjectURL(new Blob([content],{type}));const link=el('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-function filename(extension) {const scope=state.view==='detail'?state.vpc:state.view==='focus'?`focus-${node(state.focus)?.resource_id.split('/').pop()}`:'overview';return `diagram-bot-${state.snapshot.metadata.account_id}-${scope}-v${state.revision}.${extension}`;}
+function filename(extension) {const scope=state.view==='detail'?state.vpc+(state.routes?`-routes-${node(state.routes)?.name}`:''):state.view==='focus'?`focus-${node(state.focus)?.resource_id.split('/').pop()}`:'overview';return `diagram-bot-${state.snapshot.metadata.account_id}-${scope}-v${state.revision}.${extension}`;}
 async function downloadDiagram() {
   const xml=await saveDocument(false);download(filename('drawio'),xml,'application/xml');toast('편집 가능한 draw.io 파일을 다운로드했습니다.');
 }
@@ -400,6 +417,7 @@ $('combine-form').onsubmit=async event=>{
 };
 $('snapshot-select').onchange=()=>loadSnapshot($('snapshot-select').value).catch(e=>toast(e.message,true));
 $('references').onchange=async()=>{try{if(state.dirty)await saveDocument(false);state.references=$('references').checked;await loadView();}catch(e){toast(e.message,true);$('references').checked=state.references;}};
+$('route-filter').onchange=async()=>{const previous=state.routes;try{if(state.dirty)await saveDocument(false);state.routes=$('route-filter').value||null;clearNotice();await loadView();}catch(e){state.routes=previous;$('route-filter').value=previous||'';toast(e.message,true);}};
 $('import-file').onchange=async()=>{
   try{const file=$('import-file').files[0];if(!file)return;if(file.size>15*1024*1024)throw new Error('스냅샷은 최대 15 MiB입니다.');const data=JSON.parse(await file.text());const result=await api('/api/snapshots',{method:'POST',body:JSON.stringify(data)});await refreshSnapshots(result.id);await loadSnapshot(result.id);toast('스냅샷을 가져왔습니다.');}catch(error){toast(error.message,true);}finally{$('import-file').value='';}
 };
