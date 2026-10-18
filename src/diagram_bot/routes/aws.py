@@ -4,7 +4,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
-import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -57,7 +56,7 @@ def router(context, executor=None):
         if context.auth and role(request) != "admin":
             raise HTTPException(403, "AWS 자격 증명은 admin만 사용할 수 있습니다.")
         try:
-            caller = aws.outbound(boto3.Session(profile_name=profile or None), user(request)).client("sts").get_caller_identity()
+            caller = aws.profile_session(user(request), profile or None).client("sts").get_caller_identity()
         except Exception as exc:  # noqa: BLE001 - shown to the user as the reason sign-in failed
             raise HTTPException(422, f"AWS 자격 증명을 확인하지 못했습니다: {type(exc).__name__}: {exc}") from exc
         return {"account": caller["Account"], "arn": caller["Arn"], "profile": profile or None}

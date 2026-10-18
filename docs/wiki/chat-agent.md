@@ -3,7 +3,7 @@ title: 채팅 설계 에이전트
 summary: agent.py(모델 목록·대체, SYSTEM_PROMPT, Workspace, 도구 29개, Chat.ask와 진행 이벤트)와 designer.py(Design 상태, 표준 아키텍처, 기존 구성에서 시작하는 brownfield 설계, 스냅샷 메타데이터), CLI chat.
 sources: [src/diagram_bot/agent.py, src/diagram_bot/designer.py, src/diagram_bot/routes/agent.py, src/diagram_bot/cli.py, tests/test_agent.py]
 related: [http-api, howto-add-chat-tool, web-app, storage, team-mode-security, browser-egress, aws-access-and-sso, snapshot-model, cli]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 채팅 설계 에이전트
 
@@ -15,7 +15,7 @@ updated: 2026-10-18
   - `gpt-6-luna` → `global.openai.gpt-6-luna`
   - `claude-sonnet-4.5` → `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
 - `DEFAULT_MODEL = FALLBACK_MODEL = "nova-2-lite"`. 주석: 소유자 결정(2026-10-17), GPT-6 Luna는 계정에서 아직 쓸 수 없고 다른 모델이 거부되면 Nova 2 Lite로 넘어간다.
-- `bedrock_model(key, session=None, record=None, streaming=True)`: `BedrockModel`을 감싼 `Recorded`가 `stream()` 호출마다 `record(key)`를 부른다. `temperature=0.2`, `max_tokens=4096`, 세션 기본값 `boto3.Session(region_name="us-east-1")`.
+- `bedrock_model(key, session=None, record=None, streaming=True)`: `BedrockModel`을 감싼 `Recorded`가 `stream()` 호출마다 `record(key)`를 부른다. `temperature=0.2`, `max_tokens=4096`, 세션 기본값 `sdk_session("us-east-1")`(`sessions.py`).
 - 설치는 선택 의존성이다(`pip install -e '.[agent]'`). 없으면 `/api/agent`의 `ready`가 `false`이고 채팅 요청은 503([[http-api]]).
 
 ## SYSTEM_PROMPT 원칙

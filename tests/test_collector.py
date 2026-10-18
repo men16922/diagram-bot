@@ -326,7 +326,7 @@ def test_detail_steps_run_on_a_stub_call():
 
 def test_assume_role_caps_session_to_read_only_and_checks_the_assumed_account(monkeypatch):
     base, assumed = Session(), Session()
-    monkeypatch.setattr("diagram_bot.collector.boto3.Session", lambda **kwargs: assumed)
+    monkeypatch.setattr("diagram_bot.sessions.boto3.Session", lambda **kwargs: assumed)
     role = "arn:aws:iam::444455556666:role/DiagramBotReadOnly"
     with Stubber(base.clients["sts"]) as stub, Stubber(assumed.clients["sts"]) as assumed_stub:
         stub.add_response("assume_role", {"Credentials": {"AccessKeyId": "AKIAEXAMPLE000000000", "SecretAccessKey": "s" * 40,

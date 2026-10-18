@@ -1,9 +1,9 @@
 ---
 title: AWS 접근과 Identity Center 로그인
 summary: 사용자별 AWS 세션을 만드는 한 곳(aws_access.AwsAccess) — Identity Center device code 로그인, 역할 자격 증명, 프로파일·SDK 체인, AssumeRole, egress 경로 선택.
-sources: [src/diagram_bot/aws_access.py, src/diagram_bot/sso.py, src/diagram_bot/routes/aws.py, src/diagram_bot/collector.py, tests/test_sso.py]
+sources: [src/diagram_bot/aws_access.py, src/diagram_bot/sessions.py, src/diagram_bot/sso.py, src/diagram_bot/routes/aws.py, src/diagram_bot/collector.py, tests/test_sso.py, tests/test_credentials.py]
 related: [browser-egress, collection, http-api, team-mode-security, porting-guide]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # AWS 접근과 Identity Center 로그인
 
@@ -37,19 +37,22 @@ updated: 2026-10-18
 
 | 메서드 | 쓰는 곳 | 설명 |
 | --- | --- | --- |
-| `outbound(session, user)` | 신원 확인(`/api/identity`), 채팅 | 브라우저 egress면 세션에 중계를 붙인다 |
+| `outbound(session, user)` | 아래 메서드 모두 | 브라우저 egress면 세션에 중계를 붙인다 |
+| `profile_session(user, profile=None, region=None)` | 신원 확인(`/api/identity`), SSO 역할이 없을 때의 채팅 | 서버 SDK 체인(이름 있는 프로파일, 아니면 기본 체인) + 사용자 경로 |
 | `prepare_for(user)` | 수집 (`collect(prepare=…)`) | 수집이 쓰는 모든 세션(AssumeRole 세션 포함)에 같은 경로 적용 |
 | `collection_session(user, login, account, role, region)` | 수집 | SSO 역할이면 역할 세션 + 선택 기록, 아니면 `None`(프로파일·SDK 체인) |
-| `session(user, region)` | 채팅 도구·Bedrock | 선택한 SSO 역할, 없으면 서버 SDK 체인 |
+| `session(user, region)` | 채팅 도구 | 선택한 SSO 역할, 없으면 `profile_session` |
+| `model_session(user, region)` | 채팅 Bedrock 모델 | 역할 자격 증명을 쓸 때 받고 만료 전에 다시 받는 세션(`sessions.refreshing_session`) |
 | `choose` / `forget` / `chosen_account` | `/use`, 로그아웃, 채팅 기본 계정 | 사용자별 (login, account, role) |
 | `via(sso_role)` | 감사 로그 | `sso:Role` 또는 `sdk`, 브라우저 egress면 `/browser` |
 
+- 세션 자체는 `sessions.py`에서만 만든다: `sdk_session(region, profile)`(SDK 체인), `credentials_session(credentials, region)`(STS의 `AccessKeyId…` 모양과 botocore 갱신 형식 `access_key…` 모두; `collector.assume`, `SsoLogins.session`), `refreshing_session(fetch, region)`. CLI·라이브러리 기본값(`collector.collect`, `agent.Workspace`, `agent.bedrock_model`)도 같은 함수를 쓴다.
 - 수집 시 예상 계정 ID와 STS `GetCallerIdentity` 계정이 다르면 수집하지 않는다(`collector.collect`의 `expected_account`).
 - 팀 모드에서 AWS 관련 API(`/api/collections`, `/api/sso/*`)는 admin만 쓸 수 있다(`auth.allowed`).
 
 ## 회사 인증으로 바꿀 때
 - 회사가 이미 Identity Center 로그인과 `GetRoleCredentials`를 갖고 있다면, `AwsAccess.session`/`collection_session`이 그 자격 증명으로
-  `boto3.Session(aws_access_key_id, aws_secret_access_key, aws_session_token, region_name)`을 돌려주게 바꾸면 된다. 수집·채팅·검토 코드는 그대로다.
+  `sessions.credentials_session(credentials, region)`을 돌려주게 바꾸면 된다. 수집·채팅·검토 코드는 그대로다.
 - 백엔드가 AWS에 나갈 수 없으면 `egress="browser"`를 유지한다([[browser-egress]]).
 
 ## 바꿀 때 주의

@@ -220,7 +220,7 @@ def test_identity_reports_the_signed_in_credentials(client, monkeypatch):
             if self.profile == "broken":
                 raise RuntimeError("no credentials")
             return Sts()
-    monkeypatch.setattr("diagram_bot.routes.aws.boto3.Session", Session)
+    monkeypatch.setattr("diagram_bot.sessions.boto3.Session", Session)
     assert client.get('/api/identity').json() == {"account": "123456789012", "arn": "arn:aws:iam::123456789012:user/architect", "profile": None}
     assert client.get('/api/identity?profile=dev').json()["profile"] == "dev"
     failed = client.get('/api/identity?profile=broken')
