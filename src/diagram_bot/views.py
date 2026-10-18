@@ -53,11 +53,62 @@ def overview_links(graph, nodes):
     return links
 
 
-def view_graph(graph, view=None, vpc=None, resource=None, references=False):
-    """Return visible node IDs, drawn edges and counts for one view."""
+def route_filter(graph, nodes, vpc_of, vpc_node, routes, visible, drawn):
+    """Narrow a detail view to one load balancer's or target group's routes.
+
+    Other load balancers and target groups of the VPC, and targets reachable only through them (IP and unqueried
+    targets, references), are hidden and counted as hidden; placed resources stay visible so the view still shows
+    the VPC, and the layout dims those outside the selected path. Returns (visible, drawn, summary)."""
+    chosen = next((n for n in nodes.values() if (n["id"] == routes or n["resource_id"] == routes)
+                   and n["kind"] in ("load_balancer", "target_group") and vpc_of.get(n["id"]) == vpc_node["id"]), None)
+    if not chosen:
+        raise ValueError("경로 필터는 이 VPC의 로드 밸런서나 대상 그룹만 지정할 수 있습니다.")
+    associated = [e for e in graph["edges"] if e["relation"] == "associated_load_balancer"]
+    if chosen["kind"] == "target_group":
+        groups = {chosen["id"]}
+        lbs = {e["target"] for e in associated if e["source"] == chosen["id"]}
+    else:
+        lbs = {chosen["id"]}
+        groups = {e["source"] for e in associated if e["target"] == chosen["id"]}
+    path = lbs | groups | {e["target"] for e in drawn if e["relation"] == "registered_target" and e["source"] in groups} \
+        | {e["source"] for e in drawn if e["relation"] in GROUP_TARGETS and e["target"] in groups}
+    # Members of the Auto Scaling groups and ECS services attached to the selected target groups are on the path too.
+    path |= {e["target"] for e in graph["edges"] if e["relation"] in GROUPS.values() and e["source"] in path}
+
+    def keep(e):
+        if e["relation"] == "associated_load_balancer":
+            return e["source"] in groups and e["target"] in lbs
+        if e["relation"] == "registered_target":
+            return e["source"] in groups
+        if e["relation"] in GROUP_TARGETS:
+            return e["target"] in groups
+        if e["relation"] in AUXILIARY:
+            return e["source"] in path
+        return True  # Transit Gateway and VPN connections are not load-balancing routes
+    kept = [e for e in drawn if keep(e)]
+    ends = {k for e in kept for k in (e["source"], e["target"])}
+    hidden = {k for k in visible if nodes[k]["kind"] in ("load_balancer", "target_group") and k not in path}
+    # Targets and references drawn only because of a hidden route: IP targets, unqueried instances, SG/ENI/EBS.
+    for e in drawn:
+        for k in (e["source"], e["target"]):
+            placed = vpc_of.get(k) == vpc_node["id"] and not nodes[k]["reference_only"] and nodes[k]["kind"] != "registered_target"
+            if k not in ends and k not in path and not placed and nodes[k]["kind"] != "vpc":
+                hidden.add(k)
+    kept = [e for e in kept if e["source"] not in hidden and e["target"] not in hidden]
+    summary = {"resource": chosen["id"], "kind": chosen["kind"], "name": chosen["name"], "load_balancers": len(lbs), "target_groups": len(groups),
+               "path": sorted(path & (visible - hidden)), "hidden": len(hidden), "hidden_relations": len(drawn) - len(kept)}
+    return visible - hidden, kept, summary
+
+
+def view_graph(graph, view=None, vpc=None, resource=None, references=False, routes=None):
+    """Return visible node IDs, drawn edges and counts for one view.
+
+    `routes` (detail view only) narrows the view to one load balancer's or target group's routes (route_filter)."""
     view = view or ("detail" if vpc else "overview")
     if view not in VIEWS:
         raise ValueError("지원하지 않는 보기입니다.")
+    if routes and view != "detail":
+        raise ValueError("경로 필터는 상세 구성에서만 쓸 수 있습니다.")
     nodes, vpc_of, subnet_of = containment(graph)
     edges = graph["edges"]
     focus = None
@@ -102,11 +153,14 @@ def view_graph(graph, view=None, vpc=None, resource=None, references=False):
     if view != "overview":
         drawn = [e for e in drawn if e["source"] in visible and e["target"] in visible
                  and not (e["relation"] == "in_subnet" and view == "detail")]
+    summary = None
+    if routes:
+        visible, drawn, summary = route_filter(graph, nodes, vpc_of, vpc_node, routes, visible, drawn)
     collected = [n for n in nodes.values() if not n["reference_only"]]
     shown = [nodes[k] for k in visible]
     return {"view": {"kind": view, "vpc": vpc if view == "detail" else None,
-                     "resource": focus, "references": bool(references)},
-            "nodes": sorted(visible), "edges": drawn, "focus": focus,
+                     "resource": focus, "references": bool(references), "routes": summary["resource"] if summary else None},
+            "nodes": sorted(visible), "edges": drawn, "focus": focus, "routes": summary,
             "counts": {"collected": len(collected), "references": len(nodes) - len(collected),
                        "visible": len(shown), "visible_references": sum(n["reference_only"] for n in shown),
-                       "hidden": len(nodes) - len(shown)}}
+                       "hidden": len(nodes) - len(shown), "filtered": summary["hidden"] if summary else 0}}

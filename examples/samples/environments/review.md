@@ -2,24 +2,24 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T21:52:32.186140+00:00 ~ 2026-10-17T21:52:32.186140+00:00
+- 수집 구간: 2026-10-18T09:07:27.240761+00:00 ~ 2026-10-18T09:07:27.240761+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
 ## 조회 범위와 결과
 
-- ec2 / describe_vpcs: complete, 3개, 오류 없음; 범위 {}
-- ec2 / describe_subnets: complete, 12개, 오류 없음; 범위 {}
+- ec2 / describe_vpcs: complete, 4개, 오류 없음; 범위 {}
+- ec2 / describe_subnets: complete, 18개, 오류 없음; 범위 {}
 - ec2 / describe_instances: complete, 7개, 오류 없음; 범위 {}
 - elbv2 / describe_load_balancers: complete, 2개, 오류 없음; 범위 {}
 - elbv2 / describe_target_groups: complete, 2개, 오류 없음; 범위 {}
-- ec2 / describe_internet_gateways: complete, 2개, 오류 없음; 범위 {}
-- ec2 / describe_nat_gateways: complete, 4개, 오류 없음; 범위 {}
-- ec2 / describe_route_tables: complete, 10개, 오류 없음; 범위 {}
+- ec2 / describe_internet_gateways: complete, 3개, 오류 없음; 범위 {}
+- ec2 / describe_nat_gateways: complete, 3개, 오류 없음; 범위 {}
+- ec2 / describe_route_tables: complete, 12개, 오류 없음; 범위 {}
 - rds / describe_db_instances: complete, 0개, 오류 없음; 범위 {}
 - autoscaling / describe_auto_scaling_groups: complete, 2개, 오류 없음; 범위 {}
 - ec2 / describe_vpc_endpoints: complete, 0개, 오류 없음; 범위 {}
-- ec2 / describe_transit_gateway_vpc_attachments: complete, 3개, 오류 없음; 범위 {}
+- ec2 / describe_transit_gateway_vpc_attachments: complete, 4개, 오류 없음; 범위 {}
 - rds / describe_db_clusters: complete, 0개, 오류 없음; 범위 {}
 - elasticache / describe_cache_clusters: complete, 0개, 오류 없음; 범위 {}
 - kafka / list_clusters_v2: complete, 0개, 오류 없음; 범위 {}
@@ -46,11 +46,9 @@
 
 ## 아키텍처 검토 결과
 
-높음 0 · 중간 0 · 낮음 1 — 수집된 설정만으로 판정했으며 실제 트래픽·애플리케이션 수준 이중화는 별도 확인이 필요합니다.
+높음 0 · 중간 0 · 낮음 0 — 수집된 설정만으로 판정했으며 실제 트래픽·애플리케이션 수준 이중화는 별도 확인이 필요합니다.
 
-| 심각도 | 영역 | 규칙 | 리소스 | 내용 | 근거 | 권장 조치 |
-| --- | --- | --- | --- | --- | --- | --- |
-| 낮음 | 안정성 | REL-NAT-CROSS-AZ | staging-private-b | 다른 AZ의 NAT 게이트웨이에 의존하는 프라이빗 서브넷 | 라우팅 테이블 0.0.0.0/0 → nat-staging-a (ap-northeast-2a), 연결 서브넷 AZ ['ap-northeast-2b'] | AZ마다 NAT 게이트웨이를 두면 한 AZ 장애가 다른 AZ의 외부 통신을 끊지 않습니다 (비용과 절충). |
+- 해당 항목 없음
 
 ## 해석 범위
 

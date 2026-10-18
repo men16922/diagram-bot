@@ -7,7 +7,7 @@ from diagram_bot.demo import ALB, demo_snapshot
 from diagram_bot.drawio import cell_id, generate_document, layout_document, resource_style, validate_document
 from diagram_bot.editor import install_editor
 from diagram_bot.graph import build_graph
-from diagram_bot.layout import fit_label, icon_variant
+from diagram_bot.layout import fit_label, icon_variant, text_width
 from diagram_bot.samples import SAMPLES
 from fixtures import full_design, scale_snapshot
 
@@ -93,12 +93,69 @@ def assert_no_shared_segments(layout):
                         raise AssertionError((a["relation"], b["relation"], axis, c))
 
 
+# Where draw.io draws a container's caption: (left inset or None when centred, font size, line height, top inset).
+# AWS group styles put their group icon left of the text, so the caption box starts at the container's edge.
+CAPTIONS = {"cloud": (30, 12, 15, 4), "region": (30, 12, 15, 4), "vpc": (30, 12, 15, 4), "subnet": (30, 11, 14, 4),
+            "onprem": (30, 12, 15, 4), "account": (30, 12, 15, 4), "references": (12, 12, 15, 6), "unplaced": (12, 11, 14, 6),
+            "az": (None, 12, 15, 6)}
+
+
+def assert_captions_clear(layout):
+    """No route runs through a container's caption (group icon and title) other than its own endpoints'."""
+    boxes = []
+    for shape in layout["shapes"]:
+        if shape["role"] not in CAPTIONS:
+            continue
+        left, size, line, top = CAPTIONS[shape["role"]]
+        x, y = layout["absolute"][shape["id"]]
+        lines = shape["label"].split("\n")
+        width = max(text_width(part, size) for part in lines)
+        start = x + shape["w"] / 2 - width / 2 if left is None else x + 1
+        boxes.append((shape, (start, y + 1, (start + width) if left is None else x + left + width, y + top + line * len(lines))))
+    for edge in layout["edges"]:
+        for (x1, y1), (x2, y2) in zip(edge["path"], edge["path"][1:]):
+            segment = (min(x1, x2), min(y1, y2), max(x1, x2) + 0.01, max(y1, y2) + 0.01)
+            for shape, box in boxes:
+                if shape["id"] not in (edge["source"], edge["target"]):
+                    assert not overlap(segment, box), (edge["relation"], shape["role"], shape["label"][:40])
+
+
+def assert_routed(layout):
+    """Every edge carries its own orthogonal route: waypoints (or one straight segment) whose ends sit on the source and
+    target borders exactly where the exit/entry constraints put them, so draw.io never routes an edge by itself."""
+    shapes = {s["id"]: s for s in layout["shapes"]}
+    for edge in layout["edges"]:
+        path = edge["path"]
+        assert len(path) >= 2 and (edge["points"] or len(path) == 2), ("auto-routed", edge["relation"])
+        for (x1, y1), (x2, y2) in zip(path, path[1:]):
+            assert abs(x1 - x2) < 0.01 or abs(y1 - y2) < 0.01, ("not orthogonal", edge["relation"])
+        constraints = dict(part.split("=") for part in edge["constraints"].strip(";").split(";"))
+        for end, point in (("exit", path[0]), ("entry", path[-1])):
+            shape = shapes[edge["source" if end == "exit" else "target"]]
+            x, y = layout["absolute"][shape["id"]]
+            fx, fy = float(constraints[end + "X"]), float(constraints[end + "Y"])
+            assert abs(x + fx * shape["w"] - point[0]) < 1 and abs(y + fy * shape["h"] - point[1]) < 1, (end, edge["relation"])
+            assert fx in (0, 1) or fy in (0, 1), (end, "constraint off the border", edge["relation"])
+
+
+def assert_xml_routed(xml):
+    """The serialized document keeps every route: each edge cell has waypoints and fixed exit/entry points."""
+    root = validate_document(xml)
+    for cell in root.iter("mxCell"):
+        if cell.get("edge") == "1":
+            style = cell.get("style")
+            assert "exitX=" in style and "entryX=" in style and "orthogonalEdgeStyle" in style
+            assert cell.find("mxGeometry/Array[@as='points']/mxPoint") is not None, style[:60]
+
+
 @pytest.mark.parametrize("view,vpc,resource,references", VIEWS)
 def test_views_are_readable_and_reproducible(view, vpc, resource, references):
     snapshot = demo_snapshot()
     layout = layout_document(snapshot, view, vpc, resource, references)
     assert_readable(layout)
     assert_no_shared_segments(layout)
+    assert_routed(layout)
+    assert_captions_clear(layout)
     assert layout_document(snapshot, view, vpc, resource, references)["shapes"] == layout["shapes"]
     xml = generate_document(snapshot, vpc, references, view, resource)
     assert xml == generate_document(snapshot, vpc, references, view, resource)
@@ -197,16 +254,51 @@ def test_best_practice_samples_are_readable(key):
     graph = build_graph(snapshot)
     assert snapshot["metadata"]["demo"] is True and snapshot["metadata"]["practices"]
     assert_readable(layout_document(snapshot, "overview"))
+    assert_routed(layout_document(snapshot, "overview"))
     for vpc in (n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc"):
         for references in (False, True):
             layout = layout_document(snapshot, "detail", vpc, None, references)
             assert_readable(layout)
             assert_no_shared_segments(layout)
+            assert_routed(layout)
+            assert_captions_clear(layout)
     for node in graph["nodes"]:
         if node["kind"] in FOCUSED and not node["reference_only"]:
             layout = layout_document(snapshot, "focus", None, node["id"], True)
             assert_readable(layout)
             assert_no_shared_segments(layout)
+
+
+FOCUS_SOURCES = {**SAMPLES, "demo": demo_snapshot, "design": lambda: full_design().snapshot()}
+
+
+@pytest.mark.parametrize("key", sorted(FOCUS_SOURCES))
+def test_every_focus_document_routes_its_edges(key):
+    """Focus views of every resource of every sample, with and without references: no edge is left to draw.io's
+    auto-routing (placement edges included), routes stay orthogonal, clear of icons, labels and captions."""
+    snapshot = FOCUS_SOURCES[key]()
+    graph = build_graph(snapshot)
+    placements = 0
+    for node in graph["nodes"]:
+        for references in (False, True):
+            layout = layout_document(snapshot, "focus", None, node["id"], references, graph)
+            assert_routed(layout)
+            assert_readable(layout)
+            assert_no_shared_segments(layout)
+            assert_captions_clear(layout)
+            placements += sum(e["relation"] == "in_subnet" for e in layout["edges"])
+    assert placements or not any(n["kind"] == "load_balancer" for n in graph["nodes"])
+    focus = next(n["id"] for n in graph["nodes"] if n["kind"] in ("load_balancer", "transit_gateway", "ec2"))
+    assert_xml_routed(generate_document(snapshot, None, True, "focus", focus))
+
+
+def test_focus_view_does_not_claim_missing_subnets():
+    """A focus view hides the subnets its resources do not sit in; it must not say the VPC has none."""
+    snapshot = SAMPLES["environments"]()
+    hub = next(n for n in build_graph(snapshot)["nodes"] if n["kind"] == "transit_gateway")
+    labels = [s["label"] for s in layout_document(snapshot, "focus", None, hub["id"])["shapes"]]
+    assert not any("조회된 서브넷이 없습니다" in label for label in labels)
+    assert sum("선택 리소스와 직접 관계된 서브넷 없음" in label for label in labels) == 4
 
 
 def test_hundred_resource_layout_is_readable_and_fast():
@@ -220,6 +312,52 @@ def test_hundred_resource_layout_is_readable_and_fast():
         layout = layout_document(snapshot, "detail", vpc, None, True)
         assert_readable(layout)
         assert_no_shared_segments(layout)
+
+
+def crossings(layout):
+    """Points where two different routes cross at right angles."""
+    parts = [(e["id"], s) for e in layout["edges"] for s in segments(e)]
+    count = 0
+    for i, (a, (axis, c, lo, hi)) in enumerate(parts):
+        for b, (axis2, c2, lo2, hi2) in parts[i + 1:]:
+            count += a != b and axis != axis2 and lo < c2 < hi and lo2 < c < hi2
+    return count
+
+
+def test_route_filter_keeps_dense_views_readable():
+    """About 100 resources (≈40 routes, hundreds of crossings): filtered to one target group the detail view draws only
+    that group's routes without a single crossing; filtered to one load balancer, a tenth of the crossings or fewer."""
+    snapshot = scale_snapshot()
+    graph = build_graph(snapshot)
+    full = layout_document(snapshot, "detail", "vpc-scale-0", None, False, graph)
+    assert crossings(full) > 300
+    vpc = [n for n in graph["nodes"] if n["attributes"].get("VpcId") == "vpc-scale-0"]
+    for node in (n for n in vpc if n["kind"] in ("target_group", "load_balancer")):
+        layout = layout_document(snapshot, "detail", "vpc-scale-0", None, False, graph, node["id"])
+        assert_readable(layout)
+        assert_no_shared_segments(layout)
+        assert_routed(layout)
+        assert_captions_clear(layout)
+        assert layout["width"] <= full["width"] and layout["height"] <= full["height"]
+        if node["kind"] == "target_group":
+            registrations = [e for e in graph["edges"] if e["source"] == node["id"] and e["relation"] in ("registered_target", "associated_load_balancer")]
+            assert sorted(e["relation_id"] for e in layout["edges"]) == sorted(e["id"] for e in registrations)
+            assert crossings(layout) == 0
+        else:
+            assert crossings(layout) * 10 <= crossings(full) and len(layout["edges"]) * 2 < len(full["edges"])
+    # The document states the filter and keeps the off-path resources, dimmed.
+    lb = next(n["id"] for n in vpc if n["name"] == "scale-0-2")
+    root = validate_document(generate_document(snapshot, "vpc-scale-0", False, "detail", None, lb))
+    scope = root.find(".//object[@id='scope']")
+    assert scope.get("routes") == lb and "경로 필터: 로드 밸런서 scale-0-2" in scope.get("label") and "숨김" in scope.get("label")
+    assert any("opacity=30" in c.get("style", "") for c in root.iter("mxCell"))
+    # 300 instances and 18 target groups in one VPC: one target group's routes still never cross.
+    dense = scale_snapshot(vpcs=1, instances_per_subnet=100, load_balancers=6, groups_per_lb=3)
+    groups = [n for n in build_graph(dense)["nodes"] if n["kind"] == "target_group"][:3]
+    for group in groups:
+        layout = layout_document(dense, "detail", "vpc-scale-0", None, False, None, group["id"])
+        assert_readable(layout)
+        assert crossings(layout) == 0 and len(layout["edges"]) <= 20
 
 
 def test_large_vpc_and_account_scale():
@@ -266,11 +404,14 @@ def test_chat_design_is_readable():
     snapshot = full_design().snapshot()
     graph = build_graph(snapshot)
     assert_readable(layout_document(snapshot, "overview"))
+    assert_routed(layout_document(snapshot, "overview"))
     for vpc in (n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc"):
         for references in (False, True):
             layout = layout_document(snapshot, "detail", vpc, None, references)
             assert_readable(layout)
             assert_no_shared_segments(layout)
+            assert_routed(layout)
+            assert_captions_clear(layout)
     for node in graph["nodes"]:
         if node["kind"] in FOCUSED and not node["reference_only"]:
             layout = layout_document(snapshot, "focus", None, node["id"], True)
@@ -334,7 +475,7 @@ def test_overview_draws_the_network_between_vpcs(key):
     validate_document(generate_document(snapshot))
     relations = sorted(e["relation"] for e in layout["edges"])
     expected = {
-        "environments": ["attached_transit_gateway"] * 3,
+        "environments": ["attached_transit_gateway"] * 4,
         "hybrid": ["attached_transit_gateway"] + ["vpn_connection"] * 2,
         "data-platform": ["attached_transit_gateway"] * 2 + ["vpn_connection"] * 2,
         "ai-platform": ["attached_transit_gateway"],

@@ -69,7 +69,7 @@ Last Updated: 2026-10-18
 | 서비스별 대상 그룹 | 마이크로서비스마다 대상 그룹 | REC | 4개 | 충족 |
 | Fargate 배치 | 프라이빗 서브넷, 퍼블릭 IP 없음, AZ마다 NAT | REC | 충족 | 충족 |
 | ECR 엔드포인트 | `ecr.api` + `ecr.dkr` + S3 게이트웨이 (NAT 없으면 필수), 로그는 `logs` | MUST(NAT 없을 때)/REC | `ecr.api`·`ecr.dkr`·`logs` + S3 | 충족 (반영) |
-| AZ | 2 AZ 이상 (참조 다이어그램 3 AZ) | HIGH/OPT | 2 AZ | 충족 (3 AZ는 선택, 미반영) |
+| AZ | 2 AZ 이상 (참조 다이어그램 3 AZ) | HIGH/OPT | 3 AZ (ASG·Fargate 태스크·NAT·RDS 서브넷 그룹) | 충족 (3 AZ 반영, §4 #7) |
 | 엣지 | ALB 앞 WAF·CloudFront | REC | 없음 | **P** / X |
 
 ### 3.3 nlb-alb — 고정 IP 진입점 (NLB → ALB)
@@ -94,10 +94,10 @@ SRA Network account, TGW isolated VPCs with shared services.
 | --- | --- | --- | --- | --- |
 | 계정 분리 | 환경마다 계정, TGW는 Network 계정에서 RAM 공유 | REC(강함) | 한 계정 (VPC 분리 예시) | 별도 사례 `multi-account`가 계정 분리·RAM 공유 TGW·중앙 egress를 그림 (2026-10-18) |
 | TGW 격리 | 운영·스테이징 별도 라우팅 테이블, 공용만 양쪽 전파, 스포크 간 blackhole | REC | 모든 VPC가 같은 10.0.0.0/8 경로 | **P** (TGW 라우팅 테이블 미수집) |
-| TGW attachment | AZ마다 서브넷 하나 | REC | 운영 3 AZ, 스테이징 2 AZ, 공용 2 AZ | 충족 |
-| 운영 NAT | AZ마다 | REC | AZ마다 | 충족 |
-| 스테이징 NAT 1개 | 비운영 비용 절충 (REL10은 운영 대상) | — | NAT 1개 | **P** "비용 절충" 명시 |
-| 중앙 egress / 검사 VPC | NAT 집중 egress VPC, 검사 VPC(TGW appliance mode) 또는 TGW Network Firewall attachment | OPT | 없음 | **S**(선택) egress VPC는 그릴 수 있음, 방화벽은 X |
+| TGW attachment | AZ마다 서브넷 하나 | REC | 운영 3 AZ, 스테이징 2 AZ, 공용 2 AZ, egress 3 AZ(전용 /28) | 충족 |
+| NAT | AZ마다 | REC | egress VPC에 AZ마다 (운영·스테이징 VPC에는 없음) | 충족 |
+| 스테이징 NAT 1개 | 비운영 비용 절충 (REL10은 운영 대상) | — | 중앙 egress로 대체 (NAT를 환경끼리 공유) | 해당 없음 (§4 #7) |
+| 중앙 egress / 검사 VPC | NAT 집중 egress VPC, 검사 VPC(TGW appliance mode) 또는 TGW Network Firewall attachment | OPT | `egress-vpc`: AZ별 NAT + 전용 /28 attachment 서브넷, 환경 VPC는 0.0.0.0/0 → TGW, 퍼블릭 경로에 10.0.0.0/8 → TGW 복귀 | egress VPC 충족 (반영, §4 #7), 방화벽은 X / P |
 
 ### 3.5 hybrid — 하이브리드 (TGW + Site-to-Site VPN)
 
@@ -122,11 +122,11 @@ Aurora high availability, ElastiCache Multi-AZ, Lambda VPC.
 | --- | --- | --- | --- | --- |
 | 엔드포인트 접근 | 일반 권장은 public+private(CIDR 제한), 격리 필요 시 private | REC | private | 충족(의도 명시) |
 | 노드 | 세 AZ 프라이빗 서브넷, AZ마다 NAT | REC | 충족 | 충족 |
-| 클러스터 서브넷 | 전용 /28 서브넷 | OPT | 노드 서브넷 공용 | **S**(선택) |
-| LB 서브넷 | ALB는 퍼블릭(`kubernetes.io/role/elb` 태그), 2 AZ 이상, Fargate면 IP 대상 | REC | 3 AZ, IP 대상 | 충족 (태그 **S**) |
+| 클러스터 서브넷 | 전용 /28 서브넷 | OPT | `eks-cluster-a/b/c` /28 (컨트롤 플레인 ENI), 노드는 /20 | 충족 (반영, §4 #7) |
+| LB 서브넷 | ALB는 퍼블릭(`kubernetes.io/role/elb` 태그), 2 AZ 이상, Fargate면 IP 대상 | REC | 3 AZ, IP 대상, `elb`·`internal-elb` 태그 | 충족 (태그 반영) |
 | VPC 엔드포인트 | NAT가 없으면 `ec2`·`ecr.api`·`ecr.dkr`·`s3`·`elasticloadbalancing`·`logs`·`sts`(+`eks-auth`) | MUST(NAT 없을 때) | NAT 있음, `ecr.api`·`ecr.dkr`·`sts`·`s3` | 충족 (반영; NAT가 있어 나머지는 선택) |
 | MSK | 3 AZ, 브로커 수는 AZ 배수, RF ≥ 3, minISR ≤ RF−1 | REC | 3 AZ × 1 | 충족 (RF는 P) |
-| Aurora | 다른 AZ에 리플리카 1개 이상 | REC | writer a, reader b | **S**(선택) c에 reader 추가 |
+| Aurora | 다른 AZ에 리플리카 1개 이상 | REC | writer a, reader b·c | 충족 (c reader 반영, §4 #7) |
 | ElastiCache | Multi-AZ 자동 장애 조치 | REC | primary b, replica c | 충족 |
 | Lambda | 여러 AZ 서브넷 | HIGH | 3 AZ | 충족 |
 | 엣지 | 인터넷 ALB에 WAF | REC | 없음 | P |
@@ -148,7 +148,7 @@ Multi-VPC 백서(VPC peering, VPN).
 
 ## 4. 변경안
 
-**반영 현황 (2026-10-18):** 1–6 완료, 7(OPT)은 범위에서 제외. 구현 기록: [docs/plans/2026-10-18-best-practice-samples.md](plans/2026-10-18-best-practice-samples.md).
+**반영 현황 (2026-10-18):** 1–7 완료. 7(OPT)은 같은 날 후속으로 반영(`SAMPLE_VERSION` 4, 세 사례 모두 `review --fail-on medium` 종료 코드 0). 구현 기록: [docs/plans/2026-10-18-best-practice-samples.md](plans/2026-10-18-best-practice-samples.md).
 
 샘플 빌더가 이미 지원하는 요소만으로 반영할 수 있는 항목부터 정리한다. 각 항목의 완료 기준은
 `make check` 통과(가독성·경로 테스트 포함)와 `review`에서 새 high 발견이 없는 것.
@@ -161,7 +161,7 @@ Multi-VPC 백서(VPC peering, VPN).
 | 4 | microservices, eks-platform | `ecr.api` 엔드포인트, microservices에 `logs` | MUST(NAT 없을 때)/REC |
 | 5 | three-tier | `ssmmessages`·`ec2messages` 엔드포인트 | REC |
 | 6 | 전 사례 | practices 문구에 그릴 수 없는 권고(CloudFront·WAF·Route 53·DX·계정 분리·TGW 라우팅 테이블) 명시 | — |
-| 7 | 선택 | microservices 3 AZ, eks Aurora reader 추가·/28 클러스터 서브넷, environments egress VPC | OPT |
+| 7 | 선택 | microservices 3 AZ, eks Aurora reader 추가·/28 클러스터 서브넷, environments egress VPC (완료) | OPT |
 
 수집 범위 확장 후보(별도 승인 필요): CloudFront·WAF(엣지), Elastic IP(NLB 고정 IP), TGW 라우팅 테이블(환경 격리),
 Direct Connect. 다중 계정 구성도는 계정 통합 보기로 구현했다(2026-10-18).

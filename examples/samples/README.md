@@ -38,14 +38,14 @@ VPC 1 · 서브넷 12 · EC2 6 · 로드밸런서 2 · 대상 그룹 2 · NAT 3 
 
 ![three-tier prod-web.png](three-tier/prod-web.png)
 
-## 마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4) — `microservices`
+## 마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4 · 3 AZ) — `microservices`
 
-VPC 1 · 서브넷 6 · EC2 4 · 로드밸런서 1 · 대상 그룹 4 · NAT 2 · RDS/Aurora/DocumentDB 1 · ECS 서비스 2 · ECS 태스크 4 · Auto Scaling 그룹 2 · VPC 엔드포인트 4
+VPC 1 · 서브넷 9 · EC2 6 · 로드밸런서 1 · 대상 그룹 4 · NAT 3 · RDS/Aurora/DocumentDB 1 · ECS 서비스 2 · ECS 태스크 6 · Auto Scaling 그룹 2 · VPC 엔드포인트 4
 
 - ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)
 - ECS Fargate 서비스(awsvpc)는 태스크 IP를 대상으로 등록, 배포 회로 차단기로 자동 롤백
 - 서비스마다 전용 포트·헬스 체크 경로
-- 두 AZ 이상에 각 서비스 대상을 분산하고 서비스별 Auto Scaling 그룹
+- 세 AZ에 각 서비스 대상(EC2·Fargate 태스크)을 분산하고 서비스별 Auto Scaling 그룹, AZ마다 NAT (REL10-BP01)
 - 서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ
 - 이미지 풀은 ECR API·Docker 인터페이스와 S3 게이트웨이 엔드포인트, 컨테이너 로그는 CloudWatch Logs 엔드포인트로 사설 경로 사용
 - 도형 밖 권고: 인터넷용 ALB 앞에 AWS WAF·CloudFront (REL02-BP01, 수집 범위 밖)
@@ -64,18 +64,21 @@ VPC 1 · 서브넷 4 · EC2 4 · 로드밸런서 2 · 대상 그룹 3 · NAT 2 �
 
 ![nlb-alb partner-gateway.png](nlb-alb/partner-gateway.png)
 
-## 환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스) — `environments`
+## 환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스 · 중앙 egress) — `environments`
 
-VPC 3 · 서브넷 12 · EC2 7 · 로드밸런서 2 · 대상 그룹 2 · NAT 4 · Auto Scaling 그룹 2 · TGW 연결 3
+VPC 4 · 서브넷 18 · EC2 7 · 로드밸런서 2 · 대상 그룹 2 · NAT 3 · Auto Scaling 그룹 2 · TGW 연결 4
 
 - 환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)
-- 운영은 3 AZ·AZ별 NAT, 스테이징은 비용을 고려한 2 AZ·NAT 1개
+- 운영은 3 AZ, 스테이징은 비용을 고려한 2 AZ
+- 인터넷 egress는 egress VPC의 AZ별 NAT로 집중: 운영·스테이징 VPC에는 NAT 없이 0.0.0.0/0 → TGW (Multi-VPC 백서: centralized egress)
+- egress VPC는 AZ마다 TGW attachment 전용 /28 서브넷과 같은 AZ의 NAT, 퍼블릭 경로에 10.0.0.0/8 → TGW 복귀 경로
+- 인터넷 진입(ALB)은 각 환경 VPC의 퍼블릭 서브넷에 그대로 둠 (집중하는 것은 egress)
 - 공용 서비스 VPC에는 내부 도구만 두고 인터넷 경로 없음
 - VPC 간 연결은 Transit Gateway 허브로 일원화 (VPC 피어링 그물망 대신)
 - Environment 태그로 소유·비용 구분
-- 스테이징 NAT 1개는 비운영 환경의 비용 절충 (REL10-BP01은 운영 워크로드 기준)
-- 도형 밖 권고: 환경별 AWS 계정 분리, Network 계정의 TGW를 RAM으로 공유, 운영·스테이징 TGW 라우팅 테이블 분리 (수집 범위 밖)
+- 도형 밖 권고: 환경별 AWS 계정 분리, Network 계정의 TGW를 RAM으로 공유, 운영·스테이징 TGW 라우팅 테이블 분리, egress VPC 앞 검사(Network Firewall) (수집 범위 밖)
 
+![environments egress-vpc.png](environments/egress-vpc.png)
 ![environments prod-vpc.png](environments/prod-vpc.png)
 ![environments shared-services.png](environments/shared-services.png)
 ![environments staging-vpc.png](environments/staging-vpc.png)
@@ -95,11 +98,12 @@ VPC 1 · 서브넷 2 · EC2 2 · 로드밸런서 1 · 대상 그룹 2 · Auto Sc
 
 ## EKS 플랫폼 (EKS · MSK · ElastiCache · Aurora · Lambda) — `eks-platform`
 
-VPC 1 · 서브넷 9 · EC2 6 · 로드밸런서 1 · 대상 그룹 1 · NAT 3 · RDS/Aurora/DocumentDB 2 · ElastiCache 2 · MSK 브로커 그룹 3 · EKS 1 · Lambda 1 · Auto Scaling 그룹 2 · VPC 엔드포인트 4
+VPC 1 · 서브넷 12 · EC2 6 · 로드밸런서 1 · 대상 그룹 1 · NAT 3 · RDS/Aurora/DocumentDB 3 · ElastiCache 2 · MSK 브로커 그룹 3 · EKS 1 · Lambda 1 · Auto Scaling 그룹 2 · VPC 엔드포인트 4
 
 - EKS 컨트롤 플레인 엔드포인트는 비공개, 관리형 노드 그룹은 세 AZ 프라이빗 서브넷에 분산
-- 인그레스는 AWS Load Balancer Controller의 ALB → IP 대상(파드)
-- Aurora PostgreSQL writer/reader를 서로 다른 AZ에, ElastiCache Redis는 primary/replica 자동 장애 조치
+- 클러스터 서브넷(컨트롤 플레인 ENI)은 AZ마다 전용 /28로 노드 서브넷과 분리해 노드·파드 확장이 클러스터 IP를 잠식하지 않음 (EKS 서브넷 모범 사례)
+- 인그레스는 AWS Load Balancer Controller의 ALB → IP 대상(파드), 서브넷은 kubernetes.io/role/elb·internal-elb 태그로 지정
+- Aurora PostgreSQL writer와 다른 두 AZ의 reader (어느 AZ가 장애여도 승격 대상), ElastiCache Redis는 primary/replica 자동 장애 조치
 - MSK 브로커는 AZ마다 하나, 클라이언트-브로커 TLS
 - 데이터 계층(Aurora·Redis·MSK)은 인터넷 경로 없는 격리 서브넷
 - ECR API·Docker·STS 인터페이스와 S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로

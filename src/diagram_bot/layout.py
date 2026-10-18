@@ -295,21 +295,34 @@ def layout_view(snapshot, graph, selection):
         subject = " · " + nodes[next(k for k in selection["nodes"] if nodes[k]["kind"] == "vpc" and nodes[k]["resource_id"] == view["vpc"])]["name"]
     elif view["kind"] == "focus":
         subject = " · " + nodes[selection["focus"]]["name"]
+    routes = selection.get("routes")
+    if routes:
+        subject += " · 경로 " + routes["name"]
     canvas.add("heading", "1", 24, 12, 1200, 30, "title", fit_label(heading + " · " + titles[view["kind"]] + subject, 1180, 1, 19))
     incomplete = [f"{c['operation']}({c.get('error_code', c['status'])})" for c in snapshot["coverage"] if c["status"] != "complete"]
     status = "부분 조회: " + ", ".join(incomplete) if incomplete else "조회 완료"
+    # A route filter says what it left out: hidden resources are part of the hidden count, omitted relations are counted.
+    narrowed = (f"\n경로 필터: {'대상 그룹' if routes['kind'] == 'target_group' else '로드 밸런서'} {routes['name']}"
+                f" · 대상 그룹 {routes['target_groups']}개의 경로만 표시 · 다른 로드 밸런서·대상 그룹과 그 대상 {routes['hidden']}개 숨김"
+                f" · 관계 {routes['hidden_relations']}개 생략 · 흐린 리소스는 이 경로 밖") if routes else ""
     scope = (f"{status} · {meta['finished_at']}\n표시 {counts['visible']}개 / 수집 {counts['collected']}개 · 참조 {counts['references']}개"
-             f" · 숨김 {counts['hidden']}개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도"
+             f" · 숨김 {counts['hidden']}개 · 설정 관계만 표시, 실제 통신 미확인 · 사용자 주석은 수집 데이터와 별도" + narrowed
              + ("\n서브넷 구분: 라우팅 테이블의 0.0.0.0/0 경로 (IGW = 퍼블릭, NAT·TGW·VGW = 프라이빗, 없음 = 격리)"
                 if any(part["raw"].get("route_tables") for part in snapshot.get("parts") or [snapshot])
                 else "\n퍼블릭 서브넷 표시 기준: MapPublicIpOnLaunch 또는 이름·Tier 태그 (라우팅 테이블 미조회)"))
-    canvas.add("scope", "1", 24, 48, 960, 42, "caption", scope, layout=f"{ENGINE}/{VERSION}",
+    canvas.add("scope", "1", 24, 48, 960, 42 + (15 if routes else 0), "caption", scope, layout=f"{ENGINE}/{VERSION}",
                view=view["kind"], vpc=view["vpc"] or "", focus=view["resource"] or "",
-               references="1" if view["references"] else "0")
+               references="1" if view["references"] else "0", routes=view.get("routes") or "")
     if view["kind"] == "overview":
         overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of)
     else:
         detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of)
+    if routes:
+        # Resources and groups off the selected path stay in place for context, dimmed.
+        path = set(routes["path"])
+        for shape in canvas.shapes:
+            if shape["role"] in ("resource", "asg") and shape.get("resource") not in path:
+                shape["muted"] = True
     width = max(s["x"] + s["w"] for s in canvas.shapes if s["parent"] == "1")
     height = max(s["y"] + s["h"] for s in canvas.shapes if s["parent"] == "1")
     labels = {s["id"]: canvas.label_box(s) for s in canvas.shapes if s.get("label_side")}
@@ -782,6 +795,9 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
         if not subnets:
             status = next((c["status"] for c in snapshot["coverage"] if c["operation"] == "describe_subnets"), "unavailable")
             text = "이 VPC에서 조회된 서브넷이 없습니다." if status == "complete" else "서브넷 조회가 완료되지 않아 배치를 확인할 수 없습니다."
+            if focus and any(n["kind"] == "subnet" and vpc_of.get(k) == vpc["id"] for k, n in nodes.items()):
+                # A focus view draws only the subnets its resources sit in; the VPC's other subnets are hidden, not missing.
+                text = "선택 리소스와 직접 관계된 서브넷 없음 · 서브넷은 상세 구성에서 확인"
             canvas.add(cell_id(vpc["id"] + "/empty"), vid, gutters[0], y, 420, 40, "caption", text)
             y += 56
         metrics, arranged = {}, {}
@@ -883,8 +899,11 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
 
     inside = [n for n in others if not outside_vpc(n)]
     if inside:
-        cursor += place_box("references", "references", "VPC 밖 리전 리소스 · 배치 미확인 · 참조만 확인 (점선 = 참조)",
-                            "region", 20, cursor, inside, width)["h"] + 36
+        # Routes to the box come down the VPCs' gutters. Starting the box right of the left gutter, those routes enter
+        # from its side below the caption; the two-line caption ends before the first gutter between AZ columns.
+        inset = max([g["gutters"][0][1] - g["gutters"][0][0] for g in lanes.values() if len(g["gutters"]) > 1] + [0])
+        cursor += place_box("references", "references", "VPC 밖 리전 리소스 · 배치 미확인\n참조만 확인 (점선 = 참조)",
+                            "region", 20 + inset, cursor, inside, width)["h"] + 36
     region["w"] = max([sh["x"] + sh["w"] for sh in canvas.shapes if sh["parent"] == "region"] + [400]) + 20
     region["h"] = cursor
     cloud["w"], cloud["h"] = region["x"] + region["w"] + 20, region["y"] + region["h"] + 20

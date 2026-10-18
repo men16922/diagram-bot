@@ -2,20 +2,20 @@
 
 - 계정: 111122223333
 - 리전: ap-northeast-2
-- 수집 구간: 2026-10-17T21:52:31.962123+00:00 ~ 2026-10-17T21:52:31.962123+00:00
+- 수집 구간: 2026-10-18T09:07:27.036118+00:00 ~ 2026-10-18T09:07:27.036118+00:00
 - 수집 상태: complete
 - 샘플 데이터: True
 
 ## 조회 범위와 결과
 
 - ec2 / describe_vpcs: complete, 1개, 오류 없음; 범위 {}
-- ec2 / describe_subnets: complete, 6개, 오류 없음; 범위 {}
-- ec2 / describe_instances: complete, 4개, 오류 없음; 범위 {}
+- ec2 / describe_subnets: complete, 9개, 오류 없음; 범위 {}
+- ec2 / describe_instances: complete, 6개, 오류 없음; 범위 {}
 - elbv2 / describe_load_balancers: complete, 1개, 오류 없음; 범위 {}
 - elbv2 / describe_target_groups: complete, 4개, 오류 없음; 범위 {}
 - ec2 / describe_internet_gateways: complete, 1개, 오류 없음; 범위 {}
-- ec2 / describe_nat_gateways: complete, 2개, 오류 없음; 범위 {}
-- ec2 / describe_route_tables: complete, 4개, 오류 없음; 범위 {}
+- ec2 / describe_nat_gateways: complete, 3개, 오류 없음; 범위 {}
+- ec2 / describe_route_tables: complete, 5개, 오류 없음; 범위 {}
 - rds / describe_db_instances: complete, 1개, 오류 없음; 범위 {}
 - autoscaling / describe_auto_scaling_groups: complete, 2개, 오류 없음; 범위 {}
 - ec2 / describe_vpc_endpoints: complete, 4개, 오류 없음; 범위 {}
@@ -29,7 +29,7 @@
 - opensearch / describe_domains: complete, 0개, 오류 없음; 범위 {}
 - opensearch / describe_domain_nodes: complete, 0개, 오류 없음; 범위 {}
 - ecs / describe_services: complete, 2개, 오류 없음; 범위 {}
-- ecs / describe_tasks: complete, 4개, 오류 없음; 범위 {}
+- ecs / describe_tasks: complete, 6개, 오류 없음; 범위 {}
 - efs / describe_file_systems: complete, 0개, 오류 없음; 범위 {}
 - efs / describe_mount_targets: complete, 0개, 오류 없음; 범위 {}
 - redshift / describe_clusters: complete, 0개, 오류 없음; 범위 {}
@@ -41,10 +41,10 @@
 - fsx / describe_file_systems: complete, 0개, 오류 없음; 범위 {}
 - sagemaker / list_endpoints: complete, 0개, 오류 없음; 범위 {}
 - sagemaker / list_clusters: complete, 0개, 오류 없음; 범위 {}
-- elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001"}
-- elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002"}
-- elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/cart-svc-ecs/0000000000000003"}
-- elbv2 / describe_target_health: complete, 2개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/payments-svc-ecs/0000000000000004"}
+- elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001"}
+- elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002"}
+- elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/cart-svc-ecs/0000000000000003"}
+- elbv2 / describe_target_health: complete, 3개, 오류 없음; 범위 {"TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/payments-svc-ecs/0000000000000004"}
 
 ## 아키텍처 검토 결과
 

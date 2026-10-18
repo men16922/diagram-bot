@@ -22,18 +22,18 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:31.962123+00:00",
-    "finished_at": "2026-10-17T21:52:31.962123+00:00",
+    "started_at": "2026-10-18T09:07:27.036118+00:00",
+    "finished_at": "2026-10-18T09:07:27.036118+00:00",
     "status": "complete",
     "demo": true,
     "sample": "microservices",
-    "sample_version": 3,
-    "title": "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4)",
+    "sample_version": 4,
+    "title": "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4 · 3 AZ)",
     "practices": [
       "ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)",
       "ECS Fargate 서비스(awsvpc)는 태스크 IP를 대상으로 등록, 배포 회로 차단기로 자동 롤백",
       "서비스마다 전용 포트·헬스 체크 경로",
-      "두 AZ 이상에 각 서비스 대상을 분산하고 서비스별 Auto Scaling 그룹",
+      "세 AZ에 각 서비스 대상(EC2·Fargate 태스크)을 분산하고 서비스별 Auto Scaling 그룹, AZ마다 NAT (REL10-BP01)",
       "서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ",
       "이미지 풀은 ECR API·Docker 인터페이스와 S3 게이트웨이 엔드포인트, 컨테이너 로그는 CloudWatch Logs 엔드포인트로 사설 경로 사용",
       "도형 밖 권고: 인터넷용 ALB 앞에 AWS WAF·CloudFront (REL02-BP01, 수집 범위 밖)"
@@ -82,14 +82,14 @@
       "operation": "describe_subnets",
       "status": "complete",
       "pages": 1,
-      "items": 6
+      "items": 9
     },
     {
       "service": "ec2",
       "operation": "describe_instances",
       "status": "complete",
       "pages": 1,
-      "items": 4
+      "items": 6
     },
     {
       "service": "elbv2",
@@ -117,14 +117,14 @@
       "operation": "describe_nat_gateways",
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 3
     },
     {
       "service": "ec2",
       "operation": "describe_route_tables",
       "status": "complete",
       "pages": 1,
-      "items": 4
+      "items": 5
     },
     {
       "service": "rds",
@@ -222,7 +222,7 @@
       "operation": "describe_tasks",
       "status": "complete",
       "pages": 1,
-      "items": 4
+      "items": 6
     },
     {
       "service": "efs",
@@ -309,7 +309,7 @@
       },
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 3
     },
     {
       "service": "elbv2",
@@ -319,7 +319,7 @@
       },
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 3
     },
     {
       "service": "elbv2",
@@ -329,7 +329,7 @@
       },
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 3
     },
     {
       "service": "elbv2",
@@ -339,7 +339,7 @@
       },
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 3
     }
   ],
   "raw": {
@@ -397,6 +397,24 @@
         "AvailableIpAddressCount": 251
       },
       {
+        "SubnetId": "subnet-ms-pub-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.20.2.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "public-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
         "SubnetId": "subnet-ms-app-a",
         "VpcId": "vpc-0a1b2c3d4e5f60002",
         "AvailabilityZone": "ap-northeast-2a",
@@ -433,6 +451,24 @@
         "AvailableIpAddressCount": 1017
       },
       {
+        "SubnetId": "subnet-ms-app-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.20.16.0/22",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "services-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 1017
+      },
+      {
         "SubnetId": "subnet-ms-data-a",
         "VpcId": "vpc-0a1b2c3d4e5f60002",
         "AvailabilityZone": "ap-northeast-2a",
@@ -460,6 +496,24 @@
           {
             "Key": "Name",
             "Value": "data-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "data"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-ms-data-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.20.22.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "data-c"
           },
           {
             "Key": "Tier",
@@ -551,6 +605,46 @@
         ]
       },
       {
+        "InstanceId": "i-catalogc00000001",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "SubnetId": "subnet-ms-app-c",
+        "InstanceType": "c6i.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.3.13",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "catalog-c"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-services"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-catalogc00000001",
+            "InterfaceType": "interface"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-catalogc00000001"
+            }
+          }
+        ]
+      },
+      {
         "InstanceId": "i-ordersa000000001",
         "VpcId": "vpc-0a1b2c3d4e5f60002",
         "SubnetId": "subnet-ms-app-a",
@@ -558,7 +652,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.3.13",
+        "PrivateIpAddress": "10.0.4.14",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a"
         },
@@ -598,7 +692,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.4.14",
+        "PrivateIpAddress": "10.0.5.15",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2b"
         },
@@ -629,6 +723,46 @@
             }
           }
         ]
+      },
+      {
+        "InstanceId": "i-ordersc000000001",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "SubnetId": "subnet-ms-app-c",
+        "InstanceType": "c6i.large",
+        "State": {
+          "Name": "running"
+        },
+        "PrivateIpAddress": "10.0.6.16",
+        "Placement": {
+          "AvailabilityZone": "ap-northeast-2c"
+        },
+        "MetadataOptions": {
+          "HttpTokens": "required"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "orders-c"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "GroupId": "sg-services"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "NetworkInterfaceId": "eni-ordersc000000001",
+            "InterfaceType": "interface"
+          }
+        ],
+        "BlockDeviceMappings": [
+          {
+            "Ebs": {
+              "VolumeId": "vol-ordersc000000001"
+            }
+          }
+        ]
       }
     ],
     "load_balancers": [
@@ -646,6 +780,10 @@
           {
             "ZoneName": "ap-northeast-2b",
             "SubnetId": "subnet-ms-pub-b"
+          },
+          {
+            "ZoneName": "ap-northeast-2c",
+            "SubnetId": "subnet-ms-pub-c"
           }
         ],
         "SecurityGroups": [
@@ -724,6 +862,15 @@
             "TargetHealth": {
               "State": "healthy"
             }
+          },
+          {
+            "Target": {
+              "Id": "i-catalogc00000001",
+              "Port": 8080
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
           }
         ]
       },
@@ -742,6 +889,15 @@
           {
             "Target": {
               "Id": "i-ordersb000000001",
+              "Port": 8081
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-ordersc000000001",
               "Port": 8081
             },
             "TargetHealth": {
@@ -772,6 +928,16 @@
             "TargetHealth": {
               "State": "healthy"
             }
+          },
+          {
+            "Target": {
+              "Id": "10.20.16.43",
+              "Port": 9000,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
           }
         ]
       },
@@ -793,6 +959,16 @@
               "Id": "10.20.12.89",
               "Port": 9100,
               "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.20.16.90",
+              "Port": 9100,
+              "AvailabilityZone": "ap-northeast-2c"
             },
             "TargetHealth": {
               "State": "healthy"
@@ -844,6 +1020,19 @@
             "Value": "commerce-nat-b"
           }
         ]
+      },
+      {
+        "NatGatewayId": "nat-commerce-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "SubnetId": "subnet-ms-pub-c",
+        "State": "available",
+        "ConnectivityType": "public",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-nat-c"
+          }
+        ]
       }
     ],
     "route_tables": [
@@ -870,6 +1059,10 @@
           {
             "RouteTableAssociationId": "rtbassoc-commerce-public-1",
             "SubnetId": "subnet-ms-pub-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-commerce-public-2",
+            "SubnetId": "subnet-ms-pub-c"
           }
         ],
         "Tags": [
@@ -946,6 +1139,39 @@
         ]
       },
       {
+        "RouteTableId": "rtb-commerce-private-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60002",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.20.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-commerce-c",
+            "State": "active"
+          },
+          {
+            "DestinationPrefixListId": "pl-s3",
+            "GatewayId": "vpce-commerce-s3",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-commerce-private-c-0",
+            "SubnetId": "subnet-ms-app-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "commerce-private-c"
+          }
+        ]
+      },
+      {
         "RouteTableId": "rtb-commerce-main",
         "VpcId": "vpc-0a1b2c3d4e5f60002",
         "Routes": [
@@ -995,6 +1221,12 @@
               "SubnetAvailabilityZone": {
                 "Name": "ap-northeast-2b"
               }
+            },
+            {
+              "SubnetIdentifier": "subnet-ms-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
             }
           ]
         },
@@ -1004,10 +1236,10 @@
     "auto_scaling_groups": [
       {
         "AutoScalingGroupName": "catalog-asg",
-        "MinSize": 2,
-        "MaxSize": 6,
-        "DesiredCapacity": 2,
-        "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b",
+        "MinSize": 3,
+        "MaxSize": 9,
+        "DesiredCapacity": 3,
+        "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b,subnet-ms-app-c",
         "TargetGroupARNs": [
           "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001"
         ],
@@ -1022,15 +1254,20 @@
             "InstanceId": "i-catalogb00000001",
             "AvailabilityZone": "ap-northeast-2b",
             "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-catalogc00000001",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
           }
         ]
       },
       {
         "AutoScalingGroupName": "orders-asg",
-        "MinSize": 2,
-        "MaxSize": 6,
-        "DesiredCapacity": 2,
-        "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b",
+        "MinSize": 3,
+        "MaxSize": 9,
+        "DesiredCapacity": 3,
+        "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b,subnet-ms-app-c",
         "TargetGroupARNs": [
           "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002"
         ],
@@ -1045,6 +1282,11 @@
             "InstanceId": "i-ordersb000000001",
             "AvailabilityZone": "ap-northeast-2b",
             "LifecycleState": "InService"
+          },
+          {
+            "InstanceId": "i-ordersc000000001",
+            "AvailabilityZone": "ap-northeast-2c",
+            "LifecycleState": "InService"
           }
         ]
       }
@@ -1058,7 +1300,8 @@
         "ServiceName": "com.amazonaws.ap-northeast-2.s3",
         "RouteTableIds": [
           "rtb-commerce-private-a",
-          "rtb-commerce-private-b"
+          "rtb-commerce-private-b",
+          "rtb-commerce-private-c"
         ],
         "Tags": [
           {
@@ -1075,7 +1318,8 @@
         "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
         "SubnetIds": [
           "subnet-ms-app-a",
-          "subnet-ms-app-b"
+          "subnet-ms-app-b",
+          "subnet-ms-app-c"
         ],
         "PrivateDnsEnabled": true,
         "Tags": [
@@ -1093,7 +1337,8 @@
         "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
         "SubnetIds": [
           "subnet-ms-app-a",
-          "subnet-ms-app-b"
+          "subnet-ms-app-b",
+          "subnet-ms-app-c"
         ],
         "PrivateDnsEnabled": true,
         "Tags": [
@@ -1111,7 +1356,8 @@
         "ServiceName": "com.amazonaws.ap-northeast-2.logs",
         "SubnetIds": [
           "subnet-ms-app-a",
-          "subnet-ms-app-b"
+          "subnet-ms-app-b",
+          "subnet-ms-app-c"
         ],
         "PrivateDnsEnabled": true,
         "Tags": [
@@ -1141,14 +1387,15 @@
         "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
         "status": "ACTIVE",
         "launchType": "FARGATE",
-        "desiredCount": 2,
-        "runningCount": 2,
+        "desiredCount": 3,
+        "runningCount": 3,
         "platformVersion": "1.4.0",
         "networkConfiguration": {
           "awsvpcConfiguration": {
             "subnets": [
               "subnet-ms-app-a",
-              "subnet-ms-app-b"
+              "subnet-ms-app-b",
+              "subnet-ms-app-c"
             ],
             "securityGroups": [
               "sg-cart-svc"
@@ -1177,14 +1424,15 @@
         "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
         "status": "ACTIVE",
         "launchType": "FARGATE",
-        "desiredCount": 2,
-        "runningCount": 2,
+        "desiredCount": 3,
+        "runningCount": 3,
         "platformVersion": "1.4.0",
         "networkConfiguration": {
           "awsvpcConfiguration": {
             "subnets": [
               "subnet-ms-app-a",
-              "subnet-ms-app-b"
+              "subnet-ms-app-b",
+              "subnet-ms-app-c"
             ],
             "securityGroups": [
               "sg-payments-svc"
@@ -1262,6 +1510,32 @@
         ]
       },
       {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/f78a8e877fc6b9123db2dcea01398103",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
+        "group": "service:cart-svc",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2c",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-ms-app-c"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.20.16.43"
+              }
+            ]
+          }
+        ]
+      },
+      {
         "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/5889412364af1f51e1db373b9caaa63d",
         "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
         "group": "service:payments-svc",
@@ -1312,6 +1586,32 @@
             ]
           }
         ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/fe31429c6bddc6b204b8d56969e77e54",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
+        "group": "service:payments-svc",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2c",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-ms-app-c"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.20.16.90"
+              }
+            ]
+          }
+        ]
       }
     ],
     "efs_file_systems": [],
@@ -1339,10 +1639,10 @@
         "region": "ap-northeast-2",
         "attributes": {
           "AutoScalingGroupName": "catalog-asg",
-          "MinSize": 2,
-          "MaxSize": 6,
-          "DesiredCapacity": 2,
-          "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b",
+          "MinSize": 3,
+          "MaxSize": 9,
+          "DesiredCapacity": 3,
+          "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b,subnet-ms-app-c",
           "TargetGroupARNs": [
             "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001"
           ],
@@ -1356,6 +1656,11 @@
             {
               "InstanceId": "i-catalogb00000001",
               "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-catalogc00000001",
+              "AvailabilityZone": "ap-northeast-2c",
               "LifecycleState": "InService"
             }
           ]
@@ -1372,10 +1677,10 @@
         "region": "ap-northeast-2",
         "attributes": {
           "AutoScalingGroupName": "orders-asg",
-          "MinSize": 2,
-          "MaxSize": 6,
-          "DesiredCapacity": 2,
-          "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b",
+          "MinSize": 3,
+          "MaxSize": 9,
+          "DesiredCapacity": 3,
+          "VPCZoneIdentifier": "subnet-ms-app-a,subnet-ms-app-b,subnet-ms-app-c",
           "TargetGroupARNs": [
             "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002"
           ],
@@ -1389,6 +1694,11 @@
             {
               "InstanceId": "i-ordersb000000001",
               "AvailabilityZone": "ap-northeast-2b",
+              "LifecycleState": "InService"
+            },
+            {
+              "InstanceId": "i-ordersc000000001",
+              "AvailabilityZone": "ap-northeast-2c",
               "LifecycleState": "InService"
             }
           ]
@@ -1427,6 +1737,12 @@
                 "SubnetIdentifier": "subnet-ms-data-b",
                 "SubnetAvailabilityZone": {
                   "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-ms-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
                 }
               }
             ]
@@ -1553,6 +1869,56 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/ec2/i-catalogc00000001",
+        "resource_id": "i-catalogc00000001",
+        "kind": "ec2",
+        "name": "catalog-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-catalogc00000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "SubnetId": "subnet-ms-app-c",
+          "InstanceType": "c6i.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.3.13",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "catalog-c"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-services"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-catalogc00000001",
+              "InterfaceType": "interface"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-catalogc00000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
         "id": "111122223333/ap-northeast-2/ec2/i-ordersa000000001",
         "resource_id": "i-ordersa000000001",
         "kind": "ec2",
@@ -1567,7 +1933,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.3.13",
+          "PrivateIpAddress": "10.0.4.14",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -1617,7 +1983,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.4.14",
+          "PrivateIpAddress": "10.0.5.15",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
@@ -1653,6 +2019,56 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/ec2/i-ordersc000000001",
+        "resource_id": "i-ordersc000000001",
+        "kind": "ec2",
+        "name": "orders-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InstanceId": "i-ordersc000000001",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "SubnetId": "subnet-ms-app-c",
+          "InstanceType": "c6i.large",
+          "State": {
+            "Name": "running"
+          },
+          "PrivateIpAddress": "10.0.6.16",
+          "Placement": {
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "MetadataOptions": {
+            "HttpTokens": "required"
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "orders-c"
+            }
+          ],
+          "SecurityGroups": [
+            {
+              "GroupId": "sg-services"
+            }
+          ],
+          "NetworkInterfaces": [
+            {
+              "NetworkInterfaceId": "eni-ordersc000000001",
+              "InterfaceType": "interface"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "Ebs": {
+                "VolumeId": "vol-ordersc000000001"
+              }
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInstances"
+      },
+      {
         "id": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/cart-svc",
         "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/cart-svc",
         "kind": "ecs_service",
@@ -1665,14 +2081,15 @@
           "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
           "status": "ACTIVE",
           "launchType": "FARGATE",
-          "desiredCount": 2,
-          "runningCount": 2,
+          "desiredCount": 3,
+          "runningCount": 3,
           "platformVersion": "1.4.0",
           "networkConfiguration": {
             "awsvpcConfiguration": {
               "subnets": [
                 "subnet-ms-app-a",
-                "subnet-ms-app-b"
+                "subnet-ms-app-b",
+                "subnet-ms-app-c"
               ],
               "securityGroups": [
                 "sg-cart-svc"
@@ -1712,14 +2129,15 @@
           "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
           "status": "ACTIVE",
           "launchType": "FARGATE",
-          "desiredCount": 2,
-          "runningCount": 2,
+          "desiredCount": 3,
+          "runningCount": 3,
           "platformVersion": "1.4.0",
           "networkConfiguration": {
             "awsvpcConfiguration": {
               "subnets": [
                 "subnet-ms-app-a",
-                "subnet-ms-app-b"
+                "subnet-ms-app-b",
+                "subnet-ms-app-c"
               ],
               "securityGroups": [
                 "sg-payments-svc"
@@ -1907,6 +2325,86 @@
         "source": "DescribeTasks"
       },
       {
+        "id": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/f78a8e877fc6b9123db2dcea01398103",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/f78a8e877fc6b9123db2dcea01398103",
+        "kind": "ecs_task",
+        "name": "cart-svc/f78a8e87",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/f78a8e877fc6b9123db2dcea01398103",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
+          "group": "service:cart-svc",
+          "launchType": "FARGATE",
+          "lastStatus": "RUNNING",
+          "availabilityZone": "ap-northeast-2c",
+          "cpu": "512",
+          "memory": "1024",
+          "attachments": [
+            {
+              "type": "ElasticNetworkInterface",
+              "status": "ATTACHED",
+              "details": [
+                {
+                  "name": "subnetId",
+                  "value": "subnet-ms-app-c"
+                },
+                {
+                  "name": "privateIPv4Address",
+                  "value": "10.20.16.43"
+                }
+              ]
+            }
+          ],
+          "DisplayName": "cart-svc/f78a8e87",
+          "ServiceName": "cart-svc",
+          "PrivateIp": "10.20.16.43",
+          "SubnetId": "subnet-ms-app-c"
+        },
+        "reference_only": false,
+        "source": "DescribeTasks"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/fe31429c6bddc6b204b8d56969e77e54",
+        "resource_id": "arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/fe31429c6bddc6b204b8d56969e77e54",
+        "kind": "ecs_task",
+        "name": "payments-svc/fe31429c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/fe31429c6bddc6b204b8d56969e77e54",
+          "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/commerce",
+          "group": "service:payments-svc",
+          "launchType": "FARGATE",
+          "lastStatus": "RUNNING",
+          "availabilityZone": "ap-northeast-2c",
+          "cpu": "512",
+          "memory": "1024",
+          "attachments": [
+            {
+              "type": "ElasticNetworkInterface",
+              "status": "ATTACHED",
+              "details": [
+                {
+                  "name": "subnetId",
+                  "value": "subnet-ms-app-c"
+                },
+                {
+                  "name": "privateIPv4Address",
+                  "value": "10.20.16.90"
+                }
+              ]
+            }
+          ],
+          "DisplayName": "payments-svc/fe31429c",
+          "ServiceName": "payments-svc",
+          "PrivateIp": "10.20.16.90",
+          "SubnetId": "subnet-ms-app-c"
+        },
+        "reference_only": false,
+        "source": "DescribeTasks"
+      },
+      {
         "id": "111122223333/ap-northeast-2/internet_gateway/igw-commerce",
         "resource_id": "igw-commerce",
         "kind": "internet_gateway",
@@ -1952,6 +2450,10 @@
             {
               "ZoneName": "ap-northeast-2b",
               "SubnetId": "subnet-ms-pub-b"
+            },
+            {
+              "ZoneName": "ap-northeast-2c",
+              "SubnetId": "subnet-ms-pub-c"
             }
           ],
           "SecurityGroups": [
@@ -2008,6 +2510,29 @@
         "source": "DescribeNatGateways"
       },
       {
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-c",
+        "resource_id": "nat-commerce-c",
+        "kind": "nat_gateway",
+        "name": "commerce-nat-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "NatGatewayId": "nat-commerce-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "SubnetId": "subnet-ms-pub-c",
+          "State": "available",
+          "ConnectivityType": "public",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-nat-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeNatGateways"
+      },
+      {
         "id": "111122223333/ap-northeast-2/network_interface/eni-cataloga00000001",
         "resource_id": "eni-cataloga00000001",
         "kind": "network_interface",
@@ -2030,6 +2555,17 @@
         "source": null
       },
       {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-catalogc00000001",
+        "resource_id": "eni-catalogc00000001",
+        "kind": "network_interface",
+        "name": "eni-catalogc00000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
         "id": "111122223333/ap-northeast-2/network_interface/eni-ordersa000000001",
         "resource_id": "eni-ordersa000000001",
         "kind": "network_interface",
@@ -2045,6 +2581,17 @@
         "resource_id": "eni-ordersb000000001",
         "kind": "network_interface",
         "name": "eni-ordersb000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/network_interface/eni-ordersc000000001",
+        "resource_id": "eni-ordersc000000001",
+        "kind": "network_interface",
+        "name": "eni-ordersc000000001",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {},
@@ -2171,6 +2718,49 @@
         "source": "DescribeRouteTables"
       },
       {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-c",
+        "resource_id": "rtb-commerce-private-c",
+        "kind": "route_table",
+        "name": "commerce-private-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-commerce-private-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.20.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-commerce-c",
+              "State": "active"
+            },
+            {
+              "DestinationPrefixListId": "pl-s3",
+              "GatewayId": "vpce-commerce-s3",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-commerce-private-c-0",
+              "SubnetId": "subnet-ms-app-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "commerce-private-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
         "id": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
         "resource_id": "rtb-commerce-public",
         "kind": "route_table",
@@ -2200,6 +2790,10 @@
             {
               "RouteTableAssociationId": "rtbassoc-commerce-public-1",
               "SubnetId": "subnet-ms-pub-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-commerce-public-2",
+              "SubnetId": "subnet-ms-pub-c"
             }
           ],
           "Tags": [
@@ -2295,6 +2889,36 @@
         "route_table": "rtb-commerce-private-b"
       },
       {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "resource_id": "subnet-ms-app-c",
+        "kind": "subnet",
+        "name": "services-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ms-app-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.20.16.0/22",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "services-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 1017
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-commerce-private-c"
+      },
+      {
         "id": "111122223333/ap-northeast-2/subnet/subnet-ms-data-a",
         "resource_id": "subnet-ms-data-a",
         "kind": "subnet",
@@ -2355,6 +2979,36 @@
         "route_table": "rtb-commerce-main"
       },
       {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ms-data-c",
+        "resource_id": "subnet-ms-data-c",
+        "kind": "subnet",
+        "name": "data-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ms-data-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.20.22.0/24",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "data-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "data"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "isolated",
+        "route_table": "rtb-commerce-main"
+      },
+      {
         "id": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-a",
         "resource_id": "subnet-ms-pub-a",
         "kind": "subnet",
@@ -2401,6 +3055,36 @@
             {
               "Key": "Name",
               "Value": "public-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-commerce-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-c",
+        "resource_id": "subnet-ms-pub-c",
+        "kind": "subnet",
+        "name": "public-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-ms-pub-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60002",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.20.2.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "public-c"
             },
             {
               "Key": "Tier",
@@ -2525,6 +3209,17 @@
         "source": null
       },
       {
+        "id": "111122223333/ap-northeast-2/volume/vol-catalogc00000001",
+        "resource_id": "vol-catalogc00000001",
+        "kind": "volume",
+        "name": "vol-catalogc00000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
         "id": "111122223333/ap-northeast-2/volume/vol-ordersa000000001",
         "resource_id": "vol-ordersa000000001",
         "kind": "volume",
@@ -2540,6 +3235,17 @@
         "resource_id": "vol-ordersb000000001",
         "kind": "volume",
         "name": "vol-ordersb000000001",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {},
+        "reference_only": true,
+        "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/volume/vol-ordersc000000001",
+        "resource_id": "vol-ordersc000000001",
+        "kind": "volume",
+        "name": "vol-ordersc000000001",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {},
@@ -2585,7 +3291,8 @@
           "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
           "SubnetIds": [
             "subnet-ms-app-a",
-            "subnet-ms-app-b"
+            "subnet-ms-app-b",
+            "subnet-ms-app-c"
           ],
           "PrivateDnsEnabled": true,
           "Tags": [
@@ -2614,7 +3321,8 @@
           "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
           "SubnetIds": [
             "subnet-ms-app-a",
-            "subnet-ms-app-b"
+            "subnet-ms-app-b",
+            "subnet-ms-app-c"
           ],
           "PrivateDnsEnabled": true,
           "Tags": [
@@ -2643,7 +3351,8 @@
           "ServiceName": "com.amazonaws.ap-northeast-2.logs",
           "SubnetIds": [
             "subnet-ms-app-a",
-            "subnet-ms-app-b"
+            "subnet-ms-app-b",
+            "subnet-ms-app-c"
           ],
           "PrivateDnsEnabled": true,
           "Tags": [
@@ -2672,7 +3381,8 @@
           "ServiceName": "com.amazonaws.ap-northeast-2.s3",
           "RouteTableIds": [
             "rtb-commerce-private-a",
-            "rtb-commerce-private-b"
+            "rtb-commerce-private-b",
+            "rtb-commerce-private-c"
           ],
           "Tags": [
             {
@@ -2710,6 +3420,18 @@
         },
         "inferred": false,
         "id": "rel-721c79d855090a4ce4b2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/catalog-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-catalogc00000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-0db8a094f45d6c7b78fc"
       },
       {
         "source": "111122223333/ap-northeast-2/auto_scaling_group/catalog-asg",
@@ -2754,6 +3476,18 @@
         },
         "inferred": false,
         "id": "rel-e33ec75391ef3a386910"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/auto_scaling_group/orders-asg",
+        "target": "111122223333/ap-northeast-2/ec2/i-ordersc000000001",
+        "relation": "asg_member",
+        "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-3e7b3f1728c1fd77d05d"
       },
       {
         "source": "111122223333/ap-northeast-2/auto_scaling_group/orders-asg",
@@ -2930,6 +3664,56 @@
         "id": "rel-741753654d3a15674fc3"
       },
       {
+        "source": "111122223333/ap-northeast-2/ec2/i-catalogc00000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-catalogc00000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3bc12ba2f4ce3c071d44"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-catalogc00000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-catalogc00000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-276a6271a1fb4cc2a19b"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-catalogc00000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-acca4c1db79e5d08cea7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-catalogc00000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-3ab9e5958bdc227ddc35"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-catalogc00000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-services",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-719b02454dc3e99c9b08"
+      },
+      {
         "source": "111122223333/ap-northeast-2/ec2/i-ordersa000000001",
         "target": "111122223333/ap-northeast-2/network_interface/eni-ordersa000000001",
         "relation": "attached_interface",
@@ -3030,6 +3814,56 @@
         "id": "rel-cf158b805b00f5cbafb7"
       },
       {
+        "source": "111122223333/ap-northeast-2/ec2/i-ordersc000000001",
+        "target": "111122223333/ap-northeast-2/network_interface/eni-ordersc000000001",
+        "relation": "attached_interface",
+        "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-af69f7ec1043b45e54eb"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ordersc000000001",
+        "target": "111122223333/ap-northeast-2/volume/vol-ordersc000000001",
+        "relation": "attached_volume",
+        "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b3ff2aedfc8789fdc929"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ordersc000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeInstances.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0261cce6485e1c7f2db1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ordersc000000001",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeInstances.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fd7e91f391a2c7cc3e2e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ec2/i-ordersc000000001",
+        "target": "111122223333/ap-northeast-2/security_group/sg-services",
+        "relation": "uses_security_group",
+        "evidence": "DescribeInstances.SecurityGroups[].GroupId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4d800312bd53977424c7"
+      },
+      {
         "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/cart-svc",
         "target": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/cart-svc-ecs/0000000000000003",
         "relation": "ecs_target_group",
@@ -3074,6 +3908,16 @@
       },
       {
         "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/cart-svc",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "service_subnet",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9098ab848734df8cc9c7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/cart-svc",
         "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/8a08ce99e4fa2b48b330bd40ecdc3c60",
         "relation": "service_task",
         "evidence": "DescribeTasks.group",
@@ -3091,6 +3935,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-76548e0227846de73221"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/cart-svc",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/f78a8e877fc6b9123db2dcea01398103",
+        "relation": "service_task",
+        "evidence": "DescribeTasks.group",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-0dcdd965d71ce7e51a95"
       },
       {
         "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/payments-svc",
@@ -3137,6 +3991,16 @@
       },
       {
         "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/payments-svc",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "service_subnet",
+        "evidence": "DescribeServices.networkConfiguration.awsvpcConfiguration.subnets[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-a78bf28e87fdc646bb85"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/payments-svc",
         "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/3c89833b28325a266604ca70b3a504f8",
         "relation": "service_task",
         "evidence": "DescribeTasks.group",
@@ -3154,6 +4018,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-0f1ba1450059e1a96a16"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_service/arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/payments-svc",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/fe31429c6bddc6b204b8d56969e77e54",
+        "relation": "service_task",
+        "evidence": "DescribeTasks.group",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-be89009784d3a97ef431"
       },
       {
         "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/3c89833b28325a266604ca70b3a504f8",
@@ -3252,6 +4126,54 @@
         "id": "rel-bcfddc49524fa71e8ad3"
       },
       {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/f78a8e877fc6b9123db2dcea01398103",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeTasks.attachments[].details.subnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-a90b2d1fdcb6bac15486"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/f78a8e877fc6b9123db2dcea01398103",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeTasks.attachments[].details.subnetId → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-bdab542699accfb204a1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/fe31429c6bddc6b204b8d56969e77e54",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeTasks.attachments[].details.subnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-64af12fece02092bcc1e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/fe31429c6bddc6b204b8d56969e77e54",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeTasks.attachments[].details.subnetId → DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e7167fdb792beebc74ac"
+      },
+      {
         "source": "111122223333/ap-northeast-2/internet_gateway/igw-commerce",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
         "relation": "in_vpc",
@@ -3288,6 +4210,20 @@
         },
         "inferred": false,
         "id": "rel-004952c88794c9fd8a41"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/commerce-alb/0000000000000001",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeLoadBalancers.AvailabilityZones[].SubnetId",
+        "qualifiers": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-7fee7f9afbf273680f0d"
       },
       {
         "source": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/commerce-alb/0000000000000001",
@@ -3350,6 +4286,26 @@
         "id": "rel-4b401f3f95aa321478bf"
       },
       {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeNatGateways.SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-dc0a366cf1e5d260a67d"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeNatGateways.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-218e6252a0a37a2c1a26"
+      },
+      {
         "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-main",
         "target": "111122223333/ap-northeast-2/subnet/subnet-ms-data-a",
         "relation": "associated_subnet",
@@ -3372,6 +4328,18 @@
         },
         "inferred": false,
         "id": "rel-3909ae3ce997a476bbe2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-main",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-data-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].Main (implicit)",
+        "qualifiers": {},
+        "details": {
+          "implicit": true
+        },
+        "inferred": false,
+        "id": "rel-01c3e3aec8e0b01f0219"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-main",
@@ -3480,6 +4448,54 @@
         "id": "rel-cc98c2c927ec58df2ecc"
       },
       {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-6e348e1bb0f0ab182827"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-8ad2cbfca9f1d3a22578"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-c",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-commerce-c",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-a7dbfc1e49a3b3e523ac"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-c",
+        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-s3",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "pl-s3"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-cf85b304efe9a362f876"
+      },
+      {
         "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
         "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-a",
         "relation": "associated_subnet",
@@ -3498,6 +4514,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-2d2e23440fe8545b0b95"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-97a8148f16599d60ed99"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-commerce-public",
@@ -3544,6 +4570,16 @@
         "id": "rel-ee6a4c6907f77b01d5f4"
       },
       {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b88374084ab7e57c326c"
+      },
+      {
         "source": "111122223333/ap-northeast-2/subnet/subnet-ms-data-a",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
         "relation": "in_vpc",
@@ -3564,6 +4600,16 @@
         "id": "rel-a027a37f254dff7cb2ad"
       },
       {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ms-data-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-119f7f6daaf48807bf1d"
+      },
+      {
         "source": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-a",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
         "relation": "in_vpc",
@@ -3582,6 +4628,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-394512be92f1fab96586"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-ms-pub-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-442288b95aba879eccea"
       },
       {
         "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/cart-svc-ecs/0000000000000003",
@@ -3648,6 +4704,28 @@
         "id": "rel-e2cb4ae78c53d455f8e6"
       },
       {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/cart-svc-ecs/0000000000000003",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/f78a8e877fc6b9123db2dcea01398103",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 9000,
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.20.16.43",
+            "Port": 9000,
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-554c010159bd2eb688f2"
+      },
+      {
         "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001",
         "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/commerce-alb/0000000000000001",
         "relation": "associated_load_balancer",
@@ -3708,6 +4786,26 @@
         "id": "rel-52db7b921db11ec7c9c9"
       },
       {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001",
+        "target": "111122223333/ap-northeast-2/ec2/i-catalogc00000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8080
+        },
+        "details": {
+          "Target": {
+            "Id": "i-catalogc00000001",
+            "Port": 8080
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-0af3810489d03b1c16cd"
+      },
+      {
         "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002",
         "target": "111122223333/ap-northeast-2/load_balancer/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/commerce-alb/0000000000000001",
         "relation": "associated_load_balancer",
@@ -3766,6 +4864,26 @@
         },
         "inferred": false,
         "id": "rel-bd84b19ff298f4806be1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002",
+        "target": "111122223333/ap-northeast-2/ec2/i-ordersc000000001",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 8081
+        },
+        "details": {
+          "Target": {
+            "Id": "i-ordersc000000001",
+            "Port": 8081
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-956c1caee22816baa38e"
       },
       {
         "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/payments-svc-ecs/0000000000000004",
@@ -3832,6 +4950,28 @@
         "id": "rel-06ca148d05e50b31f823"
       },
       {
+        "source": "111122223333/ap-northeast-2/target_group/arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/payments-svc-ecs/0000000000000004",
+        "target": "111122223333/ap-northeast-2/ecs_task/arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/fe31429c6bddc6b204b8d56969e77e54",
+        "relation": "registered_target",
+        "evidence": "DescribeTargetHealth.Target.Id",
+        "qualifiers": {
+          "port": 9100,
+          "availability_zone": "ap-northeast-2c"
+        },
+        "details": {
+          "Target": {
+            "Id": "10.20.16.90",
+            "Port": 9100,
+            "AvailabilityZone": "ap-northeast-2c"
+          },
+          "TargetHealth": {
+            "State": "healthy"
+          }
+        },
+        "inferred": false,
+        "id": "rel-66e3d6d66b4c585efb3f"
+      },
+      {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-api",
         "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-a",
         "relation": "endpoint_subnet",
@@ -3850,6 +4990,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-d30dd470abefa1dea6e9"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-api",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-fe7cfa714ddea65737ee"
       },
       {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-api",
@@ -3883,6 +5033,16 @@
       },
       {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-dkr",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-2368b60b3199e13f40ab"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-ecr-dkr",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
@@ -3913,6 +5073,16 @@
       },
       {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-logs",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-ms-app-c",
+        "relation": "endpoint_subnet",
+        "evidence": "DescribeVpcEndpoints.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-58b5d546a8baacf42fcd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-logs",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60002",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
@@ -3940,6 +5110,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-fb80d1a0967610d2d390"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-s3",
+        "target": "111122223333/ap-northeast-2/route_table/rtb-commerce-private-c",
+        "relation": "endpoint_route_table",
+        "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f21e3c71fa95c38ac03c"
       },
       {
         "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-commerce-s3",

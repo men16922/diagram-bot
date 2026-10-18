@@ -126,6 +126,8 @@ a.button{display:block;text-align:center;text-decoration:none}
 select{border:1px solid var(--line-strong);border-radius:8px;background:#fff;padding:6px 10px;font-size:13px}
 .check{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text);white-space:nowrap}
 .check input{accent-color:var(--link);width:15px;height:15px}
+.route-filter[hidden]{display:none}
+.route-filter select{max-width:240px}
 .filter-spacer{flex:1}
 .search-results{display:flex;flex-wrap:wrap;gap:8px;padding:10px 20px;border-bottom:1px solid var(--line);max-height:150px;overflow:auto}
 .search-results button{border:1px solid var(--line-strong);background:#fff;color:var(--link);border-radius:16px;padding:3px 12px;font-size:12px}
