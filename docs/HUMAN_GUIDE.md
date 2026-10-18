@@ -17,8 +17,9 @@
   회사 표준 템플릿 (company_standard.drawio)
        │
        ▼  api.adopt_xml("company_standard.drawio", name="company-std", set_default=True)
-          (또는 CLI: diagram-bot adopt-template company_standard.drawio -o reports/company)
-  ① 회사 XML의 포맷(래퍼 태그, Cloud/Region/AZ 상자 유무, 서브넷 라벨 표기, 리소스별 색상·폰트·화살표) 100% 추출 → 전역 기본값으로 자동 설정!
+          (또는 CLI: diagram-bot adopt-template company_standard.drawio -o reports/company;
+           HTTP는 요청마다 결과만, 서버 기본값 변경은 admin의 make_default=true)
+  ① 회사 XML(모든 페이지)의 포맷(래퍼 태그, Cloud/Region/AZ 상자 유무, 서브넷 라벨 표기, 컨테이너·리소스별 스타일·폰트·화살표) 추출 → 이 프로세스의 기본값으로 설정(재시작하면 사라짐)
   ② 원본 XML의 도형 겹침·컨테이너 경계·AZ 서브넷 계층·직교 배선을 자동 교정한 aligned.drawio 생성!
   ③ 회사 템플릿을 사내 표준 아키텍처("company-std")로 자동 등록 → Design.apply_standard("company-std")로 불러와
      리소스를 추가·변경해도 항상 회사 포맷 + 자동 레이아웃으로 출력!
@@ -27,8 +28,9 @@
   회사 기존 코드가 만든 어수선한 drawio.xml
        │
        ▼  api.align_xml(xml, mode="preserve")
-  셀 ID·라벨·스타일은 100% 그대로 유지하면서
-  도형 겹침 제거 + AZ 서브넷 계층 높이 동기화 + 컨테이너 자동 크기 조절 + 직교 화살표 배선 완료!
+  셀 ID·라벨·사용자 속성은 유지하면서(엣지 스타일은 직교 경로·포트로 다시 씀)
+  도형 겹침 제거 + AZ 서브넷 계층 행 맞춤 + 컨테이너 크기 조절 + 직교 화살표 배선.
+  정렬하면 더 나빠지는 페이지는 원래대로 돌려주고 align_report의 status로 알려 줌
 
 [방식 B. 회사 draw.io 규격(DrawioSpec) 자동 추출 및 적용]
   회사 표준 샘플 drawio.xml 1개
@@ -54,12 +56,12 @@
 
 ## 2. 원하는 만큼만 가져가는 5단계 모듈 지도 (Level 0 ~ Level 4)
 
-내일 회사에서 이 저장소를 다운로드한 뒤, **원하는 단계(Level) 하나만 골라** 코딩 에이전트에게 지시하면 됩니다. 핵심 엔진(Level 0~1)은 외부 라이브러리가 **`defusedxml` 단 1개**(나머지는 전부 Python 3.11+ 기본 내장 라이브러리)뿐이라 사내 폐쇄망·보안 환경에서도 즉시 이식됩니다.
+내일 회사에서 이 저장소를 다운로드한 뒤, **원하는 단계(Level) 하나만 골라** 코딩 에이전트에게 지시하면 됩니다. `drawio_spec.py`(규격·분류·입력 관문)는 `defusedxml`만 필요합니다. `xml_align.py`와 Level 1 엔진은 `samples` → `collector`를 거쳐 import 시점에 `boto3`도 불러오므로(AWS 호출은 하지 않음) 두 패키지를 함께 설치합니다. 정확한 파일 목록은 [porting-guide](wiki/porting-guide.md)의 Level 표가 기준입니다.
 
 | 단계 | 무엇을 가져가나? | 어떤 상황에 추천하나? | 외부 패키지 |
 | --- | --- | --- | --- |
-| **Level 0** | **기존 `drawio.xml` 자동 정렬기 + 회사 템플릿 표준화(`adopt_xml`, `DrawioSpec`)** (`drawio_spec.py`, `xml_align.py`, `drawio.py`, `layout.py`, `designer.py`) | 회사 표준 `drawio.xml` 파일 기준으로 포맷을 통일하고, **깨지는 정렬·컨테이너 크기·화살표 배선을 즉시 고치고 싶을 때** | `defusedxml` (1개) |
-| **Level 1** | **다이어그램·설계(`Design`)·검토(`review`)·CloudFormation(`iac`) 코어 엔진** | XML 직접 조작 대신 `d.apply_standard("company-std")`, `d.add_alb(...)`, `d.add_cache(...)` 같은 **의도 단위 코드로 아키텍처를 조립**하고, 보안 점검과 CFN 내보내기까지 쓰고 싶을 때 | `defusedxml` (1개) |
+| **Level 0** | **기존 `drawio.xml` 진단·정렬기 + 회사 템플릿 표준화(`adopt_xml`, `DrawioSpec`)** (파일 목록: [porting-guide](wiki/porting-guide.md) Level 0) | 회사 표준 `drawio.xml` 파일 기준으로 포맷을 통일하고, **깨지는 정렬·컨테이너 크기·화살표 배선을 고치고 싶을 때** | `defusedxml`, `boto3`(import만) |
+| **Level 1** | **다이어그램·설계(`Design`)·검토(`review`)·CloudFormation(`iac`) 코어 엔진** | XML 직접 조작 대신 `d.apply_standard("company-std")`, `d.add_load_balancer(...)`, `d.add_cache(...)` 같은 **의도 단위 코드로 아키텍처를 조립**하고, 보안 점검과 CFN 내보내기까지 쓰고 싶을 때 | `defusedxml`, `boto3`(import만) |
 | **Level 2** | **실제 AWS 계정 읽기 전용 수집 + 브라우저 Egress (`BrowserRelay`)** | 사내 방화벽·IP 제한(`aws:SourceIp`) 환경에서 **서버가 서명하고 사용자 브라우저가 AWS API를 호출**해 실제 계정을 구성도로 그리고 싶을 때 | `defusedxml`, `boto3` |
 | **Level 3** | **FastAPI 백엔드 라우터 + 리비전 저장소** (`/api/snapshots`, `/api/xml/adopt`, `/api/xml/align`, `/api/xml/import` 등) | 회사의 기존 FastAPI 서버에 `/diagram/*` API 엔드포인트들을 통째로 마운트하고 싶을 때 | + `fastapi`, `pydantic` |
 | **Level 4** | **AI 채팅 설계 에이전트 + React 프런트엔드 브리지** | **GPT-6 Luna나 Claude 5.5 Haiku 같은 하위/경량 모델**로도 환각 없이 표준 아키텍처 설계·브라운필드 수정이 되는 AI 어시스턴트를 붙이고 싶을 때 | + `strands-agents` |
@@ -74,18 +76,19 @@
 ```text
 우리 회사 레포의 drawio.xml 정렬/배선 문제를 해결하기 위해 다운로드한 diagram-bot 레포의 Level 0 모듈을 이식해줘.
 1. 먼저 diagram-bot/docs/wiki/porting-guide.md 와 diagram-bot/docs/wiki/drawio-format-and-alignment.md 두 문서만 읽어. (전체 코드 스캔 금지)
-2. Level 0에 적힌 파일들(drawio_spec.py, xml_align.py, drawio.py, layout.py, views.py, graph.py, samples.py, designer.py, findings.py)을 우리 프로젝트 패키지로 복사해.
-3. 우리 회사 코드에서 drawio.xml을 최종 반환하기 직전에 `align_drawio_xml(xml_text, mode="preserve")`를 통과하도록 연결해줘. (기존 셀 ID와 라벨은 그대로 유지되면서 도형 겹침, AZ 서브넷 계층 높이, 컨테이너 경계, 직교 화살표가 자동 정렬됨)
-4. diagram-bot/tests/test_xml_align.py 를 참고해서 우리 회사 샘플 drawio.xml로 정렬 전후(inspect_drawio_xml) 테스트를 돌려서 clean=True가 나오는지 검증해줘.
+2. porting-guide.md의 Level 0 표에 적힌 파일들만 우리 프로젝트 패키지로 복사해.
+3. 우리 회사 코드에서 drawio.xml을 최종 반환하기 직전에 `align_report(xml_text, mode="preserve")`를 통과하도록 연결하고, 결과의 `xml`을 쓰고 `pages[*].status`(clean·aligned·reverted)를 로그로 남겨줘. (셀 ID·라벨·사용자 속성은 유지, 나빠지는 페이지는 원래대로 돌아옴)
+4. diagram-bot/tests/test_xml_align.py 와 tests/test_xml_robustness.py 를 참고해서 우리 회사 샘플 drawio.xml로 정렬 전후(inspect_drawio_xml) 문제 수가 늘지 않는지 검증해줘. 우리 파일의 구조에 따라 clean=True가 안 나올 수 있으니 남은 문제 목록을 보고해줘.
 ```
 
 ### 시나리오 ②: 우리 회사 표준 아키텍처 `drawio.xml` 파일을 기준으로 전체 포맷·레이아웃·표준 템플릿을 완전 개편할 때 (가장 추천)
 ```text
 우리 회사의 표준 아키텍처 템플릿 XML 파일(<여기에 회사 .drawio 파일 경로 입력>)을 기준으로 diagram-bot이 우리 회사 포맷과 레이아웃 규칙으로 동작하도록 개편해줘.
 1. diagram-bot/docs/wiki/drawio-format-and-alignment.md 를 읽어.
-2. 앱 시작 시점(또는 모듈 초기화 시점)에 우리 회사의 표준 XML 파일을 `api.adopt_xml("<회사_템플릿.drawio>", name="company-standard", set_default=True, save_spec="config/company_spec.json")`으로 호출하도록 연결해줘.
+2. 앱 시작 시점(또는 모듈 초기화 시점, 서버 설정 코드에서만; 요청 데이터의 경로를 넘기지 말 것)에 우리 회사의 표준 XML 파일을 `api.adopt_xml("<회사_템플릿.drawio>", name="company-standard", set_default=True, save_spec="config/company_spec.json")`으로 호출하도록 연결해줘. 기본 표준 이름(three-tier 등)은 쓸 수 없어.
    - 이렇게 하면 우리 회사 XML의 래퍼(<mxCell> vs <object>), 외곽 Cloud/Region/AZ 상자 사용 여부, 서브넷 한 줄 라벨 표기법, 컨테이너·리소스별 색상/폰트/화살표가 자동으로 기본 규격(`DrawioSpec`)으로 고정되고,
-   - 우리 회사 템플릿이 `"company-standard"`라는 이름의 표준 아키텍처로 등록되어 `Design.apply_standard("company-standard")` 및 `add_*` 메서드로 리소스를 추가해도 무조건 우리 회사 포맷과 자동 레이아웃으로 렌더링돼.
+   - 우리 회사 템플릿이 `"company-standard"`라는 이름의 표준 아키텍처로 등록되어 `Design.apply_standard("company-standard")` 및 `add_*` 메서드로 리소스를 추가해도 우리 회사 포맷과 자동 레이아웃으로 렌더링돼. 앱 편집기에서 여는 문서는 선택에 필요한 `object` 래퍼와 `resourceId`를 유지해.
+   - 템플릿의 라벨로 리소스를 추론하므로, 가져온 스냅샷의 `metadata.import.unmapped`·`synthesized`를 확인해줘.
 3. `tests/test_xml_align.py::test_adopt_company_xml_overhauls_format_and_registers_standard` 를 참고해서 우리 회사 XML 파일로 테스트를 작성하고 통과하는지 확인해줘.
 ```
 
@@ -94,7 +97,7 @@
 우리 회사의 정적 표준 아키텍처 drawio.xml 파일들을 diagram-bot의 Snapshot 파이프라인(Level 1)으로 이식해줘.
 1. diagram-bot/docs/wiki/porting-guide.md 와 diagram-bot/docs/wiki/drawio-format-and-alignment.md 를 읽어.
 2. Level 1 모듈들을 우리 백엔드에 복사해.
-3. 우리 회사의 기존 표준 drawio.xml을 `api.import_xml(xml_text)`로 가져와서 Snapshot JSON으로 변환하거나, 자주 쓰는 표준 패턴은 `samples.py`의 `Sample` 빌더 형식으로 `designer.STANDARDS`에 등록해줘.
+3. 우리 회사의 기존 표준 drawio.xml을 `api.import_xml(xml_text)`로 가져와서 Snapshot JSON으로 변환하거나, 자주 쓰는 표준 패턴은 `samples/` 패키지의 `Sample` 빌더 형식으로 `designer.STANDARDS`에 등록해줘.
 4. 이제 XML 좌표를 직접 건드리지 말고 `Design.start_from_snapshot(snapshot)`과 `add_*` 메서드로 리소스를 추가한 뒤, 회사 규격(`spec`)으로 렌더링하고 `review_snapshot`(아키텍처 점검)과 `cloudformation`(IaC 템플릿)까지 출력되도록 연결해줘.
 ```
 
@@ -139,7 +142,7 @@ diagram-bot의 AI 아키텍처 설계 에이전트(agent.py, designer.py)를 우
 - **실행**:
   1. 회사 대표 `drawio.xml` 1개에서 `api.spec_from_xml()`로 사내 표준 `DrawioSpec` 추출 및 고정.
   2. 기존 XML 생성 파이프라인 끝에 `api.align_xml(xml, spec=COMPANY_SPEC, mode="preserve")` 적용.
-  3. CLI(`diagram-bot align-xml --report`)로 사내 기존 템플릿 일괄 정렬 및 품질 검증(`clean: True`).
+  3. CLI(`diagram-bot align-xml <입력> -o <출력>`; 정렬 전후 겹침·범위 이탈·미배선·선 충돌 개수와 되돌린 페이지를 표준 오류에 출력)로 사내 기존 템플릿을 일괄 정렬·검증.
 
 ### Phase 2. 사내 플랫폼 결합 (1~2주): 인증·영구 저장소·웹 편집기 내재화
 - **목표**: 여러 명의 사내 아키텍트·엔지니어가 동시에 접속해 실제 AWS 계정을 수집하고 다이어그램을 편집·공유하는 웹 서비스화.
@@ -151,6 +154,6 @@ diagram-bot의 AI 아키텍처 설계 에이전트(agent.py, designer.py)를 우
 ### Phase 3. 엔터프라이즈 지능화 (2~4주): 사내 표준 카탈로그 & CI/CD 아키텍처 게이트
 - **목표**: 단순 그리기를 넘어 **설계 자동화 → 사내 보안 규정 검증 → IaC 코드 생성 → 운영 드리프트 감시**의 전체 수명주기 완성.
 - **실행**:
-  1. **사내 표준 아키텍처 카탈로그화**: 사내 표준 `drawio.xml`들을 `api.import_xml`로 불러오거나 `samples.py`에 사내 표준 패턴(예: 사내 금융망 3-Tier, 사내 프라이빗 EKS 표준 등)으로 등록해 AI 채팅에서 `"사내 금융망 표준 불러와서 Redis 추가해줘"` 한 줄로 즉시 설계.
+  1. **사내 표준 아키텍처 카탈로그화**: 사내 표준 `drawio.xml`들을 `api.import_xml`로 불러오거나 `samples/` 패키지에 사내 표준 패턴(예: 사내 금융망 3-Tier, 사내 프라이빗 EKS 표준 등)으로 등록해 AI 채팅에서 `"사내 금융망 표준 불러와서 Redis 추가해줘"` 한 줄로 즉시 설계.
   2. **사내 보안·컴플라이언스 규칙 추가** ([[howto-add-review-rule]]): `findings.py`의 47개 AWS Well-Architected 규칙 위에 사내 전용 규칙(예: 필수 비용 태그 누락, 사내 보안 프록시 미경유, 금지된 인스턴스 패밀리 등)을 추가해 다이어그램 화면에서 즉시 빨간색/주황색 배지로 시각화.
   3. **배포 파이프라인(CI/CD) 아키텍처 게이트** ([[cli]]): 인프라 변경 전후에 `diagram-bot review --fail-on high`(종료 코드 3)와 `diagram-bot diff --fail-on-change`(종료 코드 4)를 실행해 단일 장애점(SPOF)이나 보안 위반이 생겼을 때 PR 단계에서 자동 알림·차단.

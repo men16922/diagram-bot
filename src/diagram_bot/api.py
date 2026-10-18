@@ -36,7 +36,7 @@ from .iac import templates as cloudformation_parts
 from .samples import SAMPLES
 from .store import DocumentStore, SnapshotStore
 from .views import view_graph
-from .xml_align import adopt_company_xml, align_drawio_xml, import_drawio_xml, inspect_drawio_xml
+from .xml_align import adopt_company_xml, align_drawio_xml, align_report, import_drawio_xml, inspect_drawio_xml
 
 adopt_xml = adopt_company_xml
 align_xml = align_drawio_xml
@@ -49,7 +49,7 @@ __all__ = [
     "BrowserRelay", "RelayError", "SnapshotStore", "DocumentStore", "build_graph", "layout_document",
     "validate_document", "carry_annotations", "DrawioSpec", "DEFAULT_SPEC", "ENTERPRISE_CLEAN_SPEC", "MXCELL_SPEC",
     "PRESETS", "resolve_spec", "set_default_spec", "get_default_spec", "spec_from_xml",
-    "adopt_company_xml", "align_drawio_xml", "import_drawio_xml", "inspect_drawio_xml",
+    "adopt_company_xml", "align_drawio_xml", "align_report", "import_drawio_xml", "inspect_drawio_xml",
     "adopt_xml", "align_xml", "import_xml", "inspect_xml",
 ]
 

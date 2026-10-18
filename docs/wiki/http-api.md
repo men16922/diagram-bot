@@ -18,7 +18,7 @@ updated: 2026-10-19
   - 팀 모드(`context.auth`가 있음)에서 `PUBLIC`(`/login`, `/api/login`, `/auth/oidc/start`, `/auth/oidc/callback`) 밖의 경로는 세션 쿠키가 필요하다. 없으면 `/api/*`는 401, 그 밖(페이지·`/static`·`/editor` 포함)은 303 → `/login`.
   - 역할 검사는 `auth.allowed(role, method, path)`: `GET`/`HEAD`와 `/api/logout`은 모두 허용, `/api/collections`·`/api/sso`로 시작하는 변경은 `admin`만, 나머지 변경은 `editor`·`admin`. 거부는 403과 감사 기록(`result="denied"`).
 - 로컬 모드(팀 모드 아님)에서는 `request.state.user = "local"`이고 `routes.role()`은 `admin`을 돌려준다.
-- 예외 처리기(`routes.install_error_handlers`): `store.NotFound` → 404, `store.Conflict` → 409, 메시지는 예외 문자열 그대로. pydantic 검증 실패는 FastAPI 기본 422.
+- 예외 처리기(`routes.install_error_handlers`): `store.NotFound` → 404, `store.Conflict` → 409, `errors.InputError` → 422(draw.io XML·규격 입력 오류 포함), 메시지는 예외 문자열 그대로. pydantic 검증 실패는 FastAPI 기본 422.
 - `FastAPI(docs_url=None, redoc_url=None)`이라 `/docs`·`/redoc`는 없다.
 
 ## 감사 기록
@@ -66,19 +66,21 @@ updated: 2026-10-19
 
 ## documents 라우터 (`routes/documents.py`)
 
-문서 네 엔드포인트 모두 보기 쿼리를 받는다: `view`(`overview`·`detail`·`focus`), `vpc`, `resource`, `references: bool`, `routes`(상세 보기의 로드 밸런서·대상 그룹 노드 ID), `spec`(`default`·`clean`·`enterprise`·`mxcell` 프리셋 이름, [[drawio-format-and-alignment]]). `views.view_graph`가 `ValueError`를 내면 422. 정해진 `(kind, vpc, resource, references, routes)`가 문서 키가 된다.
+문서 네 엔드포인트 모두 보기 쿼리를 받는다: `view`(`overview`·`detail`·`focus`), `vpc`, `resource`, `references: bool`, `routes`(상세 보기의 로드 밸런서·대상 그룹 노드 ID), `spec`(`default`·`clean`·`enterprise`·`enterprise-clean`·`mxcell` 프리셋 이름만; 파일 경로·XML은 422, `drawio_spec.request_spec`, [[drawio-format-and-alignment]]). `views.view_graph`가 `ValueError`를 내면 422. 정해진 `(kind, vpc, resource, references, routes)`가 문서 키가 된다.
 
 | 메서드·경로 | 본문 | 동작 |
 | --- | --- | --- |
-| `GET /api/snapshots/{id}/document` | (`reset: bool`, `spec: str?` 쿼리) | 저장본이 있고 `reset`·`spec`이 없으면 저장본, 아니면 새로 생성(`revision`은 저장본의 것 또는 0, `saved_at: null`) |
-| `PUT /api/snapshots/{id}/document` | `DocumentRequest{xml: ≤10 MiB, revision: ≥0}` | `drawio.validate_document` 실패 422, 리비전 불일치 409, 같은 XML이면 변경 없음 |
+| `GET /api/snapshots/{id}/document` | (`reset: bool`, `spec: str?` 쿼리) | `spec`이 있으면 그 규격의 내보내기 미리보기(`revision: null`, `preview: true`, 저장 불가: PUT은 422). 아니면 저장본이 있고 `reset`이 없으면 저장본, 아니면 새로 생성(`revision`은 저장본의 것 또는 0, `saved_at: null`) |
+| `PUT /api/snapshots/{id}/document` | `DocumentRequest{xml: ≤10 MiB, revision: ≥0}` | `drawio.validate_document` 실패(압축 페이지 포함) 422, 리비전 불일치 409, 같은 XML이면 변경 없음 |
 | `POST /api/snapshots/{id}/document/relayout` | `RevisionRequest{revision}` (`spec: str?` 쿼리) | 다시 생성하고 `carry_annotations`로 사용자 메모를 옮김, 이전 편집본은 `자동 재배치 전`으로 보관 |
 | `POST /api/snapshots/{id}/document/restore` | `RestoreRequest{revision, from_revision}` | 보관된 리비전을 복원(`v<n> 복원 전`으로 현재본 보관), 없으면 404 |
-| `POST /api/xml/align` | `XmlAlignRequest{xml: ≤10 MiB, mode: "preserve"\|"rebuild", spec: str \| dict \| None}` | 기존 `drawio.xml`을 규칙 정렬·직교 배선해 `{xml, before, after}` 반환([[drawio-format-and-alignment]]) |
-| `POST /api/xml/import` | `XmlImportRequest{xml: ≤10 MiB, title?, region="ap-northeast-2", save=True}` | 기존 `drawio.xml`을 `Snapshot`으로 역변환·저장하고 `{id, snapshot}` 반환 |
-| `POST /api/xml/adopt` | `XmlAdoptRequest{xml: ≤10 MiB, name="company-standard", title?, region="ap-northeast-2", set_default=True, save=True}` | 회사 `drawio.xml`에서 `DrawioSpec` 추출·기본값 설정, 인플레이스 정렬, 사내 표준 아키텍처(`Design.apply_standard`) 등록 후 `{id, name, spec, aligned_xml, standardized_xml, before, after}` 반환 |
+| `POST /api/xml/align` | `XmlAlignRequest{xml: ≤10 MiB, mode: Literal["preserve", "rebuild"], spec: 프리셋 이름 \| 객체 \| None, reparent, route_edges, normalize_styles}` | 모든 페이지를 정렬해 `{xml, before, after, pages: [{name, status, before, after, kept_wrappers}]}` 반환. 나빠지는 페이지는 `status: "reverted"`로 원래 배치 유지([[drawio-format-and-alignment]]) |
+| `POST /api/xml/import` | `XmlImportRequest{xml: ≤10 MiB, title: ≤200자?, region: REGION 형식, save=True}` | 모든 페이지를 `Snapshot`으로 가져와 저장하고 `{id, snapshot}` 반환. `snapshot.metadata.import`에 셀 ID → 리소스 ID 맵, 페이지, 미대응 셀, 합성한 것 |
+| `POST /api/xml/adopt` | `XmlAdoptRequest{xml: ≤10 MiB(XML 본문만, 경로 불가), name: ≤60자, title: ≤200자?, region: REGION 형식, make_default=False, save=True}` | 회사 `drawio.xml`에서 `DrawioSpec` 추출, 정렬, 가져오기 결과를 이 요청에만 돌려줌: `{id, name, default, spec, aligned_xml, standardized_xml, before, after}`. `make_default=true`는 admin만(아니면 403): 프로세스 기본 규격 설정 + `Design` 표준 등록, 기본 표준 이름과 겹치면 422 |
 
-응답(`describe`)은 `{xml, revision, saved_at, view, counts, visible, routes, history: [{revision, saved_at, reason}]}`. `routes`에서는 `path`를 뺀다. 리비전·이력 규칙은 [[storage]].
+XML 입력은 모두 `drawio_spec.read_document`를 지난다(크기, defusedxml, 압축 페이지 해제, 셀 10,000개, 좌표 유한성, 부모 순환·깊이). 실패는 422. 감사 로그는 미들웨어가 변경 요청마다 한 줄 쓴다(라우트가 따로 쓰지 않음).
+
+응답(`describe`)은 `{xml, revision, saved_at, view, counts, visible, routes, history: [{revision, saved_at, reason}]}`(미리보기는 `preview: true`도). `routes`에서는 `path`를 뺀다. 리비전·이력 규칙은 [[storage]].
 
 ## agent 라우터 (`routes/agent.py`)
 

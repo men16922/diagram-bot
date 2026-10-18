@@ -14,33 +14,25 @@ manipulated at the code level) with Diagram Bot's deterministic layout and snaps
   diffed with `diff.diff`, or exported to CloudFormation with `iac.template`.
 """
 import copy
+import ipaddress
 import json
 import math
 from pathlib import Path
 import re
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-from .designer import register_standard
-from .drawio import ICONS, RESOURCE_ICONS, generate_document, validate_document
-from .drawio_spec import format_style, parse_style, patch_style, resolve_spec, set_default_spec, spec_from_xml
+from .designer import STANDARDS, register_standard, slug
+from .drawio import generate_document
+from .drawio_spec import (AZ_CODE, REGION_CODE, classify_cell, format_style, iter_cells, pages, parse_style, patch_style,
+                          read_document, resolve_spec, set_default_spec, spec_from_xml)
+from .errors import InputError
 from .graph import build_graph
+from .layout import AZ_HEADER, ICON, LANE_TOP, ROW, SLOT, SUBNET_HEADER, VPC_HEADER
 from .samples import Sample
 
-__all__ = ["adopt_company_xml", "align_drawio_xml", "import_drawio_xml", "inspect_drawio_xml"]
-
-# Reverse lookup from draw.io aws4 icon names to Diagram Bot (kind, variant).
-_ICON_TO_KIND = {}
-for _k, (_icon_name, _) in ICONS.items():
-    _ICON_TO_KIND.setdefault(_icon_name, _k)
-for _k, (_icon_name, _) in RESOURCE_ICONS.items():
-    _ICON_TO_KIND[_icon_name] = _k
-
-_SUBNET_TIER_WORDS = (
-    (0, ("public", "퍼블릭", "pub", "dmz", "ingress")),
-    (1, ("web", "front", "웹")),
-    (3, ("isolated", "data", "db", "rds", "database", "cache", "격리", "데이터")),
-    (2, ("app", "private", "service", "was", "eks", "ecs", "프라이빗", "앱")),
-)
+__all__ = ["adopt_company_xml", "align_drawio_xml", "align_report", "import_drawio_xml", "inspect_drawio_xml"]
+# Attributes draw.io reads on an <mxCell>; anything else on a bare mxCell moves to the wrapper when one is added.
+MXCELL_ATTRIBUTES = {"id", "value", "style", "vertex", "edge", "parent", "source", "target", "connectable", "collapsed", "visible"}
 
 _BAND_ORDER = {
     "internet_gateway": 0, "vpn_gateway": 0, "vpc_peering": 0, "tgw_attachment": 0,
@@ -50,159 +42,43 @@ _BAND_ORDER = {
 }
 
 
-def _clean_text(text):
-    return (text or "").strip()
+MAX_COORDINATE, MAX_DEPTH = 1e7, 64
 
 
-def _cell_elements(graph_root):
-    """Yield `(wrapper_el, mxcell_el, cell_id, label)` for every cell in `graph_root`."""
-    for el in graph_root:
-        if el.tag == "mxCell":
-            cid = el.get("id") or ""
-            label = el.get("value") or ""
-            yield el, el, cid, label
-        elif el.tag in ("object", "UserObject"):
-            inner = el.find("mxCell")
-            if inner is not None:
-                cid = el.get("id") or inner.get("id") or ""
-                label = el.get("label") or el.get("value") or inner.get("value") or ""
-                yield el, inner, cid, label
-
-
-def _classify_vertex(cid, label, style_str, w, h, wrapper_el):
-    """Return `(role, kind, subnet_tier)` for a vertex cell."""
-    flags, kv = parse_style(style_str)
-    gr = kv.get("grIcon", "").replace("mxgraph.aws4.", "")
-    shape = kv.get("shape", "").replace("mxgraph.aws4.", "")
-    res_icon = kv.get("resIcon", "").replace("mxgraph.aws4.", "")
-    text = (label or "").lower()
-    res_attr = wrapper_el.get("resourceId") or wrapper_el.get("resource") or ""
-
-    if cid == "heading" or ("text" in flags and kv.get("fontSize") in ("18", "19", "20", "22")):
-        return "title", "title", None
-    if cid == "scope" or ("text" in flags and kv.get("strokeColor") == "none" and kv.get("fillColor") == "none"):
-        return "caption", "caption", None
-    if res_icon == "waf" and w <= 28 and h <= 28:
-        return "badge", "waf_web_acl", None
-    if wrapper_el.get("summary") == "1":
-        return "summary", "vpc", None
-
-    if "group_aws_cloud" in gr or "aws cloud" in text:
-        return "cloud", "cloud", None
-    if "group_region" in gr or (kv.get("container") == "1" and re.search(r"\b(ap|us|eu|sa|ca|me|af)-[a-z]+-\d\b", text) and not re.search(r"\d[a-f]\b", text)):
-        return "region", "region", None
-    if "group_account" in gr or (kv.get("container") in ("0", "1") and ("account" in text or "계정" in text) and "group" in shape):
-        return "account", "account", None
-    if "group_vpc" in gr or "/vpc/" in res_attr or (kv.get("container") == "1" and "vpc" in text and "subnet" not in text and "엔드포인트" not in text):
-        return "vpc", "vpc", None
-    if "group_auto_scaling_group" in gr or ("auto scaling" in text and ("group" in shape or kv.get("dashed") == "1")):
-        return "asg", "auto_scaling_group", None
-    if "group_corporate_data_center" in gr or "corporate data center" in text or "on-prem" in text or "데이터 센터" in text:
-        return "onprem", "onprem", None
-    if cid == "references" or "vpc 외" in text or "배치 미확인" in text:
-        return "references", "references", None
-    if "서브넷 미확인" in text:
-        return "unplaced", "unplaced", None
-
-    is_subnet = (
-        "group_security_group" in gr
-        or "/subnet/" in res_attr
-        or (kv.get("container") == "1" and any(w in text for w in ("subnet", "서브넷", "public-", "private-", "isolated-", "app-", "db-", "web-", "data-")))
-    )
-    if is_subnet:
-        fill = kv.get("fillColor", "").upper()
-        stroke = kv.get("strokeColor", "").upper()
-        tier = 2
-        if fill in ("#F2F6E8", "#E8F5E9") or stroke == "#7AA116" or "0.0.0.0/0 → igw" in text:
-            tier = 0
-        elif fill in ("#ECEFF8", "#EDE7F6") or "인터넷 경로 없음" in text:
-            tier = 3
-        else:
-            for rank, words in _SUBNET_TIER_WORDS:
-                if any(word in text for word in words):
-                    tier = rank
-                    break
-        return "subnet", "subnet", tier
-
-    if kv.get("container") == "1" and (re.search(r"\b[a-z]{2}-[a-z0-9]+-\d[a-f]\b", text) or re.search(r"\baz[-_\s]?[a-f1-4]\b", text) or "가용 영역" in text):
-        return "az", "az", None
-
-    if kv.get("container") == "0" and kv.get("dashed") == "1" and kv.get("strokeColor", "").upper() == "#ED7100":
-        return "ecs_frame", "ecs_service", None
-
-    # Resource detection
-    icon_key = res_icon or shape
-    kind = _ICON_TO_KIND.get(icon_key)
-    if not kind:
-        if "/load_balancer/" in res_attr or "alb" in text or "nlb" in text or "load balancer" in text:
-            kind = "network" if "nlb" in text else "application"
-        elif "/target_group/" in res_attr or "target group" in text or "대상 그룹" in text or text.startswith("tg-"):
-            kind = "target_group"
-        elif "/ec2/" in res_attr or "ec2" in text or "instance" in text:
-            kind = "ec2"
-        elif "/db_instance/" in res_attr or "rds" in text or "postgres" in text or "mysql" in text:
-            kind = "db_instance"
-        elif "/db_cluster/" in res_attr or "aurora" in text:
-            kind = "aurora"
-        elif "redis" in text or "elasticache" in text or "valkey" in text:
-            kind = "redis"
-        elif "nat" in text:
-            kind = "nat_gateway"
-        elif "igw" in text or "internet gateway" in text:
-            kind = "internet_gateway"
-        elif "tgw" in text or "transit gateway" in text:
-            kind = "tgw_attachment" if "attach" in text else "transit_gateway"
-        elif "eks" in text:
-            kind = "eks_cluster"
-        elif "ecs" in text or "fargate" in text:
-            kind = "ecs_task" if "task" in text else "ecs_service"
-        elif "lambda" in text:
-            kind = "lambda_function"
-        elif "opensearch" in text:
-            kind = "search_node"
-        elif "msk" in text or "kafka" in text:
-            kind = "msk_broker"
-        elif "efs" in text:
-            kind = "efs_standard"
-        elif "fsx" in text or "lustre" in text:
-            kind = "fsx_lustre"
-        elif "sagemaker" in text:
-            kind = "sagemaker_endpoint"
-        elif "bedrock" in text:
-            kind = "bedrock"
-        elif "endpoint" in text or "vpce" in text:
-            kind = "vpc_endpoint"
-        elif "cloudfront" in text:
-            kind = "cloudfront_distribution"
-        elif "waf" in text:
-            kind = "waf_web_acl"
-        elif "direct connect" in text or "dx" in text:
-            kind = "dx_connection"
-        elif "vpn" in text:
-            kind = "vpn_gateway"
-        elif "cgw" in text or "customer gateway" in text:
-            kind = "customer_gateway"
-        else:
-            kind = "ec2"
-    return "resource", kind, None
+def _number(geo, key, default, cid):
+    raw = geo.get(key)
+    try:
+        value = float(raw) if raw not in (None, "") else default
+    except ValueError:
+        raise InputError(f"셀 {cid}의 {key} 값이 숫자가 아닙니다: {raw[:20]}") from None
+    if not math.isfinite(value) or abs(value) > MAX_COORDINATE or (key in ("width", "height") and value < 0):
+        raise InputError(f"셀 {cid}의 {key} 값이 범위를 벗어났습니다: {raw[:20]}")
+    return value
 
 
 def _parse_page_model(graph_root):
     """Parse vertices and edges from a single `<root>` element into structured dicts."""
     vertices = {}
     edges = []
-    for wrapper, inner, cid, label in _cell_elements(graph_root):
-        if cid in ("0", "1", ""):
+    cells = [cell for cell in iter_cells(graph_root) if cell[2] not in ("0", "1", "", None)]
+    edge_ids = {cid for _, inner, cid, _ in cells if inner.get("edge") == "1"}
+    parents = {inner.get("parent") for _, inner, _, _ in cells}
+    for wrapper, inner, cid, label in cells:
+        if cid in ("0", "1", "", None):
             continue
         style_str = inner.get("style") or ""
         geo = inner.find("mxGeometry")
         if inner.get("vertex") == "1" and geo is not None:
-            x = float(geo.get("x") or 0)
-            y = float(geo.get("y") or 0)
-            w = float(geo.get("width") or 52)
-            h = float(geo.get("height") or 52)
+            x = _number(geo, "x", 0.0, cid)
+            y = _number(geo, "y", 0.0, cid)
+            w = _number(geo, "width", 52.0, cid)
+            h = _number(geo, "height", 52.0, cid)
             parent = inner.get("parent") or "1"
-            role, kind, tier = _classify_vertex(cid, label, style_str, w, h, wrapper)
+            if parent in edge_ids or geo.get("relative") == "1":
+                role, kind, tier = "label", "label", None  # an edge's label cell moves with its edge
+            else:
+                role, kind, tier = classify_cell(label, style_str, wrapper.attrib, cell_id=cid, container=cid in parents,
+                                                 small=w <= 28 and h <= 28)
             vertices[cid] = {
                 "id": cid, "wrapper": wrapper, "cell": inner, "geo": geo,
                 "label": label, "style": style_str, "parent": parent,
@@ -215,149 +91,236 @@ def _parse_page_model(graph_root):
                 arr = geo.find("Array[@as='points']")
                 if arr is not None:
                     for pt in arr.findall("mxPoint"):
-                        pts.append((float(pt.get("x") or 0), float(pt.get("y") or 0)))
+                        pts.append((_number(pt, "x", 0.0, cid), _number(pt, "y", 0.0, cid)))
             edges.append({
                 "id": cid, "wrapper": wrapper, "cell": inner, "geo": geo,
                 "label": label, "style": style_str,
                 "source": inner.get("source") or "", "target": inner.get("target") or "",
-                "points": pts,
+                "parent": inner.get("parent") or "1", "points": pts,  # points are relative to the parent's origin
             })
     return vertices, edges
 
 
 def _compute_abs(vertices):
-    """Compute `(abs_x, abs_y)` for every vertex in `vertices`."""
-    abs_pos = {"0": (0.0, 0.0), "1": (0.0, 0.0)}
+    """Page coordinates `(abs_x, abs_y)` of every vertex; iterative, so a hostile parent chain cannot exhaust the stack.
 
-    def resolve(cid, visited=None):
-        if cid in abs_pos:
-            return abs_pos[cid]
-        if cid not in vertices:
-            return (0.0, 0.0)
-        visited = visited or set()
-        if cid in visited:
-            return (vertices[cid]["x"], vertices[cid]["y"])
-        visited.add(cid)
-        v = vertices[cid]
-        px, py = resolve(v["parent"], visited)
-        abs_pos[cid] = (px + v["x"], py + v["y"])
-        return abs_pos[cid]
-
-    for cid in vertices:
-        resolve(cid)
+    A parent cycle or nesting deeper than MAX_DEPTH is an InputError; a parent that is not a vertex counts as the page."""
+    abs_pos, depth = {"0": (0.0, 0.0), "1": (0.0, 0.0)}, {}
+    for start in vertices:
+        chain, cid = [], start
+        while cid not in abs_pos and cid in vertices:
+            if len(chain) >= MAX_DEPTH or cid in chain:
+                raise InputError(f"셀 {start}의 부모 관계가 순환하거나 {MAX_DEPTH}단계보다 깊습니다.")
+            chain.append(cid)
+            cid = vertices[cid]["parent"]
+        (x, y), level = abs_pos.get(cid, (0.0, 0.0)), depth.get(cid, 0)
+        for cid in reversed(chain):
+            x, y, level = x + vertices[cid]["x"], y + vertices[cid]["y"], level + 1
+            if level > MAX_DEPTH:
+                raise InputError(f"셀 {cid}의 부모 관계가 {MAX_DEPTH}단계보다 깊습니다.")
+            abs_pos[cid], depth[cid] = (x, y), level
     return abs_pos
+
+
+def _fraction(value):
+    """An exit/entry port fraction from a style, or None when absent or not a finite number."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+class _Grid:
+    """Uniform-grid index over boxes (x1, y1, x2, y2): a query visits only the boxes in the cells it covers.
+
+    Boxes or queries spanning more than SPAN cells (huge containers, page-long segments) fall back to a scan."""
+    SIZE, SPAN = 160.0, 1024
+
+    def __init__(self, boxes):
+        self.boxes, self.cells, self.wide = boxes, {}, []
+        self.checks = 0  # candidate boxes visited, for tests that bound the work rather than the time
+        for key, box in boxes.items():
+            span = self._span(box)
+            if span is None:
+                self.wide.append(key)
+            else:
+                for cell in span:
+                    self.cells.setdefault(cell, []).append(key)
+
+    def _span(self, box):
+        x1, y1, x2, y2 = (int(math.floor(c / self.SIZE)) for c in box)
+        if (x2 - x1 + 1) * (y2 - y1 + 1) > self.SPAN:
+            return None
+        return ((gx, gy) for gx in range(x1, x2 + 1) for gy in range(y1, y2 + 1))
+
+    def near(self, box):
+        """Keys of the boxes that may intersect `box` (a superset), each once, in insertion order."""
+        span = self._span(box)
+        if span is None:
+            keys = list(self.boxes)
+        else:
+            seen = dict.fromkeys(self.wide)
+            for cell in span:
+                seen.update(dict.fromkeys(self.cells.get(cell, ())))
+            keys = list(seen)
+        self.checks += len(keys)
+        return keys
+
+    def along(self, a, b):
+        """Keys of the boxes near the segment a-b, querying it in cell-sized pieces (a long diagonal's bounding box would
+        cover cells the line never crosses)."""
+        steps = max(1, math.ceil(max(abs(b[0] - a[0]), abs(b[1] - a[1])) / self.SIZE))
+        keys = {}
+        for i in range(steps):
+            p = (a[0] + (b[0] - a[0]) * i / steps, a[1] + (b[1] - a[1]) * i / steps)
+            q = (a[0] + (b[0] - a[0]) * (i + 1) / steps, a[1] + (b[1] - a[1]) * (i + 1) / steps)
+            keys.update(dict.fromkeys(self.near((min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]) + 0.1, max(p[1], q[1]) + 0.1))))
+        return list(keys)
 
 
 def _boxes_overlap(a, b, pad=0.0):
     return (a[0] + pad) < (b[2] - pad) and (b[0] + pad) < (a[2] - pad) and (a[1] + pad) < (b[3] - pad) and (b[1] + pad) < (a[3] - pad)
 
 
-def inspect_drawio_xml(xml_text) -> dict:
-    """Inspect a `drawio.xml` string and return layout/routing diagnostics and its extracted `DrawioSpec`."""
-    root = validate_document(xml_text)
-    graph_root = root.find("diagram/mxGraphModel/root") if root.tag == "mxfile" else root.find("root")
+def _segment_hits(p1, p2, box):
+    """Whether the segment p1-p2 passes through the box (Liang-Barsky clipping; exact for diagonal segments too)."""
+    (x1, y1), (x2, y2) = p1, p2
+    t0, t1, dx, dy = 0.0, 1.0, x2 - x1, y2 - y1
+    for p, q in ((-dx, x1 - box[0]), (dx, box[2] - x1), (-dy, y1 - box[1]), (dy, box[3] - y1)):
+        if p == 0:
+            if q < 0:
+                return False
+        elif p < 0:
+            t0 = max(t0, q / p)
+        else:
+            t1 = min(t1, q / p)
+        if t0 > t1:
+            return False
+    return True
+
+
+ISSUES = ("overlaps", "out_of_bounds", "unaligned_tiers", "unrouted_edges", "edge_collisions")
+FREE_ROLES = ("annotation", "label", "group")  # cells align and import leave where they are
+OVERLAY_ROLES = ("asg", "account", "ecs_frame", "badge", "title", "caption") + FREE_ROLES
+CONTAINER_ROLES = {"cloud", "region", "account", "vpc", "az", "subnet", "onprem", "references", "unplaced", "summary"}
+
+
+def _inspect_page(graph_root):
+    """Layout and routing issues of one page, in page coordinates (edge points offset by their parent's origin)."""
     vertices, edges = _parse_page_model(graph_root)
     abs_pos = _compute_abs(vertices)
+    report = {"vertices": vertices, "edges": edges, **{key: [] for key in ISSUES}}
 
-    roles = {}
-    for v in vertices.values():
-        roles[v["role"]] = roles.get(v["role"], 0) + 1
-
-    overlaps = []
     by_parent = {}
     for cid, v in vertices.items():
-        if v["role"] in ("asg", "account", "ecs_frame", "badge", "title", "caption"):
-            continue
-        by_parent.setdefault(v["parent"], []).append(cid)
-
+        if v["role"] not in OVERLAY_ROLES:
+            by_parent.setdefault(v["parent"], []).append(cid)
     for members in by_parent.values():
-        for i, a_id in enumerate(members):
-            ax, ay = abs_pos[a_id]
-            va = vertices[a_id]
-            box_a = (ax, ay, ax + va["w"], ay + va["h"])
-            for b_id in members[i + 1:]:
-                bx, by = abs_pos[b_id]
-                vb = vertices[b_id]
-                box_b = (bx, by, bx + vb["w"], by + vb["h"])
-                if _boxes_overlap(box_a, box_b, pad=0.5):
-                    overlaps.append((a_id, b_id))
+        boxes = {cid: (abs_pos[cid][0], abs_pos[cid][1], abs_pos[cid][0] + vertices[cid]["w"], abs_pos[cid][1] + vertices[cid]["h"])
+                 for cid in members}
+        order, grid = {cid: i for i, cid in enumerate(members)}, _Grid(boxes)
+        for a_id in members:
+            for b_id in grid.near(boxes[a_id]):
+                if order[b_id] > order[a_id] and _boxes_overlap(boxes[a_id], boxes[b_id], pad=0.5):
+                    report["overlaps"].append((a_id, b_id))
 
-    out_of_bounds = []
     for cid, v in vertices.items():
         pid = v["parent"]
-        if pid in vertices and v["role"] not in ("badge", "asg", "account", "ecs_frame"):
+        if pid in vertices and v["role"] not in OVERLAY_ROLES:
             p = vertices[pid]
             if v["x"] < -1 or v["y"] < -1 or (v["x"] + v["w"]) > (p["w"] + 1) or (v["y"] + v["h"]) > (p["h"] + 1):
-                out_of_bounds.append((cid, pid))
+                report["out_of_bounds"].append((cid, pid))
 
-    unaligned_tiers = []
-    # Check subnets of the same tier across sibling AZ columns in each VPC
-    az_by_vpc = {}
+    # A tier row (the k-th subnet of a tier in each AZ column of a VPC) starts at the same y in every column, as
+    # layout.py draws it; heights may differ (an empty subnet is shorter).
+    az_by_vpc, subnets_of = {}, {}
     for cid, v in vertices.items():
         if v["role"] == "az":
             az_by_vpc.setdefault(v["parent"], []).append(cid)
+        elif v["role"] == "subnet":
+            subnets_of.setdefault(v["parent"], []).append(v)
     for az_ids in az_by_vpc.values():
-        tier_subnets = {}
+        rows = {}
         for az_id in az_ids:
-            for s in vertices.values():
-                if s["parent"] == az_id and s["role"] == "subnet":
-                    tier_subnets.setdefault(s["tier"], []).append(s)
-        for subs in tier_subnets.values():
-            if len(subs) > 1:
-                y0, h0 = subs[0]["y"], subs[0]["h"]
-                for other in subs[1:]:
-                    if abs(other["y"] - y0) > 1 or abs(other["h"] - h0) > 1:
-                        unaligned_tiers.append((subs[0]["id"], other["id"]))
+            seen = {}
+            for s in sorted(subnets_of.get(az_id, ()), key=lambda s: (s["y"], s["id"])):
+                seen[s["tier"]] = seen.get(s["tier"], -1) + 1
+                rows.setdefault((s["tier"], seen[s["tier"]]), []).append(s)
+        for subs in rows.values():
+            for other in subs[1:]:
+                if abs(other["y"] - subs[0]["y"]) > 1:
+                    report["unaligned_tiers"].append((subs[0]["id"], other["id"]))
 
-    unrouted_edges = []
-    edge_collisions = []
     resource_boxes = {
         cid: (abs_pos[cid][0] + 2, abs_pos[cid][1] + 2, abs_pos[cid][0] + v["w"] - 2, abs_pos[cid][1] + v["h"] - 2)
         for cid, v in vertices.items() if v["role"] == "resource"
     }
-
+    resource_grid = _Grid(resource_boxes)
     for e in edges:
         src, dst = e["source"], e["target"]
         if src not in vertices or dst not in vertices:
             continue
         _, kv = parse_style(e["style"])
-        has_ports = all(k in kv for k in ("exitX", "exitY", "entryX", "entryY"))
-        if not has_ports or kv.get("edgeStyle") != "orthogonalEdgeStyle":
-            unrouted_edges.append(e["id"])
-            continue
-        sx, sy = abs_pos[src]
-        dx, dy = abs_pos[dst]
+        ports = [_fraction(kv.get(k)) for k in ("exitX", "exitY", "entryX", "entryY")]
+        ox, oy = abs_pos.get(e["parent"], (0.0, 0.0))
+        points = [(x + ox, y + oy) for x, y in e["points"]]
+        (sx, sy), (dx, dy) = abs_pos[src], abs_pos[dst]
         sv, dv = vertices[src], vertices[dst]
-        p_start = (sx + float(kv["exitX"]) * sv["w"], sy + float(kv["exitY"]) * sv["h"])
-        p_end = (dx + float(kv["entryX"]) * dv["w"], dy + float(kv["entryY"]) * dv["h"])
-        path = [p_start, *e["points"], p_end]
-        if len(path) == 2 and abs(p_start[0] - p_end[0]) > 1 and abs(p_start[1] - p_end[1]) > 1:
-            unrouted_edges.append(e["id"])
-            continue
-        for (x1, y1), (x2, y2) in zip(path, path[1:]):
-            if abs(x1 - x2) > 1 and abs(y1 - y2) > 1:
-                if e["id"] not in unrouted_edges:
-                    unrouted_edges.append(e["id"])
-                break
-            seg = (min(x1, x2), min(y1, y2), max(x1, x2) + 0.1, max(y1, y2) + 0.1)
-            for rid, rbox in resource_boxes.items():
-                if rid not in (src, dst) and _boxes_overlap(seg, rbox):
-                    edge_collisions.append((e["id"], rid))
+        orthogonal = kv.get("edgeStyle") == "orthogonalEdgeStyle"
+        if None in ports or not orthogonal:
+            report["unrouted_edges"].append(e["id"])
+            if orthogonal and not points:
+                continue  # draw.io picks this route itself: nothing to measure
+            # A straight edge (or one through its waypoints) as draw.io draws it, from centre to centre.
+            path = [(sx + sv["w"] / 2, sy + sv["h"] / 2), *points, (dx + dv["w"] / 2, dy + dv["h"] / 2)]
+        else:
+            path = [(sx + ports[0] * sv["w"], sy + ports[1] * sv["h"]), *points, (dx + ports[2] * dv["w"], dy + ports[3] * dv["h"])]
+            if any(abs(a[0] - b[0]) > 1 and abs(a[1] - b[1]) > 1 for a, b in zip(path, path[1:])):
+                report["unrouted_edges"].append(e["id"])
+        hit = set()
+        for a, b in zip(path, path[1:]):
+            for rid in resource_grid.along(a, b):
+                if rid not in (src, dst) and rid not in hit and _segment_hits(a, b, resource_boxes[rid]):
+                    hit.add(rid)
+                    report["edge_collisions"].append((e["id"], rid))
+    return report
 
+
+def _counts(report):
+    return {key: len(report[key]) for key in ISSUES}
+
+
+def inspect_drawio_xml(xml_text) -> dict:
+    """Layout and routing diagnostics of every page of a `drawio.xml` string, and its extracted `DrawioSpec`.
+
+    The issue lists and counts cover all pages; `pages` has each page's counts and whether it holds AWS cells at all
+    (a cover or legend page does not, and import skips it)."""
+    root = read_document(xml_text)
+    roles, totals, page_reports = {}, {key: [] for key in ISSUES}, []
+    nodes = containers = edge_count = 0
+    for name, graph_root in pages(root):
+        page = _inspect_page(graph_root)
+        vertices = page["vertices"].values()
+        for v in vertices:
+            roles[v["role"]] = roles.get(v["role"], 0) + 1
+        for key in ISSUES:
+            totals[key] += page[key]
+        page_nodes = sum(1 for v in vertices if v["role"] == "resource")
+        nodes, edge_count = nodes + page_nodes, edge_count + len(page["edges"])
+        containers += sum(1 for v in vertices if v["role"] in CONTAINER_ROLES)
+        page_reports.append({"name": name, "aws": any(v["role"] in ("vpc", "subnet", "resource", "summary") for v in vertices),
+                             "node_count": page_nodes, **_counts(page), "clean": not any(page[key] for key in ISSUES)})
     extracted = spec_from_xml(xml_text)
-    container_roles = {"cloud", "region", "account", "vpc", "az", "subnet", "onprem", "references", "unplaced", "summary"}
     return {
         "wrapper": extracted.cell_wrapper,
-        "node_count": sum(1 for v in vertices.values() if v["role"] == "resource"),
-        "container_count": sum(1 for v in vertices.values() if v["role"] in container_roles),
-        "edge_count": len(edges),
+        "node_count": nodes,
+        "container_count": containers,
+        "edge_count": edge_count,
         "roles": roles,
-        "overlaps": overlaps,
-        "out_of_bounds": out_of_bounds,
-        "unaligned_tiers": unaligned_tiers,
-        "unrouted_edges": unrouted_edges,
-        "edge_collisions": edge_collisions,
-        "clean": not (overlaps or out_of_bounds or unaligned_tiers or unrouted_edges or edge_collisions),
+        **totals,
+        "clean": not any(totals.values()),
+        "pages": page_reports,
         "spec": extracted.to_dict(),
     }
 
@@ -379,7 +342,7 @@ def _reparent_visual_children(vertices):
     containers.sort(key=lambda item: (container_order.index(item[1]["role"]), (item[4] - item[2]) * (item[5] - item[3])))
 
     for cid, v in vertices.items():
-        if v["parent"] != "1" or v["role"] in ("title", "caption", "cloud", "account", "asg", "ecs_frame"):
+        if v["parent"] != "1" or v["role"] in ("title", "caption", "cloud", "account", "asg", "ecs_frame", *FREE_ROLES):
             continue
         ax, ay = abs_pos[cid]
         cx, cy = ax + v["w"] / 2, ay + v["h"] / 2
@@ -397,8 +360,8 @@ def _reparent_visual_children(vertices):
                 break
 
 
-def _align_page_in_place(graph_root, *, spec=None, reparent=True, route_edges=True, normalize_styles=False, grid_size=10):
-    """Align containers, resource grids, cross-AZ tiers, and orthogonal routes in-place on `graph_root`."""
+def _align_page_in_place(graph_root, *, reparent=True, route_edges=True, grid_size=10):
+    """Align containers, resource grids, cross-AZ tiers, and orthogonal routes in-place on `graph_root` (geometry only)."""
     vertices, edges = _parse_page_model(graph_root)
     if not vertices:
         return
@@ -426,14 +389,15 @@ def _align_page_in_place(graph_root, *, spec=None, reparent=True, route_edges=Tr
     for v in vertices.values():
         children_of.setdefault(v["parent"], []).append(v)
 
-    SLOT_W, ROW_H, ICON_SIZE = 150.0, 144.0, 52.0
-    SUBNET_HDR, AZ_HDR, VPC_HDR, OUTER_HDR = 46.0, 36.0, 42.0, 40.0
+    # The renderer's grid (layout.py): slot width, icon size, row pitch and container headers.
+    SLOT_W, ROW_H, ICON_SIZE = float(SLOT), float(ROW), float(ICON)
+    SUBNET_HDR, AZ_HDR, VPC_HDR, OUTER_HDR = float(SUBNET_HEADER), float(AZ_HEADER), float(VPC_HEADER), 40.0
 
     def layout_leaf_container(cont, header_h=SUBNET_HDR, min_w=190.0, min_h=120.0):
         kids = children_of.get(cont["id"], [])
         res_kids = [k for k in kids if k["role"] == "resource"]
         cap_kids = [k for k in kids if k["role"] == "caption"]
-        sub_conts = [k for k in kids if k["role"] not in ("resource", "caption", "badge", "title")]
+        sub_conts = [k for k in kids if k["role"] in CONTAINER_ROLES or k["role"] == "group"]
         if sub_conts:
             return
         res_kids.sort(key=lambda r: (round(r["y"] / 40.0), r["x"], r["id"]))
@@ -446,9 +410,9 @@ def _align_page_in_place(graph_root, *, spec=None, reparent=True, route_edges=Tr
                     r["w"] = ICON_SIZE
                     r["h"] = ICON_SIZE
                 r["x"] = round(20.0 + col * SLOT_W + (SLOT_W - r["w"]) / 2.0, 1)
-                r["y"] = round(header_h + 24.0 + row * ROW_H, 1)
+                r["y"] = round(header_h + LANE_TOP + row * ROW_H, 1)
             cont["w"] = _snap(max(min_w, cols * SLOT_W + 40.0), grid_size)
-            cont["h"] = _snap(max(min_h, header_h + rows * ROW_H + 24.0), grid_size)
+            cont["h"] = _snap(max(min_h, header_h + rows * ROW_H + 8.0), grid_size)
         else:
             for c in cap_kids:
                 c["x"] = 20.0
@@ -577,7 +541,7 @@ def _align_page_in_place(graph_root, *, spec=None, reparent=True, route_edges=Tr
     # 3. Bottom-up auto-fit for outer containers (region -> cloud -> root "1")
     for outer_role in ("region", "cloud"):
         for cont in [v for v in vertices.values() if v["role"] == outer_role]:
-            kids = [k for k in children_of.get(cont["id"], []) if k["role"] not in ("badge", "asg", "ecs_frame", "account")]
+            kids = [k for k in children_of.get(cont["id"], []) if k["role"] not in ("badge", "asg", "ecs_frame", "account", *FREE_ROLES)]
             if not kids:
                 continue
             # Ensure children inside region/cloud have at least minimum top/left padding and don't overlap horizontally
@@ -606,7 +570,7 @@ def _align_page_in_place(graph_root, *, spec=None, reparent=True, route_edges=Tr
 
     # Also ensure top-level containers on parent=="1" (e.g., cloud and onprem) don't overlap
     top_conts = sorted(
-        [v for v in vertices.values() if v["parent"] == "1" and v["role"] not in ("title", "caption", "asg", "ecs_frame", "account", "badge")],
+        [v for v in vertices.values() if v["parent"] == "1" and v["role"] not in OVERLAY_ROLES],
         key=lambda v: (0 if v["role"] == "cloud" else 1, v["x"], v["id"]),
     )
     for i, a in enumerate(top_conts):
@@ -646,11 +610,6 @@ def _align_page_in_place(graph_root, *, spec=None, reparent=True, route_edges=Tr
     # 5. Obstacle-avoiding orthogonal edge routing
     if route_edges and edges:
         _route_edges_orthogonally(vertices, edges)
-
-    # 6. Apply DrawioSpec style & wrapper normalization if requested
-    if normalize_styles or spec is not None:
-        cfg = resolve_spec(spec)
-        _apply_spec_to_page(graph_root, vertices, edges, cfg)
 
 
 def _route_edges_orthogonally(vertices, edges):
@@ -707,17 +666,21 @@ def _route_edges_orthogonally(vertices, edges):
             return (round(x, 1), round(y + frac * h, 1)), (0.0, frac)
         return (round(x + w, 1), round(y + frac * h, 1)), (1.0, frac)
 
+    grid = _Grid(obstacles)
+
     def hits_obstacle(p1, p2, ignore_ids):
         seg = (min(p1[0], p2[0]), min(p1[1], p2[1]), max(p1[0], p2[0]) + 0.1, max(p1[1], p2[1]) + 0.1)
-        for oid, obox in obstacles.items():
-            if oid not in ignore_ids and _boxes_overlap(seg, obox):
-                return True
-        return False
+        return any(oid not in ignore_ids and _boxes_overlap(seg, obstacles[oid]) for oid in grid.near(seg))
 
     def path_clear(pts, ignore_ids):
         return all(not hits_obstacle(a, b, ignore_ids) for a, b in zip(pts, pts[1:]))
 
-    used_mid_lines = []
+    # Horizontal mid lines already taken, bucketed by 6 px: a candidate within 6 px of one is skipped.
+    def line_taken(y):
+        bucket = math.floor(y / 6.0)
+        return any(abs(y - u) < 6.0 for b in (bucket - 1, bucket, bucket + 1) for u in used_buckets.get(b, ()))
+
+    used_buckets = {}
     for idx, e in enumerate(valid_edges):
         src, dst = e["source"], e["target"]
         exit_face, entry_face = e["_faces"]
@@ -733,7 +696,7 @@ def _route_edges_orthogonally(vertices, edges):
             for step in range(0, 18):
                 for sign in (1, -1):
                     cand_y = round(base_mid_y + sign * step * 10.0, 1)
-                    if any(abs(cand_y - uy) < 6.0 for uy in used_mid_lines):
+                    if line_taken(cand_y):
                         continue
                     cand_pts = [p_start, (p_start[0], cand_y), (p_end[0], cand_y), p_end]
                     if path_clear(cand_pts, ignore):
@@ -742,7 +705,7 @@ def _route_edges_orthogonally(vertices, edges):
                 else:
                     continue
                 break
-            used_mid_lines.append(chosen_y)
+            used_buckets.setdefault(math.floor(chosen_y / 6.0), set()).add(chosen_y)
             waypoints = [(p_start[0], chosen_y), (p_end[0], chosen_y)]
             if not path_clear([p_start, *waypoints, p_end], ignore):
                 # Bypass around obstacles via an outer vertical gutter X
@@ -768,7 +731,8 @@ def _route_edges_orthogonally(vertices, edges):
                 break
             waypoints = [(chosen_x, p_start[1]), (chosen_x, p_end[1])]
 
-        e["points"] = waypoints
+        ox, oy = abs_pos.get(e["parent"], (0.0, 0.0))  # draw.io offsets an edge's points by its parent's origin
+        e["points"] = [(round(px - ox, 1), round(py - oy, 1)) for px, py in waypoints]
         e["style"] = patch_style(
             e["style"] or "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;",
             edgeStyle="orthogonalEdgeStyle",
@@ -782,7 +746,7 @@ def _route_edges_orthogonally(vertices, edges):
         if arr is not None:
             e["geo"].remove(arr)
         arr = SubElement(e["geo"], "Array", {"as": "points"})
-        for px, py in waypoints:
+        for px, py in e["points"]:
             SubElement(arr, "mxPoint", {"x": f"{px:g}", "y": f"{py:g}"})
 
 
@@ -801,11 +765,11 @@ def _apply_spec_to_page(graph_root, vertices, edges, cfg):
                     v["y"] = round(v["y"] + dy, 1)
                     v["geo"].set("y", f"{v['y']:g}")
             for e in edges:
-                if e["geo"] is not None:
+                if e["geo"] is not None and e["parent"] == "1":  # nested edges move with their parent
                     arr = e["geo"].find("Array[@as='points']")
                     if arr is not None:
                         for pt in arr.findall("mxPoint"):
-                            pt.set("y", f"{float(pt.get('y') or 0) + dy:g}")
+                            pt.set("y", f"{_number(pt, 'y', 0.0, e['id']) + dy:g}")
 
     for v in vertices.values():
         role = v["role"]
@@ -833,304 +797,422 @@ def _apply_spec_to_page(graph_root, vertices, edges, cfg):
         e["style"] = format_style([], merged)
         e["cell"].set("style", e["style"])
 
-    # Normalize wrapper tags if needed (`object` vs `UserObject` vs `mxCell`)
-    current_children = list(graph_root)
-    for el in current_children:
-        if el.tag == "mxCell" and el.get("id") in ("0", "1"):
+    # Wrapper tags (`object` / `UserObject` / `mxCell`). A wrapper carrying custom attributes (tooltip, link, placeholders,
+    # resourceId...) is never downgraded to a bare mxCell: draw.io would drop them. It is kept and counted instead.
+    kept = 0
+    position = {id(el): i for i, el in enumerate(graph_root)}
+    for el, inner, cid, label in list(iter_cells(graph_root)):
+        if (el.tag == "mxCell" and cid in ("0", "1")) or el.tag == cfg.cell_wrapper:
             continue
-        inner = el if el.tag == "mxCell" else el.find("mxCell")
-        if inner is None:
-            continue
-        cid = el.get("id") or inner.get("id") or ""
-        label = el.get("label") or el.get("value") or inner.get("value") or ""
-        if cfg.cell_wrapper == "mxCell" and el.tag != "mxCell":
-            idx = list(graph_root).index(el)
-            graph_root.remove(el)
+        idx, cid = position[id(el)], cid or ""
+        if cfg.cell_wrapper == "mxCell":
+            if set(el.attrib) - {"id", "label"}:
+                kept += 1
+                continue
             inner.set("id", cid)
             inner.set("value", label)
-            graph_root.insert(idx, inner)
-        elif cfg.cell_wrapper in ("object", "UserObject") and el.tag != cfg.cell_wrapper:
-            idx = list(graph_root).index(el)
             graph_root.remove(el)
-            if el.tag == "mxCell":
-                inner.attrib.pop("id", None)
-                inner.attrib.pop("value", None)
-                wrapper = Element(cfg.cell_wrapper, {"id": cid, "label": label})
-                wrapper.append(inner)
-                graph_root.insert(idx, wrapper)
-            else:
-                el.tag = cfg.cell_wrapper
-                graph_root.insert(idx, el)
+            graph_root.insert(idx, inner)
+        elif el.tag == "mxCell":
+            custom = {k: inner.attrib.pop(k) for k in list(inner.attrib) if k not in MXCELL_ATTRIBUTES}
+            inner.attrib.pop("id", None)
+            inner.attrib.pop("value", None)
+            wrapper = Element(cfg.cell_wrapper, {"id": cid, "label": label, **custom})
+            wrapper.append(inner)
+            graph_root.remove(el)
+            graph_root.insert(idx, wrapper)
+        else:
+            el.tag = cfg.cell_wrapper
+    return kept
 
 
-def align_drawio_xml(
-    xml_text,
-    *,
-    mode="preserve",
-    spec=None,
-    reparent=True,
-    route_edges=True,
-    normalize_styles=False,
-    grid_size=10,
-) -> str:
-    """Auto-align, resize containers, and orthogonally route an existing `drawio.xml` document.
+GUARDED = ("overlaps", "out_of_bounds", "edge_collisions")
 
-    - `mode="preserve"` (default): preserves existing cell IDs, labels, and custom attributes while fixing
-      containment, grid alignment, cross-AZ subnet tier heights, container bounds, and orthogonal edge routes.
-    - `mode="rebuild"`: imports the XML into a Diagram Bot `Snapshot` and renders it through `generate_document`.
-    """
+
+def align_report(xml_text, *, mode="preserve", spec=None, reparent=True, route_edges=True, normalize_styles=False, grid_size=10):
+    """`align_drawio_xml` with what happened to each page: {"xml", "pages": [{name, status, before, after, kept_wrappers}]}.
+
+    Status per page: "clean" (no issues: geometry untouched), "aligned", or "reverted" when the aligned page had more
+    overlaps, out-of-bounds cells or edge-icon collisions than the input (the input geometry is kept). A spec is applied
+    to every page either way; kept_wrappers counts wrappers not downgraded to <mxCell> because they carry attributes."""
     if mode == "rebuild":
+        read_document(xml_text)
         snapshot = import_drawio_xml(xml_text)
         target_spec = resolve_spec(spec) if spec is not None else spec_from_xml(xml_text)
         vpcs = [n["resource_id"] for n in snapshot["graph"]["nodes"] if n["kind"] == "vpc"]
         view = "detail" if len(vpcs) == 1 else "overview"
         vpc_id = vpcs[0] if len(vpcs) == 1 else None
-        return generate_document(snapshot, vpc_id=vpc_id, view=view, spec=target_spec)
+        return {"xml": generate_document(snapshot, vpc_id=vpc_id, view=view, spec=target_spec), "pages": [{"status": "rebuilt"}]}
     if mode != "preserve":
-        raise ValueError(f"알 수 없는 정렬 모드입니다: {mode} ('preserve' 또는 'rebuild')")
+        raise InputError(f"알 수 없는 정렬 모드입니다: {mode} ('preserve' 또는 'rebuild')")
 
-    root = validate_document(xml_text)
-    cfg = resolve_spec(spec) if spec is not None else None
+    root = read_document(xml_text)
+    cfg = resolve_spec(spec) if spec is not None or normalize_styles else None
     if cfg is not None and root.tag == "mxfile":
         root.set("host", cfg.host)
-
-    models = root.findall("diagram/mxGraphModel") if root.tag == "mxfile" else [root]
-    for model in models:
+    models = [(d.get("name") or d.get("id") or f"page-{i + 1}", d.find("mxGraphModel")) for i, d in enumerate(root.findall("diagram"))
+              if d.find("mxGraphModel/root") is not None] if root.tag == "mxfile" else [("", root)]
+    report = []
+    for name, model in models:
+        graph_root = model.find("root")
+        before = _counts(_inspect_page(graph_root))
+        entry = {"name": name, "status": "clean", "before": before, "after": before}
+        if any(before.values()):
+            original = copy.deepcopy(graph_root)
+            _align_page_in_place(graph_root, reparent=reparent, route_edges=route_edges,
+                                 grid_size=cfg.grid_size if cfg is not None else grid_size)
+            after = _counts(_inspect_page(graph_root))
+            if any(after[key] > before[key] for key in GUARDED):
+                graph_root[:] = list(original)
+                entry["status"] = "reverted"
+            else:
+                entry.update(status="aligned", after=after)
         if cfg is not None:
             model.set("background", cfg.background)
             model.set("gridSize", str(cfg.grid_size))
-        graph_root = model.find("root")
-        if graph_root is not None:
-            _align_page_in_place(
-                graph_root,
-                spec=cfg,
-                reparent=reparent,
-                route_edges=route_edges,
-                normalize_styles=normalize_styles,
-                grid_size=cfg.grid_size if cfg is not None else grid_size,
-            )
-    return tostring(root, encoding="unicode")
+            entry["kept_wrappers"] = _apply_spec_to_page(graph_root, *_parse_page_model(graph_root), cfg)
+        report.append(entry)
+    return {"xml": tostring(root, encoding="unicode"), "pages": report}
+
+
+def align_drawio_xml(xml_text, *, mode="preserve", spec=None, reparent=True, route_edges=True, normalize_styles=False,
+                     grid_size=10) -> str:
+    """Auto-align, resize containers, and orthogonally route an existing `drawio.xml` document; every page.
+
+    - `mode="preserve"` (default): keeps cell IDs, labels and custom attributes while fixing containment, grid alignment,
+      cross-AZ subnet tier heights, container bounds and orthogonal edge routes. A page without issues is left as it is,
+      and a page the aligner would make worse is returned unchanged (`align_report` says which).
+    - `mode="rebuild"`: imports the XML into a Diagram Bot `Snapshot` and renders it through `generate_document`.
+    """
+    return align_report(xml_text, mode=mode, spec=spec, reparent=reparent, route_edges=route_edges,
+                        normalize_styles=normalize_styles, grid_size=grid_size)["xml"]
+
+
+# Availability Zone letters per region, in order; a label's AZ is used only when it is one of these.
+REGION_AZS = {"us-east-1": "abcdef", "us-east-2": "abc", "us-west-1": "bc", "us-west-2": "abcd", "ca-central-1": "abd",
+              "eu-west-1": "abc", "eu-west-2": "abc", "eu-central-1": "abc", "ap-northeast-1": "acd", "ap-northeast-2": "abcd",
+              "ap-northeast-3": "abc", "ap-southeast-1": "abc", "ap-southeast-2": "abc", "ap-south-1": "abc", "sa-east-1": "abc"}
+TIER_NAMES = {0: "public", 1: "web", 2: "app", 3: "data"}
+INSTANCE_TYPES = {"p3": "p3.2xlarge", "p4d": "p4d.24xlarge", "p4de": "p4de.24xlarge", "g4dn": "g4dn.xlarge", "g4ad": "g4ad.xlarge",
+                  "trainium": "trn1.32xlarge", "inferentia": "inf2.xlarge", "dl1": "dl1.24xlarge"}
+IMPORTED_KINDS = {"internet_gateway", "nat_gateway", "application", "network", "gateway", "load_balancer", "target_group", "ec2",
+                  *INSTANCE_TYPES, "db_instance", "db_standby", "documentdb", "neptune", "aurora", "redis", "valkey", "memcached",
+                  "eks_cluster", "ecs_service", "ecs_task", "lambda_function", "vpc_endpoint", "bedrock", "sagemaker", "efs_standard",
+                  "efs_one_zone", "fsx_lustre", "fsx_file_system", "fsx_ontap", "fsx_openzfs", "fsx_windows", "sagemaker_endpoint",
+                  "cloudfront_distribution"}
+CIDR = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}\b")
+
+
+def _network(text):
+    """The first IPv4 network written in a label (0.0.0.0/0 route captions excluded), or None."""
+    for match in CIDR.finditer(text or ""):
+        try:
+            network = ipaddress.ip_network(match.group(0), strict=False)
+        except ValueError:
+            continue
+        if network.prefixlen >= 8:
+            return network
+    return None
+
+
+def _name(label, fallback):
+    """A resource name from a label's first line, without its '(cidr)' part, 'VPC ·' captions or CIDR parts."""
+    first = (label or "").splitlines()[0] if label else ""
+    parts = [p.strip() for p in re.sub(r"\s*\([^)]*\)", "", first).split("·")]
+    parts = [p for p in parts if p and p.lower() != "vpc" and not CIDR.fullmatch(p)]
+    return (parts[0] if parts else "")[:60] or fallback
+
+
+def _az_letter(label, region, letters):
+    """The AZ letter a label names, if it is a real AZ of `region`: 'ap-northeast-2a', 'AZ a', 'Zone B', 'AZ 2'."""
+    text = (label or "").lower()
+    match = AZ_CODE.search(text)
+    if match:
+        return match.group(2) if match.group(1) == region and match.group(2) in letters else None
+    match = re.search(r"(?:\baz|\bzone|가용\s*영역|availability zone)\s*[-_:]?\s*([a-f])\b", text)
+    if match:
+        return match.group(1) if match.group(1) in letters else None
+    match = re.search(r"\baz\s*[-_]?\s*([1-9])\b", text)
+    return letters[int(match.group(1)) - 1] if match and int(match.group(1)) <= len(letters) else None
+
+
+class _Cidrs:
+    """Subnet CIDRs inside one VPC: labels' CIDRs when they fit, then free blocks of the VPC for the rest."""
+
+    def __init__(self, network):
+        self.network, self.used = network, []
+
+    def claim(self, network):
+        if network and network.version == self.network.version and network.subnet_of(self.network) \
+                and not any(network.overlaps(u) for u in self.used):
+            self.used.append(network)
+            return str(network)
+        return None
+
+    def allocate(self):
+        prefix = min(28, max(24, self.network.prefixlen + 4))
+        for candidate in self.network.subnets(new_prefix=max(prefix, self.network.prefixlen)):
+            if self.claim(candidate):
+                return str(candidate)
+        raise InputError(f"VPC {self.network}에 서브넷을 더 둘 주소가 없습니다.")
+
+
+def _own_id(v, prefix):
+    """The AWS id in a Diagram Bot cell's resourceId when it has the right form (vpc-, subnet-, i-...), else None."""
+    rid = (v["wrapper"].get("resourceId") or "").rsplit("/", 1)[-1]
+    return rid if re.fullmatch(prefix + r"-[0-9a-z][0-9a-z-]{2,60}", rid) else None
 
 
 def import_drawio_xml(xml_text, *, title=None, region="ap-northeast-2", account="000000000000") -> dict:
-    """Convert an existing AWS `drawio.xml` diagram into a valid Diagram Bot `Snapshot` (`raw` + `graph`)."""
-    root = validate_document(xml_text)
-    graph_root = root.find("diagram/mxGraphModel/root") if root.tag == "mxfile" else root.find("root")
-    vertices, edges = _parse_page_model(graph_root)
-    _reparent_visual_children(vertices)
+    """Convert an existing AWS `drawio.xml` diagram, every page, into a Diagram Bot `Snapshot` (`raw` + `graph`).
 
-    # Detect region / title from heading or region containers if present
-    for v in vertices.values():
-        if v["role"] == "title" and not title:
-            title = v["label"].split("·")[0].replace("SAMPLE", "").replace("DESIGN", "").strip(" /")
-        m = re.search(r"\b(ap|us|eu|sa|ca|me|af)-[a-z0-9]+-\d\b", v["label"])
-        if m:
-            region = m.group(0)
+    Pages without AWS cells (a cover, a legend) are skipped. A resource drawn on several pages (an overview card and its
+    detail page) is imported once: Diagram Bot's own cells match by resourceId, others by kind, name and VPC.
+    `metadata.import` records `cells` (draw.io cell id -> snapshot resource id), `pages`, `unmapped` cells (shapes the
+    importer has no resource for, reported instead of guessed) and what was `synthesized` (a default VPC, subnets, an IGW).
+    Labels are inference, not API evidence: the snapshot is marked `metadata.imported`."""
+    root = read_document(xml_text)
+    models = []
+    for name, graph_root in pages(root):
+        vertices, edges = _parse_page_model(graph_root)
+        _reparent_visual_children(vertices)
+        for v in vertices.values():  # the counts and glance icons inside an overview card are not resources
+            if v["role"] != "summary" and _ancestor(vertices, v["parent"], "summary"):
+                v["role"] = "glance"
+        models.append({"name": name, "vertices": vertices, "edges": edges,
+                       "aws": any(v["role"] in ("vpc", "subnet", "resource", "summary") for v in vertices.values())})
+    used = [m for m in models if m["aws"]]
+    cells = [(pi, v) for pi, m in enumerate(used) for v in sorted(m["vertices"].values(), key=lambda c: (c["y"], c["x"], c["id"]))]
+    report = {"cells": {}, "pages": [{"name": m["name"], "imported": m["aws"]} for m in models], "unmapped": [], "synthesized": []}
 
+    def own_parts(v):
+        parts = (v["wrapper"].get("resourceId") or "").split("/")
+        return parts if len(parts) >= 4 else None
+
+    detected = next((p[1] for _, v in cells if (p := own_parts(v)) and REGION_CODE.fullmatch(p[1])), None)
+    for _, v in cells:
+        match = None if detected else (AZ_CODE.search(v["label"].lower()) or REGION_CODE.search(v["label"].lower()))
+        detected = detected or (match and (match.group(1) if match.re is AZ_CODE else match.group(0)))
+    region = detected or region
+    for m in used:
+        for v in m["vertices"].values():
+            if v["role"] == "title" and not title:
+                title = v["label"].split("·")[0].replace("SAMPLE", "").replace("DESIGN", "").strip(" /")
     sample = Sample("imported", title or "draw.io 가져온 아키텍처", ["draw.io XML에서 가져온 구성"], region=region, account=account)
+    letters = REGION_AZS.get(region, "abc")
+    imported = {}  # (page index, cell id) -> resource id
 
-    def ancestor_of_role(cid, target_role):
-        cur = vertices.get(cid)
-        seen = set()
-        while cur and cur["id"] not in seen:
-            seen.add(cur["id"])
-            if cur["role"] == target_role:
-                return cur
-            cur = vertices.get(cur["parent"])
-        return None
+    def record(pi, v, resource_id):
+        imported[(pi, v["id"])] = resource_id
+        key = v["id"] if report["cells"].get(v["id"], resource_id) == resource_id else f"{used[pi]['name']}/{v['id']}"
+        report["cells"][key] = resource_id
 
-    # 1. VPCs
-    vpc_cells = [v for v in vertices.values() if v["role"] == "vpc"]
-    vpc_map = {}  # vertex_id -> vpc_id
-    if not vpc_cells:
-        default_vpc = sample.vpc("vpc-main", "10.0.0.0/16", "main-vpc")
-    else:
-        for idx, v in enumerate(vpc_cells):
-            raw_name = (v["label"].splitlines()[0] if v["label"] else f"vpc-{idx + 1}").strip()
-            name = re.sub(r"\s*\([^)]*\)", "", raw_name).strip() or raw_name
-            cidr_m = re.search(r"\b\d+\.\d+\.\d+\.\d+/\d+\b", v["label"])
-            cidr = cidr_m.group(0) if cidr_m else f"10.{idx}.0.0/16"
-            slug_id = "vpc-" + (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:20] or f"imported-{idx + 1}")
-            if slug_id in vpc_map.values():
-                slug_id = f"{slug_id}-{idx + 1}"
-            vpc_map[v["id"]] = sample.vpc(slug_id, cidr, name)
-        default_vpc = next(iter(vpc_map.values()))
+    def owner(pi, v, role):
+        cell = _ancestor(used[pi]["vertices"], v["id"], role)
+        return imported.get((pi, cell["id"])) if cell else None
 
-    # 2. AZs & Subnets
-    az_letters = "abcdef"
-    az_map = {}
-    for idx, v in enumerate(sorted([v for v in vertices.values() if v["role"] == "az"], key=lambda a: (a["x"], a["id"]))):
-        m = re.search(r"([a-f])\b", v["label"].lower())
-        az_map[v["id"]] = m.group(1) if m else az_letters[idx % 3]
+    # 1. VPCs: containers, and overview cards whose VPC has no detail page.
+    seen, nets = {}, {}
+    for pi, v in cells:
+        own = own_parts(v)
+        if v["role"] != "vpc" and not (v["role"] == "summary" and own and own[2] == "vpc"):
+            continue
+        network = _network(v["label"])
+        name = _name(v["label"], f"vpc-{len(nets) + 1}")
+        key = v["wrapper"].get("resourceId") or ("vpc", str(network) if network else name)
+        if key not in seen:
+            network = network or ipaddress.ip_network(f"10.{len(nets) % 256}.0.0/16")
+            vid = _own_id(v, "vpc") or "vpc-" + (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:20] or "imported")
+            vid = vid if vid not in nets else f"{vid}-{len(nets) + 1}"
+            seen[key] = sample.vpc(vid, str(network), name)
+            nets[vid] = _Cidrs(network)
+        record(pi, v, seen[key])
+    if not nets:
+        nets[sample.vpc("vpc-main", "10.0.0.0/16", "main-vpc")] = _Cidrs(ipaddress.ip_network("10.0.0.0/16"))
+        report["synthesized"].append("vpc-main")
+    default_vpc = next(iter(nets))
 
-    subnet_cells = sorted([v for v in vertices.values() if v["role"] == "subnet"], key=lambda s: (s["y"], s["x"], s["id"]))
-    subnet_map = {}  # vertex_id -> subnet_id
-    vpc_tier_subnets = {}  # (vpc_id, tier_name) -> [subnet_ids]
-    tier_names = {0: "public", 1: "web", 2: "app", 3: "data"}
+    # 2. AZ columns: the label's AZ when it is real in this region, else the region's AZs in column order.
+    az_of = {}
+    for vid in nets:
+        columns = [(pi, v) for pi, v in cells if v["role"] == "az" and (owner(pi, v, "vpc") or default_vpc) == vid]
+        named = {(pi, v["id"]): _az_letter(v["label"], region, letters) for pi, v in columns}
+        spare = [letter for letter in letters if letter not in named.values()] or list(letters)
+        for i, (pi, v) in enumerate(sorted(columns, key=lambda c: (c[0], c[1]["x"], c[1]["id"]))):
+            az_of[(pi, v["id"])] = named[(pi, v["id"])] or spare[i % len(spare)]
 
-    if not subnet_cells:
-        # Synthesize default public/app/data subnets across 2 AZs so resources can be placed cleanly
-        for ai, az_ch in enumerate(("a", "b")):
-            pub = sample.subnet(f"subnet-pub-{az_ch}", default_vpc, az_ch, f"10.0.{ai}.0/24", f"public-{az_ch}", "public")
-            app = sample.subnet(f"subnet-app-{az_ch}", default_vpc, az_ch, f"10.0.{ai + 10}.0/24", f"app-{az_ch}", "app")
-            dat = sample.subnet(f"subnet-data-{az_ch}", default_vpc, az_ch, f"10.0.{ai + 20}.0/24", f"data-{az_ch}", "data")
-            vpc_tier_subnets.setdefault((default_vpc, "public"), []).append(pub)
-            vpc_tier_subnets.setdefault((default_vpc, "app"), []).append(app)
-            vpc_tier_subnets.setdefault((default_vpc, "data"), []).append(dat)
-    else:
-        for idx, s in enumerate(subnet_cells):
-            vpc_cell = ancestor_of_role(s["id"], "vpc")
-            vpc_id = vpc_map.get(vpc_cell["id"], default_vpc) if vpc_cell else default_vpc
-            az_cell = ancestor_of_role(s["id"], "az")
-            az_ch = az_map.get(az_cell["id"], az_letters[idx % 2]) if az_cell else az_letters[idx % 2]
-            t_name = tier_names.get(s["tier"] if s["tier"] is not None else 2, "app")
-            cidr_m = re.search(r"\b\d+\.\d+\.\d+\.\d+/\d+\b", s["label"])
-            cidr = cidr_m.group(0) if cidr_m else f"10.0.{idx + 1}.0/24"
-            raw_name = (s["label"].splitlines()[0] if s["label"] else f"{t_name}-{az_ch}").strip()
-            name = re.sub(r"\s*\([^)]*\)", "", raw_name).strip() or raw_name
-            sid = f"subnet-{idx + 1}-{az_ch}"
-            sample.subnet(sid, vpc_id, az_ch, cidr, name, t_name)
-            subnet_map[s["id"]] = sid
-            vpc_tier_subnets.setdefault((vpc_id, t_name), []).append(sid)
+    # 3. Subnets: a label's CIDR when it lies inside its VPC (and is free), else the next free block of that VPC.
+    subnets, tier_subnets, pending = {}, {}, []
+    for pi, v in cells:
+        if v["role"] != "subnet":
+            continue
+        vid = owner(pi, v, "vpc") or default_vpc
+        network = _network(v["label"])
+        name = _name(v["label"], f"subnet-{len(pending) + 1}")
+        key = v["wrapper"].get("resourceId") or ("subnet", vid, str(network) if network else name)
+        if key in subnets:
+            record(pi, v, subnets[key])
+            continue
+        az_cell = _ancestor(used[pi]["vertices"], v["id"], "az")
+        letter = az_of.get((pi, az_cell["id"])) if az_cell else letters[len(pending) % min(2, len(letters))]
+        subnets[key] = None
+        pending.append((pi, v, vid, key, nets[vid].claim(network), letter, name))
+    for i, (pi, v, vid, key, cidr, letter, name) in enumerate(pending):
+        tier = TIER_NAMES[v["tier"] if v["tier"] is not None else 2]
+        sid = _own_id(v, "subnet") or f"subnet-{i + 1}-{letter}"
+        subnets[key] = sample.subnet(sid, vid, letter, cidr or nets[vid].allocate(), name, tier)
+        tier_subnets.setdefault((vid, tier), []).append(sid)
+        record(pi, v, sid)
+    resources = [(pi, v) for pi, v in cells if v["role"] == "resource"]
+    if not pending and resources:
+        for letter in letters[:2]:
+            for tier in ("public", "app", "data"):
+                sid = sample.subnet(f"subnet-{tier}-{letter}", default_vpc, letter, nets[default_vpc].allocate(), f"{tier}-{letter}", tier)
+                tier_subnets.setdefault((default_vpc, tier), []).append(sid)
+                report["synthesized"].append(sid)
 
-    def pick_subnet(v, preferred_tier="app"):
-        sub_cell = ancestor_of_role(v["id"], "subnet")
-        if sub_cell and sub_cell["id"] in subnet_map:
-            return subnet_map[sub_cell["id"]]
-        vpc_cell = ancestor_of_role(v["id"], "vpc")
-        vid = vpc_map.get(vpc_cell["id"], default_vpc) if vpc_cell else default_vpc
-        for t in (preferred_tier, "app", "web", "public", "data"):
-            if vpc_tier_subnets.get((vid, t)):
-                return vpc_tier_subnets[(vid, t)][0]
-        return sample.raw["subnets"][0]["SubnetId"]
+    def subnet_for(pi, v, vid, preferred="app"):
+        return owner(pi, v, "subnet") or next((tier_subnets[(vid, t)][0] for t in (preferred, "app", "web", "public", "data")
+                                              if tier_subnets.get((vid, t))), None) or sample.raw["subnets"][0]["SubnetId"]
 
-    def pick_vpc(v):
-        vpc_cell = ancestor_of_role(v["id"], "vpc")
-        return vpc_map.get(vpc_cell["id"], default_vpc) if vpc_cell else default_vpc
+    def tier_of(vid, tier, pi, v):
+        return (tier_subnets.get((vid, tier)) or [subnet_for(pi, v, vid, tier)])[:2]
 
-    # 3. Resources
-    lb_by_vertex = {}
-    tg_by_vertex = {}
-    ec2_by_vertex = {}
-    res_cells = [v for v in vertices.values() if v["role"] == "resource"]
+    def az_letter(subnet_id):
+        return sample.az_of(subnet_id)[-1]
 
-    def az_letter_of(subnet_id):
-        sub = next((s for s in sample.raw["subnets"] if s["SubnetId"] == subnet_id), None)
-        return sub["AvailabilityZone"][-1] if sub else "a"
-
-    for idx, v in enumerate(res_cells):
-        kind = v["kind"]
-        name = (v["label"].splitlines()[0] if v["label"] else f"{kind}-{idx + 1}").strip()[:48] or f"{kind}-{idx + 1}"
-        vid = pick_vpc(v)
+    # 4. Resources, once each.
+    done, lbs, tgs, ec2s = {}, {}, {}, {}
+    for idx, (pi, v) in enumerate(resources):
+        kind, vid = v["kind"], owner(pi, v, "vpc") or default_vpc
+        name = _name(v["label"], f"{kind or 'resource'}-{idx + 1}")[:48]
+        slug_name = re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"{kind}-{idx + 1}"
+        key = v["wrapper"].get("resourceId") or (kind, name, vid)
+        if kind == "target_group":  # created after every page is read, wired by the edges drawn to it
+            tgs.setdefault(key, (slug_name, vid, []))[2].append((pi, v["id"]))
+            continue
+        if key in done:
+            if done[key]:
+                record(pi, v, done[key])
+            continue
+        if kind not in IMPORTED_KINDS:
+            done[key] = None
+            report["unmapped"].append({"page": used[pi]["name"], "id": v["id"], "label": name, "kind": kind})
+            continue
+        rid = None
         if kind == "internet_gateway":
-            sample.internet_gateway(f"igw-{idx + 1}", vid, name)
+            rid = sample.internet_gateway(_own_id(v, "igw") or f"igw-{idx + 1}", vid, name)
         elif kind == "nat_gateway":
-            sample.nat_gateway(f"nat-{idx + 1}", vid, pick_subnet(v, "public"), name)
+            rid = sample.nat_gateway(_own_id(v, "nat") or f"nat-{idx + 1}", vid, subnet_for(pi, v, vid, "public"), name)
         elif kind in ("application", "network", "gateway", "load_balancer"):
-            lb_type = kind if kind in ("application", "network", "gateway") else "application"
-            sub_cell = ancestor_of_role(v["id"], "subnet")
-            is_internal = (sub_cell and sub_cell.get("tier") not in (0, None)) or "internal" in v["label"].lower() or "내부" in v["label"]
-            subs = vpc_tier_subnets.get((vid, "app" if is_internal else "public")) or [pick_subnet(v, "public")]
-            lb_by_vertex[v["id"]] = sample.load_balancer(
-                re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"lb-{idx + 1}",
-                vid, subs[:2], kind=lb_type, scheme="internal" if is_internal else "internet-facing",
-            )
-        elif kind == "target_group":
-            tg_by_vertex[v["id"]] = name
-        elif kind in ("ec2", "p3", "p4d", "p4de", "g4dn", "g4ad", "trainium", "inferentia", "dl1"):
-            itype = {"p3": "p3.2xlarge", "p4d": "p4d.24xlarge", "g4dn": "g4dn.xlarge", "trainium": "trn1.32xlarge", "inferentia": "inf2.xlarge"}.get(kind, "t3.medium")
-            ec2_by_vertex[v["id"]] = sample.instance(f"i-imp{idx + 1:04d}", pick_subnet(v, "app"), name, kind=itype)
+            subnet = _ancestor(used[pi]["vertices"], v["id"], "subnet")
+            internal = (subnet and subnet.get("tier") not in (0, None)) or "internal" in v["label"].lower() or "내부" in v["label"]
+            rid = sample.load_balancer(slug_name, vid, tier_of(vid, "app" if internal else "public", pi, v),
+                                       kind=kind if kind != "load_balancer" else "application",
+                                       scheme="internal" if internal else "internet-facing")
+            lbs[(pi, v["id"])] = rid
+        elif kind == "ec2" or kind in INSTANCE_TYPES:
+            rid = sample.instance(_own_id(v, "i") or f"i-imp{idx + 1:04d}", subnet_for(pi, v, vid), name,
+                                  kind=INSTANCE_TYPES.get(kind, "t3.medium"))
+            ec2s[(pi, v["id"])] = rid
         elif kind in ("db_instance", "db_standby", "documentdb", "neptune"):
-            engine = "docdb" if kind == "documentdb" else ("neptune" if kind == "neptune" else "postgres")
-            subs = vpc_tier_subnets.get((vid, "data")) or [pick_subnet(v, "data")]
-            primary_az = az_letter_of(subs[0])
-            standby_az = az_letter_of(subs[1]) if len(subs) > 1 and az_letter_of(subs[1]) != primary_az else None
-            sample.database(
-                re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"db-{idx + 1}",
-                vid, subs[:2], primary=primary_az, engine=engine, standby=standby_az,
-            )
+            subs = tier_of(vid, "data", pi, v)
+            standby = az_letter(subs[1]) if len(subs) > 1 and az_letter(subs[1]) != az_letter(subs[0]) else None
+            rid = re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"db-{idx + 1}"
+            sample.database(rid, vid, subs, primary=az_letter(subs[0]), standby=standby,
+                            engine={"documentdb": "docdb", "neptune": "neptune"}.get(kind, "postgres"))
         elif kind == "aurora":
-            subs = (vpc_tier_subnets.get((vid, "data")) or [pick_subnet(v, "data")])[:2]
-            writer = az_letter_of(subs[0])
-            readers = [az_letter_of(s) for s in subs[1:]]
-            sample.aurora(re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"aurora-{idx + 1}", vid, subs, writer=writer, readers=readers)
+            subs = tier_of(vid, "data", pi, v)
+            rid = re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"aurora-{idx + 1}"
+            sample.aurora(rid, vid, subs, writer=az_letter(subs[0]), readers=[az_letter(s) for s in subs[1:]])
         elif kind in ("redis", "valkey", "memcached"):
-            subs = (vpc_tier_subnets.get((vid, "data")) or [pick_subnet(v, "data")])[:2]
-            primary = az_letter_of(subs[0])
-            replicas = [az_letter_of(s) for s in subs[1:]]
-            sample.redis(re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"cache-{idx + 1}", vid, subs, primary=primary, replicas=replicas)
+            subs = tier_of(vid, "data", pi, v)
+            rid = re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"cache-{idx + 1}"
+            sample.redis(rid, vid, subs, primary=az_letter(subs[0]), replicas=[az_letter(s) for s in subs[1:]])
         elif kind == "eks_cluster":
-            subs = (vpc_tier_subnets.get((vid, "app")) or [pick_subnet(v, "app")])[:2]
-            sample.eks(re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"eks-{idx + 1}", vid, subs, nodegroups=[])
+            rid = slug_name
+            sample.eks(rid, vid, tier_of(vid, "app", pi, v), nodegroups=[])
         elif kind in ("ecs_service", "ecs_task"):
-            subs = (vpc_tier_subnets.get((vid, "app")) or [pick_subnet(v, "app")])[:2]
-            tasks = [(s, sample.address(s, 50 + i)) for i, s in enumerate(subs)]
-            sample.ecs_service("imported-cluster", re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"ecs-{idx + 1}", vid, tasks)
+            rid = slug_name
+            subs = tier_of(vid, "app", pi, v)
+            sample.ecs_service("imported-cluster", rid, vid, [(s, sample.address(s, 50 + i)) for i, s in enumerate(subs)])
         elif kind == "lambda_function":
-            subs = (vpc_tier_subnets.get((vid, "app")) or [pick_subnet(v, "app")])[:2]
-            sample.function(re.sub(r"[^a-zA-Z0-9-_]+", "-", name).strip("-") or f"fn-{idx + 1}", vid, subs)
+            rid = re.sub(r"[^a-zA-Z0-9-_]+", "-", name).strip("-") or f"fn-{idx + 1}"
+            sample.function(rid, vid, tier_of(vid, "app", pi, v))
         elif kind in ("vpc_endpoint", "bedrock", "sagemaker"):
-            svc = "bedrock-runtime" if kind == "bedrock" else ("sagemaker.runtime" if kind == "sagemaker" else "ssm")
-            subs = (vpc_tier_subnets.get((vid, "app")) or [pick_subnet(v, "app")])[:2]
-            sample.interface_endpoint(f"vpce-imp{idx + 1:04d}", vid, svc, subs)
+            rid = _own_id(v, "vpce") or f"vpce-imp{idx + 1:04d}"
+            service = {"bedrock": "bedrock-runtime", "sagemaker": "sagemaker.runtime"}.get(kind, "ssm")
+            sample.interface_endpoint(rid, vid, service, tier_of(vid, "app", pi, v))
         elif kind in ("efs_standard", "efs_one_zone"):
-            subs = (vpc_tier_subnets.get((vid, "data")) or [pick_subnet(v, "data")])[:2]
-            sample.efs(f"fs-imp{idx + 1:04d}", name, vid, subs, one_zone=az_letter_of(subs[0]) if kind == "efs_one_zone" else None)
-        elif kind in ("fsx_lustre", "fsx_file_system", "fsx_ontap", "fsx_openzfs", "fsx_windows"):
-            sample.fsx_lustre(f"fs-fsx{idx + 1:04d}", name, vid, pick_subnet(v, "data"))
-        elif kind in ("sagemaker_endpoint",):
-            sample.sagemaker_endpoint(re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"sm-{idx + 1}", "ml.g5.2xlarge", 2, [pick_subnet(v, "app")])
+            subs = tier_of(vid, "data", pi, v)
+            rid = _own_id(v, "fs") or f"fs-imp{idx + 1:04d}"
+            sample.efs(rid, name, vid, subs, one_zone=az_letter(subs[0]) if kind == "efs_one_zone" else None)
+        elif kind.startswith("fsx_"):
+            rid = f"fs-fsx{idx + 1:04d}"
+            sample.fsx_lustre(rid, name, vid, subnet_for(pi, v, vid, "data"))
+        elif kind == "sagemaker_endpoint":
+            rid = slug_name
+            sample.sagemaker_endpoint(rid, "ml.g5.2xlarge", 2, [subnet_for(pi, v, vid)])
         elif kind == "cloudfront_distribution":
-            origins = list(lb_by_vertex.values())[:1] or ["imported-origin"]
-            sample.cloudfront(f"EIMP{idx + 1:08d}", name, origins)
+            rid = f"EIMP{idx + 1:08d}"
+            sample.cloudfront(rid, name, list(lbs.values())[:1] or ["imported-origin"])
+        done[key] = rid
+        if rid:
+            record(pi, v, rid)
 
-    # Wire Target Groups from edges (LB -> TG -> EC2, or LB -> EC2 directly)
-    adj = {}
-    for e in edges:
-        adj.setdefault(e["source"], []).append(e["target"])
-        adj.setdefault(e["target"], []).append(e["source"])
+    # Target groups: wired to the load balancers and instances their edges reach (on any page they are drawn).
+    neighbours = {}
+    for pi, m in enumerate(used):
+        for e in m["edges"]:
+            neighbours.setdefault((pi, e["source"]), []).append((pi, e["target"]))
+            neighbours.setdefault((pi, e["target"]), []).append((pi, e["source"]))
+    for name, vid, drawn in tgs.values():
+        near = [n for cell in drawn for n in neighbours.get(cell, ())]
+        arn = sample.target_group(name, vid, "HTTP", 80, list(dict.fromkeys(ec2s[n] for n in near if n in ec2s)),
+                                  lbs=list(dict.fromkeys(lbs[n] for n in near if n in lbs)))
+        for pi, cid in drawn:
+            record(pi, used[pi]["vertices"][cid], arn)
+    if lbs and ec2s and not tgs:
+        sample.target_group("tg-imported", default_vpc, "HTTP", 80, list(dict.fromkeys(ec2s.values())), lbs=list(lbs.values())[:1])
+        report["synthesized"].append("tg-imported")
 
-    for tg_vid, tg_name in tg_by_vertex.items():
-        neighbors = adj.get(tg_vid, [])
-        lbs = [lb_by_vertex[n] for n in neighbors if n in lb_by_vertex]
-        targets = [ec2_by_vertex[n] for n in neighbors if n in ec2_by_vertex]
-        vid = pick_vpc(vertices[tg_vid])
-        sample.target_group(
-            re.sub(r"[^a-zA-Z0-9-]+", "-", tg_name).strip("-") or "tg-imported",
-            vid, "HTTP", 80, targets or list(ec2_by_vertex.values())[:2], lbs=lbs or list(lb_by_vertex.values())[:1],
-        )
-
-    if lb_by_vertex and ec2_by_vertex and not tg_by_vertex:
-        sample.target_group("tg-imported", default_vpc, "HTTP", 80, list(ec2_by_vertex.values()), lbs=list(lb_by_vertex.values())[:1])
-
-    # Ensure basic route tables exist for public/private/isolated subnet classification
-    if not sample.raw["route_tables"] and sample.raw["subnets"]:
-        for vid in set(vpc_map.values()) | {default_vpc}:
-            v_subs = [s for s in sample.raw["subnets"] if s["VpcId"] == vid]
-            if not v_subs:
-                continue
-            igw_id = next((g["InternetGatewayId"] for g in sample.raw["internet_gateways"]
-                           if any(a.get("VpcId") == vid for a in g.get("Attachments", []))), None)
-            if not igw_id:
-                igw_id = sample.internet_gateway(f"igw-{vid}", vid, f"{vid}-igw")
-            pub_subs = [s["SubnetId"] for s in v_subs if s.get("MapPublicIpOnLaunch")]
-            priv_subs = [
-                s["SubnetId"] for s in v_subs
-                if not s.get("MapPublicIpOnLaunch")
-                and not any(t.get("Key") == "Tier" and t.get("Value") == "data" for t in s.get("Tags", []))
-            ]
-            if pub_subs:
-                sample.route_table(f"rtb-{vid}-public", vid, f"{vid}-public", subnets=pub_subs, gateway=igw_id)
-            nat_id = next((n["NatGatewayId"] for n in sample.raw["nat_gateways"] if n.get("VpcId") == vid), None)
-            if not nat_id and pub_subs:
-                nat_id = sample.nat_gateway(f"nat-{vid}-a", vid, pub_subs[0], f"{vid}-nat-a")
-            if priv_subs:
-                sample.route_table(f"rtb-{vid}-private", vid, f"{vid}-private", subnets=priv_subs, nat=nat_id)
-            sample.route_table(f"rtb-{vid}-main", vid, f"{vid}-isolated", main=True)
+    # Route tables from what is drawn: public subnets to an internet gateway (added when none is drawn), private
+    # subnets to a drawn NAT gateway (none is invented), the rest on the main table (isolated).
+    for vid in nets:
+        vpc_subnets = [s for s in sample.raw["subnets"] if s["VpcId"] == vid]
+        if not vpc_subnets:
+            continue
+        public = [s["SubnetId"] for s in vpc_subnets if s["MapPublicIpOnLaunch"]]
+        private = [s["SubnetId"] for s in vpc_subnets if not s["MapPublicIpOnLaunch"]
+                   and not any(t["Key"] == "Tier" and t["Value"] == "data" for t in s["Tags"])]
+        if public:
+            igw = next((g["InternetGatewayId"] for g in sample.raw["internet_gateways"]
+                        if any(a.get("VpcId") == vid for a in g["Attachments"])), None)
+            if not igw:
+                igw = sample.internet_gateway(f"igw-{vid}", vid, f"{vid}-igw")
+                report["synthesized"].append(igw)
+            sample.route_table(f"rtb-{vid}-public", vid, f"{vid}-public", subnets=public, gateway=igw)
+        nat = next((n["NatGatewayId"] for n in sample.raw["nat_gateways"] if n["VpcId"] == vid), None)
+        if private and nat:
+            sample.route_table(f"rtb-{vid}-private", vid, f"{vid}-private", subnets=private, nat=nat)
+        sample.route_table(f"rtb-{vid}-main", vid, f"{vid}-isolated", main=True)
 
     snap = sample.snapshot()
+    snap["metadata"]["imported"] = True
+    snap["metadata"]["import"] = report
     snap["graph"] = build_graph(snap)
     return snap
+
+
+def _ancestor(vertices, cid, role):
+    """The nearest cell of `role` among `cid` and its ancestors (`cid` itself included)."""
+    cur, seen = vertices.get(cid), set()
+    while cur and cur["id"] not in seen:
+        if cur["role"] == role:
+            return cur
+        seen.add(cur["id"])
+        cur = vertices.get(cur["parent"])
+    return None
 
 
 def adopt_company_xml(
@@ -1142,6 +1224,8 @@ def adopt_company_xml(
     account="000000000000",
     set_default=False,
     save_spec=None,
+    allow_path=True,
+    register=True,
 ) -> dict:
     """Adopt a company standard architecture `drawio.xml` file or string as both a `DrawioSpec` and a `Design` standard.
 
@@ -1152,7 +1236,12 @@ def adopt_company_xml(
        `designer.COMPANY_STANDARDS` under `name` so `Design().apply_standard(name)` loads and extends it.
     4. Renders a standardized `drawio.xml` from the imported snapshot using the extracted company `DrawioSpec`.
     5. Optionally sets the extracted `DrawioSpec` as the process-wide default (`set_default=True`) and/or saves it as JSON (`save_spec`).
+
+    `register=False` skips step 3's registration (the HTTP route registers only for an admin's make_default); a name that
+    collides with a built-in standard is refused. `allow_path=False` accepts XML text only (request data).
     """
+    if not allow_path and not (isinstance(xml_or_path, str) and xml_or_path.lstrip().startswith("<")):
+        raise InputError("draw.io XML 본문이 필요합니다 (파일 경로는 CLI·라이브러리에서만).")
     if isinstance(xml_or_path, Path) or (isinstance(xml_or_path, str) and not xml_or_path.lstrip().startswith("<") and Path(xml_or_path).is_file()):
         path = Path(xml_or_path)
         xml_text = path.read_text(encoding="utf-8")
@@ -1161,12 +1250,19 @@ def adopt_company_xml(
     else:
         xml_text = str(xml_or_path)
 
-    spec = spec_from_xml(xml_text, name=name)
+    try:
+        std_key = slug(name)
+    except ValueError as exc:
+        raise InputError(str(exc)) from exc
+    if register and std_key in STANDARDS:
+        raise InputError(f"기본 표준 아키텍처와 같은 이름은 쓸 수 없습니다: {std_key}")
     before = inspect_drawio_xml(xml_text)
+    spec = spec_from_xml(xml_text, name=name)
     aligned_xml = align_drawio_xml(xml_text, spec=spec, mode="preserve")
     after = inspect_drawio_xml(aligned_xml)
     snapshot = import_drawio_xml(aligned_xml, title=title or f"사내 표준 ({name})", region=region, account=account)
-    std_key = register_standard(name, lambda: copy.deepcopy(snapshot), description=title or f"사내 표준 아키텍처 ({name})")
+    if register:
+        register_standard(std_key, lambda: copy.deepcopy(snapshot), description=title or f"사내 표준 아키텍처 ({name})")
 
     vpc_id = snapshot["raw"]["vpcs"][0]["VpcId"] if snapshot["raw"].get("vpcs") else None
     standardized_xml = generate_document(snapshot, view="detail" if vpc_id else "overview", vpc_id=vpc_id, spec=spec)

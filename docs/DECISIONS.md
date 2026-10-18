@@ -1,6 +1,6 @@
 # Decisions
 
-Last Updated: 2026-10-18
+Last Updated: 2026-10-19
 
 - Product name is Diagram Bot; initial provider scope is AWS only.
 - Current refinement scope is docs/TOPOLOGY_PLAN.md: direct SSO/service APIs, no Resource
@@ -65,3 +65,15 @@ Last Updated: 2026-10-18
   the prepared request to the user's browser at `before-send` (`egress.py`). Chosen over a generic "sign this request"
   endpoint: the server signs only its own clients' requests, and the collector, chat tools and Bedrock run unchanged.
   Bedrock uses Converse without response streaming in this mode. Server egress stays the default.
+- Company draw.io XML (2026-10-19, review of 6622915): request data never names server files. HTTP `spec` is a preset or
+  an inline object (`request_spec`), adopt takes XML text; paths are for the CLI, library and `DIAGRAM_BOT_SPEC` only.
+  `DrawioSpec` is a validated model. `/api/xml/adopt` answers per request for editors; only an admin's `make_default`
+  changes the process default spec and registers a Design standard (in memory, like the existing default). Documents the
+  app edits keep the `object` wrapper and `resourceId`/`relationId` whatever the default exports (`for_editor`).
+- Alignment never returns a page with more overlaps, out-of-bounds cells or edge-icon collisions than its input (the
+  page is kept and reported `reverted`); a page without issues is untouched, so Diagram Bot's own output is a no-op.
+  The aligner uses layout.py's grid and tier rank; draw.io XML output stays uncompressed (compressed input is decoded).
+- Import is label inference, not API evidence: snapshots carry `metadata.imported` and `metadata.import` (cell → resource
+  map, unmapped cells, synthesized items). One classification table (`classify_cell`) serves spec extraction, inspect,
+  align and import: shapes first, whole-word labels second; unknown shapes are annotations, never guessed EC2s, and no
+  NAT gateway or out-of-VPC CIDR is invented.

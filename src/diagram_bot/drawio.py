@@ -1,14 +1,12 @@
 """Serialize a computed layout into native, editable draw.io XML."""
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-from defusedxml.ElementTree import fromstring
-
-from .drawio_spec import resolve_spec
+from .drawio_spec import COMMON, ICONS, RESOURCE_ICONS, iter_cells, read_document, resolve_spec
 from .graph import build_graph
 from .layout import cell_id, layout_view
 from .views import view_graph
 
-__all__ = ["carry_annotations", "cell_id", "generate_document", "layout_document", "validate_document"]
+__all__ = ["ICONS", "RESOURCE_ICONS", "carry_annotations", "cell_id", "generate_document", "layout_document", "validate_document"]
 GENERATED = {"0", "1", "heading", "scope", "cloud", "region", "references", "onprem"}
 
 RELATIONS = {
@@ -20,115 +18,11 @@ RELATIONS = {
     "dx_virtual_interface": "Direct Connect 가상 인터페이스", "dx_gateway_association": "Direct Connect 게이트웨이 연결",
     "cloudfront_origin": "CloudFront 오리진",
 }
-# Resource-level icons from the AWS Architecture Icons set (draw.io aws4 library).
-RESOURCE_ICONS = {
-    "ec2": ("instance2", "#ED7100"),
-    "application": ("application_load_balancer", "#8C4FFF"),
-    "network": ("network_load_balancer", "#8C4FFF"),
-    "gateway": ("gateway_load_balancer", "#8C4FFF"),
-    "network_interface": ("elastic_network_interface", "#8C4FFF"),
-    "volume": ("volume", "#7AA116"),
-    "internet_gateway": ("internet_gateway", "#8C4FFF"),
-    "nat_gateway": ("nat_gateway", "#8C4FFF"),
-    "db_instance": ("rds_instance", "#C925D1"),
-    "db_standby": ("rds_instance_alt", "#C925D1"),
-    "vpc_endpoint": ("endpoints", "#8C4FFF"),
-    "lambda_function": ("lambda_function", "#ED7100"),
-    "aurora": ("aurora_instance", "#C925D1"),
-    "redis": ("elasticache_for_redis", "#C925D1"),
-    "valkey": ("elasticache_for_valkey", "#C925D1"),
-    "memcached": ("elasticache_for_memcached", "#C925D1"),
-    "tgw_attachment": ("transit_gateway_attachment", "#8C4FFF"),
-    "vpn_gateway": ("vpn_gateway", "#8C4FFF"),
-    "customer_gateway": ("customer_gateway", "#8C4FFF"),
-    "vpc_peering": ("peering", "#8C4FFF"),
-    "ip_target": ("elastic_network_interface", "#8C4FFF"),
-    "ecs_task": ("ecs_task", "#ED7100"),
-    "ecs_service": ("ecs_service", "#ED7100"),
-    "search_node": ("opensearch_service_data_node", "#8C4FFF"),
-    "efs_standard": ("elastic_file_system_standard", "#7AA116"),
-    "efs_one_zone": ("elastic_file_system_one_zone", "#7AA116"),
-    "redshift_cluster": ("redshift_ra3", "#8C4FFF"),
-    "p3": ("p3_instance", "#ED7100"),
-    "p4d": ("p4d_instance", "#ED7100"),
-    "p4de": ("ec2_p4de_instance", "#ED7100"),
-    "g4dn": ("g4dn", "#ED7100"),
-    "g4ad": ("g4ad_instance", "#ED7100"),
-    "trainium": ("trainium_instance", "#ED7100"),
-    "inferentia": ("inferentia", "#ED7100"),
-    "dl1": ("ec2_dl1_instance", "#ED7100"),
-    "elastic_ip": ("elastic_ip_address", "#8C4FFF"),
-}
-# Square resource-icon tiles for things without a resource-level icon.
-ICONS = {
-    "load_balancer": ("elastic_load_balancing", "#8C4FFF"),
-    "target_group": ("elastic_load_balancing", "#6D5DB3"),
-    "security_group": ("group_security_group", "#DD344C"),
-    "transit_gateway": ("transit_gateway", "#8C4FFF"),
-    "eks_cluster": ("eks", "#ED7100"),
-    "msk_broker": ("managed_streaming_for_kafka", "#8C4FFF"),
-    "documentdb": ("documentdb_with_mongodb_compatibility", "#C925D1"),
-    "neptune": ("neptune", "#C925D1"),
-    "bedrock": ("bedrock", "#01A88D"),
-    "sagemaker": ("sagemaker", "#01A88D"),
-    "sagemaker_endpoint": ("sagemaker", "#01A88D"),
-    "sagemaker_cluster": ("sagemaker", "#01A88D"),
-    "fsx_file_system": ("fsx", "#7AA116"),
-    "fsx_lustre": ("fsx_for_lustre", "#7AA116"),
-    "fsx_ontap": ("fsx_for_netapp_ontap", "#7AA116"),
-    "fsx_openzfs": ("fsx_for_openzfs", "#7AA116"),
-    "fsx_windows": ("fsx_for_windows_file_server", "#7AA116"),
-    # Edge and dedicated connectivity: service icons, as AWS has no resource-level icon for them.
-    "cloudfront_distribution": ("cloudfront", "#8C4FFF"),
-    "waf_web_acl": ("waf", "#DD344C"),
-    "dx_gateway": ("direct_connect", "#8C4FFF"),
-    "dx_connection": ("direct_connect", "#8C4FFF"),
-}
-COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
-# Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.
-AWS_GROUP = (COMMON + "outlineConnect=0;gradientColor=none;whiteSpace=wrap;fontStyle=1;container=1;pointerEvents=0;"
-             "collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;verticalAlign=top;align=left;spacingLeft=30;")
-PLAIN_GROUP = COMMON + "whiteSpace=wrap;container=1;collapsible=0;recursiveResize=0;verticalAlign=top;fontStyle=0;"
-STYLES = {
-    "title": COMMON + "text;align=left;fontSize=19;fontStyle=1;strokeColor=none;fillColor=none;",
-    "caption": COMMON + "text;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=10;fontColor=#5A6C86;strokeColor=none;fillColor=none;",
-    "cloud": AWS_GROUP + "grIcon=mxgraph.aws4.group_aws_cloud_alt;strokeColor=#232F3E;fillColor=none;fontColor=#232F3E;dashed=0;",
-    "region": AWS_GROUP + "grIcon=mxgraph.aws4.group_region;strokeColor=#00A4A6;fillColor=none;fontColor=#147EBA;dashed=1;",
-    "summary": AWS_GROUP + "grIcon=mxgraph.aws4.group_vpc2;strokeColor=#8C4FFF;fillColor=#FFFFFF;fontStyle=0;spacingTop=4;dashed=0;",
-    "vpc": AWS_GROUP + "grIcon=mxgraph.aws4.group_vpc2;strokeColor=#8C4FFF;fillColor=none;fontColor=#8C4FFF;dashed=0;",
-    "az": PLAIN_GROUP + "fillColor=none;strokeColor=#147EBA;dashed=1;fontColor=#147EBA;align=center;spacingTop=6;",
-    "public_subnet": AWS_GROUP + "grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#7AA116;fillColor=#F2F6E8;fontColor=#248814;dashed=0;fontSize=11;",
-    "private_subnet": AWS_GROUP + "grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#00A4A6;fillColor=#E6F6F7;fontColor=#147EBA;dashed=0;fontSize=11;",
-    "unplaced": PLAIN_GROUP + "fillColor=none;strokeColor=#5A6C86;dashed=1;fontColor=#5A6C86;align=left;spacingLeft=12;spacingTop=6;fontSize=11;",
-    "references": PLAIN_GROUP + "fillColor=none;strokeColor=#5A6C86;dashed=1;fontColor=#5A6C86;align=left;spacingLeft=12;spacingTop=6;",
-    # Auto Scaling group overlays AZ columns (not a container), dashed orange as in the icon set.
-    # AWS account boundary in a combined (multi-account) overview; drawn behind its VPC cards, not a container.
-    "account": (COMMON + "outlineConnect=0;gradientColor=none;whiteSpace=wrap;container=0;pointerEvents=0;shape=mxgraph.aws4.group;"
-                "grIcon=mxgraph.aws4.group_account;strokeColor=#CD2264;fillColor=none;fontColor=#CD2264;dashed=0;fontStyle=1;"
-                "verticalAlign=top;align=left;spacingLeft=30;"),
-    "asg": (COMMON + "outlineConnect=0;gradientColor=none;whiteSpace=wrap;container=0;pointerEvents=0;shape=mxgraph.aws4.groupCenter;"
-            "grIcon=mxgraph.aws4.group_auto_scaling_group;grStroke=1;strokeColor=#D86613;fillColor=none;fontColor=#D86613;"
-            "dashed=1;align=left;spacingLeft=12;verticalAlign=bottom;spacingBottom=4;fontSize=11;"),
-    # ECS service around its tasks: same overlay idea in the containers colour, without a group icon.
-    "ecs_frame": (COMMON + "rounded=1;arcSize=4;whiteSpace=wrap;container=0;pointerEvents=0;strokeColor=#ED7100;fillColor=none;"
-                  "fontColor=#C25E00;dashed=1;dashPattern=6 3;align=left;spacingLeft=12;verticalAlign=bottom;spacingBottom=4;fontSize=11;"),
-    "onprem": AWS_GROUP + "grIcon=mxgraph.aws4.group_corporate_data_center;strokeColor=#7D8998;fillColor=none;fontColor=#5A6C86;dashed=0;",
-    # AWS WAF marker in the corner of a protected resource icon (a child cell of that icon).
-    "badge": COMMON + "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.waf;fillColor=#DD344C;strokeColor=#FFFFFF;gradientColor=none;",
-}
-EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;fontFamily=Arial;fontSize=9;fontColor=#536A82;strokeColor=#7C91A8;strokeWidth=1.5;endArrow=none;labelBackgroundColor=#FFFFFF;"
 
 
 def validate_document(xml):
-    if len(xml.encode()) > 10 * 1024 * 1024:
-        raise ValueError("문서는 최대 10 MiB입니다.")
-    root = fromstring(xml)
-    if root.tag not in {"mxfile", "mxGraphModel"}:
-        raise ValueError("draw.io XML 문서가 아닙니다.")
-    # Keep an inspectable XML document, not compressed/unbounded input.
-    if root.tag == "mxfile" and not root.findall("diagram/mxGraphModel"):
-        raise ValueError("압축하지 않은 draw.io XML이 필요합니다.")
-    return root
+    """A document the app stores: the input gate without decompression (stored documents stay uncompressed)."""
+    return read_document(xml, decode=False)
 
 
 def resource_style(shape, spec=None):
@@ -323,15 +217,16 @@ def carry_annotations(saved_xml, generated_xml):
     source = saved.find("diagram/mxGraphModel/root") if saved.tag == "mxfile" else saved.find("root")
     if source is None or target is None:
         return generated_xml
-    present = {c.get("id") for c in target}
-    for cell in source:
-        inner = cell if cell.tag == "mxCell" else cell.find("mxCell")
-        key = cell.get("id")
-        if inner is None or key in present or key in GENERATED or key.startswith("r-") \
+    present = {key for _, _, key, _ in iter_cells(target)}
+    for cell, inner, key, _ in list(iter_cells(source)):
+        # A cell without an id cannot be matched or referenced; draw.io assigns one when it saves, so skip it.
+        if not key or key in present or key in GENERATED or key.startswith("r-") \
                 or any(cell.get(a) is not None for a in ("resourceId", "relationId", "relationIndex", "summary")):
             continue
         if any(inner.get(a) is not None and inner.get(a) not in present for a in ("parent", "source", "target")):
             continue
+        if cell is not inner and cell.get("id") is None:  # draw.io reads a wrapped cell's id from the wrapper
+            cell.set("id", inner.attrib.pop("id"))
         target.append(cell)
         present.add(key)
     return tostring(generated, encoding="unicode")
