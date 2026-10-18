@@ -8,6 +8,11 @@ AWS 설정을 읽기 전용으로 수집해 **편집 가능한 인프라 아키�
 
 ![Diagram Bot AWS 워크스페이스](docs/images/workspace.png)
 
+## 문서
+
+구조·데이터 모델·API·인증·포팅 방법은 **[위키](docs/wiki/index.md)**에 페이지별로 있습니다(한 페이지 한 주제, 코드 근거 포함; LLM 에이전트용 목록은 [`llms.txt`](llms.txt)).
+회사 스택(React + Vite, Identity Center, 브라우저 egress)으로 옮길 때는 [포팅 가이드](docs/wiki/porting-guide.md)부터 보세요.
+
 ## 바로 실행
 
 Python 3.11 이상, 데스크톱 Chrome/Chromium을 권장합니다.

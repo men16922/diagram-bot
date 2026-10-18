@@ -5,9 +5,11 @@ Start the app first with the server's own AWS access blocked, so any call it mad
     HTTPS_PROXY=http://127.0.0.1:9 NO_PROXY=127.0.0.1,localhost \\
       diagram-bot serve --aws-egress browser --env-file .env --port 8796
 
-then `python scripts/verify_browser_egress.py --url http://127.0.0.1:8796 --region us-east-1`. The script signs in with the
-server's credential chain (with Identity Center, sign in through the dialog first and pass --skip-sign-in), collects one
-region through the app UI, sends one chat turn, and reports which AWS hosts the browser called. Nothing is changed in AWS.
+then `python scripts/verify_browser_egress.py --url http://127.0.0.1:8796 --region us-east-1`. The script opens its own
+Chromium, signs in with the server's credential chain (the sign-in dialog's local-credentials button), collects one region
+through the app UI, sends one chat turn (--skip-chat to leave Bedrock out) and reports which AWS hosts the browser called.
+Nothing is changed in AWS. An Identity Center sign-in needs a person to approve the device code, so check that path by hand
+in the app (DevTools > Network shows the *.amazonaws.com requests leaving the browser).
 """
 import argparse
 import json

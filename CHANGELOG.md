@@ -5,6 +5,9 @@
 ## [Unreleased]
 
 ### Added
+- **LLM 위키:** `docs/wiki/`(24개 페이지: 구조, 포팅 가이드, 데이터 모델, 수집, 그래프, 보기, 배치, 샘플, 검토 규칙 47개, 변경 비교, 계정 통합,
+  CloudFormation, AWS 접근·SSO, 브라우저 egress, 팀 모드 보안, HTTP API, 웹 앱, 저장소, 채팅 에이전트, CLI, 작업 방법 3개, 용어), 작성 규칙(SCHEMA),
+  변경 기록, 루트 `llms.txt`. `scripts/wiki_index.py`가 색인·`llms.txt`를 만들고, 테스트가 근거 파일·링크·색인 최신 여부와 화면 라벨 누락을 검사.
 - **브라우저 egress (회사 인증 구조):** `serve --aws-egress browser [--sso-start-url … --sso-region …]`. Identity Center 로그인과
   `GetRoleCredentials`는 서버, AWS API 요청은 서버의 boto3가 만들고 서명한 뒤 `before-send`에서 사용자 브라우저로 넘겨 PC IP에서 전송(`egress.py`,
   `/api/relay/next`·`/api/relay/{id}`). 수집기·검토·채팅 도구 코드는 그대로이고, 채팅의 Bedrock은 비스트리밍 Converse. SSO `이 역할로 로그인`을 서버에 알려
@@ -60,6 +63,9 @@
   ALB WAF, hybrid에 Direct Connect 2개 위치·transit VIF·DX 게이트웨이(VPN은 백업), data-platform에 TGW 라우팅 테이블 2개(스포크·사내망).
 
 ### Changed
+- **포팅하기 좋게 서버 분리:** `store.py`(스냅샷·편집본 저장소), `aws_access.py`(로그인·egress 경로), `routes/`(session·snapshots·documents·agent·aws
+  라우터, 다른 FastAPI 앱에 장착 가능), `server.py`는 조립만(760 → 약 130줄). 라이브러리 진입점 `api.py`. 프런트엔드는 ES 모듈(`js/http.js`, `js/relay.js`, `js/labels.js`).
+- 관계 표시 이름 누락 4개 보완(배치 그룹, SageMaker·HyperPod 서브넷, HyperPod 오케스트레이터).
 - 테스트 클라이언트가 `httpx2`로 동작합니다(`[test]`의 `httpx` → `httpx2`). Starlette의 `httpx` 대체 경로 경고는 테스트 오류로 처리해 다시 생기지 않게 막았습니다.
 - CloudFormation 내보내기가 새 수집 항목을 다룹니다: TGW 라우팅 테이블(연결·전파·정적/blackhole 경로)과 인스턴스 Elastic IP는 초안에 만들고,
   CloudFront·WAF 규칙·Direct Connect·유휴 Elastic IP·VPN/DX 연결의 TGW 라우팅 연결은 `Unsupported`에 이유와 함께 남깁니다.

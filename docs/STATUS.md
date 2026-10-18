@@ -4,6 +4,8 @@ Last Updated: 2026-10-18
 
 ## Active Plan
 
+- 2026-10-18 company auth structure: `--aws-egress browser` (server signs, browser sends from the PC; docs/wiki/browser-egress.md),
+  server split into store / aws_access / routes + `api.py` for porting (docs/wiki/porting-guide.md), LLM wiki docs/wiki + llms.txt.
 - 2026-10-18 remaining work finished (PROGRESS_LOG top entry): CI green again (`.[test]`), chat streaming, brownfield designs
   (`start_from_current`, `add_subnet_tier`; 29 chat tools), CloudFormation export (`export-cfn`), collection of Elastic IPs,
   TGW route tables, CloudFront, WAFv2 and Direct Connect (4 new low rules), route filter for dense views, optional sample
@@ -92,7 +94,7 @@ Last Updated: 2026-10-18
 ## Verification (2026-10-17, cloud container)
 
 - Gate, team-mode Chromium run, layout tests, 27 browser checks and evidence files: docs/archive/STATUS-verification-2026-10.md.
-  Current gate: `make check` = ruff + 229 pytest cases + CLI round trip; `verify_demo.py` 35 checks (incl. streamed chat, route
+  Current gate: `make check` = ruff + 238 pytest cases + CLI round trip; `verify_demo.py` 35 checks (incl. streamed chat, route
   filter, CloudFormation download, edge/DX samples); `verify_team.py` ok (2026-10-18). CI (GitHub Actions) green from 077c6ee.
 
 ## Harness

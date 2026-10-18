@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: remaining work finished (2026-10-18): CI green, chat streaming, brownfield designs, CloudFormation export, edge/DX/EIP/TGW-route-table collection, route filter, SAMPLE_VERSION 6. No [auto] backlog; candidates in NEXT_PLAN are owner decisions.
+> ▶ NEXT SESSION: company auth structure done (2026-10-18): `--aws-egress browser` (server signs, browser sends), server split into store/aws_access/routes, `api.py`, frontend ES modules, LLM wiki in docs/wiki (llms.txt). No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 
@@ -15,6 +15,7 @@ never invents resources) and CloudFormation draft export. draw.io internals: doc
 
 ## Read Order
 
+0. docs/wiki/index.md — code-grounded wiki (architecture, data model, API, auth, porting); keep it current (docs/wiki/SCHEMA.md).
 1. docs/STATUS.md — implemented behavior and evidence.
 2. docs/NEXT_PLAN.md — authorized open work only.
 3. docs/PROGRESS_LOG.md — recent changes.

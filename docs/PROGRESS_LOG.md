@@ -2,6 +2,18 @@
 
 Last Updated: 2026-10-18
 
+## 2026-10-18 — Company auth structure, porting refactor, LLM wiki (owner: 인증 구조 회사것과 동일하게; 포팅하기 좋게 리팩토링; LLM Wiki)
+
+- Browser egress (`serve --aws-egress browser`): Identity Center device code + GetRoleCredentials on the server; every AWS
+  request built and signed by botocore and handed to the browser at before-send (`egress.py`, `/api/relay/*`). Measured with
+  real Chromium: 18 collector services + Bedrock answer CORS for signed requests; Identity Center endpoints do not (stay on the
+  server). Live with the server's own AWS egress blocked: collection 42/42 and a Bedrock chat turn, 46 requests from the browser.
+- Refactor for porting: `store.py`, `aws_access.py`, `routes/*` (mountable routers), `api.py`, frontend `js/` modules; server.py
+  760 → ~130 lines, behaviour unchanged (tests, verify_demo 35, verify_team, live egress re-run after the refactor).
+- LLM wiki: 24 code-grounded pages + SCHEMA/log/index, `llms.txt`, `scripts/wiki_index.py`; tests check sources, links, index
+  freshness and UI labels (found and fixed 4 missing relation labels).
+- Also: CI test client on `httpx2` (deprecated fallback is an error). Verified: `make check` 238; CI green on 7698e86.
+
 ## 2026-10-18 — Remaining work finished (goal: 잔여 작업 수행, 승인 없이 최대한 완성도 있게)
 
 - CI was red on every push since db76a70 (`strands` missing from its hand-written install list): it now installs `.[test]`,
