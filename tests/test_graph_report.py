@@ -218,6 +218,12 @@ def test_msk_brokers_follow_list_nodes():
     graph = build_graph(SAMPLES["eks-platform"]())
     brokers = sorted((n["attributes"]["BrokerIds"], n["attributes"]["Estimated"]) for n in graph["nodes"] if n["kind"] == "msk_broker")
     assert brokers == [([1], False), ([2], False), ([3], False)]
+    # A partial ListNodes answer (broker replacement) must not fail the whole graph: the unnamed subnet is estimated.
+    snapshot = SAMPLES["eks-platform"]()
+    snapshot["raw"]["msk_nodes"] = snapshot["raw"]["msk_nodes"][:2]
+    brokers = sorted((n["attributes"]["BrokerIds"], n["attributes"]["Brokers"], n["attributes"]["Estimated"])
+                     for n in build_graph(snapshot)["nodes"] if n["kind"] == "msk_broker")
+    assert brokers == [([], 0, True), ([1], 1, False), ([2], 1, False)]
 
 
 def test_optional_best_practice_items():
