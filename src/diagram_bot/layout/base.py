@@ -1,6 +1,7 @@
 """Sizes every view shares, cell ids, and the node facts placement depends on (subnet tier, on premises)."""
 import hashlib
 
+from ..graph import tag_map
 from ..views import SITE_KINDS
 
 ENGINE, VERSION = "diagram-bot-layered", 2
@@ -21,7 +22,7 @@ def is_public(subnet):
     """Route table decides when collected; otherwise MapPublicIpOnLaunch or the name/Tier tag."""
     if subnet.get("route_class"):
         return subnet["route_class"] == "public"
-    tags = {t["Key"]: t.get("Value", "") for t in subnet["attributes"].get("Tags", [])}
+    tags = tag_map(subnet["attributes"])
     return bool(subnet["attributes"].get("MapPublicIpOnLaunch")) or "public" in (tags.get("Tier", "") + " " + subnet["name"]).lower()
 
 
@@ -29,7 +30,7 @@ def tier_rank(subnet):
     """Order subnets the way architecture diagrams read: public, then web, app, data tiers."""
     if is_public(subnet):
         return 0
-    tags = {t["Key"]: t.get("Value", "") for t in subnet["attributes"].get("Tags", [])}
+    tags = tag_map(subnet["attributes"])
     words = (tags.get("Tier", "") + " " + subnet["name"]).lower()
     for rank, names in enumerate((("web", "front"), ("app", "service", "private"), ("data", "db", "database")), 1):
         if any(name in words for name in names):
