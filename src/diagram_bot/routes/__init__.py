@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from ..auth import AuditLog
 from ..aws_access import AwsAccess
+from ..errors import InputError
 from ..store import Conflict, DocumentStore, NotFound, SnapshotStore
 
 
@@ -39,7 +40,7 @@ def role(request: Request):
 
 
 def install_error_handlers(app):
-    """Store errors become HTTP errors with the message the user sees."""
+    """Store and input errors become HTTP errors with the message the user sees."""
     @app.exception_handler(NotFound)
     async def not_found(request, exc):
         return JSONResponse({"detail": str(exc)}, status_code=404)
@@ -47,3 +48,7 @@ def install_error_handlers(app):
     @app.exception_handler(Conflict)
     async def conflict(request, exc):
         return JSONResponse({"detail": str(exc)}, status_code=409)
+
+    @app.exception_handler(InputError)
+    async def invalid_input(request, exc):
+        return JSONResponse({"detail": str(exc)}, status_code=422)

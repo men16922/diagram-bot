@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..egress import RelayError
+from ..errors import error_code
 from ..sso import SsoError
 from . import role, user
 
@@ -35,8 +36,7 @@ def chat_error(exc):
     if isinstance(exc, (RelayError, SsoError)):
         return str(exc)
     if isinstance(exc, (BotoCoreError, ClientError)):
-        code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
-        return f"Bedrock 호출 실패({code}): 모델 액세스·리전·자격 증명을 확인하세요."
+        return f"Bedrock 호출 실패({error_code(exc)}): 모델 액세스·리전·자격 증명을 확인하세요."
     # The model provider's own errors are surfaced to the user, the chat stays usable.
     return f"에이전트 응답 실패: {type(exc).__name__}: {str(exc)[:300]}"
 

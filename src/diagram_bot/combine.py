@@ -4,6 +4,7 @@
 The parts are stored unchanged; the graph is merged from them (graph.merge_graphs). Nothing is inferred
 between accounts beyond resource IDs the APIs report on both sides.
 """
+from .errors import InputError
 
 
 def combine_snapshots(snapshots, title=None):
@@ -11,10 +12,10 @@ def combine_snapshots(snapshots, title=None):
     for snapshot in snapshots:
         parts += snapshot["parts"] if snapshot.get("parts") else [{k: v for k, v in snapshot.items() if k != "graph"}]
     if len(parts) < 2:
-        raise ValueError("계정·리전 스냅샷을 두 개 이상 고르세요.")
+        raise InputError("계정·리전 스냅샷을 두 개 이상 고르세요.")
     keys = [(p["metadata"]["account_id"], p["metadata"]["region"]) for p in parts]
     if len(set(keys)) != len(keys):
-        raise ValueError("같은 계정·리전 스냅샷이 두 번 들어 있습니다. 하나만 고르세요.")
+        raise InputError("같은 계정·리전 스냅샷이 두 번 들어 있습니다. 하나만 고르세요.")
     meta = [p["metadata"] for p in parts]
     accounts, regions = sorted({m["account_id"] for m in meta}), sorted({m["region"] for m in meta})
     scope = sorted({item for m in meta for item in m.get("scope", [])})

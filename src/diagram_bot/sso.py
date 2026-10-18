@@ -15,8 +15,10 @@ import botocore.session
 from botocore.credentials import DeferredRefreshableCredentials
 from botocore.exceptions import ClientError
 
+from .errors import error_code
+from .validation import ACCOUNT, REGION
+
 GRANT = "urn:ietf:params:oauth:grant-type:device_code"
-REGION = re.compile(r"^[a-z]{2}(?:-[a-z0-9]+)+-\d+$")
 START_URL = re.compile(r"^https://[A-Za-z0-9.-]+(?::\d+)?/[^\s]*$")
 
 
@@ -41,7 +43,7 @@ class SsoLogins:
         start_url, region = (start_url or "").strip(), (region or "").strip()
         if not START_URL.match(start_url) or len(start_url) > 512:
             raise SsoError("SSO 시작 URL은 https://로 시작해야 합니다. 예: https://d-1234567890.awsapps.com/start")
-        if not REGION.match(region):
+        if not re.fullmatch(REGION, region):
             raise SsoError(f"SSO 리전 형식이 아닙니다: {region}")
         oidc = self.client("sso-oidc", region)
         try:
@@ -49,7 +51,7 @@ class SsoLogins:
             device = oidc.start_device_authorization(clientId=registration["clientId"], clientSecret=registration["clientSecret"],
                                                      startUrl=start_url)
         except ClientError as exc:
-            raise SsoError(f"SSO 로그인을 시작하지 못했습니다({exc.response['Error']['Code']}). 시작 URL과 리전을 확인하세요.") from exc
+            raise SsoError(f"SSO 로그인을 시작하지 못했습니다({error_code(exc)}). 시작 URL과 리전을 확인하세요.") from exc
         identifier = secrets.token_urlsafe(16)
         now = self.clock()
         with self.lock:
@@ -108,7 +110,7 @@ class SsoLogins:
             token = self.client("sso-oidc", grant["region"]).create_token(
                 clientId=grant["client_id"], clientSecret=grant["client_secret"], grantType=GRANT, deviceCode=grant["device_code"])
         except ClientError as exc:
-            code = exc.response["Error"]["Code"]
+            code = error_code(exc)
             if code == "AuthorizationPendingException":
                 return {}
             if code == "SlowDownException":
@@ -130,7 +132,7 @@ class SsoLogins:
         with self.lock:
             flow = self.authorized(identifier, owner)
             token, region = flow["token"], flow["region"]
-        if not re.fullmatch(r"\d{12}", account_id or ""):
+        if not re.fullmatch(ACCOUNT, account_id or ""):
             raise SsoError("12자리 계정 ID가 필요합니다.")
         sso = self.client("sso", region)
         names = []
@@ -157,7 +159,7 @@ class SsoLogins:
             credentials = self.client("sso", sso_region).get_role_credentials(
                 accessToken=token, accountId=account_id, roleName=role_name)["roleCredentials"]
         except ClientError as exc:
-            raise SsoError(f"SSO 역할 자격 증명을 받지 못했습니다({exc.response['Error']['Code']}). 계정·역할 할당을 확인하세요.") from exc
+            raise SsoError(f"SSO 역할 자격 증명을 받지 못했습니다({error_code(exc)}). 계정·역할 할당을 확인하세요.") from exc
         expires = credentials.get("expiration") or (time.time() + 900) * 1000  # epoch milliseconds
         return {"access_key": credentials["accessKeyId"], "secret_key": credentials["secretAccessKey"],
                 "token": credentials["sessionToken"], "expiry_time": datetime.fromtimestamp(expires / 1000, UTC).isoformat()}

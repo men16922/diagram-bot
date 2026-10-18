@@ -10,20 +10,20 @@ from pydantic import BaseModel, Field
 
 from ..collector import collect, now
 from ..egress import RelayError
+from ..errors import error_code
 from ..sso import SsoError
+from ..validation import ACCOUNT, REGION, ROLE_NAME
 from . import role, user
-
-REGION = r"^[a-z]{2}(?:-[a-z0-9]+)+-\d+$"
 
 
 class CollectionRequest(BaseModel):
     profile: str | None = Field(default=None, max_length=128)
     region: str = Field(pattern=REGION, max_length=50)
-    expected_account: str = Field(pattern=r"^\d{12}$")
+    expected_account: str = Field(pattern=ACCOUNT)
     role_arn: str | None = Field(default=None, max_length=2048, pattern=r"^arn:aws[a-z-]*:iam::\d{12}:role/[\w+=,.@/-]+$")
     external_id: str | None = Field(default=None, min_length=2, max_length=1224, pattern=r"^[\w+=,.@:/-]+$")
     sso_login: str | None = Field(default=None, max_length=64, pattern=r"^[\w-]+$")
-    sso_role: str | None = Field(default=None, max_length=64, pattern=r"^[\w+=,.@-]+$")
+    sso_role: str | None = Field(default=None, max_length=64, pattern=ROLE_NAME)
 
 
 class SsoStartRequest(BaseModel):
@@ -32,8 +32,8 @@ class SsoStartRequest(BaseModel):
 
 
 class SsoUseRequest(BaseModel):
-    account_id: str = Field(pattern=r"^\d{12}$")
-    role: str = Field(max_length=64, pattern=r"^[\w+=,.@-]+$")
+    account_id: str = Field(pattern=ACCOUNT)
+    role: str = Field(max_length=64, pattern=ROLE_NAME)
 
 
 class RelayAnswer(BaseModel):
@@ -79,8 +79,7 @@ def router(context, executor=None):
                                    role_arn=params.role_arn, external_id=params.external_id, prepare=aws.prepare_for(who))
                 jobs[identifier].update(status=snapshot["metadata"]["status"], snapshot_id=context.snapshots.save(snapshot))
             except (BotoCoreError, ClientError) as exc:
-                code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
-                jobs[identifier].update(status="failed", error=f"{code}: 기존 SSO 로그인·프로파일·권한을 확인하세요.")
+                jobs[identifier].update(status="failed", error=f"{error_code(exc)}: 기존 SSO 로그인·프로파일·권한을 확인하세요.")
             except (ValueError, RelayError) as exc:
                 jobs[identifier].update(status="failed", error=str(exc))
             except Exception:

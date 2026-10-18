@@ -14,6 +14,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .collector import now
+from .errors import InputError
 from .fileio import atomic_write
 from .graph import build_graph, upgrade_graph
 
@@ -43,13 +44,13 @@ class Conflict(RuntimeError):
 
 def validate_snapshot(snapshot):
     if snapshot.get("schema_version") != 1:
-        raise ValueError("지원하지 않는 스냅샷 버전입니다.")
+        raise InputError("지원하지 않는 스냅샷 버전입니다.")
     metadata = snapshot["metadata"]
     for name in ("account_id", "region", "started_at", "finished_at", "status"):
         if not isinstance(metadata.get(name), str):
-            raise ValueError(f"스냅샷 metadata.{name} 필드가 필요합니다.")
+            raise InputError(f"스냅샷 metadata.{name} 필드가 필요합니다.")
     if not isinstance(snapshot.get("coverage"), list) or not isinstance(snapshot.get("raw"), dict):
-        raise ValueError("스냅샷 coverage/raw 형식이 잘못되었습니다.")
+        raise InputError("스냅샷 coverage/raw 형식이 잘못되었습니다.")
 
 
 class SnapshotStore:

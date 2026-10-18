@@ -101,3 +101,12 @@ def test_snapshot_get_survives_a_concurrent_eviction(tmp_path):
 
     store.cache = Evicting(store.cache)
     assert store.get("demo")["metadata"]["account_id"]
+
+
+def test_error_code_names_the_aws_code_or_the_exception():
+    from botocore.exceptions import ClientError, EndpointConnectionError
+
+    from diagram_bot.errors import error_code
+    assert error_code(ClientError({"Error": {"Code": "AccessDenied"}}, "op")) == "AccessDenied"
+    assert error_code(ClientError({}, "op")) == "ClientError"
+    assert error_code(EndpointConnectionError(endpoint_url="https://x")) == "EndpointConnectionError"
