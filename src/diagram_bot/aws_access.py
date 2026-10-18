@@ -100,5 +100,7 @@ class AwsAccess:
             # Discovery calls sso-admin from the server, which browser egress assumes cannot reach AWS.
             if not rows and not self.relay and (found := discover_start_url()):
                 rows.append({"name": "Identity Center", **found})
+            if not rows:
+                return []  # nothing found (no config, discovery failed): look again next time instead of caching the miss
             self._defaults = rows
         return self._defaults

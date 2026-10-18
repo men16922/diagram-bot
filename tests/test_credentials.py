@@ -141,3 +141,12 @@ def test_chat_creation_with_browser_egress_makes_no_identity_center_call(tmp_pat
             response = client.post(path, json={"message": "hi"})
             assert response.status_code == 409 and "다시 로그인" in response.json()["detail"]
     assert len(built) == 2 and fake.issued == []
+
+
+def test_a_failed_start_url_discovery_is_tried_again(monkeypatch):
+    found = iter([None, {"start_url": START, "region": "us-east-1"}])
+    monkeypatch.setattr("diagram_bot.aws_access.discover_start_url", lambda: next(found))
+    access = AwsAccess("server", sso=SsoLogins(client=FakeIdentityCenter()))
+    assert access.start_urls() == []
+    assert access.start_urls() == [{"name": "Identity Center", "start_url": START, "region": "us-east-1"}]
+    assert access.start_urls() == [{"name": "Identity Center", "start_url": START, "region": "us-east-1"}]  # a hit is kept
