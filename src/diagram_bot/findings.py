@@ -235,6 +235,8 @@ def review(graph, coverage=()):
             low, high = rule.get("FromPort", 0), rule.get("ToPort", 65535)
             if protocol == "-1":
                 exposed = {"모든 포트": None}
+            elif protocol.lower() not in ("tcp", "6"):
+                continue  # the listed services listen on TCP: a UDP, ICMP or other-protocol rule does not open them
             else:
                 exposed = {name: port for port, name in {**ADMIN_PORTS, **DATA_PORTS}.items() if low <= port <= high}
                 for port, name in AI_PORTS.items():

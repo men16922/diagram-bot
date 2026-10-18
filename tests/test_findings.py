@@ -94,6 +94,17 @@ def test_security_group_exposure_rules():
     assert titles == {"인터넷(0.0.0.0/0)에 MySQL 3306 허용", "인터넷(0.0.0.0/0)에 RDP 3389 허용", "인터넷(0.0.0.0/0)에 모든 포트 허용"}
 
 
+
+def test_world_open_rules_on_other_protocols_do_not_name_tcp_services():
+    snapshot = demo_snapshot()
+    groups = snapshot["raw"]["security_groups"]
+    groups[0]["IpPermissions"] += [{"IpProtocol": "udp", "FromPort": 0, "ToPort": 65535, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]},
+                                   {"IpProtocol": "50", "IpRanges": [{"CidrIp": "0.0.0.0/0"}]},  # ESP: no ports at all
+                                   {"IpProtocol": "6", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
+    rules = {(f["rule"], f["title"]) for f in findings(snapshot) if f["resource_name"] == "demo-alb-sg" and f["rule"].startswith(("SEC-SG", "SEC-AI"))}
+    assert rules == {("SEC-SG-OPEN", "인터넷(0.0.0.0/0)에 SSH 22 허용")}  # only the TCP rule (protocol number 6)
+
+
 def test_missing_input_reports_nothing_instead_of_guessing():
     snapshot = copy.deepcopy(demo_snapshot())
     snapshot["raw"] = {"vpcs": snapshot["raw"]["vpcs"]}
