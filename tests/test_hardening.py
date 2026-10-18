@@ -6,7 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from diagram_bot.auth import AuditLog, load_users, remove_user, save_user, verify_password
+from diagram_bot.demo import demo_snapshot
 from diagram_bot.server import create_app
+from diagram_bot.store import SnapshotStore
 
 PASSWORD = "correct horse battery"
 
@@ -46,3 +48,26 @@ def test_user_file_writes_are_atomic_and_private(tmp_path):
     assert stat.S_IMODE(users.stat().st_mode) == 0o600
     assert [u["name"] for u in json.loads(users.read_text(encoding="utf-8"))["users"]] == ["eddie"]
     assert [p.name for p in tmp_path.iterdir()] == ["users.json"]  # no temporary file left behind
+
+
+def test_snapshot_list_skips_one_corrupt_file(tmp_path):
+    store = SnapshotStore(tmp_path)
+    store.save(demo_snapshot(), "good")
+    (store.directory / "broken.json").write_text('{"metadata": {"finished_at"', encoding="utf-8")
+    (store.directory / "nometa.json").write_text("[]", encoding="utf-8")
+    assert [row["id"] for row in store.list()] == ["good"]
+
+
+def test_snapshot_get_survives_a_concurrent_eviction(tmp_path):
+    store = SnapshotStore(tmp_path)
+    store.save(demo_snapshot(), "demo")
+    store.get("demo")
+
+    class Evicting(dict):
+        def __contains__(self, key):  # another request evicts the key right after this check
+            found = dict.__contains__(self, key)
+            self.pop(key, None)
+            return found
+
+    store.cache = Evicting(store.cache)
+    assert store.get("demo")["metadata"]["account_id"]
