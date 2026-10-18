@@ -110,3 +110,10 @@ def test_error_code_names_the_aws_code_or_the_exception():
     assert error_code(ClientError({"Error": {"Code": "AccessDenied"}}, "op")) == "AccessDenied"
     assert error_code(ClientError({}, "op")) == "ClientError"
     assert error_code(EndpointConnectionError(endpoint_url="https://x")) == "EndpointConnectionError"
+
+
+def test_the_server_does_not_import_the_cli_for_its_version():
+    import subprocess
+    import sys
+    code = "import sys, diagram_bot.server; assert 'diagram_bot.cli' not in sys.modules"
+    assert subprocess.run([sys.executable, "-c", code], capture_output=True).returncode == 0

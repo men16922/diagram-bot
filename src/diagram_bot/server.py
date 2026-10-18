@@ -18,7 +18,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .auth import AuditLog, Authenticator, allowed
 from .aws_access import AwsAccess
-from .cli import app_version
+from .version import app_version
 from .demo import demo_snapshot
 from .editor import VERSION, editor_path
 from .routes import Context, install_error_handlers, role
