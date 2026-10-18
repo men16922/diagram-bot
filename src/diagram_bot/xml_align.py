@@ -28,7 +28,9 @@ from .errors import InputError
 from .graph import build_graph
 from .samples import Sample
 
-__all__ = ["adopt_company_xml", "align_drawio_xml", "import_drawio_xml", "inspect_drawio_xml"]
+__all__ = ["adopt_company_xml", "align_drawio_xml", "align_report", "import_drawio_xml", "inspect_drawio_xml"]
+# Attributes draw.io reads on an <mxCell>; anything else on a bare mxCell moves to the wrapper when one is added.
+MXCELL_ATTRIBUTES = {"id", "value", "style", "vertex", "edge", "parent", "source", "target", "connectable", "collapsed", "visible"}
 
 # Reverse lookup from draw.io aws4 icon names to Diagram Bot (kind, variant).
 _ICON_TO_KIND = {}
@@ -291,24 +293,38 @@ def _boxes_overlap(a, b, pad=0.0):
     return (a[0] + pad) < (b[2] - pad) and (b[0] + pad) < (a[2] - pad) and (a[1] + pad) < (b[3] - pad) and (b[1] + pad) < (a[3] - pad)
 
 
-def inspect_drawio_xml(xml_text) -> dict:
-    """Inspect a `drawio.xml` string and return layout/routing diagnostics and its extracted `DrawioSpec`."""
-    root = read_document(xml_text)
-    graph_root = root.find("diagram/mxGraphModel/root") if root.tag == "mxfile" else root.find("root")
+def _segment_hits(p1, p2, box):
+    """Whether the segment p1-p2 passes through the box (Liang-Barsky clipping; exact for diagonal segments too)."""
+    (x1, y1), (x2, y2) = p1, p2
+    t0, t1, dx, dy = 0.0, 1.0, x2 - x1, y2 - y1
+    for p, q in ((-dx, x1 - box[0]), (dx, box[2] - x1), (-dy, y1 - box[1]), (dy, box[3] - y1)):
+        if p == 0:
+            if q < 0:
+                return False
+        elif p < 0:
+            t0 = max(t0, q / p)
+        else:
+            t1 = min(t1, q / p)
+        if t0 > t1:
+            return False
+    return True
+
+
+ISSUES = ("overlaps", "out_of_bounds", "unaligned_tiers", "unrouted_edges", "edge_collisions")
+OVERLAY_ROLES = ("asg", "account", "ecs_frame", "badge", "title", "caption", "annotation", "label")
+CONTAINER_ROLES = {"cloud", "region", "account", "vpc", "az", "subnet", "onprem", "references", "unplaced", "summary"}
+
+
+def _inspect_page(graph_root):
+    """Layout and routing issues of one page, in page coordinates (edge points offset by their parent's origin)."""
     vertices, edges = _parse_page_model(graph_root)
     abs_pos = _compute_abs(vertices)
+    report = {"vertices": vertices, "edges": edges, **{key: [] for key in ISSUES}}
 
-    roles = {}
-    for v in vertices.values():
-        roles[v["role"]] = roles.get(v["role"], 0) + 1
-
-    overlaps = []
     by_parent = {}
     for cid, v in vertices.items():
-        if v["role"] in ("asg", "account", "ecs_frame", "badge", "title", "caption"):
-            continue
-        by_parent.setdefault(v["parent"], []).append(cid)
-
+        if v["role"] not in OVERLAY_ROLES:
+            by_parent.setdefault(v["parent"], []).append(cid)
     for members in by_parent.values():
         boxes = {cid: (abs_pos[cid][0], abs_pos[cid][1], abs_pos[cid][0] + vertices[cid]["w"], abs_pos[cid][1] + vertices[cid]["h"])
                  for cid in members}
@@ -316,89 +332,90 @@ def inspect_drawio_xml(xml_text) -> dict:
         for a_id in members:
             for b_id in grid.near(boxes[a_id]):
                 if order[b_id] > order[a_id] and _boxes_overlap(boxes[a_id], boxes[b_id], pad=0.5):
-                    overlaps.append((a_id, b_id))
+                    report["overlaps"].append((a_id, b_id))
 
-    out_of_bounds = []
     for cid, v in vertices.items():
         pid = v["parent"]
-        if pid in vertices and v["role"] not in ("badge", "asg", "account", "ecs_frame"):
+        if pid in vertices and v["role"] not in OVERLAY_ROLES:
             p = vertices[pid]
             if v["x"] < -1 or v["y"] < -1 or (v["x"] + v["w"]) > (p["w"] + 1) or (v["y"] + v["h"]) > (p["h"] + 1):
-                out_of_bounds.append((cid, pid))
+                report["out_of_bounds"].append((cid, pid))
 
-    unaligned_tiers = []
-    # Check subnets of the same tier across sibling AZ columns in each VPC
-    az_by_vpc = {}
+    # Subnets of the same tier across sibling AZ columns in each VPC share their y and height.
+    az_by_vpc, subnets_of = {}, {}
     for cid, v in vertices.items():
         if v["role"] == "az":
             az_by_vpc.setdefault(v["parent"], []).append(cid)
-    subnets_of = {}
-    for s in vertices.values():
-        if s["role"] == "subnet":
-            subnets_of.setdefault(s["parent"], []).append(s)
+        elif v["role"] == "subnet":
+            subnets_of.setdefault(v["parent"], []).append(v)
     for az_ids in az_by_vpc.values():
         tier_subnets = {}
         for az_id in az_ids:
             for s in subnets_of.get(az_id, ()):
                 tier_subnets.setdefault(s["tier"], []).append(s)
         for subs in tier_subnets.values():
-            if len(subs) > 1:
-                y0, h0 = subs[0]["y"], subs[0]["h"]
-                for other in subs[1:]:
-                    if abs(other["y"] - y0) > 1 or abs(other["h"] - h0) > 1:
-                        unaligned_tiers.append((subs[0]["id"], other["id"]))
+            for other in subs[1:]:
+                if abs(other["y"] - subs[0]["y"]) > 1 or abs(other["h"] - subs[0]["h"]) > 1:
+                    report["unaligned_tiers"].append((subs[0]["id"], other["id"]))
 
-    unrouted_edges = []
-    edge_collisions = []
     resource_boxes = {
         cid: (abs_pos[cid][0] + 2, abs_pos[cid][1] + 2, abs_pos[cid][0] + v["w"] - 2, abs_pos[cid][1] + v["h"] - 2)
         for cid, v in vertices.items() if v["role"] == "resource"
     }
     resource_grid = _Grid(resource_boxes)
-
     for e in edges:
         src, dst = e["source"], e["target"]
         if src not in vertices or dst not in vertices:
             continue
         _, kv = parse_style(e["style"])
         ports = [_fraction(kv.get(k)) for k in ("exitX", "exitY", "entryX", "entryY")]
-        if None in ports or kv.get("edgeStyle") != "orthogonalEdgeStyle":
-            unrouted_edges.append(e["id"])
-            continue
-        sx, sy = abs_pos[src]
-        dx, dy = abs_pos[dst]
-        sv, dv = vertices[src], vertices[dst]
-        p_start = (sx + ports[0] * sv["w"], sy + ports[1] * sv["h"])
-        p_end = (dx + ports[2] * dv["w"], dy + ports[3] * dv["h"])
         ox, oy = abs_pos.get(e["parent"], (0.0, 0.0))
-        path = [p_start, *((x + ox, y + oy) for x, y in e["points"]), p_end]
-        if len(path) == 2 and abs(p_start[0] - p_end[0]) > 1 and abs(p_start[1] - p_end[1]) > 1:
-            unrouted_edges.append(e["id"])
-            continue
-        for (x1, y1), (x2, y2) in zip(path, path[1:]):
-            if abs(x1 - x2) > 1 and abs(y1 - y2) > 1:
-                if e["id"] not in unrouted_edges:
-                    unrouted_edges.append(e["id"])
-                break
-            seg = (min(x1, x2), min(y1, y2), max(x1, x2) + 0.1, max(y1, y2) + 0.1)
+        points = [(x + ox, y + oy) for x, y in e["points"]]
+        (sx, sy), (dx, dy) = abs_pos[src], abs_pos[dst]
+        sv, dv = vertices[src], vertices[dst]
+        orthogonal = kv.get("edgeStyle") == "orthogonalEdgeStyle"
+        if None in ports or not orthogonal:
+            report["unrouted_edges"].append(e["id"])
+            if orthogonal and not points:
+                continue  # draw.io picks this route itself: nothing to measure
+            # A straight edge (or one through its waypoints) as draw.io draws it, from centre to centre.
+            path = [(sx + sv["w"] / 2, sy + sv["h"] / 2), *points, (dx + dv["w"] / 2, dy + dv["h"] / 2)]
+        else:
+            path = [(sx + ports[0] * sv["w"], sy + ports[1] * sv["h"]), *points, (dx + ports[2] * dv["w"], dy + ports[3] * dv["h"])]
+            if any(abs(a[0] - b[0]) > 1 and abs(a[1] - b[1]) > 1 for a, b in zip(path, path[1:])):
+                report["unrouted_edges"].append(e["id"])
+        hit = set()
+        for a, b in zip(path, path[1:]):
+            seg = (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]) + 0.1, max(a[1], b[1]) + 0.1)
             for rid in resource_grid.near(seg):
-                if rid not in (src, dst) and _boxes_overlap(seg, resource_boxes[rid]):
-                    edge_collisions.append((e["id"], rid))
+                if rid not in (src, dst) and rid not in hit and _segment_hits(a, b, resource_boxes[rid]):
+                    hit.add(rid)
+                    report["edge_collisions"].append((e["id"], rid))
+    return report
 
+
+def _counts(report):
+    return {key: len(report[key]) for key in ISSUES}
+
+
+def inspect_drawio_xml(xml_text) -> dict:
+    """Inspect a `drawio.xml` string and return layout/routing diagnostics and its extracted `DrawioSpec`."""
+    root = read_document(xml_text)
+    graph_root = root.find("diagram/mxGraphModel/root") if root.tag == "mxfile" else root.find("root")
+    page = _inspect_page(graph_root)
+    vertices = page["vertices"]
+    roles = {}
+    for v in vertices.values():
+        roles[v["role"]] = roles.get(v["role"], 0) + 1
     extracted = spec_from_xml(xml_text)
-    container_roles = {"cloud", "region", "account", "vpc", "az", "subnet", "onprem", "references", "unplaced", "summary"}
     return {
         "wrapper": extracted.cell_wrapper,
         "node_count": sum(1 for v in vertices.values() if v["role"] == "resource"),
-        "container_count": sum(1 for v in vertices.values() if v["role"] in container_roles),
-        "edge_count": len(edges),
+        "container_count": sum(1 for v in vertices.values() if v["role"] in CONTAINER_ROLES),
+        "edge_count": len(page["edges"]),
         "roles": roles,
-        "overlaps": overlaps,
-        "out_of_bounds": out_of_bounds,
-        "unaligned_tiers": unaligned_tiers,
-        "unrouted_edges": unrouted_edges,
-        "edge_collisions": edge_collisions,
-        "clean": not (overlaps or out_of_bounds or unaligned_tiers or unrouted_edges or edge_collisions),
+        **{key: page[key] for key in ISSUES},
+        "clean": not any(page[key] for key in ISSUES),
         "spec": extracted.to_dict(),
     }
 
@@ -438,8 +455,8 @@ def _reparent_visual_children(vertices):
                 break
 
 
-def _align_page_in_place(graph_root, *, spec=None, reparent=True, route_edges=True, normalize_styles=False, grid_size=10):
-    """Align containers, resource grids, cross-AZ tiers, and orthogonal routes in-place on `graph_root`."""
+def _align_page_in_place(graph_root, *, reparent=True, route_edges=True, grid_size=10):
+    """Align containers, resource grids, cross-AZ tiers, and orthogonal routes in-place on `graph_root` (geometry only)."""
     vertices, edges = _parse_page_model(graph_root)
     if not vertices:
         return
@@ -688,11 +705,6 @@ def _align_page_in_place(graph_root, *, spec=None, reparent=True, route_edges=Tr
     if route_edges and edges:
         _route_edges_orthogonally(vertices, edges)
 
-    # 6. Apply DrawioSpec style & wrapper normalization if requested
-    if normalize_styles or spec is not None:
-        cfg = resolve_spec(spec)
-        _apply_spec_to_page(graph_root, vertices, edges, cfg)
-
 
 def _route_edges_orthogonally(vertices, edges):
     """Compute explicit exit/entry border constraints and obstacle-avoiding orthogonal waypoints for all edges."""
@@ -879,52 +891,45 @@ def _apply_spec_to_page(graph_root, vertices, edges, cfg):
         e["style"] = format_style([], merged)
         e["cell"].set("style", e["style"])
 
-    # Normalize wrapper tags if needed (`object` vs `UserObject` vs `mxCell`)
-    current_children = list(graph_root)
-    for el in current_children:
-        if el.tag == "mxCell" and el.get("id") in ("0", "1"):
-            continue
+    # Wrapper tags (`object` / `UserObject` / `mxCell`). A wrapper carrying custom attributes (tooltip, link, placeholders,
+    # resourceId...) is never downgraded to a bare mxCell: draw.io would drop them. It is kept and counted instead.
+    kept = 0
+    for idx, el in enumerate(list(graph_root)):
         inner = el if el.tag == "mxCell" else el.find("mxCell")
-        if inner is None:
+        if inner is None or (el.tag == "mxCell" and el.get("id") in ("0", "1")) or el.tag == cfg.cell_wrapper:
             continue
         cid = el.get("id") or inner.get("id") or ""
         label = el.get("label") or el.get("value") or inner.get("value") or ""
-        if cfg.cell_wrapper == "mxCell" and el.tag != "mxCell":
-            idx = list(graph_root).index(el)
-            graph_root.remove(el)
+        if cfg.cell_wrapper == "mxCell":
+            if set(el.attrib) - {"id", "label"}:
+                kept += 1
+                continue
             inner.set("id", cid)
             inner.set("value", label)
-            graph_root.insert(idx, inner)
-        elif cfg.cell_wrapper in ("object", "UserObject") and el.tag != cfg.cell_wrapper:
-            idx = list(graph_root).index(el)
             graph_root.remove(el)
-            if el.tag == "mxCell":
-                inner.attrib.pop("id", None)
-                inner.attrib.pop("value", None)
-                wrapper = Element(cfg.cell_wrapper, {"id": cid, "label": label})
-                wrapper.append(inner)
-                graph_root.insert(idx, wrapper)
-            else:
-                el.tag = cfg.cell_wrapper
-                graph_root.insert(idx, el)
+            graph_root.insert(idx, inner)
+        elif el.tag == "mxCell":
+            custom = {k: inner.attrib.pop(k) for k in list(inner.attrib) if k not in MXCELL_ATTRIBUTES}
+            inner.attrib.pop("id", None)
+            inner.attrib.pop("value", None)
+            wrapper = Element(cfg.cell_wrapper, {"id": cid, "label": label, **custom})
+            wrapper.append(inner)
+            graph_root.remove(el)
+            graph_root.insert(idx, wrapper)
+        else:
+            el.tag = cfg.cell_wrapper
+    return kept
 
 
-def align_drawio_xml(
-    xml_text,
-    *,
-    mode="preserve",
-    spec=None,
-    reparent=True,
-    route_edges=True,
-    normalize_styles=False,
-    grid_size=10,
-) -> str:
-    """Auto-align, resize containers, and orthogonally route an existing `drawio.xml` document.
+GUARDED = ("overlaps", "out_of_bounds", "edge_collisions")
 
-    - `mode="preserve"` (default): preserves existing cell IDs, labels, and custom attributes while fixing
-      containment, grid alignment, cross-AZ subnet tier heights, container bounds, and orthogonal edge routes.
-    - `mode="rebuild"`: imports the XML into a Diagram Bot `Snapshot` and renders it through `generate_document`.
-    """
+
+def align_report(xml_text, *, mode="preserve", spec=None, reparent=True, route_edges=True, normalize_styles=False, grid_size=10):
+    """`align_drawio_xml` with what happened to each page: {"xml", "pages": [{name, status, before, after, kept_wrappers}]}.
+
+    Status per page: "clean" (no issues: geometry untouched), "aligned", or "reverted" when the aligned page had more
+    overlaps, out-of-bounds cells or edge-icon collisions than the input (the input geometry is kept). A spec is applied
+    to every page either way; kept_wrappers counts wrappers not downgraded to <mxCell> because they carry attributes."""
     if mode == "rebuild":
         read_document(xml_text)
         snapshot = import_drawio_xml(xml_text)
@@ -932,31 +937,50 @@ def align_drawio_xml(
         vpcs = [n["resource_id"] for n in snapshot["graph"]["nodes"] if n["kind"] == "vpc"]
         view = "detail" if len(vpcs) == 1 else "overview"
         vpc_id = vpcs[0] if len(vpcs) == 1 else None
-        return generate_document(snapshot, vpc_id=vpc_id, view=view, spec=target_spec)
+        return {"xml": generate_document(snapshot, vpc_id=vpc_id, view=view, spec=target_spec), "pages": [{"status": "rebuilt"}]}
     if mode != "preserve":
         raise InputError(f"알 수 없는 정렬 모드입니다: {mode} ('preserve' 또는 'rebuild')")
 
     root = read_document(xml_text)
-    cfg = resolve_spec(spec) if spec is not None else None
+    cfg = resolve_spec(spec) if spec is not None or normalize_styles else None
     if cfg is not None and root.tag == "mxfile":
         root.set("host", cfg.host)
-
-    models = root.findall("diagram/mxGraphModel") if root.tag == "mxfile" else [root]
-    for model in models:
+    models = [(d.get("name") or d.get("id") or f"page-{i + 1}", d.find("mxGraphModel")) for i, d in enumerate(root.findall("diagram"))
+              if d.find("mxGraphModel/root") is not None] if root.tag == "mxfile" else [("", root)]
+    report = []
+    for name, model in models:
+        graph_root = model.find("root")
+        before = _counts(_inspect_page(graph_root))
+        entry = {"name": name, "status": "clean", "before": before, "after": before}
+        if any(before.values()):
+            original = copy.deepcopy(graph_root)
+            _align_page_in_place(graph_root, reparent=reparent, route_edges=route_edges,
+                                 grid_size=cfg.grid_size if cfg is not None else grid_size)
+            after = _counts(_inspect_page(graph_root))
+            if any(after[key] > before[key] for key in GUARDED):
+                graph_root[:] = list(original)
+                entry["status"] = "reverted"
+            else:
+                entry.update(status="aligned", after=after)
         if cfg is not None:
             model.set("background", cfg.background)
             model.set("gridSize", str(cfg.grid_size))
-        graph_root = model.find("root")
-        if graph_root is not None:
-            _align_page_in_place(
-                graph_root,
-                spec=cfg,
-                reparent=reparent,
-                route_edges=route_edges,
-                normalize_styles=normalize_styles,
-                grid_size=cfg.grid_size if cfg is not None else grid_size,
-            )
-    return tostring(root, encoding="unicode")
+            entry["kept_wrappers"] = _apply_spec_to_page(graph_root, *_parse_page_model(graph_root), cfg)
+        report.append(entry)
+    return {"xml": tostring(root, encoding="unicode"), "pages": report}
+
+
+def align_drawio_xml(xml_text, *, mode="preserve", spec=None, reparent=True, route_edges=True, normalize_styles=False,
+                     grid_size=10) -> str:
+    """Auto-align, resize containers, and orthogonally route an existing `drawio.xml` document; every page.
+
+    - `mode="preserve"` (default): keeps cell IDs, labels and custom attributes while fixing containment, grid alignment,
+      cross-AZ subnet tier heights, container bounds and orthogonal edge routes. A page without issues is left as it is,
+      and a page the aligner would make worse is returned unchanged (`align_report` says which).
+    - `mode="rebuild"`: imports the XML into a Diagram Bot `Snapshot` and renders it through `generate_document`.
+    """
+    return align_report(xml_text, mode=mode, spec=spec, reparent=reparent, route_edges=route_edges,
+                        normalize_styles=normalize_styles, grid_size=grid_size)["xml"]
 
 
 def import_drawio_xml(xml_text, *, title=None, region="ap-northeast-2", account="000000000000") -> dict:

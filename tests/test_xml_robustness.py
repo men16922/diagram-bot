@@ -363,3 +363,51 @@ def test_align_and_inspect_do_linear_work(monkeypatch):
         calls.clear()
         api.inspect_xml(api.align_xml(mx(cells)))
         assert len(calls) < 200 * n, (n, len(calls))  # the pairwise scan made ~20,000 checks per shape at n=1,600
+
+
+# --- f. align never returns something worse than its input; preserve keeps custom attributes -------------------------
+
+@pytest.mark.parametrize("name", sorted(api.SAMPLES))
+def test_align_on_own_output_is_a_no_op_or_an_improvement(name):
+    xml = api.render(api.SAMPLES[name]())
+    result = api.align_report(xml)
+    for page in result["pages"]:
+        assert all(page["after"][key] <= page["before"][key] for key in page["before"]), page
+    if all(page["status"] == "clean" for page in result["pages"]):
+        assert result["xml"] == xml
+    assert api.align_xml(result["xml"]) == api.align_xml(api.align_xml(result["xml"]))
+
+
+def test_align_reverts_a_page_it_would_make_worse(monkeypatch):
+    from diagram_bot import xml_align
+    xml = MESSY_COMPANY_XML
+
+    def stack_everything(graph_root, **_):
+        for el in graph_root.iter("mxGeometry"):
+            if el.get("width"):
+                el.set("x", "0")
+                el.set("y", "0")
+    monkeypatch.setattr(xml_align, "_align_page_in_place", stack_everything)
+    result = api.align_report(xml)
+    assert result["pages"][0]["status"] == "reverted"
+    assert result["pages"][0]["after"] == result["pages"][0]["before"]
+    assert api.inspect_xml(result["xml"])["overlaps"] == api.inspect_xml(xml)["overlaps"]
+
+
+def test_preserve_keeps_custom_attributes_when_rewrapping():
+    user_object = ('<UserObject id="u1" label="web-1 %name%" placeholders="1" tooltip="owner: team-a" link="https://wiki/x">'
+                   f'<mxCell style="{EC2}" vertex="1" parent="1"><mxGeometry x="10" y="10" width="52" height="52" as="geometry"/>'
+                   '</mxCell></UserObject>')
+    bare = '<mxCell id="b1" value="plain" style="rounded=1;" vertex="1" parent="1"><mxGeometry x="200" y="10" width="80" height="40" as="geometry"/></mxCell>'
+    tagged = ('<mxCell id="t1" value="tagged" owner="ops" style="rounded=1;" vertex="1" parent="1">'
+              '<mxGeometry x="400" y="10" width="80" height="40" as="geometry"/></mxCell>')
+    xml = mx([user_object, bare, tagged])
+    result = api.align_report(xml, spec="mxcell")
+    root = fromstring(result["xml"])
+    kept = root.find(".//UserObject[@id='u1']")
+    assert kept is not None and kept.get("tooltip") == "owner: team-a" and kept.get("link") == "https://wiki/x"
+    assert root.find(".//mxCell[@id='b1']") is not None and result["pages"][0]["kept_wrappers"] == 1
+    wrapped = fromstring(api.align_xml(xml, spec="default"))
+    assert wrapped.find(".//object[@id='t1']").get("owner") == "ops"
+    assert wrapped.find(".//object[@id='t1']/mxCell").get("owner") is None
+    assert wrapped.find(".//object[@id='u1']").get("placeholders") == "1"

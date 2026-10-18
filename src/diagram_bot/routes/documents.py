@@ -9,7 +9,7 @@ from ..drawio_spec import get_default_spec, request_spec
 from ..validation import REGION
 from ..views import view_graph
 from . import role
-from ..xml_align import adopt_company_xml, align_drawio_xml, import_drawio_xml, inspect_drawio_xml
+from ..xml_align import adopt_company_xml, align_report, import_drawio_xml, inspect_drawio_xml
 
 
 class DocumentRequest(BaseModel):
@@ -122,10 +122,9 @@ def router(context):
     def align_xml_endpoint(payload: XmlAlignRequest):
         """Auto-align, resize containers, and orthogonally route an arbitrary draw.io XML document (InputError: 422)."""
         before = inspect_drawio_xml(payload.xml)
-        aligned = align_drawio_xml(payload.xml, mode=payload.mode, spec=request_spec(payload.spec), reparent=payload.reparent,
-                                   route_edges=payload.route_edges, normalize_styles=payload.normalize_styles)
-        after = inspect_drawio_xml(aligned)
-        return {"xml": aligned, "before": before, "after": after}
+        result = align_report(payload.xml, mode=payload.mode, spec=request_spec(payload.spec), reparent=payload.reparent,
+                              route_edges=payload.route_edges, normalize_styles=payload.normalize_styles)
+        return {"xml": result["xml"], "before": before, "after": inspect_drawio_xml(result["xml"]), "pages": result["pages"]}
 
     @api.post("/api/xml/import")
     def import_xml_endpoint(payload: XmlImportRequest):

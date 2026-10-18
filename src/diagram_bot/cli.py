@@ -308,7 +308,7 @@ def export_cfn(parser, args):
 
 def run_align_xml(args):
     from .drawio_spec import resolve_spec, spec_from_xml
-    from .xml_align import align_drawio_xml, inspect_drawio_xml
+    from .xml_align import align_report, inspect_drawio_xml
     xml_text = Path(args.input).read_text(encoding="utf-8")
     spec = None
     if args.spec_from:
@@ -316,15 +316,22 @@ def run_align_xml(args):
     elif args.spec:
         spec = resolve_spec(args.spec)
     before = inspect_drawio_xml(xml_text)
-    aligned = align_drawio_xml(xml_text, mode=args.mode, spec=spec, normalize_styles=args.normalize_styles or spec is not None)
+    result = align_report(xml_text, mode=args.mode, spec=spec, normalize_styles=args.normalize_styles or spec is not None)
+    aligned = result["xml"]
     after = inspect_drawio_xml(aligned)
+    for page in result["pages"]:
+        if page["status"] == "reverted":
+            print(f"페이지 {page['name']}: 정렬하면 겹침·범위 이탈·선 충돌이 늘어 원래 배치를 유지했습니다.", file=sys.stderr)
+        if page.get("kept_wrappers"):
+            print(f"페이지 {page['name']}: 사용자 속성이 있는 래퍼 {page['kept_wrappers']}개는 <mxCell>로 바꾸지 않았습니다.", file=sys.stderr)
     if args.output:
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(aligned, encoding="utf-8")
         print(f"정렬된 draw.io XML: {out_path.resolve()} · 겹침 {len(before['overlaps'])}→{len(after['overlaps'])} · "
               f"범위 이탈 {len(before['out_of_bounds'])}→{len(after['out_of_bounds'])} · "
-              f"미배선 {len(before['unrouted_edges'])}→{len(after['unrouted_edges'])}", file=sys.stderr)
+              f"미배선 {len(before['unrouted_edges'])}→{len(after['unrouted_edges'])} · "
+              f"선 충돌 {len(before['edge_collisions'])}→{len(after['edge_collisions'])}", file=sys.stderr)
     else:
         sys.stdout.write(aligned)
     return 0
