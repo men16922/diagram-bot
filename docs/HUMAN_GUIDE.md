@@ -63,15 +63,15 @@
 
 ## 2. 원하는 만큼만 가져가는 5단계 모듈 지도 (Level 0 ~ Level 4)
 
-내일 회사에서 이 저장소를 다운로드한 뒤, **원하는 단계(Level) 하나만 골라** 코딩 에이전트에게 지시하면 됩니다. `drawio_spec.py`(규격·분류·입력 관문)는 `defusedxml`만 필요합니다. `xml_align.py`와 Level 1 엔진은 `samples` → `collector`를 거쳐 import 시점에 `boto3`도 불러오므로(AWS 호출은 하지 않음) 두 패키지를 함께 설치합니다. 정확한 파일 목록은 [porting-guide](wiki/porting-guide.md)의 Level 표가 기준입니다.
+**원하는 단계(Level) 하나만 골라** 코딩 에이전트에게 지시합니다. 단계별 복사 파일·필요 패키지·진입점: [porting-guide](wiki/porting-guide.md) 2·3절.
 
-| 단계 | 무엇을 가져가나? | 어떤 상황에 추천하나? | 외부 패키지 |
-| --- | --- | --- | --- |
-| **Level 0** | **기존 `drawio.xml` 진단·정렬기 + 회사 템플릿 표준화(`adopt_xml`, `DrawioSpec`)** (파일 목록: [porting-guide](wiki/porting-guide.md) Level 0) | 회사 표준 `drawio.xml` 파일 기준으로 포맷을 통일하고, **깨지는 정렬·컨테이너 크기·화살표 배선을 고치고 싶을 때** | `defusedxml`, `boto3`(import만) |
-| **Level 1** | **다이어그램·설계(`Design`)·검토(`review`)·CloudFormation(`iac`) 코어 엔진** | XML 직접 조작 대신 `d.apply_standard("company-std")`, `d.add_load_balancer(...)`, `d.add_cache(...)` 같은 **의도 단위 코드로 아키텍처를 조립**하고, 보안 점검과 CFN 내보내기까지 쓰고 싶을 때 | `defusedxml`, `boto3`(import만) |
-| **Level 2** | **실제 AWS 계정 읽기 전용 수집 + 브라우저 Egress (`BrowserRelay`)** | 사내 방화벽·IP 제한(`aws:SourceIp`) 환경에서 **서버가 서명하고 사용자 브라우저가 AWS API를 호출**해 실제 계정을 구성도로 그리고 싶을 때 | `defusedxml`, `boto3` |
-| **Level 3** | **FastAPI 백엔드 라우터 + 리비전 저장소** (`/api/snapshots`, `/api/xml/adopt`, `/api/xml/align`, `/api/xml/import` 등) | 회사의 기존 FastAPI 서버에 `/diagram/*` API 엔드포인트들을 통째로 마운트하고 싶을 때 | + `fastapi`, `pydantic` |
-| **Level 4** | **AI 채팅 설계 에이전트 + React 프런트엔드 브리지** | **GPT-6 Luna나 Claude 5.5 Haiku 같은 하위/경량 모델**로도 환각 없이 표준 아키텍처 설계·브라운필드 수정이 되는 AI 어시스턴트를 붙이고 싶을 때 | + `strands-agents` |
+| 단계 | 무엇을 가져가나? | 어떤 상황에 추천하나? |
+| --- | --- | --- |
+| **Level 0** | **기존 `drawio.xml` 진단·정렬기 + 회사 템플릿 표준화(`adopt_xml`, `DrawioSpec`)** | 회사 표준 `drawio.xml` 파일 기준으로 포맷을 통일하고, **깨지는 정렬·컨테이너 크기·화살표 배선을 고치고 싶을 때** |
+| **Level 1** | **다이어그램·설계(`Design`)·검토(`review`)·CloudFormation(`iac`) 코어 엔진** | XML 직접 조작 대신 `d.apply_standard("company-std")`, `d.add_load_balancer(...)`, `d.add_cache(...)` 같은 **의도 단위 코드로 아키텍처를 조립**하고, 보안 점검과 CFN 내보내기까지 쓰고 싶을 때 |
+| **Level 2** | **실제 AWS 계정 읽기 전용 수집 + 브라우저 Egress (`BrowserRelay`)** | 사내 방화벽·IP 제한(`aws:SourceIp`) 환경에서 **서버가 서명하고 사용자 브라우저가 AWS API를 호출**해 실제 계정을 구성도로 그리고 싶을 때 |
+| **Level 3** | **FastAPI 백엔드 라우터 + 리비전 저장소** (`/api/snapshots`, `/api/xml/adopt`, `/api/xml/align`, `/api/xml/import` 등) | 회사의 기존 FastAPI 서버에 `/diagram/*` API 엔드포인트들을 통째로 마운트하고 싶을 때 |
+| **Level 4** | **AI 채팅 설계 에이전트 + React 프런트엔드 브리지** | **GPT-6 Luna나 Claude 5.5 Haiku 같은 하위/경량 모델**로도 환각 없이 표준 아키텍처 설계·브라운필드 수정이 되는 AI 어시스턴트를 붙이고 싶을 때 |
 
 ---
 
@@ -113,7 +113,7 @@
 diagram-bot의 AWS 수집·브라우저 Egress·다이어그램 편집기 기능을 우리 회사 FastAPI + React(Vite) 프로젝트에 포팅해줘.
 1. diagram-bot/llms.txt 를 먼저 보고, docs/wiki/porting-guide.md, docs/wiki/browser-egress.md, docs/wiki/http-api.md 만 필요한 순서대로 읽어.
 2. 백엔드에는 Level 3 모듈을 복사하고, `routes.Context`를 생성해 `snapshots`, `documents`, `aws` 라우터를 마운트해줘. 우리 사내 인증 미들웨어가 `request.state.user`를 세팅하도록 연결해.
-3. 프런트엔드(React + Vite)에는 `static/js/http.js`, `relay.js`, `labels.js`, `editor-bridge.js` 4개 파일을 그대로 복사하고, 최상단 컴포넌트 마운트 시 `startRelay(api)`가 돌도록 훅을 추가해줘.
+3. 프런트엔드(React + Vite)에는 `static/js/http.js`·`relay.js`·`labels.js`와 `static/editor-bridge.js` 4개 파일을 그대로 복사하고, 최상단 컴포넌트 마운트 시 `startRelay(api)`가 돌도록 훅을 추가해줘.
 4. pytest 로 `test_api.py`, `test_xml_align.py`, `test_egress.py` 가 통과하는지 확인해줘.
 ```
 
@@ -131,12 +131,12 @@ diagram-bot의 AI 아키텍처 설계 에이전트(agent.py, designer.py)를 우
 
 1. **토큰 최적화 2계층 지식 구조 (`llms.txt` + `docs/wiki/*.md`)**:
    - 코딩 에이전트가 수만 줄의 코드를 처음부터 다 읽으면 컨텍스트가 넘치고 길을 잃습니다.
-   - 이 저장소는 루트의 [`llms.txt`](../llms.txt)(약 70줄)가 **전체 지도 역할**을 하고, 각 위키 페이지 상단에 `sources: [정확한 코드 경로]`와 입출력 계약이 적혀 있어 에이전트가 **딱 필요한 문서 1~2개와 대상 코드 파일만 열어 작업**합니다.
+   - 이 저장소는 루트의 [`llms.txt`](../llms.txt)(약 60줄)가 **전체 지도 역할**을 하고, 각 위키 페이지 상단에 `sources: [정확한 코드 경로]`와 입출력 계약이 적혀 있어 에이전트가 **딱 필요한 문서 1~2개와 대상 코드 파일만 열어 작업**합니다.
 2. **단일 진입점 퍼사드 ([`src/diagram_bot/api.py`](../src/diagram_bot/api.py))**:
    - 내부 모듈이 어떻게 나뉘어 있든 외부에서는 `from diagram_bot import api` 하나로 생성·정렬·변환·검토·비교·CFN 내보내기를 모두 호출할 수 있습니다.
 3. **좌표/XML과 비즈니스 로직의 완전한 분리**:
    - 에이전트(또는 하위 LLM)는 `x, y, width, height`를 계산할 필요가 전혀 없습니다.
-   - 기존 XML은 `api.align_xml(xml)`이 알아서 정렬하고, 새 설계는 `Design.add_*` 메서드가 알아서 모범사례(Multi-AZ, 서브넷 분리, 보안 그룹 최소 권한)를 채운 뒤 `layout.py`가 결정적 좌표를 계산합니다.
+   - 기존 XML은 `api.align_xml(xml)`이 알아서 정렬하고, 새 설계는 `Design.add_*` 메서드가 알아서 모범사례(Multi-AZ, 서브넷 분리, 보안 그룹 최소 권한)를 채운 뒤 `layout/` 패키지가 결정적 좌표를 계산합니다.
 
 ---
 
@@ -154,13 +154,13 @@ diagram-bot의 AI 아키텍처 설계 에이전트(agent.py, designer.py)를 우
 ### Phase 2. 사내 플랫폼 결합 (1~2주): 인증·영구 저장소·웹 편집기 내재화
 - **목표**: 여러 명의 사내 아키텍트·엔지니어가 동시에 접속해 실제 AWS 계정을 수집하고 다이어그램을 편집·공유하는 웹 서비스화.
 - **실행**:
-  1. **사내 SSO + 브라우저 Egress 연결** ([[aws-access-and-sso]], [[browser-egress]]): 사내 방화벽 뒤의 백엔드 서버는 boto3로 요청을 SigV4 서명만 하고, 사용자 PC 브라우저(`relay.js`)가 사내 공인 IP로 AWS API를 호출해 응답을 중계.
-  2. **DB / S3 저장소 교체** ([[storage]]): 로컬 디스크에 저장하는 `SnapshotStore`·`DocumentStore`의 5~6개 메서드(`save`, `get`, `list`, `replace`, `history`, `restore`)만 사내 PostgreSQL/DynamoDB + S3 버킷을 바라보도록 교체 (리비전 낙관적 락 `409 Conflict`와 `carry_annotations` 주석 보존 로직은 그대로 유지).
-  3. **오프라인 draw.io 사내 호스팅** ([[layout-and-drawio]]): `diagram-bot setup-editor`가 검증한 draw.io `32.4.1` 정적 에셋과 `editor-bridge.js`를 사내 CDN/Nginx에 올려 외부 인터넷 연결 없이 편집·고해상도 PNG(1×/2×/3×) 내보내기 제공.
+  1. **사내 SSO + 브라우저 Egress 연결** ([aws-access-and-sso](wiki/aws-access-and-sso.md), [browser-egress](wiki/browser-egress.md)): 사내 방화벽 뒤의 백엔드 서버는 boto3로 요청을 SigV4 서명만 하고, 사용자 PC 브라우저(`relay.js`)가 사내 공인 IP로 AWS API를 호출해 응답을 중계.
+  2. **DB / S3 저장소 교체** ([storage](wiki/storage.md) "DB·S3로 바꿀 때"): 로컬 디스크의 `SnapshotStore`·`DocumentStore`·`StandardStore`를 같은 메서드의 사내 PostgreSQL/DynamoDB + S3 구현으로 교체 (리비전 낙관적 락 `409 Conflict`와 `carry_annotations` 주석 보존은 유지).
+  3. **오프라인 draw.io 사내 호스팅** ([layout-and-drawio](wiki/layout-and-drawio.md)): `diagram-bot setup-editor`가 검증한 draw.io `32.4.1` 정적 에셋과 `editor-bridge.js`를 사내 CDN/Nginx에 올려 외부 인터넷 연결 없이 편집·고해상도 PNG(1×/2×/3×) 내보내기 제공.
 
 ### Phase 3. 엔터프라이즈 지능화 (2~4주): 사내 표준 카탈로그 & CI/CD 아키텍처 게이트
 - **목표**: 단순 그리기를 넘어 **설계 자동화 → 사내 보안 규정 검증 → IaC 코드 생성 → 운영 드리프트 감시**의 전체 수명주기 완성.
 - **실행**:
   1. **사내 표준 아키텍처 카탈로그화**: 사내 표준 `drawio.xml`들을 웹 앱 `도구 › draw.io XML`(관리자 채택은 서버에 저장)이나 `api.import_xml`로 불러오거나 `samples/` 패키지에 사내 표준 패턴(예: 사내 금융망 3-Tier, 사내 프라이빗 EKS 표준 등)으로 등록해 AI 채팅에서 `"사내 금융망 표준 불러와서 Redis 추가해줘"` 한 줄로 즉시 설계.
-  2. **사내 보안·컴플라이언스 규칙 추가** ([[howto-add-review-rule]]): `findings.py`의 47개 AWS Well-Architected 규칙 위에 사내 전용 규칙(예: 필수 비용 태그 누락, 사내 보안 프록시 미경유, 금지된 인스턴스 패밀리 등)을 추가해 다이어그램 화면에서 즉시 빨간색/주황색 배지로 시각화.
-  3. **배포 파이프라인(CI/CD) 아키텍처 게이트** ([[cli]]): 인프라 변경 전후에 `diagram-bot review --fail-on high`(종료 코드 3)와 `diagram-bot diff --fail-on-change`(종료 코드 4)를 실행해 단일 장애점(SPOF)이나 보안 위반이 생겼을 때 PR 단계에서 자동 알림·차단.
+  2. **사내 보안·컴플라이언스 규칙 추가** ([howto-add-review-rule](wiki/howto-add-review-rule.md)): `findings.py`의 47개 AWS Well-Architected 규칙 위에 사내 전용 규칙(예: 필수 비용 태그 누락, 사내 보안 프록시 미경유, 금지된 인스턴스 패밀리 등)을 추가해 다이어그램 화면에서 즉시 빨간색/주황색 배지로 시각화.
+  3. **배포 파이프라인(CI/CD) 아키텍처 게이트** ([cli](wiki/cli.md)): 인프라 변경 전후에 `diagram-bot review --fail-on high`(종료 코드 3)와 `diagram-bot diff --fail-on-change`(종료 코드 4)를 실행해 단일 장애점(SPOF)이나 보안 위반이 생겼을 때 PR 단계에서 자동 알림·차단.
