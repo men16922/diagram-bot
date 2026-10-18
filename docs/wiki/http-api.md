@@ -115,7 +115,7 @@ XML 입력은 모두 `drawio_spec.read_document`를 지난다(크기, defusedxml
 | `GET /api/sso/login/{id}/roles` | `account_id` 쿼리 | `{"roles": [...]}`. `SsoError` 409, AWS 오류 502 |
 | `POST /api/sso/login/{id}/use` | `SsoUseRequest{account_id: 12자리, role}` | `{account, role}`. 그 사용자의 채팅 대화를 버린다. 미승인 422 |
 | `POST /api/sso/login/{id}/logout` | — | `{"logged_out": ...}` |
-| `GET /api/relay/next` | — | `{"requests": [{id, url, method, headers, body}]}` (롱 폴링, 기본 20초) |
+| `GET /api/relay/next` | `tab` 쿼리(`^[\w-]*$`, ≤64) | `{"requests": [{id, url, method, headers, body}]}` (비동기 롱 폴링, 기본 20초; 열린 폴이 탭의 심장 박동) |
 | `POST /api/relay/{id}` | `RelayAnswer{status: 0–599, headers, body: ≤12 MiB base64?, error: ≤1000자?}` | `{"ok": true}`. 끝났거나 남의 요청이면 404 |
 
 - `CollectionRequest`: `profile`(≤128), `region`(패턴 `^[a-z]{2}(?:-[a-z0-9]+)+-\d+$`), `expected_account`(12자리, 필수), `role_arn`(IAM 역할 ARN 패턴), `external_id`(2–1224자), `sso_login`(`^[\w-]+$`), `sso_role`.

@@ -3,7 +3,7 @@ title: 웹 앱 (프런트엔드)
 summary: 빌드 없는 ES 모듈 프런트엔드(app.html, 진입 app.js, js/ 화면 모듈 10개와 http.js·relay.js·labels.js)의 화면 구조, state 객체와 주요 흐름, draw.io 임베드 메시지 규약, React로 옮길 때 그대로 쓸 모듈과 다시 짤 부분.
 sources: [src/diagram_bot/static/app.html, src/diagram_bot/static/app.js, src/diagram_bot/static/js/state.js, src/diagram_bot/static/js/ui.js, src/diagram_bot/static/js/editor.js, src/diagram_bot/static/js/document.js, src/diagram_bot/static/js/workspace.js, src/diagram_bot/static/js/inspector.js, src/diagram_bot/static/js/review.js, src/diagram_bot/static/js/exports.js, src/diagram_bot/static/js/signin.js, src/diagram_bot/static/js/chat.js, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js, src/diagram_bot/editor.py, src/diagram_bot/server.py]
 related: [http-api, storage, chat-agent, team-mode-security, browser-egress, views, porting-guide]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 웹 앱 (프런트엔드)
 
@@ -57,7 +57,7 @@ updated: 2026-10-18
 - `js/signin.js` — `renderProfile`, 로그인 대화상자(SSO·프로파일), 수집 대화상자.
 - `js/chat.js` — 어시스턴트 패널과 `markdown()`.
 - `js/http.js` — `createClient(getToken, {onUnauthorized})` → `{api, request, streamApi}`. `request(path, options)`는 JSON 헤더와 `X-Diagram-Bot`을 붙이고, 401이면 `onUnauthorized()`(기본 `/login` 이동), 실패면 `errorMessage()`로 만든 `Error`(JSON `detail`, 422 검증 목록은 `필드: 메시지`, JSON이 아닌 응답은 `요청에 실패했습니다 (HTTP 상태)`). `api()`는 `request()` 결과를 JSON으로 읽는다. `streamApi(path, body, onEvent)`는 NDJSON을 줄 단위로 `onEvent`에 넘기고 마지막 줄이 `error`이거나 없으면 throw, 아니면 마지막 이벤트를 돌려준다.
-- `js/relay.js` — `send(request)`(AWS API 주소만 `fetch`, `credentials: 'omit'`, 응답 본문 base64)와 `startRelay(api, {onRequests})`(`/api/relay/next` 롱 폴링 → 요청마다 `POST /api/relay/{id}`, 오류 시 3초 대기). 서버 쪽은 [[browser-egress]].
+- `js/relay.js` — `send(request)`(AWS API 주소만 `fetch`, `credentials: 'omit'`, 응답 본문 base64)와 `startRelay(api, {onRequests})`(탭 id를 붙여 `/api/relay/next?tab=` 롱 폴링 → 요청마다 백그라운드로 보내고 `POST /api/relay/{id}`, 답을 기다리지 않고 곧바로 다시 폴링(열린 폴이 심장 박동), 오류 시 3초 대기). 서버 쪽은 [[browser-egress]].
 - `js/labels.js` — 순수 데이터: `names`(노드 종류), `relationNames`, `routeClasses`, `statuses`(수집 상태), `viewNames`, `severityNames`, `pillarNames`. `viewer.html`(CLI 보고서)의 종류 이름은 이 목록을 모두 덮어야 한다(`tests/test_frontend.py`).
 
 ## draw.io 임베드 규약

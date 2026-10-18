@@ -7,10 +7,9 @@ server's SDK chain (profile, environment, .env). Path: the server itself, or wit
 """
 import threading
 
-import boto3
-
 from .egress import BrowserRelay
-from .sso import SsoError, SsoLogins, discover_start_url, refreshing_session
+from .sessions import refreshing_session, sdk_session
+from .sso import SsoError, SsoLogins, discover_start_url
 
 
 class AwsAccess:
@@ -29,6 +28,10 @@ class AwsAccess:
     def outbound(self, session, user):
         """With browser egress the session's requests leave from `user`'s browser; otherwise unchanged."""
         return self.relay.attach(session, user) if self.relay else session
+
+    def profile_session(self, user, profile=None, region=None):
+        """The server's SDK chain (a named profile, else the default chain) on the user's network path."""
+        return self.outbound(sdk_session(region, profile), user)
 
     def prepare_for(self, user):
         """For collect(prepare=...): every session of a collection, incl. an assumed role's, takes the same path."""
@@ -50,15 +53,16 @@ class AwsAccess:
     def session(self, user, region):
         """The user's session for read-only calls: their Identity Center role if they chose one, else the SDK chain."""
         choice = self.choices.get(user)
-        session = self.sso.session(choice[0], user, choice[1], choice[2], region) if choice else boto3.Session(region_name=region)
-        return self.outbound(session, user)
+        if not choice:
+            return self.profile_session(user, region=region)
+        return self.outbound(self.sso.session(choice[0], user, choice[1], choice[2], region), user)
 
     def model_session(self, user, region):
         """The user's session for a long-lived client (the chat's Bedrock model). With an Identity Center role the
         credentials are fetched on first use and again before they expire, for the role the user has chosen by then,
         so a chat outlives the role session and picks up a new sign-in; building it makes no AWS call."""
         if user not in self.choices:
-            return self.outbound(boto3.Session(region_name=region), user)
+            return self.profile_session(user, region=region)
 
         def fetch():
             choice = self.choices.get(user)

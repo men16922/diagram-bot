@@ -14,12 +14,15 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .expiry import Purge
 from .fileio import atomic_write
 
 ROLES = ("viewer", "editor", "admin")
 ITERATIONS = 600_000
 SESSION_SECONDS = 8 * 3600
-FAILURE_WINDOW, FAILURE_LIMIT = 15 * 60, 5
+# Failed logins in the window: per (client, name), and looser per client. Behind an authenticating proxy every user
+# shares one client address, so the per-client cap only stops guessing across many names.
+FAILURE_WINDOW, FAILURE_LIMIT, CLIENT_FAILURE_LIMIT = 15 * 60, 5, 50
 
 
 def hash_password(password, salt=None, iterations=ITERATIONS):
@@ -79,44 +82,55 @@ def remove_user(path, name):
 class Authenticator:
     """Users, sessions and login throttling for one server process."""
 
-    def __init__(self, users):
-        self.users = users
+    def __init__(self, users, clock=time.monotonic):
+        self.users, self.clock = users, clock
         self.sessions = {}
-        self.failures = {}
+        self.failures = {}  # client or (client, name) -> failure times
         self.lock = threading.Lock()
+        self.purge_sessions = Purge(lambda entry, now: entry["expires"] <= now)
+        self.purge_failures = Purge(lambda times, now: now - max(times) >= FAILURE_WINDOW)
         # Unknown names still cost one hash, so response time does not reveal which names exist.
         self.dummy = hash_password(secrets.token_urlsafe(16))
 
-    def throttled(self, client):
-        now = time.monotonic()
+    def recent_failures(self, key, now):
+        recent = [t for t in self.failures.get(key, []) if now - t < FAILURE_WINDOW]
+        if recent:
+            self.failures[key] = recent
+        else:
+            self.failures.pop(key, None)
+        return len(recent)
+
+    def throttled(self, client, name):
+        now = self.clock()
         with self.lock:
-            recent = [t for t in self.failures.get(client, []) if now - t < FAILURE_WINDOW]
-            self.failures[client] = recent
-            return len(recent) >= FAILURE_LIMIT
+            self.purge_failures(self.failures, now)
+            return (self.recent_failures((client, name), now) >= FAILURE_LIMIT
+                    or self.recent_failures(client, now) >= CLIENT_FAILURE_LIMIT)
 
     def login(self, name, password, client):
         user = self.users.get(name)
         ok = verify_password(password, user["password_hash"] if user else self.dummy) and user is not None
         with self.lock:
             if not ok:
-                self.failures.setdefault(client, []).append(time.monotonic())
+                for key in ((client, name), client):
+                    self.failures.setdefault(key, []).append(self.clock())
                 return None
-            self.failures.pop(client, None)
-            token = secrets.token_urlsafe(32)
-            self.sessions[token] = {"name": name, "role": user["role"], "expires": time.monotonic() + SESSION_SECONDS}
-            return token
+            self.failures.pop((client, name), None)
+        return self.start_session(name, user["role"])
 
     def start_session(self, name, role):
         """Session for an identity verified elsewhere (OpenID Connect)."""
         token = secrets.token_urlsafe(32)
         with self.lock:
-            self.sessions[token] = {"name": name, "role": role, "expires": time.monotonic() + SESSION_SECONDS}
+            self.sessions[token] = {"name": name, "role": role, "expires": self.clock() + SESSION_SECONDS}
         return token
 
     def session(self, token):
+        now = self.clock()
         with self.lock:
+            self.purge_sessions(self.sessions, now)
             entry = self.sessions.get(token or "")
-            if entry and entry["expires"] > time.monotonic():
+            if entry and entry["expires"] > now:
                 return entry
             self.sessions.pop(token or "", None)
             return None

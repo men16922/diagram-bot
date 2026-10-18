@@ -9,12 +9,11 @@ import json
 import os
 import threading
 
-import boto3
-
 from .collector import collect
 from .designer import STANDARDS, Design
 from .findings import review, summary
 from .graph import build_graph
+from .sessions import sdk_session
 
 MODELS = {
     "nova-2-lite": ("Amazon Nova 2 Lite", "us.amazon.nova-2-lite-v1:0"),
@@ -63,7 +62,7 @@ class Workspace:
         self.model_session = None  # browser egress: () -> the user's boto3 session for Bedrock (see routes.agent.default_chat)
         # Expected account for collections: AWS_ACCOUNT_ID (e.g. from --env-file) guards against the wrong account.
         self.default_account = default_account or (lambda: os.environ.get("AWS_ACCOUNT_ID"))
-        self.session_factory = session_factory or (lambda region: boto3.Session(region_name=region))
+        self.session_factory = session_factory or sdk_session
         self.region = region or os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
         self.design = Design(region=self.region)
         self.collected = self.collected_id = None
@@ -370,7 +369,7 @@ def bedrock_model(key, session=None, record=None, streaming=True):
             async for event in super().stream(*args, **kwargs):
                 yield event
 
-    return Recorded(model_id=MODELS[key][1], boto_session=session or boto3.Session(region_name="us-east-1"),
+    return Recorded(model_id=MODELS[key][1], boto_session=session or sdk_session("us-east-1"),
                     temperature=0.2, max_tokens=4096, streaming=streaming)
 
 

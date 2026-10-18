@@ -1,10 +1,11 @@
+import json
 from contextlib import ExitStack
 
 import boto3
 import pytest
 from botocore.stub import Stubber
 
-from diagram_bot.collector import OPERATIONS, collect, query
+from diagram_bot.collector import DETAILS, OPERATIONS, collect, opensearch, query, transit_routes
 
 
 def client(service):
@@ -300,9 +301,33 @@ def test_target_health_error_is_scoped_to_group():
         assert coverage["parameters"]["TargetGroupArn"] == arn
 
 
+def stub_call(answers):
+    """A collect() call stand-in: logs each request and answers from {operation: rows}."""
+    def call(log, service, operation, key, params=None, client=None):
+        log.append({"service": service, "operation": operation, "parameters": params, "status": "complete"})
+        return answers.get(operation, [])
+    return call
+
+
+def test_detail_steps_run_on_a_stub_call():
+    empty = {name: [] for *_, name in OPERATIONS}
+    assert all(value == [] for detail in DETAILS for value in detail(empty, stub_call({}), []).values())
+    log = []
+    names = [{"DomainName": f"d{i}"} for i in range(7)]
+    domains = opensearch({**empty, "opensearch_domain_names": names}, stub_call({"describe_domains": [{"DomainName": "d0", "VPCOptions": {"SubnetIds": ["s"]}}]}), log)
+    assert [c["parameters"]["DomainNames"] for c in log[:2]] == [[f"d{i}" for i in range(5)], ["d5", "d6"]]  # five names per call
+    assert [c["operation"] for c in log[2:]] == ["describe_domain_nodes"] * 2 and len(domains["opensearch_domains"]) == 2
+    log = []
+    tables = [{"TransitGatewayRouteTableId": "tgw-rtb-1"}]
+    routes = transit_routes({**empty, "transit_gateway_route_tables": tables},
+                            stub_call({"search_transit_gateway_routes": [{"Routes": [{"State": "active"}], "AdditionalRoutesAvailable": True}]}), log)
+    assert routes["transit_gateway_routes"] == [{"State": "active", "TransitGatewayRouteTableId": "tgw-rtb-1"}]
+    assert log[-1]["status"] == "partial" and log[-1]["items"] == 1 and log[-1]["error_code"] == "AdditionalRoutesAvailable"
+
+
 def test_assume_role_caps_session_to_read_only_and_checks_the_assumed_account(monkeypatch):
     base, assumed = Session(), Session()
-    monkeypatch.setattr("diagram_bot.collector.boto3.Session", lambda **kwargs: assumed)
+    monkeypatch.setattr("diagram_bot.sessions.boto3.Session", lambda **kwargs: assumed)
     role = "arn:aws:iam::444455556666:role/DiagramBotReadOnly"
     with Stubber(base.clients["sts"]) as stub, Stubber(assumed.clients["sts"]) as assumed_stub:
         stub.add_response("assume_role", {"Credentials": {"AccessKeyId": "AKIAEXAMPLE000000000", "SecretAccessKey": "s" * 40,
@@ -369,3 +394,21 @@ def test_cli_combine_writes_one_report_for_several_accounts(monkeypatch, tmp_pat
     report = json.loads((tmp_path / "out" / "snapshot.json").read_text(encoding="utf-8"))
     assert report["metadata"]["combined"] and len(report["parts"]) == 3
     assert "AWS 계정 · 111111111111" in (tmp_path / "out" / "topology.drawio").read_text(encoding="utf-8")
+
+
+def test_every_producer_builds_the_same_envelope_and_files_are_checked_on_load(tmp_path):
+    from diagram_bot.combine import combine_snapshots
+    from diagram_bot.demo import demo_snapshot
+    from diagram_bot.samples import SAMPLES
+    from diagram_bot.snapshot import SCHEMA_VERSION, load_snapshot
+    sample = SAMPLES["three-tier"]()
+    other = {**sample, "metadata": {**sample["metadata"], "account_id": "444455556666"}}
+    for snapshot in (demo_snapshot(), sample, combine_snapshots([sample, other])):
+        assert list(snapshot)[:4] == ["schema_version", "metadata", "coverage", "raw"] and snapshot["schema_version"] == SCHEMA_VERSION
+    path = tmp_path / "snapshot.json"
+    path.write_text(json.dumps(sample), encoding="utf-8")
+    assert load_snapshot(path) == sample
+    for wrong in ({**sample, "schema_version": 2}, [sample]):
+        path.write_text(json.dumps(wrong), encoding="utf-8")
+        with pytest.raises(ValueError, match="schema_version"):
+            load_snapshot(path)

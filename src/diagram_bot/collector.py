@@ -1,12 +1,13 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
-import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from .egress import RelayDisconnected
 from .errors import error_code
+from .sessions import credentials_session, sdk_session
+from .snapshot import make_snapshot
 
 
 def now():
@@ -64,6 +65,17 @@ OPERATIONS = [
     ("directconnect", "describe_virtual_interfaces", "virtualInterfaces", "dx_virtual_interfaces"),
     ("directconnect", "describe_direct_connect_gateways", "directConnectGateways", "dx_gateways"),
 ]
+# Snapshot metadata of a collection: what it covers and what it does not claim.
+SCOPE = ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway",
+         "NatGateway", "RouteTable", "RDS", "Aurora", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment",
+         "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN", "SecurityGroupRules",
+         "PlacementGroup", "FSx", "SageMakerEndpoint", "SageMakerHyperPod", "ElasticIP", "TransitGatewayRouteTable",
+         "CloudFront", "WAF", "DirectConnect"]
+LIMITATIONS = ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
+               "여러 API의 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
+               "ENI·EBS는 EC2 응답의 참조만 표시합니다. 보안 그룹 규칙은 검토 결과와 속성 패널에만 쓰며 구성도에 선으로 그리지 않습니다.",
+               "CloudFront·CloudFront용 WAF·Direct Connect 게이트웨이는 계정 전역 리소스라 어느 리전에서 수집해도 같습니다.",
+               "리스너 규칙·NACL·실제 트래픽은 조회 범위에 포함되지 않습니다."]
 # IAM service prefixes that differ from the boto3 client name.
 IAM_PREFIX = {"elbv2": "elasticloadbalancing", "opensearch": "es", "efs": "elasticfilesystem"}
 # IAM action names whose capitalisation differs from the boto3 operation name.
@@ -141,14 +153,126 @@ def assume(session, role_arn, external_id, region, config):
     if external_id:
         params["ExternalId"] = external_id
     credentials = session.client("sts", region_name=region, config=config).assume_role(**params)["Credentials"]
-    return boto3.Session(aws_access_key_id=credentials["AccessKeyId"], aws_secret_access_key=credentials["SecretAccessKey"],
-                         aws_session_token=credentials["SessionToken"], region_name=region)
+    return credentials_session(credentials, region)
+
+
+def batches(items, size):
+    return [items[i:i + size] for i in range(0, len(items), size)]
+
+
+# Phase 2 details: each reads the phase-1 listings in `raw` and returns the collections it adds, querying through
+# call(log, service, operation, key, params=None, client=None), which logs coverage and returns the rows.
+def target_health(raw, call, log):
+    return {"target_health": [{"TargetGroupArn": g["TargetGroupArn"], "Descriptions": call(
+        log, "elbv2", "describe_target_health", "TargetHealthDescriptions", {"TargetGroupArn": g["TargetGroupArn"]})}
+        for g in raw["target_groups"]]}
+
+
+def eks(raw, call, log):
+    clusters = []
+    for name in raw["eks_cluster_names"]:
+        cluster = call(log, "eks", "describe_cluster", "cluster", {"name": name})
+        groups = call(log, "eks", "list_nodegroups", "nodegroups", {"clusterName": name})
+        if cluster:
+            clusters.append({**cluster[0], "nodegroups": [g for group in groups for g in call(
+                log, "eks", "describe_nodegroup", "nodegroup", {"clusterName": name, "nodegroupName": group})]})
+    return {"eks_clusters": clusters}
+
+
+def msk(raw, call, log):
+    # Which subnet each broker runs in.
+    return {"msk_nodes": [{**node, "ClusterArn": c["ClusterArn"]} for c in raw["msk_clusters"]
+                          if c.get("ClusterType", "PROVISIONED") == "PROVISIONED"
+                          for node in call(log, "kafka", "list_nodes", "NodeInfoList", {"ClusterArn": c["ClusterArn"]})]}
+
+
+def opensearch(raw, call, log):
+    names = [d["DomainName"] for d in raw["opensearch_domain_names"]]
+    domains = [d for batch in batches(names, 5) for d in call(log, "opensearch", "describe_domains", "DomainStatusList", {"DomainNames": batch})]
+    nodes = [{**node, "DomainName": d["DomainName"]} for d in domains if (d.get("VPCOptions") or {}).get("SubnetIds")
+             for node in call(log, "opensearch", "describe_domain_nodes", "DomainNodesStatusList", {"DomainName": d["DomainName"]})]
+    return {"opensearch_domains": domains, "opensearch_nodes": nodes}
+
+
+def ecs(raw, call, log):
+    services, tasks = [], []
+    for cluster in raw["ecs_cluster_arns"]:
+        arns = call(log, "ecs", "list_services", "serviceArns", {"cluster": cluster})
+        services += [s for batch in batches(arns, 10) for s in call(log, "ecs", "describe_services", "services", {"cluster": cluster, "services": batch})]
+        running = call(log, "ecs", "list_tasks", "taskArns", {"cluster": cluster, "desiredStatus": "RUNNING"})
+        tasks += [t for batch in batches(running, 100) for t in call(log, "ecs", "describe_tasks", "tasks", {"cluster": cluster, "tasks": batch})]
+    return {"ecs_services": services, "ecs_tasks": tasks}
+
+
+def efs(raw, call, log):
+    return {"efs_mount_targets": [m for fs in raw["efs_file_systems"]
+                                  for m in call(log, "efs", "describe_mount_targets", "MountTargets", {"FileSystemId": fs["FileSystemId"]})]}
+
+
+def sagemaker(raw, call, log):
+    # An endpoint's instance type comes from its config, its subnets from the models' VpcConfig.
+    endpoints, clusters = [], []
+    for summary in raw["sagemaker_endpoint_names"]:
+        endpoint = call(log, "sagemaker", "describe_endpoint", None, {"EndpointName": summary["EndpointName"]})
+        if not endpoint:
+            continue
+        config = call(log, "sagemaker", "describe_endpoint_config", None, {"EndpointConfigName": endpoint[0]["EndpointConfigName"]})
+        variants = config[0].get("ProductionVariants", []) if config else []
+        models = [m for name in sorted({v["ModelName"] for v in variants if v.get("ModelName")})
+                  for m in call(log, "sagemaker", "describe_model", None, {"ModelName": name})]
+        endpoints.append({**endpoint[0], "EndpointConfig": config[0] if config else {}, "Models": models})
+    for summary in raw["sagemaker_cluster_names"]:
+        clusters += call(log, "sagemaker", "describe_cluster", None, {"ClusterName": summary["ClusterName"]})
+    return {"sagemaker_endpoints": endpoints, "sagemaker_clusters": clusters}
+
+
+def transit_routes(raw, call, log):
+    # Which attachments each Transit Gateway route table is associated with and learns from, and its routes.
+    associations, propagations, routes = [], [], []
+    for table in raw["transit_gateway_route_tables"]:
+        ident = {"TransitGatewayRouteTableId": table["TransitGatewayRouteTableId"]}
+        associations += [{**a, **ident} for a in call(log, "ec2", "get_transit_gateway_route_table_associations", "Associations", dict(ident))]
+        propagations += [{**p, **ident} for p in call(log, "ec2", "get_transit_gateway_route_table_propagations",
+                                                      "TransitGatewayRouteTablePropagations", dict(ident))]
+        # Active and blackhole routes only (pending/deleted ones carry no path); one call returns at most 1,000 routes.
+        found = call(log, "ec2", "search_transit_gateway_routes", None,
+                     {**ident, "Filters": [{"Name": "state", "Values": ["active", "blackhole"]}]})
+        page = found[0] if found else {}
+        routes += [{**r, **ident} for r in page.get("Routes", [])]
+        log[-1]["items"] = len(page.get("Routes", []))
+        if page.get("AdditionalRoutesAvailable"):
+            log[-1].update(status="partial", error_code="AdditionalRoutesAvailable", reason="경로가 1,000개를 넘어 일부만 조회했습니다.")
+    return {"transit_gateway_route_table_associations": associations, "transit_gateway_route_table_propagations": propagations,
+            "transit_gateway_routes": routes}
+
+
+def web_acls(raw, call, log):
+    # Regional web ACLs and the load balancers they protect. CloudFront ACLs come from the global scope; their
+    # distributions name them in ListDistributions.WebACLId.
+    acls = []
+    for acl in call(log, "wafv2", "list_web_acls", "WebACLs", {"Scope": "REGIONAL", "Limit": 100}):
+        arns = call(log, "wafv2", "list_resources_for_web_acl", "ResourceArns",
+                    {"WebACLArn": acl["ARN"], "ResourceType": "APPLICATION_LOAD_BALANCER"})
+        acls.append({**acl, "Scope": "REGIONAL", "ResourceArns": arns})
+    acls += [{**acl, "Scope": "CLOUDFRONT"} for acl in call(log, "wafv2", "list_web_acls", "WebACLs", {"Scope": "CLOUDFRONT", "Limit": 100},
+                                                            client="wafv2/global")]
+    return {"waf_web_acls": acls}
+
+
+def direct_connect(raw, call, log):
+    # The virtual private gateways and Transit Gateways each Direct Connect gateway is associated with.
+    return {"dx_gateway_associations": [a for g in raw["dx_gateways"] for a in call(
+        log, "directconnect", "describe_direct_connect_gateway_associations", "directConnectGatewayAssociations",
+        {"directConnectGatewayId": g["directConnectGatewayId"]})]}
+
+
+DETAILS = (target_health, eks, msk, opensearch, ecs, efs, sagemaker, transit_routes, web_acls, direct_connect)
 
 
 def collect(region, profile=None, expected_account=None, session=None, role_arn=None, external_id=None, workers=8, prepare=None):
     """prepare(session) is applied to every session the collection uses, incl. the assumed role's (browser egress)."""
     prepare = prepare or (lambda s: s)
-    session = prepare(session or boto3.Session(profile_name=profile, region_name=region))
+    session = prepare(session or sdk_session(region, profile))
     # Adaptive retries back off client-side when an account is throttled during large collections.
     config = Config(retries={"mode": "adaptive", "total_max_attempts": 8}, connect_timeout=10, read_timeout=30,
                     max_pool_connections=16)
@@ -192,108 +316,10 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
         log[0]["items"] = len(raw[name])
         coverage += log
 
-    def batches(items, size):
-        return [items[i:i + size] for i in range(0, len(items), size)]
-
     # Phase 2: per-resource detail, again one thread per service.
-    def target_health(log):
-        return {"target_health": [{"TargetGroupArn": g["TargetGroupArn"], "Descriptions": call(
-            log, "elbv2", "describe_target_health", "TargetHealthDescriptions", {"TargetGroupArn": g["TargetGroupArn"]})}
-            for g in raw["target_groups"]]}
-
-    def eks(log):
-        clusters = []
-        for name in raw["eks_cluster_names"]:
-            cluster = call(log, "eks", "describe_cluster", "cluster", {"name": name})
-            groups = call(log, "eks", "list_nodegroups", "nodegroups", {"clusterName": name})
-            if cluster:
-                clusters.append({**cluster[0], "nodegroups": [g for group in groups for g in call(
-                    log, "eks", "describe_nodegroup", "nodegroup", {"clusterName": name, "nodegroupName": group})]})
-        return {"eks_clusters": clusters}
-
-    def msk(log):
-        # Which subnet each broker runs in.
-        return {"msk_nodes": [{**node, "ClusterArn": c["ClusterArn"]} for c in raw["msk_clusters"]
-                              if c.get("ClusterType", "PROVISIONED") == "PROVISIONED"
-                              for node in call(log, "kafka", "list_nodes", "NodeInfoList", {"ClusterArn": c["ClusterArn"]})]}
-
-    def opensearch(log):
-        names = [d["DomainName"] for d in raw["opensearch_domain_names"]]
-        domains = [d for batch in batches(names, 5) for d in call(log, "opensearch", "describe_domains", "DomainStatusList", {"DomainNames": batch})]
-        nodes = [{**node, "DomainName": d["DomainName"]} for d in domains if (d.get("VPCOptions") or {}).get("SubnetIds")
-                 for node in call(log, "opensearch", "describe_domain_nodes", "DomainNodesStatusList", {"DomainName": d["DomainName"]})]
-        return {"opensearch_domains": domains, "opensearch_nodes": nodes}
-
-    def ecs(log):
-        services, tasks = [], []
-        for cluster in raw["ecs_cluster_arns"]:
-            arns = call(log, "ecs", "list_services", "serviceArns", {"cluster": cluster})
-            services += [s for batch in batches(arns, 10) for s in call(log, "ecs", "describe_services", "services", {"cluster": cluster, "services": batch})]
-            running = call(log, "ecs", "list_tasks", "taskArns", {"cluster": cluster, "desiredStatus": "RUNNING"})
-            tasks += [t for batch in batches(running, 100) for t in call(log, "ecs", "describe_tasks", "tasks", {"cluster": cluster, "tasks": batch})]
-        return {"ecs_services": services, "ecs_tasks": tasks}
-
-    def efs(log):
-        return {"efs_mount_targets": [m for fs in raw["efs_file_systems"]
-                                      for m in call(log, "efs", "describe_mount_targets", "MountTargets", {"FileSystemId": fs["FileSystemId"]})]}
-
-    def sagemaker(log):
-        # An endpoint's instance type comes from its config, its subnets from the models' VpcConfig.
-        endpoints, clusters = [], []
-        for summary in raw["sagemaker_endpoint_names"]:
-            endpoint = call(log, "sagemaker", "describe_endpoint", None, {"EndpointName": summary["EndpointName"]})
-            if not endpoint:
-                continue
-            config = call(log, "sagemaker", "describe_endpoint_config", None, {"EndpointConfigName": endpoint[0]["EndpointConfigName"]})
-            variants = config[0].get("ProductionVariants", []) if config else []
-            models = [m for name in sorted({v["ModelName"] for v in variants if v.get("ModelName")})
-                      for m in call(log, "sagemaker", "describe_model", None, {"ModelName": name})]
-            endpoints.append({**endpoint[0], "EndpointConfig": config[0] if config else {}, "Models": models})
-        for summary in raw["sagemaker_cluster_names"]:
-            clusters += call(log, "sagemaker", "describe_cluster", None, {"ClusterName": summary["ClusterName"]})
-        return {"sagemaker_endpoints": endpoints, "sagemaker_clusters": clusters}
-
-    def transit_routes(log):
-        # Which attachments each Transit Gateway route table is associated with and learns from, and its routes.
-        associations, propagations, routes = [], [], []
-        for table in raw["transit_gateway_route_tables"]:
-            ident = {"TransitGatewayRouteTableId": table["TransitGatewayRouteTableId"]}
-            associations += [{**a, **ident} for a in call(log, "ec2", "get_transit_gateway_route_table_associations", "Associations", dict(ident))]
-            propagations += [{**p, **ident} for p in call(log, "ec2", "get_transit_gateway_route_table_propagations",
-                                                          "TransitGatewayRouteTablePropagations", dict(ident))]
-            # Active and blackhole routes only (pending/deleted ones carry no path); one call returns at most 1,000 routes.
-            found = call(log, "ec2", "search_transit_gateway_routes", None,
-                         {**ident, "Filters": [{"Name": "state", "Values": ["active", "blackhole"]}]})
-            page = found[0] if found else {}
-            routes += [{**r, **ident} for r in page.get("Routes", [])]
-            log[-1]["items"] = len(page.get("Routes", []))
-            if page.get("AdditionalRoutesAvailable"):
-                log[-1].update(status="partial", error_code="AdditionalRoutesAvailable", reason="경로가 1,000개를 넘어 일부만 조회했습니다.")
-        return {"transit_gateway_route_table_associations": associations, "transit_gateway_route_table_propagations": propagations,
-                "transit_gateway_routes": routes}
-
-    def web_acls(log):
-        # Regional web ACLs and the load balancers they protect. CloudFront ACLs come from the global scope; their
-        # distributions name them in ListDistributions.WebACLId.
-        acls = []
-        for acl in call(log, "wafv2", "list_web_acls", "WebACLs", {"Scope": "REGIONAL", "Limit": 100}):
-            arns = call(log, "wafv2", "list_resources_for_web_acl", "ResourceArns",
-                        {"WebACLArn": acl["ARN"], "ResourceType": "APPLICATION_LOAD_BALANCER"})
-            acls.append({**acl, "Scope": "REGIONAL", "ResourceArns": arns})
-        acls += [{**acl, "Scope": "CLOUDFRONT"} for acl in call(log, "wafv2", "list_web_acls", "WebACLs", {"Scope": "CLOUDFRONT", "Limit": 100},
-                                                                client="wafv2/global")]
-        return {"waf_web_acls": acls}
-
-    def direct_connect(log):
-        # The virtual private gateways and Transit Gateways each Direct Connect gateway is associated with.
-        return {"dx_gateway_associations": [a for g in raw["dx_gateways"] for a in call(
-            log, "directconnect", "describe_direct_connect_gateway_associations", "directConnectGatewayAssociations",
-            {"directConnectGatewayId": g["directConnectGatewayId"]})]}
-
-    details = (target_health, eks, msk, opensearch, ecs, efs, sagemaker, transit_routes, web_acls, direct_connect)
-    detail_logs = [[] for _ in details]
+    detail_logs = [[] for _ in DETAILS]
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        updates = list(pool.map(lambda pair: pair[0](pair[1]), zip(details, detail_logs)))
+        updates = list(pool.map(lambda pair: pair[0](raw, call, pair[1]), zip(DETAILS, detail_logs)))
     for update, log in zip(updates, detail_logs):
         raw.update(update)
         coverage += log
@@ -303,19 +329,9 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
         coverage.append({"service": "elbv2", "operation": "describe_target_health",
                          "parameters": {}, "status": "not_discovered",
                          "reason": "대상 그룹 조회가 불완전하여 미발견 그룹의 대상은 조회하지 못했습니다."})
-    return {"schema_version": 1, "metadata": {
+    return make_snapshot({
         "account_id": account, "region": region, "profile": profile, "role_arn": role_arn,
         "partition": partition,
         "started_at": started, "finished_at": now(), "demo": False,
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
-        "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway",
-                  "NatGateway", "RouteTable", "RDS", "Aurora", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment",
-                  "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN", "SecurityGroupRules",
-                  "PlacementGroup", "FSx", "SageMakerEndpoint", "SageMakerHyperPod", "ElasticIP", "TransitGatewayRouteTable",
-                  "CloudFront", "WAF", "DirectConnect"],
-        "limitations": ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
-                        "여러 API의 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
-                        "ENI·EBS는 EC2 응답의 참조만 표시합니다. 보안 그룹 규칙은 검토 결과와 속성 패널에만 쓰며 구성도에 선으로 그리지 않습니다.",
-                        "CloudFront·CloudFront용 WAF·Direct Connect 게이트웨이는 계정 전역 리소스라 어느 리전에서 수집해도 같습니다.",
-                        "리스너 규칙·NACL·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
-        "coverage": coverage, "raw": raw}
+        "scope": SCOPE, "limitations": LIMITATIONS}, coverage, raw)

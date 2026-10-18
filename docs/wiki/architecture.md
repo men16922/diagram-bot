@@ -1,9 +1,9 @@
 ---
 title: 전체 구조
 summary: 수집 → 스냅샷 → 그래프 → 보기 → 배치 → draw.io의 데이터 흐름과, 라이브러리·저장소·AWS 접근·HTTP 라우터·프런트엔드로 나뉜 모듈 지도.
-sources: [src/diagram_bot/api.py, src/diagram_bot/server.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/store.py, src/diagram_bot/aws_access.py, src/diagram_bot/egress.py]
+sources: [src/diagram_bot/api.py, src/diagram_bot/server.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/store.py, src/diagram_bot/aws_access.py, src/diagram_bot/sessions.py, src/diagram_bot/snapshot.py, src/diagram_bot/egress.py]
 related: [snapshot-model, collection, graph, views, layout-and-drawio, http-api, web-app, aws-access-and-sso, browser-egress, porting-guide]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 전체 구조
 
@@ -23,7 +23,7 @@ updated: 2026-10-18
      (보기·개수)        (검토 규칙)      (변경 비교)  (계정 통합)       (CFN 초안)      (설계안 = 같은 raw 형식)
             │
             ▼
-     layout.layout (결정적 배치) ──▶ drawio.generate_document ──▶ draw.io XML ──▶ 웹 편집기 / PNG / .drawio
+     layout.layout_view (결정적 배치) ──▶ drawio.generate_document ──▶ draw.io XML ──▶ 웹 편집기 / PNG / .drawio
 ```
 
 - **스냅샷이 유일한 계약이다.** 원본 API 응답(`raw`)과 호출 결과(`coverage`)를 보존하고, 그래프는 언제든 `raw`에서 다시 만든다([[snapshot-model]]).
@@ -36,14 +36,14 @@ updated: 2026-10-18
 | --- | --- | --- | --- |
 | 라이브러리 | `api.py` | 웹 없이 쓰는 공개 함수: `collect_snapshot`, `render`, `view`, `review_snapshot`, `diff_snapshots`, `combine_snapshots`, `cloudformation`, `Design`, `BrowserRelay` | 회사 백엔드가 직접 import |
 | 수집 | `collector.py` | 서비스별 읽기 호출, 페이지·부분 실패 처리, `prepare` 훅 | — |
-| 모델 | `graph.py`, `views.py` | 노드·관계 생성, 보기별 선택과 개수 | — |
-| 출력 | `layout.py`, `drawio.py`, `report.py` | 배치, draw.io XML, 단독 HTML 보고서 | — |
-| 분석 | `findings.py`, `diff.py`, `combine.py`, `iac.py` | 검토, 변경 비교, 계정 통합, CloudFormation | — |
+| 모델 | `snapshot.py`, `graph.py`, `views.py` | 스냅샷 봉투, 노드·관계 생성, 보기별 선택과 개수 | — |
+| 출력 | `layout/`, `drawio.py`, `report.py` | 배치, draw.io XML, 단독 HTML 보고서 | — |
+| 분석 | `findings.py`, `diff.py`, `combine.py`, `iac/` | 검토, 변경 비교, 계정 통합, CloudFormation | — |
 | 설계·채팅 | `designer.py`, `agent.py` | 표준·브라운필드 설계, Strands + Bedrock 에이전트 | 모델 목록(`MODELS`) |
 | 저장소 | `store.py` | `SnapshotStore`, `DocumentStore`(리비전·이력) | **DB·S3로 교체** ([[storage]]) |
-| AWS 접근 | `aws_access.py`, `sso.py`, `egress.py` | Identity Center 로그인, 역할 세션, 서버/브라우저 egress | **회사 인증으로 교체** ([[aws-access-and-sso]]) |
+| AWS 접근 | `aws_access.py`, `sessions.py`, `sso.py`, `egress.py` | Identity Center 로그인, 역할 세션, 서버/브라우저 egress | **회사 인증으로 교체** ([[aws-access-and-sso]]) |
 | HTTP | `routes/*.py`, `server.py` | 도메인별 `APIRouter`, 미들웨어·조립 | **회사 FastAPI에 라우터 장착** ([[http-api]]) |
-| 팀 모드 | `auth.py`, `oidc.py` | 앱 계정·역할·OIDC·감사 로그 | 회사 SSO 미들웨어 ([[team-mode-security]]) |
+| 팀 모드 | `auth.py`, `oidc.py`, `expiry.py` | 앱 계정·역할·OIDC·감사 로그 | 회사 SSO 미들웨어 ([[team-mode-security]]) |
 | 프런트엔드 | `static/app.js`, `static/js/*.js`, `editor-bridge.js` | 콘솔형 화면, API 클라이언트, 브라우저 중계, draw.io 연동 | **React 컴포넌트로 이식** ([[web-app]]) |
 | 실행 | `cli.py`, `editor.py` | 명령줄, draw.io 편집기 설치 | — |
 
@@ -58,7 +58,7 @@ updated: 2026-10-18
 - **CLI·CI:** `collect`, `review --fail-on`, `diff --fail-on-change`, `export-cfn`([[cli]]).
 
 ## 바꿀 때 주의
-- 스냅샷 형식(`schema_version: 1`)을 바꾸면 저장된 스냅샷 호환(`graph.upgrade_graph`, `store.validate_snapshot`)과 [[snapshot-model]]을 함께 고친다.
+- 스냅샷 형식(`snapshot.SCHEMA_VERSION`, 봉투는 `snapshot.make_snapshot`)을 바꾸면 저장된 스냅샷 호환(`graph.upgrade_graph`, `store.validate_snapshot`)과 [[snapshot-model]]을 함께 고친다.
 - 검증 묶음: `make check`(오프라인 게이트), `scripts/verify_demo.py`(브라우저 35개 확인), `scripts/verify_team.py`, 실제 AWS는 `scripts/verify_browser_egress.py`([[cli]]).
 
 ## 관련

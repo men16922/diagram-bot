@@ -1,7 +1,7 @@
 ---
 title: 회사 draw.io 규격(DrawioSpec)과 기존 XML 진단·정렬·가져오기
 summary: drawio_spec.py의 검증된 회사 규격(DrawioSpec, spec_from_xml, request_spec)·입력 관문(read_document)·공용 분류표(classify_cell)와 xml_align.py의 진단(inspect), 품질 보호 정렬(align_report), 여러 페이지 가져오기(import), 템플릿 채택(adopt)과 그 HTTP·CLI 진입점.
-sources: [src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/drawio.py, src/diagram_bot/layout.py, src/diagram_bot/designer.py, src/diagram_bot/api.py, src/diagram_bot/routes/documents.py, src/diagram_bot/cli.py, tests/test_xml_align.py, tests/test_xml_robustness.py]
+sources: [src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/drawio.py, src/diagram_bot/layout/, src/diagram_bot/designer.py, src/diagram_bot/api.py, src/diagram_bot/routes/documents.py, src/diagram_bot/cli.py, tests/test_xml_align.py, tests/test_xml_robustness.py]
 related: [porting-guide, layout-and-drawio, snapshot-model, http-api, cli, team-mode-security]
 updated: 2026-10-19
 ---
@@ -38,7 +38,7 @@ updated: 2026-10-19
 ## 진단 (`inspect_drawio_xml` / `api.inspect_xml`)
 - 모든 페이지를 본다. `overlaps`, `out_of_bounds`, `unaligned_tiers`, `unrouted_edges`, `edge_collisions`는 셀 ID 쌍 또는 ID 목록이다(개수가 아니다). `clean`, `node_count`, `container_count`, `edge_count`, `roles`, `wrapper`, `spec`도 돌려준다.
 - `pages`에는 페이지마다 `name`, `aws`(AWS 셀이 있는지; 표지·범례는 `false`), `node_count`, 문제 개수, `clean`이 들어 있다.
-- 계층 행은 각 AZ 열에서 같은 계층의 k번째 서브넷이 같은 `y`에서 시작하면 정렬된 것으로 본다. `layout.py`처럼 높이는 달라도 된다(빈 서브넷은 더 낮다).
+- 계층 행은 각 AZ 열에서 같은 계층의 k번째 서브넷이 같은 `y`에서 시작하면 정렬된 것으로 본다. `layout/`처럼 높이는 달라도 된다(빈 서브넷은 더 낮다).
 - 엣지 중간점은 엣지 부모의 원점에 대한 상대 좌표다(draw.io 규칙). `orthogonalEdgeStyle`에 포트가 있으면 그 경로를 잰다. 직선 엣지는 중심에서 중심까지 그어 잰다(`_segment_hits`, 대각선도 정확). 경로를 draw.io가 정하는 엣지(직교, 포트·중간점 없음)는 충돌을 재지 않는다.
 - 겹침·충돌 검사는 격자 색인(`xml_align._Grid`)을 쓴다. 도형 3,200개도 1초 안팎이다(예전에는 13.7초). 도형 하나당 상자 검사 횟수 상한을 테스트가 지킨다.
 
@@ -109,7 +109,7 @@ xml = api.render(snapshot, spec=spec)
 
 ## 관련
 - [[porting-guide]] — 회사 저장소로 옮길 때의 단계별 파일 목록.
-- [[layout-and-drawio]] — 렌더러의 격자·계층·경로 규칙(정렬기가 따르는 기준).
+- [[layout-and-drawio]] — `layout/` 패키지의 격자·계층·경로 규칙(정렬기가 따르는 기준).
 - [[snapshot-model]] — 가져오기가 만드는 `Snapshot` 구조.
 - [[http-api]] — `/api/xml/*`와 문서 `spec` 미리보기 계약.
 - [[cli]] — `align-xml`, `import-xml`, `adopt-template` 옵션과 종료 코드.

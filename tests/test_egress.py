@@ -1,8 +1,11 @@
 """Browser egress: the server signs, the browser sends. A thread plays the browser: it long-polls the relay,
 sends each request (to the AWS emulator through `requests`, which moto intercepts) and answers with the response."""
+import asyncio
 import base64
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import boto3
 import pytest
@@ -10,7 +13,7 @@ import requests
 from fastapi.testclient import TestClient
 
 from diagram_bot.collector import collect
-from diagram_bot.egress import BrowserRelay, RelayError
+from diagram_bot.egress import BrowserRelay, RelayDisconnected, RelayError
 from diagram_bot.graph import build_graph
 from diagram_bot.server import create_app
 from test_aws_emulator import ACCOUNT, REGION, environment  # noqa: F401 - fixture
@@ -82,6 +85,98 @@ def test_relay_failures_are_reported_not_hung():
             local.client("sts", endpoint_url="http://127.0.0.1:9/").get_caller_identity()
 
 
+class Tab:
+    """A page's relay loop that polls with its own id; `answering` False makes it take requests and sit on them
+    (a slow fetch), `close()` stops its polls (the tab was closed)."""
+
+    def __init__(self, relay, name, answering=True):
+        self.relay, self.name, self.answering, self.taken, self.open = relay, name, answering, [], True
+        self.relay.next("alice", wait=0, tab=name)
+        self.thread = threading.Thread(target=self.loop, daemon=True)
+        self.thread.start()
+
+    def loop(self):
+        while self.open:
+            for request in self.relay.next("alice", wait=0.05, tab=self.name):
+                self.taken.append(request["id"])
+                if self.answering:
+                    self.relay.answer("alice", request["id"], {"status": 200, "body": ""})
+
+    def close(self):
+        self.open = False
+        self.thread.join(2)
+
+
+def relayed(relay, operation):
+    request = SimpleNamespace(url="https://sts.us-east-1.amazonaws.com/", method="POST", headers={}, body=b"")
+    return ThreadPoolExecutor(1).submit(relay.send, "alice", request, f"before-send.sts.{operation}")
+
+
+def test_a_closed_tab_hands_reads_to_another_tab_and_fails_the_rest_at_once():
+    relay = BrowserRelay(timeout=30, idle=0.3, tick=0.02)
+    slow = Tab(relay, "slow", answering=False)
+    started = time.monotonic()
+    read = relayed(relay, "DescribeVpcs")
+    while not slow.taken:
+        time.sleep(0.01)
+    other = Tab(relay, "other")
+    time.sleep(0.6)  # a tab that keeps polling is alive however long it holds a request (a slow Bedrock call)
+    assert not read.done()
+    slow.close()
+    # Gone: the read goes to the other tab, long before the 30 s round-trip timeout.
+    assert read.result(2).status_code == 200 and time.monotonic() - started < 3
+    other.close()
+    sitting = Tab(relay, "sitting", answering=False)
+    converse = relayed(relay, "Converse")  # may have reached AWS: never sent twice
+    while not sitting.taken:
+        time.sleep(0.01)
+    sitting.close()
+    started = time.monotonic()
+    with pytest.raises(RelayDisconnected, match="탭이 닫혔습니다"):
+        converse.result(5)
+    assert time.monotonic() - started < 2
+
+
+def test_a_read_fails_at_once_when_the_last_tab_closes():
+    relay = BrowserRelay(timeout=30, idle=0.3, tick=0.02)
+    only = Tab(relay, "only", answering=False)
+    read = relayed(relay, "ListClusters")
+    while not only.taken:
+        time.sleep(0.01)
+    only.close()
+    with pytest.raises(RelayDisconnected):
+        read.result(3)
+    assert relay.tabs == {} or not relay.connected("alice")
+
+
+def test_async_polls_wait_without_a_thread_and_wake_on_work():
+    relay = BrowserRelay(poll=5)
+
+    async def tabs():
+        polls = [asyncio.create_task(relay.wait_next("alice", f"tab{i}")) for i in range(60)]  # more than the threadpool
+        bob = asyncio.create_task(relay.wait_next("bob", "b"))
+        await asyncio.sleep(0.05)
+        assert relay.connected("alice") and relay.connected("bob")
+        started = time.monotonic()
+        answer = await asyncio.to_thread(lambda: relayed(relay, "GetCallerIdentity"))
+        done, _ = await asyncio.wait(polls, timeout=2, return_when=asyncio.FIRST_COMPLETED)
+        assert time.monotonic() - started < 1  # woken by the request, not by the 5 s poll end
+        [request] = done.pop().result()
+        relay.answer("alice", request["id"], {"status": 200, "body": ""})
+        assert (await asyncio.wrap_future(answer)).status_code == 200
+        for task in [*polls, bob]:
+            task.cancel()
+        await asyncio.gather(*polls, bob, return_exceptions=True)
+        assert all(t["polls"] == 0 for t in relay.tabs.values()) and not relay.waiters
+
+    asyncio.run(tabs())
+
+
+def test_a_tab_that_left_mid_poll_is_gone_at_once():
+    relay = BrowserRelay(poll=5)
+    assert asyncio.run(relay.wait_next("alice", "t", wait=2, gone=lambda: True)) == [] and not relay.connected("alice")
+
+
 def through_requests(request):
     """The browser's fetch: the emulator answers AWS URLs sent through `requests`."""
     body = base64.b64decode(request["body"]) if request["body"] else None
@@ -119,7 +214,7 @@ def test_the_app_collects_through_the_browser_relay_api(environment, tmp_path): 
 
         def page():
             while not stop.is_set():
-                for request in client.get("/api/relay/next").json()["requests"]:
+                for request in client.get("/api/relay/next?tab=page").json()["requests"]:
                     client.post(f"/api/relay/{request['id']}", json=through_requests(request))
 
         loop = threading.Thread(target=page, daemon=True)
@@ -140,3 +235,16 @@ def test_the_app_collects_through_the_browser_relay_api(environment, tmp_path): 
         assert '"via": "sdk/browser"' in log and "/api/relay/" not in log
     with TestClient(create_app(tmp_path / "server", tmp_path / "no-editor")) as plain:
         assert plain.get("/api/bootstrap").json()["egress"] == "server" and plain.get("/api/relay/next").status_code == 404
+
+
+def test_open_relay_polls_do_not_starve_other_requests(tmp_path):
+    """More open tabs than the worker threadpool (40): their long-polls are async, so other calls still get a thread."""
+    with TestClient(create_app(tmp_path / "data", tmp_path / "no-editor", egress="browser", relay=BrowserRelay(poll=2))) as client:
+        assert client.get("/api/relay/next?tab=bad/id").status_code == 422
+        with ThreadPoolExecutor(45) as pool:
+            polls = [pool.submit(client.get, f"/api/relay/next?tab=t{i}") for i in range(45)]
+            time.sleep(0.3)
+            started = time.monotonic()
+            assert client.get("/api/bootstrap").status_code == 200
+            assert time.monotonic() - started < 1
+            assert all(p.result().json() == {"requests": []} for p in polls)

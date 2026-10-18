@@ -42,15 +42,36 @@ def review(graph, coverage=()):
                       "pillar": pillar, "resource": key, "resource_name": node.get("name", key), "kind": node.get("kind"),
                       "title": title, "evidence": evidence, "recommendation": recommendation})
 
-    def out(key, relation):
-        return [e for e in edges if e["source"] == key and e["relation"] == relation]
-
+    outgoing = {}
+    for e in edges:
+        outgoing.setdefault((e["source"], e["relation"]), []).append(e)
+    out = lambda key, relation: outgoing.get((key, relation), [])
     collected = lambda kind: [n for n in graph["nodes"] if n["kind"] == kind and not n["reference_only"]]
+
+    reliability_review(nodes, edges, collected, out, add)
+    security_review(edges, collected, add)
+    ai_review(graph, nodes, edges, collected, out, add)
+    edge_review(nodes, edges, collected, coverage, add)
+
+    # --- Operations --------------------------------------------------------------------------
+    missing = [c for c in coverage if c.get("status") not in ("complete", None)]
+    if missing:
+        permissions = sorted({c.get("permission") for c in missing if c.get("permission")})
+        found.append({"id": "f-coverage", "rule": "OPS-COVERAGE", "severity": "low", "pillar": "operations", "resource": None,
+                      "resource_name": "수집 범위", "kind": None, "title": f"조회하지 못한 API {len(missing)}건 — 검토 결과가 불완전할 수 있음",
+                      "evidence": ", ".join(f"{c['operation']}({c.get('error_code', c['status'])})" for c in missing[:8]),
+                      "recommendation": "읽기 전용 권한 추가 후 다시 수집하세요: " + (", ".join(permissions) or "권한 확인")})
+    order = {s: i for i, s in enumerate(SEVERITIES)}
+    unique = {f["id"]: f for f in found}
+    return sorted(unique.values(), key=lambda f: (order[f["severity"]], f["pillar"], f["rule"], f["resource_name"] or ""))
+
+
+def reliability_review(nodes, edges, collected, out, add):
+    """AZ spread, failover and health of load balancers, targets, Auto Scaling groups, databases, caches, NAT routes,
+    search, streaming, warehouse, file systems, VPN tunnels and ECS services."""
     subnet_az = {n["id"]: n["attributes"].get("AvailabilityZone") for n in collected("subnet")}
     zone_of = {n["resource_id"]: n["attributes"].get("AvailabilityZone") for n in collected("subnet")}
     subnet_of = {e["source"]: e["target"] for e in edges if e["relation"] == "in_subnet"}
-
-    # --- Reliability -------------------------------------------------------------------------
     for lb in collected("load_balancer"):
         zones = {z.get("ZoneName") for z in lb["attributes"].get("AvailabilityZones", [])} - {None}
         if len(zones) < 2:
@@ -183,7 +204,9 @@ def review(graph, coverage=()):
             add("REL-ECS-AZ", "medium", "reliability", service["id"], "ECS 서비스 태스크가 모두 한 AZ",
                 f"DescribeTasks.availabilityZone = {sorted(zones)[0]}", "서비스 서브넷을 여러 AZ로 지정하고 AZ 재조정을 켜세요.")
 
-    # --- Security ----------------------------------------------------------------------------
+
+def security_review(edges, collected, add):
+    """Public access, encryption at rest and in transit, IMDS, world-open security group rules, EFA groups and the EKS endpoint."""
     for db in collected("db_instance"):
         a = db["attributes"]
         if a.get("PubliclyAccessible"):
@@ -272,21 +295,6 @@ def review(graph, coverage=()):
             add("SEC-EKS-PUBLIC", "medium", "security", cluster["id"], "EKS API 엔드포인트가 인터넷 전체에 공개",
                 "DescribeCluster.resourcesVpcConfig.endpointPublicAccess = true, publicAccessCidrs = 0.0.0.0/0",
                 "프라이빗 엔드포인트를 쓰거나 publicAccessCidrs를 회사 대역으로 제한하세요.")
-
-    ai_review(graph, nodes, edges, collected, out, add)
-    edge_review(nodes, edges, collected, coverage, add)
-
-    # --- Operations --------------------------------------------------------------------------
-    missing = [c for c in coverage if c.get("status") not in ("complete", None)]
-    if missing:
-        permissions = sorted({c.get("permission") for c in missing if c.get("permission")})
-        found.append({"id": "f-coverage", "rule": "OPS-COVERAGE", "severity": "low", "pillar": "operations", "resource": None,
-                      "resource_name": "수집 범위", "kind": None, "title": f"조회하지 못한 API {len(missing)}건 — 검토 결과가 불완전할 수 있음",
-                      "evidence": ", ".join(f"{c['operation']}({c.get('error_code', c['status'])})" for c in missing[:8]),
-                      "recommendation": "읽기 전용 권한 추가 후 다시 수집하세요: " + (", ".join(permissions) or "권한 확인")})
-    order = {s: i for i, s in enumerate(SEVERITIES)}
-    unique = {f["id"]: f for f in found}
-    return sorted(unique.values(), key=lambda f: (order[f["severity"]], f["pillar"], f["rule"], f["resource_name"] or ""))
 
 
 def ai_review(graph, nodes, edges, collected, out, add):

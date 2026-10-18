@@ -15,7 +15,7 @@ updated: 2026-10-18
 - 실제 통신·도달성은 판정하지 않는다. 설정상 가능성만 말하고, 그렇다는 사실을 문구에 밝힌다(`SEC-CF-ORIGIN-OPEN`의 "실제 접근 시험은 하지 않았습니다").
 
 ## 1. 놓을 위치 고르기
-- 안정성·보안 일반 규칙: `review()` 본문의 `# --- Reliability ---` 또는 `# --- Security ---` 절.
+- 안정성·보안 일반 규칙: `reliability_review(nodes, edges, collected, out, add)` 또는 `security_review(edges, collected, add)`.
 - GPU·EFA·SageMaker·Bedrock·FSx: `ai_review(graph, nodes, edges, collected, out, add)`.
 - 엣지·주소·라우팅 도메인처럼 `coverage`가 필요한 것: `edge_review(nodes, edges, collected, coverage, add)`.
 - 새 함수로 묶을 만큼 크면 `ai_review`·`edge_review`처럼 같은 인자를 받는 함수를 만들고 `review()`에서 `OPS-COVERAGE` 앞에 호출한다.
@@ -52,7 +52,7 @@ for address in collected("elastic_ip"):
 ## 5. 문서 카탈로그
 - `docs/ARCHITECTURE.md`에 규칙 표가 두 곳 있다: 4.1절(엣지·연결 규칙: 규칙 | 심각도 | 판정 | 근거)과 5.8절(AI/ML 규칙). 해당 범주의 표에 한 줄을 더한다. 본문 REL·SEC 규칙은 카탈로그 표가 없으므로 새 범주라면 표를 새로 만들지, 코드만 둘지 정한다.
 - 이 위키의 [[review-rules]] 규칙 표와 개수(현재 47개)를 고친다. 페이지의 `updated`도 바꾼다.
-- 새 규칙이 CloudFormation 내보내기와 같은 입력을 본다면(예: 유휴 EIP) [[cloudformation]]의 Unsupported 이유 문구와 맞춘다(`iac.elastic_ips`의 사유에 `COST-EIP-IDLE`이 적혀 있다).
+- 새 규칙이 CloudFormation 내보내기와 같은 입력을 본다면(예: 유휴 EIP) [[cloudformation]]의 Unsupported 이유 문구와 맞춘다(`iac/network.py`의 `Template.elastic_ips` 사유에 `COST-EIP-IDLE`이 적혀 있다).
 
 ## 6. 테스트
 - `tests/test_findings.py`의 헬퍼 `findings(snapshot)` = `review(build_graph(snapshot), snapshot["coverage"])`, `rules(snapshot)` = `{(rule, resource_name)}`를 쓴다.

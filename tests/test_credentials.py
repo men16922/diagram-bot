@@ -3,6 +3,7 @@ import json
 import threading
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 from test_sso import Clock, FakeIdentityCenter
 
@@ -150,3 +151,19 @@ def test_a_failed_start_url_discovery_is_tried_again(monkeypatch):
     assert access.start_urls() == []
     assert access.start_urls() == [{"name": "Identity Center", "start_url": START, "region": "us-east-1"}]
     assert access.start_urls() == [{"name": "Identity Center", "start_url": START, "region": "us-east-1"}]  # a hit is kept
+
+
+def test_sessions_come_from_one_place_and_take_the_users_path(monkeypatch):
+    from diagram_bot.egress import RelayDisconnected
+    from diagram_bot.sessions import credentials_session
+    sts = {"AccessKeyId": "ASIASTS", "SecretAccessKey": "s1", "SessionToken": "t1"}
+    refresh = {"access_key": "ASIASSO", "secret_key": "s2", "token": "t2", "expiry_time": "2030-01-01T00:00:00+00:00"}
+    for shape, key in ((sts, "ASIASTS"), (refresh, "ASIASSO")):
+        session = credentials_session(shape, "ap-northeast-2")
+        assert session.get_credentials().access_key == key and session.region_name == "ap-northeast-2"
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret")
+    assert AwsAccess().profile_session("alice", region="us-east-1").get_credentials().access_key == "AKIAEXAMPLE"
+    relayed = AwsAccess("browser", relay=BrowserRelay()).profile_session("alice", region="us-east-1")
+    with pytest.raises(RelayDisconnected):  # with browser egress the profile session goes out through alice's browser
+        relayed.client("sts").get_caller_identity()

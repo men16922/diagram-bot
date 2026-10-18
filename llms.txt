@@ -19,7 +19,7 @@ The wiki (Korean, one topic per page, code paths as sources) is the primary refe
 - [읽기 전용 수집 (collector)](docs/wiki/collection.md): collector.collect의 호출 목록(OPERATIONS)과 IAM 권한, 2단계 병렬 수집, 페이지 처리, 부분·조회 불가 기록, 계정 확인, 역할 맡기(ReadOnlyAccess 세션 정책), prepare 훅, 전역 API, 읽기 전용 정책 파일과의 관계.
 - [관계 그래프 (graph)](docs/wiki/graph.md): raw API 데이터에서 노드·관계를 만드는 결정적 조인 규칙 — 노드 종류 45개와 관계 43개, 관계 ID 규칙, 참조 전용 노드, 서브넷 경로 분류, 고가용성 역할, 계정 통합 병합, 옛 그래프 업그레이드.
 - [보기 계약 (views)](docs/wiki/views.md): views.view_graph가 정하는 overview·detail·focus 보기의 노드·관계 선택, references 옵션, 경로 필터(routes=), 개수(visible·collected·references·hidden·filtered), 전체 구성의 네트워크·엣지 연결선, 포함 관계.
-- [배치와 draw.io 문서](docs/wiki/layout-and-drawio.md): layout.py의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
+- [배치와 draw.io 문서](docs/wiki/layout-and-drawio.md): layout/ 패키지의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
 - [회사 draw.io 규격(DrawioSpec)과 기존 XML 진단·정렬·가져오기](docs/wiki/drawio-format-and-alignment.md): drawio_spec.py의 검증된 회사 규격(DrawioSpec, spec_from_xml, request_spec)·입력 관문(read_document)·공용 분류표(classify_cell)와 xml_align.py의 진단(inspect), 품질 보호 정렬(align_report), 여러 페이지 가져오기(import), 템플릿 채택(adopt)과 그 HTTP·CLI 진입점.
 - [샘플과 데모 스냅샷](docs/wiki/samples.md): samples.Sample 빌더 도우미, 번들 샘플 11개(무엇을 보여 주는지·리전), SAMPLE_VERSION과 서버의 샘플 재생성(SnapshotStore.seed), demo.py, scripts/render_samples.py, examples/samples.
 
@@ -28,7 +28,7 @@ The wiki (Korean, one topic per page, code paths as sources) is the primary refe
 - [아키텍처 검토 규칙](docs/wiki/review-rules.md): findings.py의 review(graph, coverage)가 수집된 API 필드만으로 판정하는 47개 규칙(안정성·보안·운영·AI/ML·비용), 결과 필드, 수집 공백 처리, review --fail-on 게이트.
 - [변경 비교 (diff)](docs/wiki/change-review.md): diff.py가 두 스냅샷의 그래프를 노드 ID·관계 ID로 맞춰 리소스 추가·삭제, 설정 필드 변경, 관계 추가·삭제를 내는 방식과 CLI diff --fail-on-change, /api/snapshots/{id}/diff/{other}.
 - [여러 계정 통합 보기](docs/wiki/multi-account.md): combine.py의 combine_snapshots가 계정 × 리전 스냅샷을 parts로 묶는 방식, graph.merge_graphs의 공유 TGW·계정 간 피어링 합치기와 전역 ID, 전체 구성의 계정 프레임, CLI combine과 /api/snapshots/combine, 계정별 CloudFormation.
-- [CloudFormation 초안 내보내기](docs/wiki/cloudformation.md): iac.py의 Template이 스냅샷 raw를 CloudFormation JSON 초안으로 바꾸는 단계 순서, Ref/GetAtt 규칙, 매개변수, DeletionPolicy, Metadata.DiagramBot의 Unsupported·Assumptions 전체 목록, export-cfn·API·테스트.
+- [CloudFormation 초안 내보내기](docs/wiki/cloudformation.md): iac/ 패키지의 Template이 스냅샷 raw를 CloudFormation JSON 초안으로 바꾸는 단계 순서, Ref/GetAtt 규칙, 매개변수, DeletionPolicy, Metadata.DiagramBot의 Unsupported·Assumptions 전체 목록, export-cfn·API·테스트.
 
 ## AWS 접근과 인증
 
