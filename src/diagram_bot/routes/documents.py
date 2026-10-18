@@ -83,9 +83,13 @@ def router(context):
         snapshot = snapshots.get(identifier)
         scope, selection = view_scope(snapshot, view, vpc, resource, references, routes)
         saved, history = documents.read(identifier, scope)
-        if saved and not reset and not spec:
+        if spec:
+            # An export preview in another spec: no revision, so it cannot be saved over the edited document.
+            return describe({"xml": generate(snapshot, scope, spec=spec, editor=False), "revision": None, "saved_at": None,
+                             "preview": True}, selection, history)
+        if saved and not reset:
             return describe(saved, selection, history)
-        return describe({"xml": generate(snapshot, scope, spec=spec), "revision": saved["revision"] if saved else 0, "saved_at": None}, selection, history)
+        return describe({"xml": generate(snapshot, scope), "revision": saved["revision"] if saved else 0, "saved_at": None}, selection, history)
 
     @api.put("/api/snapshots/{identifier}/document")
     def save_document(identifier: str, document: DocumentRequest, view: str | None = None, vpc: str | None = None,

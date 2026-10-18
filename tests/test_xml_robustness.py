@@ -315,3 +315,20 @@ def test_xml_routes_follow_the_snapshot_and_collection_roles(team):
         assert editor.post("/api/xml/adopt", json={"xml": MXCELL_TEMPLATE, **bad}).status_code == 422, bad
     assert editor.post("/api/xml/import", json={"xml": MXCELL_TEMPLATE, "region": "nowhere"}).status_code == 422
     assert editor.post("/api/xml/align", json={"xml": MXCELL_TEMPLATE, "mode": "shuffle"}).status_code == 422
+
+
+# --- e. a spec preview cannot be saved over the edited document ----------------------------------------------------
+
+def test_spec_preview_is_not_saveable(client):
+    sid = first_snapshot(client)
+    doc = client.get(f"/api/snapshots/{sid}/document").json()
+    edited = doc["xml"].replace("</root>", '<mxCell id="note-1" value="keep me" vertex="1" parent="1"><mxGeometry x="5" y="5" '
+                                           'width="80" height="30" as="geometry"/></mxCell></root>', 1)
+    saved = client.put(f"/api/snapshots/{sid}/document", json={"xml": edited, "revision": doc["revision"]}).json()
+    preview = client.get(f"/api/snapshots/{sid}/document", params={"spec": "mxcell"}).json()
+    assert preview["revision"] is None and preview["preview"] is True and "keep me" not in preview["xml"]
+    assert fromstring(preview["xml"]).find(".//object") is None  # the export as the spec writes it
+    res = client.put(f"/api/snapshots/{sid}/document", json={"xml": preview["xml"], "revision": preview["revision"]})
+    assert res.status_code == 422
+    current = client.get(f"/api/snapshots/{sid}/document").json()
+    assert current["revision"] == saved["revision"] and "keep me" in current["xml"]

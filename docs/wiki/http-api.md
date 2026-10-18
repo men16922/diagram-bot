@@ -70,7 +70,7 @@ updated: 2026-10-18
 
 | 메서드·경로 | 본문 | 동작 |
 | --- | --- | --- |
-| `GET /api/snapshots/{id}/document` | (`reset: bool`, `spec: str?` 쿼리) | 저장본이 있고 `reset`·`spec`이 없으면 저장본, 아니면 새로 생성(`revision`은 저장본의 것 또는 0, `saved_at: null`) |
+| `GET /api/snapshots/{id}/document` | (`reset: bool`, `spec: str?` 쿼리) | `spec`이 있으면 그 규격의 내보내기 미리보기(`revision: null`, `preview: true`, 저장 불가: PUT은 422). 아니면 저장본이 있고 `reset`이 없으면 저장본, 아니면 새로 생성(`revision`은 저장본의 것 또는 0, `saved_at: null`) |
 | `PUT /api/snapshots/{id}/document` | `DocumentRequest{xml: ≤10 MiB, revision: ≥0}` | `drawio.validate_document` 실패 422, 리비전 불일치 409, 같은 XML이면 변경 없음 |
 | `POST /api/snapshots/{id}/document/relayout` | `RevisionRequest{revision}` (`spec: str?` 쿼리) | 다시 생성하고 `carry_annotations`로 사용자 메모를 옮김, 이전 편집본은 `자동 재배치 전`으로 보관 |
 | `POST /api/snapshots/{id}/document/restore` | `RestoreRequest{revision, from_revision}` | 보관된 리비전을 복원(`v<n> 복원 전`으로 현재본 보관), 없으면 404 |
