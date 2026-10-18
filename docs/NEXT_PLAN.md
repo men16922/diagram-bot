@@ -7,6 +7,7 @@ Last Updated: 2026-10-19
 No plan is in progress. The finished plans are archived (docs/archive/TOPOLOGY_PLAN.md,
 docs/archive/2026-10-18-best-practice-samples.md, docs/archive/PLAN-2026-10-17.md); what they delivered is in
 docs/STATUS.md and docs/COMPLETED_SUMMARY.md. What remains below needs credentials or human judgment.
+Open product proposals (docs/PLAN.md) are not an unattended-work authorization.
 
 ## Overnight Seed
 
