@@ -529,6 +529,7 @@ def main():
         imported = state('snapshotId')
         assert any(s['id'] == imported and s['metadata']['imported'] for s in state('snapshots'))
         assert page.locator('#snapshot-select').input_value() == imported
+        expect(page.locator('#demo-badge')).to_have_text('XML 가져옴 · 라벨 추정')  # not the sample badge
         page.locator('#adopt-name').fill('corp-web')
         page.locator('#adopt-title').fill('사내 웹 표준')
         expect(page.locator('#adopt-default')).to_be_enabled()  # local mode is the admin

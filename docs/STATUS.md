@@ -4,18 +4,18 @@ Last Updated: 2026-10-19
 
 ## Active Plan
 
-- 2026-10-19 review + hardening (PROGRESS_LOG top entry): the company draw.io XML feature (`drawio_spec.py`, `xml_align.py`, `/api/xml/*`,
+- 2026-10-19 screen: draw.io XML dialog (import, align, adopt), stored company standards, spec export, admin audit log (PROGRESS_LOG top).
+- 2026-10-19 review + hardening: the company draw.io XML feature (`drawio_spec.py`, `xml_align.py`, `/api/xml/*`,
   CLI `align-xml`/`import-xml`/`adopt-template`; wiki drawio-format-and-alignment) fixed and raised; audit fixes; `layout/`·`iac/`·`samples/`
   packages and `js/` modules behind golden hashes. 476 tests, verify_demo 35/35, verify_team 11/11, CI green on 03641fe.
-- 2026-10-18 company auth structure: `--aws-egress browser` (server signs, browser sends from the PC; docs/wiki/browser-egress.md),
-  server split into store / aws_access / routes + `api.py` for porting (docs/wiki/porting-guide.md), LLM wiki docs/wiki + llms.txt.
-- 2026-10-18 remaining work finished (PROGRESS_LOG top entry): CI green again (`.[test]`), chat streaming, brownfield designs
+- 2026-10-18 company auth: `--aws-egress browser` (wiki browser-egress), server split + `api.py` (wiki porting-guide), LLM wiki + llms.txt.
+- 2026-10-18 remaining work finished: CI green again (`.[test]`), chat streaming, brownfield designs
   (`start_from_current`, `add_subnet_tier`; 29 chat tools), CloudFormation export (`export-cfn`), collection of Elastic IPs,
   TGW route tables, CloudFront, WAFv2 and Direct Connect (4 new low rules), route filter for dense views, optional sample
   items; SAMPLE_VERSION 6, gpu-training in us-east-2.
 - 2026-10-18 earlier: 11 samples aligned with AWS best practice (docs/ARCHITECTURE.md) incl. three AI/GPU; AI/ML collection and review
   pillar; multi-account combine; console-style UI. Live (owner's account, us-east-1): 34/34 calls; SSO collected 47 resources.
-- 2026-10-17: chat design agent (Strands + Bedrock), team mode (v0.5.0), review/diff gates (v0.4.0); docs/engineering/DEVOPS_AGENT_BENCHMARK.md.
+- 2026-10-17: chat agent (Strands + Bedrock), team mode (v0.5.0), review/diff gates (v0.4.0); docs/engineering/DEVOPS_AGENT_BENCHMARK.md.
 - All manual verification is done. No [auto] backlog is approved.
 
 ## Current Baseline (v0.5.0)

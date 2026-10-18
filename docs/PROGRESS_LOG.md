@@ -2,6 +2,15 @@
 
 Last Updated: 2026-10-19
 
+## 2026-10-19 — Screen for draw.io XML, company standards, spec export and audit log (goal: API·CLI만이 아니라 실제 화면에서)
+
+- Tools › draw.io XML dialog: import as a snapshot (import report; badge "XML 가져옴 · 라벨 추정"), auto-align (before/after metrics,
+  aligned download), adopt as a company standard (admin/local may make it the server default) and the standards list (open, admin delete).
+- Adopted default standards persist in `<data-dir>/standards/` (`StandardStore`) and come back at startup with the default spec;
+  `GET /api/standards`, `DELETE /api/standards/{name}` (admin); `?spec=<company name>` is a lookup, never a path.
+- Download dialog › 규격: preset or company spec export (fresh rendering, never saved). Profile menu › 감사 로그 for team-mode admins.
+- Also: imported isolated subnets stay the data tier. Verified: gate 483 tests; verify_demo 40/40, verify_team 13/13 (viewer XML disabled).
+
 ## 2026-10-19 — Review of the company draw.io XML work, codebase hardening and refactor (goal: antigravity 최종 커밋 검수·피드백, 2단계 수준 상승, 소스 전반 점검·리팩토링)
 
 - Review of 6622915 (antigravity): gate green but 19 reproduced defects (security: request `spec` read server files; edge waypoints in the

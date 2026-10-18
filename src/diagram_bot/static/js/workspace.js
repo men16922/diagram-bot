@@ -7,7 +7,7 @@ import {showResource} from './inspector.js';
 export function renderSummary() {
   const {metadata:m,graph}=state.snapshot;
   $('region-label').textContent=m.region;$('crumb-account').textContent=m.design?'설계안':m.combined?m.account_id:`계정 ${m.account_id}`;$('account-summary').textContent=m.design?'DESIGN · 실제 계정 아님':`ACCOUNT ${m.account_id}`;
-  $('demo-badge').hidden=!m.demo;$('demo-badge').textContent=m.design?'설계안':'샘플 데이터';
+  $('demo-badge').hidden=!m.demo;$('demo-badge').textContent=m.design?'설계안':m.imported?'XML 가져옴 · 라벨 추정':'샘플 데이터';
   $('scope-description').textContent=m.design?`${m.region} · 채팅으로 만든 표준 아키텍처 설계안 (실제 계정 아님)`:`${m.account_id} · ${m.region} · 수집 설정을 바탕으로 생성한 구성도`;
   $('collected-at').textContent=`수집 ${new Date(m.finished_at).toLocaleString('ko-KR')} · ${m.demo?'합성 샘플':'AWS API 조회'}`;
   $('coverage-button').textContent=(m.status==='complete'?'● ':'◐ ')+(statuses[m.status]||m.status);
