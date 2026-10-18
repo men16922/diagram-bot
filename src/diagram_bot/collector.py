@@ -52,16 +52,50 @@ OPERATIONS = [
     ("fsx", "describe_file_systems", "FileSystems", "fsx_file_systems"),
     ("sagemaker", "list_endpoints", "Endpoints", "sagemaker_endpoint_names"),
     ("sagemaker", "list_clusters", "ClusterSummaries", "sagemaker_cluster_names"),
+    # Static addresses, Transit Gateway routing domains, the edge in front of the load balancers (CloudFront is a global
+    # API answered in any region) and dedicated connectivity (Direct Connect gateways are global to the account).
+    ("ec2", "describe_addresses", "Addresses", "elastic_ips"),
+    ("ec2", "describe_transit_gateway_route_tables", "TransitGatewayRouteTables", "transit_gateway_route_tables"),
+    ("cloudfront", "list_distributions", "DistributionList.Items", "cloudfront_distributions"),
+    ("directconnect", "describe_connections", "connections", "dx_connections"),
+    ("directconnect", "describe_virtual_interfaces", "virtualInterfaces", "dx_virtual_interfaces"),
+    ("directconnect", "describe_direct_connect_gateways", "directConnectGateways", "dx_gateways"),
 ]
 # IAM service prefixes that differ from the boto3 client name.
 IAM_PREFIX = {"elbv2": "elasticloadbalancing", "opensearch": "es", "efs": "elasticfilesystem"}
+# IAM action names whose capitalisation differs from the boto3 operation name.
+ACTIONS = {"DescribeDbInstances": "DescribeDBInstances", "DescribeDbClusters": "DescribeDBClusters",
+           "ListWebAcls": "ListWebACLs", "ListResourcesForWebAcl": "ListResourcesForWebACL"}
+# Operations without a boto3 paginator that page with a marker (same field name in request and response).
+MARKERS = {"list_web_acls": "NextMarker"}
+# Where the CLOUDFRONT-scope WAF API is served in each partition.
+GLOBAL_REGION = {"aws": "us-east-1", "aws-cn": "cn-northwest-1", "aws-us-gov": "us-gov-west-1"}
 
 
 def permission(service, operation):
     """IAM action needed for a read operation, shown next to denied or partial coverage."""
     prefix = IAM_PREFIX.get(service, service)
     action = "".join(part.title() for part in operation.split("_"))
-    return prefix + ":" + {"DescribeDbInstances": "DescribeDBInstances", "DescribeDbClusters": "DescribeDBClusters"}.get(action, action)
+    return prefix + ":" + ACTIONS.get(action, action)
+
+
+def marker_pages(client, operation, params, field):
+    page = getattr(client, operation)(**params)
+    yield page
+    # An empty page ends the listing even if it carries a marker.
+    while page.get(field) and any(isinstance(v, list) and v for v in page.values()):
+        page = getattr(client, operation)(**params, **{field: page[field]})
+        yield page
+
+
+def extract(page, key):
+    """Rows of one page; key None keeps the whole response, a dotted key walks nested objects (DistributionList.Items)."""
+    if key is None:
+        return {k: v for k, v in page.items() if k != "ResponseMetadata"}
+    *parents, last = key.split(".")
+    for part in parents:
+        page = page.get(part) or {}
+    return page.get(last, [])
 
 
 def query(client, operation, key, params=None):
@@ -73,11 +107,13 @@ def query(client, operation, key, params=None):
     try:
         if client.can_paginate(operation):
             pages = client.get_paginator(operation).paginate(**params)
+        elif operation in MARKERS:
+            pages = marker_pages(client, operation, params, MARKERS[operation])
         else:
             pages = [getattr(client, operation)(**params)]
         for page in pages:
             # key None: the response itself describes one resource (SageMaker Describe* calls).
-            value = {k: v for k, v in page.items() if k != "ResponseMetadata"} if key is None else page.get(key, [])
+            value = extract(page, key)
             # Describe calls for one named resource return an object, list calls an array.
             rows.extend(value if isinstance(value, list) else [value])
             coverage["pages"] += 1
@@ -118,10 +154,13 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
     if expected_account and account != expected_account:
         raise ValueError(f"계정 불일치: 요청 {expected_account}, 현재 인증 {account}")
     clients = {service: session.client(service, region_name=region, config=config)
-               for service in sorted({service for service, *_ in OPERATIONS})}
+               for service in sorted({service for service, *_ in OPERATIONS} | {"wafv2"})}
+    # Web ACLs for CloudFront are served from the partition's global WAF region (us-east-1 in aws).
+    partition = identity["Arn"].split(":")[1]
+    clients["wafv2/global"] = session.client("wafv2", region_name=GLOBAL_REGION.get(partition, "us-east-1"), config=config)
 
-    def call(log, service, operation, key, params=None):
-        rows, result = query(clients[service], operation, key, params)
+    def call(log, service, operation, key, params=None, client=None):
+        rows, result = query(clients[client or service], operation, key, params)
         result.update(service=service, permission=permission(service, operation))
         log.append(result)
         return rows
@@ -208,7 +247,44 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
             clusters += call(log, "sagemaker", "describe_cluster", None, {"ClusterName": summary["ClusterName"]})
         return {"sagemaker_endpoints": endpoints, "sagemaker_clusters": clusters}
 
-    details = (target_health, eks, msk, opensearch, ecs, efs, sagemaker)
+    def transit_routes(log):
+        # Which attachments each Transit Gateway route table is associated with and learns from, and its routes.
+        associations, propagations, routes = [], [], []
+        for table in raw["transit_gateway_route_tables"]:
+            ident = {"TransitGatewayRouteTableId": table["TransitGatewayRouteTableId"]}
+            associations += [{**a, **ident} for a in call(log, "ec2", "get_transit_gateway_route_table_associations", "Associations", dict(ident))]
+            propagations += [{**p, **ident} for p in call(log, "ec2", "get_transit_gateway_route_table_propagations",
+                                                          "TransitGatewayRouteTablePropagations", dict(ident))]
+            # Active and blackhole routes only (pending/deleted ones carry no path); one call returns at most 1,000 routes.
+            found = call(log, "ec2", "search_transit_gateway_routes", None,
+                         {**ident, "Filters": [{"Name": "state", "Values": ["active", "blackhole"]}]})
+            page = found[0] if found else {}
+            routes += [{**r, **ident} for r in page.get("Routes", [])]
+            log[-1]["items"] = len(page.get("Routes", []))
+            if page.get("AdditionalRoutesAvailable"):
+                log[-1].update(status="partial", error_code="AdditionalRoutesAvailable", reason="경로가 1,000개를 넘어 일부만 조회했습니다.")
+        return {"transit_gateway_route_table_associations": associations, "transit_gateway_route_table_propagations": propagations,
+                "transit_gateway_routes": routes}
+
+    def web_acls(log):
+        # Regional web ACLs and the load balancers they protect. CloudFront ACLs come from the global scope; their
+        # distributions name them in ListDistributions.WebACLId.
+        acls = []
+        for acl in call(log, "wafv2", "list_web_acls", "WebACLs", {"Scope": "REGIONAL", "Limit": 100}):
+            arns = call(log, "wafv2", "list_resources_for_web_acl", "ResourceArns",
+                        {"WebACLArn": acl["ARN"], "ResourceType": "APPLICATION_LOAD_BALANCER"})
+            acls.append({**acl, "Scope": "REGIONAL", "ResourceArns": arns})
+        acls += [{**acl, "Scope": "CLOUDFRONT"} for acl in call(log, "wafv2", "list_web_acls", "WebACLs", {"Scope": "CLOUDFRONT", "Limit": 100},
+                                                                client="wafv2/global")]
+        return {"waf_web_acls": acls}
+
+    def direct_connect(log):
+        # The virtual private gateways and Transit Gateways each Direct Connect gateway is associated with.
+        return {"dx_gateway_associations": [a for g in raw["dx_gateways"] for a in call(
+            log, "directconnect", "describe_direct_connect_gateway_associations", "directConnectGatewayAssociations",
+            {"directConnectGatewayId": g["directConnectGatewayId"]})]}
+
+    details = (target_health, eks, msk, opensearch, ecs, efs, sagemaker, transit_routes, web_acls, direct_connect)
     detail_logs = [[] for _ in details]
     with ThreadPoolExecutor(max_workers=workers) as pool:
         updates = list(pool.map(lambda pair: pair[0](pair[1]), zip(details, detail_logs)))
@@ -223,15 +299,17 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
                          "reason": "대상 그룹 조회가 불완전하여 미발견 그룹의 대상은 조회하지 못했습니다."})
     return {"schema_version": 1, "metadata": {
         "account_id": account, "region": region, "profile": profile, "role_arn": role_arn,
-        "partition": identity["Arn"].split(":")[1],
+        "partition": partition,
         "started_at": started, "finished_at": now(), "demo": False,
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
         "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway",
                   "NatGateway", "RouteTable", "RDS", "Aurora", "AutoScalingGroup", "VpcEndpoint", "TransitGatewayAttachment",
                   "EKS", "MSK", "ElastiCache", "Lambda", "OpenSearch", "ECS", "EFS", "Redshift", "VpcPeering", "VPN", "SecurityGroupRules",
-                  "PlacementGroup", "FSx", "SageMakerEndpoint", "SageMakerHyperPod"],
+                  "PlacementGroup", "FSx", "SageMakerEndpoint", "SageMakerHyperPod", "ElasticIP", "TransitGatewayRouteTable",
+                  "CloudFront", "WAF", "DirectConnect"],
         "limitations": ["설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다.",
                         "여러 API의 조회 결과이며 단일 시점의 원자적 스냅샷이 아닙니다.",
                         "ENI·EBS는 EC2 응답의 참조만 표시합니다. 보안 그룹 규칙은 검토 결과와 속성 패널에만 쓰며 구성도에 선으로 그리지 않습니다.",
-                        "리스너 규칙·NACL·Direct Connect·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
+                        "CloudFront·CloudFront용 WAF·Direct Connect 게이트웨이는 계정 전역 리소스라 어느 리전에서 수집해도 같습니다.",
+                        "리스너 규칙·NACL·실제 트래픽은 조회 범위에 포함되지 않습니다."]},
         "coverage": coverage, "raw": raw}

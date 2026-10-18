@@ -37,6 +37,56 @@ def scale_snapshot(vpcs=2, azs=3, instances_per_subnet=12, load_balancers=3, gro
     return snapshot
 
 
+def edge_snapshot():
+    """Edge, Elastic IPs, TGW routing domains and Direct Connect around three VPCs: a TGW-attached web VPC behind CloudFront
+    with WAF, an unattached VPC whose internet ALB is a CloudFront origin without WAF, and a VPC whose virtual private
+    gateway has a private VIF and a VPN; a Direct Connect gateway joins the TGW over two transit VIFs."""
+    from diagram_bot.samples import Sample
+    s = Sample("edge", "Edge and hybrid", [])
+    web = s.vpc("vpc-edge-web", "10.80.0.0/16", "web")
+    pub = [s.subnet(f"subnet-edge-pub-{az}", web, az, f"10.80.{i}.0/24", f"web-public-{az}", "public") for i, az in enumerate("ab")]
+    app = [s.subnet(f"subnet-edge-app-{az}", web, az, f"10.80.{10 + i}.0/24", f"web-app-{az}", "app") for i, az in enumerate("ab")]
+    s.network(web, "edge", "ab", pub, [app])
+    nodes = [s.instance(f"i-edgeweb{az}", app[i], f"web-{az}", sg="sg-edge-web") for i, az in enumerate("ab")]
+    alb = s.load_balancer("web-alb", web, pub, sg="sg-edge-alb")
+    s.target_group("web", web, "HTTPS", 443, nodes, [alb])
+    s.security_group("sg-edge-alb", web, "web-alb", [(443, "0.0.0.0/0")])
+    hub = s.transit_gateway("tgw-edge0000000001", "edge-tgw")
+    s.tgw_attachment("tgw-attach-edge-web", hub, web, app, "web-attachment")
+    shop = s.vpc("vpc-edge-shop", "10.81.0.0/16", "shop")
+    shop_pub = [s.subnet(f"subnet-shop-pub-{az}", shop, az, f"10.81.{i}.0/24", f"shop-public-{az}", "public") for i, az in enumerate("ab")]
+    s.route_table("rtb-shop-public", shop, "shop-public", shop_pub, gateway=s.internet_gateway("igw-shop", shop, "shop-igw"))
+    shop_alb = s.load_balancer("shop-alb", shop, shop_pub, sg="sg-shop-alb")
+    s.security_group("sg-shop-alb", shop, "shop-alb", [(443, "pl-22a6434b")])
+    corp = s.vpc("vpc-edge-corp", "10.82.0.0/16", "corp")
+    corp_app = [s.subnet(f"subnet-corp-app-{az}", corp, az, f"10.82.{i}.0/24", f"corp-app-{az}", "app") for i, az in enumerate("ab")]
+    s.route_table("rtb-corp-main", corp, "corp-main", main=True)
+    s.instance("i-edgecorp", corp_app[0], "corp-app")
+    s.vpn("vpn-edge-corp", "cgw-edge-corp", "203.0.113.70", "corp-cgw", vgw="vgw-edge-corp", vpc=corp)
+    # Private VIF straight onto the virtual private gateway, transit VIFs through a Direct Connect gateway to the TGW.
+    s.raw.setdefault("dx_connections", []).append({"connectionId": "dxcon-edge-corp", "connectionName": "corp-dx", "location": "loc-c",
+                                                   "bandwidth": "1Gbps", "connectionState": "available"})
+    s.raw.setdefault("dx_virtual_interfaces", []).append({"virtualInterfaceId": "dxvif-corp", "virtualInterfaceType": "private",
+                                                          "connectionId": "dxcon-edge-corp", "vlan": 300, "virtualGatewayId": "vgw-edge-corp",
+                                                          "virtualInterfaceState": "available", "bgpPeers": [{"bgpStatus": "down"}]})
+    dxgw = s.dx_gateway("edge-dxgw", tgw=hub, prefixes=["10.80.0.0/16"])
+    s.direct_connect("dxcon-edge-1", "edge-dx-1", "loc-a", dxgw, 101)
+    s.direct_connect("dxcon-edge-2", "edge-dx-2", "loc-b", dxgw, 102)
+    s.raw["dx_gateway_associations"].append({"directConnectGatewayId": dxgw, "associationState": "associated",
+                                             "associatedGateway": {"id": "tgw-other", "type": "transitGateway", "region": "us-west-2"}})
+    acl = s.web_acl("edge-acl", "CLOUDFRONT")
+    s.cloudfront("E1EDGEWEB", "www.example.org", [alb, "edge-static"], acl)
+    s.cloudfront("E2EDGESHOP", "shop.example.org", [shop_alb])
+    s.raw["cloudfront_distributions"][-1]["Origins"]["Items"].append({"Id": "cname", "DomainName": "origin.shop.example.org"})
+    s.web_acl("shop-acl", "REGIONAL", [])
+    s.elastic_ip("eipalloc-edgenat-a", "203.0.113.80", "nat-a-eip", nat="nat-edge-a")
+    s.raw["elastic_ips"] += [{"AllocationId": "eipalloc-edge-i", "PublicIp": "203.0.113.81", "InstanceId": "i-edgeweba", "AssociationId": "x"},
+                             {"AllocationId": "eipalloc-edge-idle", "PublicIp": "203.0.113.82"}]
+    spokes = [("tgw-attach-edge-web", "vpc", web)]
+    s.tgw_route_table("tgw-rtb-edge", hub, "edge-spokes", spokes, spokes, [("10.80.0.0/16", spokes), ("10.99.0.0/16", [])])
+    return s.snapshot()
+
+
 def full_design():
     """A chat-style design using every designer step: two VPCs, peering, VPN."""
     d = Design("쇼핑몰", "us-east-1")

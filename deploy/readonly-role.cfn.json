@@ -57,6 +57,12 @@
                   "Effect": "Allow",
                   "Action": [
                     "autoscaling:DescribeAutoScalingGroups",
+                    "cloudfront:ListDistributions",
+                    "directconnect:DescribeConnections",
+                    "directconnect:DescribeDirectConnectGatewayAssociations",
+                    "directconnect:DescribeDirectConnectGateways",
+                    "directconnect:DescribeVirtualInterfaces",
+                    "ec2:DescribeAddresses",
                     "ec2:DescribeCustomerGateways",
                     "ec2:DescribeInstances",
                     "ec2:DescribeInternetGateways",
@@ -65,6 +71,7 @@
                     "ec2:DescribeRouteTables",
                     "ec2:DescribeSecurityGroups",
                     "ec2:DescribeSubnets",
+                    "ec2:DescribeTransitGatewayRouteTables",
                     "ec2:DescribeTransitGatewayVpcAttachments",
                     "ec2:DescribeTransitGateways",
                     "ec2:DescribeVpcEndpoints",
@@ -72,6 +79,9 @@
                     "ec2:DescribeVpcs",
                     "ec2:DescribeVpnConnections",
                     "ec2:DescribeVpnGateways",
+                    "ec2:GetTransitGatewayRouteTableAssociations",
+                    "ec2:GetTransitGatewayRouteTablePropagations",
+                    "ec2:SearchTransitGatewayRoutes",
                     "ecs:DescribeServices",
                     "ecs:DescribeTasks",
                     "ecs:ListClusters",
@@ -106,7 +116,9 @@
                     "sagemaker:DescribeModel",
                     "sagemaker:ListClusters",
                     "sagemaker:ListEndpoints",
-                    "sts:GetCallerIdentity"
+                    "sts:GetCallerIdentity",
+                    "wafv2:ListResourcesForWebACL",
+                    "wafv2:ListWebACLs"
                   ],
                   "Resource": "*"
                 }

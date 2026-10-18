@@ -150,7 +150,8 @@ def test_service_placement_and_high_availability_roles():
     # EFS mount target per AZ; one Transit Gateway joins both VPCs and terminates two VPNs (two customer gateways).
     assert len(by_kind("efs_mount_target")) == 3
     assert not by_kind("vpc_peering") and not by_kind("vpn_gateway")
-    assert {n["attributes"]["VpcId"] for n in by_kind("tgw_attachment")} == {"vpc-0a1b2c3d4e5f60007", "vpc-0a1b2c3d4e5f60008"}
+    # VPN attachments are known only by reference, from the TGW route table APIs.
+    assert {n["attributes"]["VpcId"] for n in by_kind("tgw_attachment") if not n["reference_only"]} == {"vpc-0a1b2c3d4e5f60007", "vpc-0a1b2c3d4e5f60008"}
     vpns = [e for e in graph["edges"] if e["relation"] == "vpn_connection"]
     assert sorted(nodes[e["target"]]["attributes"]["IpAddress"] for e in vpns) == ["198.51.100.20", "203.0.113.20"]
     assert all(e["details"]["Tunnels"] == "2/2 UP" for e in vpns)
@@ -271,3 +272,50 @@ def test_combined_accounts_share_one_transit_gateway_and_one_peering():
         combine_snapshots(sides[:1])
     with pytest.raises(ValueError, match="두 번"):
         combine_snapshots([sides[0], sides[0]])
+
+
+def test_edge_elastic_ips_routing_domains_and_direct_connect_join_on_api_fields():
+    """Every new relation comes from a named API field: Elastic IP owners, CloudFront origins by DNS name only, WAF
+    associations, TGW route table associations/propagations/routes and Direct Connect VIFs and gateway associations."""
+    from diagram_bot.combine import combine_snapshots
+    from fixtures import edge_snapshot
+    snapshot = edge_snapshot()
+    graph = build_graph(snapshot)
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    named = lambda name: next(n for n in graph["nodes"] if n["name"] == name)
+    out = lambda node, relation: sorted(nodes[e["target"]]["name"] for e in graph["edges"] if e["source"] == node["id"] and e["relation"] == relation)
+    # Elastic IPs: NAT by allocation ID, instance by InstanceId; the idle one joins nothing.
+    assert out(named("nat-a-eip"), "eip_associated") == ["edge-nat-a"] and out(named("203.0.113.81"), "eip_associated") == ["web-a"]
+    assert out(named("203.0.113.82"), "eip_associated") == [] and named("edge-nat-a")["elastic_ips"] == ["203.0.113.80"]
+    # CloudFront: the ALB origin is matched by DNS name, S3 by its endpoint; a CNAME in front of an ALB stays unresolved.
+    web, shop = named("www.example.org"), named("shop.example.org")
+    assert web["id"].split("/")[1] == "global" and web["region"] == "global"
+    assert out(web, "cloudfront_origin") == ["web-alb"] and out(shop, "cloudfront_origin") == ["shop-alb"]
+    assert web["origins"] == [["ELB", "web-alb"], ["S3", "edge-static"]]
+    assert shop["origins"] == [["ELB", "shop-alb"], ["custom", "origin.shop.example.org"]]
+    origin = next(e for e in graph["edges"] if e["relation"] == "cloudfront_origin" and e["source"] == web["id"])
+    assert origin["evidence"] == "ListDistributions.Origins.Items[].DomainName = DescribeLoadBalancers.DNSName" and not origin["inferred"]
+    assert out(named("edge-acl"), "waf_protects") == ["www.example.org"] and web["waf"] == ["edge-acl"] and not shop.get("waf")
+    # TGW routing domain: association, propagation and routes (a blackhole route names no attachment).
+    table = named("edge-spokes")
+    assert out(table, "route_table_of") == ["edge-tgw"]
+    assert out(table, "tgw_rt_association") == out(table, "tgw_rt_propagation") == ["web-attachment"]
+    routes = [e for e in graph["edges"] if e["source"] == table["id"] and e["relation"] == "tgw_route"]
+    assert [e["qualifiers"]["destination"] for e in routes] == ["10.80.0.0/16"]
+    assert [r["State"] for r in table["attributes"]["Routes"]] == ["active", "blackhole"]
+    assert named("web-attachment")["tgw_route_table"] == "edge-spokes" and named("edge-tgw")["route_tables"] == ["edge-spokes"]
+    # Direct Connect: a private VIF on the virtual private gateway, transit VIFs on the DX gateway, the gateway's
+    # association with the TGW; an association in another region is listed, not linked.
+    assert out(named("vgw-edge-corp"), "dx_virtual_interface") == ["corp-dx"]
+    assert out(named("edge-dxgw"), "dx_virtual_interface") == ["edge-dx-1", "edge-dx-2"]
+    assert out(named("edge-dxgw"), "dx_gateway_association") == ["edge-tgw"]
+    assert ["다른 리전의 연결 게이트웨이", "tgw-other (us-west-2)"] in named("edge-dxgw")["properties"]
+    vif = next(e for e in graph["edges"] if e["relation"] == "dx_virtual_interface" and e["target"].endswith("dxcon-edge-corp"))
+    assert vif["details"]["Type"] == "private" and vif["details"]["BGP"] == "0/1 up" and vif["qualifiers"]["destination"] == "dxvif-corp"
+    assert len({e["id"] for e in graph["edges"]}) == len(graph["edges"]) and build_graph(snapshot) == graph
+    # Account-global resources keep one node each when two regions of one account are combined.
+    other = copy.deepcopy(snapshot)
+    other["metadata"]["region"] = "us-west-2"
+    merged = build_graph(combine_snapshots([snapshot, other]))
+    assert sum(n["kind"] == "cloudfront_distribution" for n in merged["nodes"]) == 2
+    assert sum(n["kind"] == "dx_gateway" for n in merged["nodes"]) == 1

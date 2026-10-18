@@ -22,7 +22,8 @@ from diagram_bot.report import write_report  # noqa: E402
 
 REGION, ACCOUNT = "ap-northeast-2", "123456789012"
 # Operations the emulator does not implement; real AWS answers them.
-EMULATOR_GAPS = {"list_nodes", "describe_domain_nodes", "describe_placement_groups"}  # not implemented in moto
+EMULATOR_GAPS = {"list_nodes", "describe_domain_nodes", "describe_placement_groups",  # not implemented in moto
+                 "describe_virtual_interfaces", "describe_direct_connect_gateways"}
 
 
 def build(s, steps):
@@ -147,7 +148,8 @@ def build(s, steps):
         t = ec2.create_transit_gateway()["TransitGateway"]["TransitGatewayId"]
         ec2.create_transit_gateway_vpc_attachment(TransitGatewayId=t, VpcId=vpc, SubnetIds=[sub["app-a"], sub["app-c"]])
     step("tgw", tgw)
-    return {"vpc": vpc, "subnets": sub, "instances": instances, "alb": alb, "tg": tg, "web_sg": web_sg}
+    idle = ec2.allocate_address(Domain="vpc")["AllocationId"]  # reserved, attached to nothing
+    return {"vpc": vpc, "subnets": sub, "instances": instances, "alb": alb, "tg": tg, "web_sg": web_sg, "nat": nat, "eip": eip, "idle": idle}
 
 @pytest.fixture
 def environment(monkeypatch):
@@ -156,7 +158,7 @@ def environment(monkeypatch):
         monkeypatch.setenv(key, value)
     # moto loads service backends lazily; the parallel collector would race on those imports.
     for name in ("ec2", "elb", "elbv2", "rds", "autoscaling", "elasticache", "kafka", "awslambda", "eks", "ecs", "efs", "redshift",
-                 "opensearch", "es", "sts", "iam", "fsx", "sagemaker"):
+                 "opensearch", "es", "sts", "iam", "fsx", "sagemaker", "cloudfront", "wafv2", "directconnect"):
         importlib.import_module(f"moto.{name}.models")
     with moto.mock_aws():
         session = boto3.Session(region_name=REGION)
@@ -191,8 +193,24 @@ def test_collects_a_built_environment_end_to_end(environment, tmp_path):
     # Without ListNodes/DescribeDomainNodes the even spread is shown and marked as an estimate.
     assert all(n["attributes"]["Estimated"] for n in graph["nodes"] if n["kind"] in ("msk_broker", "search_node"))
     assert any(e["relation"] == "vpn_connection" for e in edges)
+    # The NAT gateway's Elastic IP is joined by allocation ID and shown on the NAT; the spare one is reported as idle.
+    nat = by_resource[built["nat"]]
+    assert nat["elastic_ips"] and any(e["relation"] == "eip_associated" and e["target"] == nat["id"] for e in edges)
+    # The Transit Gateway's default route table is associated with the VPC attachment (its routing domain).
+    table = next(n for n in graph["nodes"] if n["kind"] == "tgw_route_table")
+    attachment = next(n for n in graph["nodes"] if n["kind"] == "tgw_attachment" and not n["reference_only"])
+    assert any(e["relation"] == "tgw_rt_association" and e["source"] == table["id"] and e["target"] == attachment["id"] for e in edges)
+    assert attachment["tgw_route_table"] == table["name"]
     findings = {(f["rule"], f["resource_name"]) for f in review(graph, snapshot["coverage"])}
     assert ("SEC-SG-OPEN", "web") in findings and ("OPS-COVERAGE", "수집 범위") in findings
+    idle = by_resource[built["idle"]]["name"]
+    assert ("COST-EIP-IDLE", idle) in findings and ("COST-EIP-IDLE", by_resource[built["eip"]]["name"]) not in findings
+    # No regional web ACL in the account and WAF fully read: the internet-facing ALB is reported (low). The emulator
+    # omits DescribeLoadBalancers.Scheme, which AWS always returns (internet-facing by default).
+    assert next(c for c in snapshot["coverage"] if c["operation"] == "list_web_acls")["status"] == "complete"
+    for lb in snapshot["raw"]["load_balancers"]:
+        lb.setdefault("Scheme", "internet-facing")
+    assert ("SEC-ALB-WAF", "prod-alb") in {(f["rule"], f["resource_name"]) for f in review(build_graph(snapshot), snapshot["coverage"])}
     assert ("SEC-IMDSV1", "web-a") not in findings  # launched with HttpTokens=required
     layout = layout_document(snapshot, "detail", built["vpc"])
     from test_drawio import assert_no_shared_segments, assert_readable

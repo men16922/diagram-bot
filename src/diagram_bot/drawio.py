@@ -16,6 +16,8 @@ RELATIONS = {
     "attached_interface": "ENI 장착", "attached_volume": "EBS 장착",
     "asg_target_group": "Auto Scaling 대상 그룹", "attached_transit_gateway": "TGW 연결",
     "ecs_target_group": "ECS 서비스 대상 그룹", "vpn_connection": "Site-to-Site VPN",
+    "dx_virtual_interface": "Direct Connect 가상 인터페이스", "dx_gateway_association": "Direct Connect 게이트웨이 연결",
+    "cloudfront_origin": "CloudFront 오리진",
 }
 # Resource-level icons from the AWS Architecture Icons set (draw.io aws4 library).
 RESOURCE_ICONS = {
@@ -54,6 +56,7 @@ RESOURCE_ICONS = {
     "trainium": ("trainium_instance", "#ED7100"),
     "inferentia": ("inferentia", "#ED7100"),
     "dl1": ("ec2_dl1_instance", "#ED7100"),
+    "elastic_ip": ("elastic_ip_address", "#8C4FFF"),
 }
 # Square resource-icon tiles for things without a resource-level icon.
 ICONS = {
@@ -74,6 +77,11 @@ ICONS = {
     "fsx_ontap": ("fsx_for_netapp_ontap", "#7AA116"),
     "fsx_openzfs": ("fsx_for_openzfs", "#7AA116"),
     "fsx_windows": ("fsx_for_windows_file_server", "#7AA116"),
+    # Edge and dedicated connectivity: service icons, as AWS has no resource-level icon for them.
+    "cloudfront_distribution": ("cloudfront", "#8C4FFF"),
+    "waf_web_acl": ("waf", "#DD344C"),
+    "dx_gateway": ("direct_connect", "#8C4FFF"),
+    "dx_connection": ("direct_connect", "#8C4FFF"),
 }
 COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
 # Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.
@@ -104,6 +112,8 @@ STYLES = {
     "ecs_frame": (COMMON + "rounded=1;arcSize=4;whiteSpace=wrap;container=0;pointerEvents=0;strokeColor=#ED7100;fillColor=none;"
                   "fontColor=#C25E00;dashed=1;dashPattern=6 3;align=left;spacingLeft=12;verticalAlign=bottom;spacingBottom=4;fontSize=11;"),
     "onprem": AWS_GROUP + "grIcon=mxgraph.aws4.group_corporate_data_center;strokeColor=#7D8998;fillColor=none;fontColor=#5A6C86;dashed=0;",
+    # AWS WAF marker in the corner of a protected resource icon (a child cell of that icon).
+    "badge": COMMON + "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.waf;fillColor=#DD344C;strokeColor=#FFFFFF;gradientColor=none;",
 }
 EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;fontFamily=Arial;fontSize=9;fontColor=#536A82;strokeColor=#7C91A8;strokeWidth=1.5;endArrow=none;labelBackgroundColor=#FFFFFF;"
 
@@ -132,7 +142,7 @@ def resource_style(shape):
         style += f"labelWidth={shape.get('label_width', 140)};align=center;verticalLabelPosition=bottom;verticalAlign=top;spacingTop=8;"
     if shape.get("font_size"):
         style += f"fontSize={shape['font_size']};"
-    if shape.get("outside_vpc") and not icon:
+    if shape.get("outside_vpc") and not icon and not shape_name:
         # Target registered with AvailabilityZone=all: an address outside the VPC (e.g. on premises).
         style += "shape=mxgraph.aws4.traditional_server;fillColor=#232F3D;strokeColor=none;gradientColor=none;"
     elif icon:

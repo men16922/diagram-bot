@@ -53,7 +53,19 @@
         "sagemaker:DescribeEndpointConfig",
         "sagemaker:DescribeModel",
         "sagemaker:ListClusters",
-        "sagemaker:DescribeCluster"
+        "sagemaker:DescribeCluster",
+        "ec2:DescribeAddresses",
+        "ec2:DescribeTransitGatewayRouteTables",
+        "ec2:GetTransitGatewayRouteTableAssociations",
+        "ec2:GetTransitGatewayRouteTablePropagations",
+        "ec2:SearchTransitGatewayRoutes",
+        "cloudfront:ListDistributions",
+        "wafv2:ListWebACLs",
+        "wafv2:ListResourcesForWebACL",
+        "directconnect:DescribeConnections",
+        "directconnect:DescribeVirtualInterfaces",
+        "directconnect:DescribeDirectConnectGateways",
+        "directconnect:DescribeDirectConnectGatewayAssociations"
       ],
       "Resource": "*"
     }

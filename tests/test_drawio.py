@@ -9,7 +9,7 @@ from diagram_bot.editor import install_editor
 from diagram_bot.graph import build_graph
 from diagram_bot.layout import fit_label, icon_variant
 from diagram_bot.samples import SAMPLES
-from fixtures import full_design, scale_snapshot
+from fixtures import edge_snapshot, full_design, scale_snapshot
 
 VIEWS = [("overview", None, None, False), ("detail", "vpc-demo", None, False), ("detail", "vpc-demo", None, True),
          ("detail", "vpc-staging", None, False), ("detail", "vpc-empty", None, False),
@@ -334,8 +334,9 @@ def test_overview_draws_the_network_between_vpcs(key):
     validate_document(generate_document(snapshot))
     relations = sorted(e["relation"] for e in layout["edges"])
     expected = {
+        "three-tier": ["cloudfront_origin"],
         "environments": ["attached_transit_gateway"] * 3,
-        "hybrid": ["attached_transit_gateway"] + ["vpn_connection"] * 2,
+        "hybrid": ["attached_transit_gateway", "dx_gateway_association"] + ["dx_virtual_interface"] * 2 + ["vpn_connection"] * 2,
         "data-platform": ["attached_transit_gateway"] * 2 + ["vpn_connection"] * 2,
         "ai-platform": ["attached_transit_gateway"],
         "multi-account": ["attached_transit_gateway"] * 3 + ["vpn_connection"] * 2,
@@ -352,6 +353,75 @@ def test_overview_draws_peering_and_vpn_gateways():
     kinds = {s.get("kind") for s in layout["shapes"] if s["role"] == "resource"}
     assert {"vpc_peering", "vpn_gateway", "customer_gateway"} <= kinds
     assert sorted(e["relation"] for e in layout["edges"]) == ["in_vpc", "in_vpc", "peer_vpc", "vpn_connection"]
+
+
+def test_edge_and_direct_connect_views_are_readable():
+    """CloudFront at the edge (one VPC on the TGW, one below the hub band), WAF badges, a DX gateway joined to the TGW and
+    a private VIF onto a virtual private gateway pass the same checks as the samples in every view."""
+    snapshot = edge_snapshot()
+    graph = build_graph(snapshot)
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    overview = layout_document(snapshot, "overview")
+    assert_readable(overview)
+    assert_no_shared_segments(overview)
+    assert_routes_avoid_cards(overview)
+    assert sorted(e["relation"] for e in overview["edges"]) == sorted(
+        ["attached_transit_gateway", "in_vpc", "cloudfront_origin", "cloudfront_origin", "dx_gateway_association", "dx_virtual_interface",
+         "dx_virtual_interface", "dx_virtual_interface", "vpn_connection"])
+    shapes = {s.get("resource"): s for s in overview["shapes"] if s["role"] == "resource"}
+    # CloudFront stands outside the Region box, in the AWS Cloud; its routes enter the VPC cards from above.
+    for cf in (n for n in graph["nodes"] if n["kind"] == "cloudfront_distribution"):
+        assert shapes[cf["id"]]["parent"] == "cloud"
+    region = next(s for s in overview["shapes"] if s["id"] == "region")
+    assert all(overview["absolute"][shapes[k]["id"]][0] + 52 < overview["absolute"]["region"][0] for k in shapes if nodes[k]["kind"] == "cloudfront_distribution")
+    assert region["x"] > 20
+    # WAF badge on the protected distribution only, opening its web ACL.
+    badges = [s for s in overview["shapes"] if s["role"] == "badge"]
+    assert [nodes[b["resource"]]["name"] for b in badges] == ["edge-acl"]
+    assert all(b["parent"] == shapes[k]["id"] for b in badges for k in shapes if nodes[k].get("waf"))
+    # Direct Connect connections sit in the data center box with the customer gateway.
+    box = next(s for s in overview["shapes"] if s["id"] == "onprem")
+    assert box["label"].endswith("·DX")
+    assert {nodes[k]["kind"] for k, s in shapes.items() if s["parent"] == "onprem"} == {"customer_gateway", "dx_connection"}
+    for vpc in ("vpc-edge-web", "vpc-edge-shop", "vpc-edge-corp"):
+        for references in (False, True):
+            layout = layout_document(snapshot, "detail", vpc, None, references)
+            assert_readable(layout)
+            assert_no_shared_segments(layout)
+    corp = layout_document(snapshot, "detail", "vpc-edge-corp")
+    assert sorted(e["relation"] for e in corp["edges"] if e["relation"] in ("vpn_connection", "dx_virtual_interface")) == ["dx_virtual_interface", "vpn_connection"]
+    web = layout_document(snapshot, "detail", "vpc-edge-web")
+    edge = next(e for e in web["edges"] if e["relation"] == "cloudfront_origin")
+    assert edge["path"][0][0] < web["absolute"]["region"][0] < edge["path"][-1][0] and not edge["auxiliary"]
+    assert any(s["role"] == "badge" for s in web["shapes"])
+    for kind in ("cloudfront_distribution", "dx_connection", "dx_gateway", "load_balancer", "vpn_gateway", "transit_gateway"):
+        for node in (n for n in graph["nodes"] if n["kind"] == kind and not n["reference_only"]):
+            layout = layout_document(snapshot, "focus", None, node["id"], True)
+            assert_readable(layout)
+            assert_no_shared_segments(layout)
+    xml = generate_document(snapshot)
+    validate_document(xml)
+    for icon in ("resIcon=mxgraph.aws4.cloudfront;", "resIcon=mxgraph.aws4.waf;", "resIcon=mxgraph.aws4.direct_connect;"):
+        assert icon in xml
+    assert generate_document(snapshot) == xml
+
+
+def test_edge_labels_carry_elastic_ips_waf_and_route_tables():
+    from diagram_bot.layout import resource_label
+    snapshot = edge_snapshot()
+    graph = build_graph(snapshot)
+    by_name = {n["name"]: n for n in graph["nodes"] if not n["reference_only"]}
+    assert resource_label(by_name["edge-nat-a"]).splitlines()[-1] == "EIP 203.0.113.80"
+    assert "EIP 203.0.113.81" in resource_label(by_name["web-a"])
+    assert resource_label(by_name["edge-tgw"]).endswith("라우팅 테이블 1")
+    assert resource_label(by_name["www.example.org"]).splitlines()[1:] == ["CloudFront", "d" + by_name["www.example.org"]["attributes"]["DomainName"][1:],
+                                                                            "오리진 ELB 1 · S3 1"]
+    assert resource_label(by_name["edge-dx-1"]) == "edge-dx-1\nDirect Connect · 10Gbps\nloc-a\nVIF 1 · available"
+    card = next(s for s in layout_document(snapshot, "overview")["shapes"] if s.get("resource", "").endswith("/vpc/vpc-edge-web") and s["role"] == "summary")
+    assert "TGW 라우팅 테이블 · edge-spokes" in card["label"]
+    nlb = layout_document(SAMPLES["nlb-alb"](), "detail", "vpc-0a1b2c3d4e5f60003")
+    labels = {s["label"].split("\n")[0]: s["label"] for s in nlb["shapes"] if s["role"] == "resource"}
+    assert labels["partner-nlb"].endswith("AZ 2개 · EIP 2") and labels["partner-alb"].endswith("AZ 2개 · WAF")
 
 
 @pytest.mark.parametrize("key", sorted(SAMPLES))

@@ -8,7 +8,7 @@ import hashlib
 import re
 
 SEVERITIES = ("high", "medium", "low")
-PILLARS = {"reliability": "안정성", "security": "보안", "operations": "운영", "ai": "AI/ML"}
+PILLARS = {"reliability": "안정성", "security": "보안", "operations": "운영", "ai": "AI/ML", "cost": "비용"}
 # Ports that should never be open to the internet: remote administration and data stores.
 ADMIN_PORTS = {22: "SSH", 3389: "RDP"}
 DATA_PORTS = {3306: "MySQL", 5432: "PostgreSQL", 1433: "SQL Server", 1521: "Oracle", 6379: "Redis", 11211: "Memcached",
@@ -272,6 +272,7 @@ def review(graph, coverage=()):
                 "프라이빗 엔드포인트를 쓰거나 publicAccessCidrs를 회사 대역으로 제한하세요.")
 
     ai_review(graph, nodes, edges, collected, out, add)
+    edge_review(nodes, edges, collected, coverage, add)
 
     # --- Operations --------------------------------------------------------------------------
     missing = [c for c in coverage if c.get("status") not in ("complete", None)]
@@ -412,6 +413,61 @@ def ai_review(graph, nodes, edges, collected, out, add):
             add("SEC-HYPERPOD-PUBLIC", "high", "ai", cluster["id"], "HyperPod 클러스터가 퍼블릭 서브넷에 있음",
                 "DescribeCluster.VpcConfig.Subnets → 0.0.0.0/0 → IGW",
                 "HyperPod는 프라이빗 서브넷에 두고 S3 엔드포인트와 필요한 인터페이스 엔드포인트로 통신하세요 (GENSEC01-BP02, HyperPod 사전 조건).")
+
+
+def waf_collected(coverage, node):
+    """Regional WAF associations were read completely for the load balancer's account and region."""
+    rows = [c for c in coverage if c.get("service") == "wafv2" and (c.get("parameters") or {}).get("Scope") != "CLOUDFRONT"
+            and c.get("account_id", node["account"]) == node["account"] and c.get("region", node["region"]) == node["region"]]
+    return any(c.get("operation") == "list_web_acls" for c in rows) and all(c.get("status") == "complete" for c in rows)
+
+
+def edge_review(nodes, edges, collected, coverage, add):
+    """Edge protection, static addresses and Transit Gateway routing, from API fields only (never a reachability test)."""
+    fronts = {}
+    for e in edges:
+        if e["relation"] == "cloudfront_origin" and e["source"] in nodes:
+            fronts.setdefault(e["target"], []).append(nodes[e["source"]])
+    groups = {g["resource_id"]: g for g in collected("security_group")}
+    for lb in collected("load_balancer"):
+        a = lb["attributes"]
+        if a.get("Type") != "application" or a.get("Scheme") != "internet-facing":
+            continue
+        edge_waf = [d for d in fronts.get(lb["id"], []) if d["attributes"].get("WebACLId")]
+        if not lb.get("waf") and not edge_waf and waf_collected(coverage, lb):
+            via = f" · 앞단 CloudFront {', '.join(d['name'] for d in fronts[lb['id']])}도 WebACLId 없음" if fronts.get(lb["id"]) else ""
+            add("SEC-ALB-WAF", "low", "security", lb["id"], "인터넷 ALB에 AWS WAF 웹 ACL 없음",
+                f"ListWebACLs(REGIONAL)·ListResourcesForWebACL: 이 ALB 없음 · DescribeLoadBalancers.Scheme = internet-facing{via}",
+                "AWS WAF 웹 ACL(관리형 규칙: 핵심 규칙 세트·알려진 악성 입력·IP 평판)을 ALB에 연결하거나, WAF가 연결된 CloudFront 뒤에 두세요 "
+                "(인터넷 진입점 보호, docs/ARCHITECTURE.md C6 · REL02-BP01).")
+        sgs = a.get("SecurityGroups") or []
+        if not fronts.get(lb["id"]) or not sgs or any(sg not in groups for sg in sgs):
+            continue  # judged only for a CloudFront origin whose every security group was collected
+        open_rules = [f"{sg}: {r.get('IpProtocol')} {r.get('FromPort', '*')}-{r.get('ToPort', '*')} ← {', '.join(sorted(sources))}"
+                      for sg in sgs for r in groups[sg]["attributes"].get("IpPermissions", [])
+                      if (sources := ({x.get("CidrIp") for x in r.get("IpRanges", [])} | {x.get("CidrIpv6") for x in r.get("Ipv6Ranges", [])}) & WORLD)]
+        if open_rules:
+            add("SEC-CF-ORIGIN-OPEN", "low", "security", lb["id"], "CloudFront 오리진 ALB에 인터넷(0.0.0.0/0)에서 직접 접근 허용 (설정상)",
+                f"ListDistributions.Origins → 이 ALB ({', '.join(d['name'] for d in fronts[lb['id']])}) · DescribeSecurityGroups.IpPermissions {'; '.join(open_rules[:3])}",
+                "CloudFront와 WAF를 우회해 ALB로 직접 들어올 수 있는 설정입니다. 보안 그룹을 CloudFront 관리형 접두사 목록"
+                "(com.amazonaws.global.cloudfront.origin-facing)으로 좁히거나, CloudFront가 넣는 사용자 지정 헤더를 리스너 규칙에서 확인하거나, "
+                "CloudFront VPC 오리진과 내부 ALB를 쓰세요. 실제 접근 시험은 하지 않았습니다.")
+    joined = {e["source"] for e in edges if e["relation"] == "eip_associated"}
+    for address in collected("elastic_ip"):
+        a = address["attributes"]
+        if not (a.get("AssociationId") or a.get("InstanceId") or a.get("NetworkInterfaceId") or address["id"] in joined):
+            add("COST-EIP-IDLE", "low", "cost", address["id"], f"연결되지 않은 Elastic IP {a.get('PublicIp', '')}".strip(),
+                f"DescribeAddresses: AssociationId·InstanceId·NetworkInterfaceId 없음 ({a.get('AllocationId') or a.get('PublicIp')})",
+                "퍼블릭 IPv4 주소는 연결 여부와 관계없이 시간당 과금됩니다. 쓰지 않으면 해제(ReleaseAddress)하고, 고정 IP를 예약해 둔 것이면 "
+                "태그로 용도와 담당을 남기세요.")
+    for table in collected("tgw_route_table"):
+        holes = [r for r in table["attributes"].get("Routes", []) if r.get("State") == "blackhole"]
+        if holes:
+            listed = ", ".join(f"{r.get('DestinationCidrBlock') or r.get('PrefixListId')} ({r.get('Type', '?')})" for r in holes[:5])
+            add("REL-TGW-BLACKHOLE", "low", "reliability", table["id"], f"TGW 라우팅 테이블에 blackhole 경로 {len(holes)}개 (일치하는 트래픽은 버려짐)",
+                f"SearchTransitGatewayRoutes(state=blackhole): {listed}",
+                "스포크 간 격리처럼 의도한 차단이면 그대로 두고 설명 태그를 남기세요. 삭제된 attachment를 가리키다 남은 경로라면 정리하거나 "
+                "올바른 attachment로 바꾸세요 (TGW 라우팅 테이블 격리 설계).")
 
 
 def summary(findings):
