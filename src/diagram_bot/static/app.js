@@ -1,8 +1,9 @@
-import {names, relationNames, routeClasses, statuses, viewNames} from './js/labels.js';
+import {names, pillarNames, relationNames, routeClasses, severityNames, statuses, viewNames} from './js/labels.js';
 import {createClient} from './js/http.js';
 import {startRelay} from './js/relay.js';
 const $ = id => document.getElementById(id);
-const state = {token:null,snapshot:null,snapshotId:null,view:'overview',vpc:null,focus:null,references:false,routes:null,revision:0,xml:null,history:[],visible:null,counts:null,ready:false,loading:true,dirty:false,busy:false,mode:'diagram',selected:null};
+const state = {token:null,role:null,team:false,snapshots:[],snapshot:null,snapshotId:null,review:null,view:'overview',vpc:null,focus:null,references:false,routes:null,revision:0,xml:null,history:[],visible:null,
+  ready:false,loading:true,dirty:false,busy:false,scrollY:0,mode:'diagram',selected:null,identity:null,sso:null,ssoDefaults:null,ssoTimer:null,chatReady:undefined,chatBusy:false};
 const {api, request, streamApi} = createClient(() => state.token);
 window.diagramBot = {state};  // for browser checks (scripts/verify_demo.py) and debugging
 const pending = new Map();
@@ -11,6 +12,8 @@ const emptyDetail=document.querySelector('#detail-body .empty-detail');
 function el(tag, text, className) { const element=document.createElement(tag); if(text!==undefined)element.textContent=text; if(className)element.className=className; return element; }
 // Notices describe the current diagram; a new snapshot or view drops them (errors stay until they time out).
 function clearNotice() { if($('toast').className!=='error'){$('toast').hidden=true;clearTimeout(toastTimer);} }
+// Runs a click handler and shows its failure; every button handler goes through it.
+const guard = handler => () => Promise.resolve().then(handler).catch(error=>toast(error.message,true));
 function toast(message, error=false) { $('toast').textContent=message; $('toast').className=error?'error':''; $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true,error?8500:4000); }
 function post(message) { $('editor').contentWindow.postMessage(JSON.stringify(message),location.origin); }
 const node = id => state.snapshot.graph.nodes.find(n=>n.id===id);
@@ -62,7 +65,7 @@ window.addEventListener('message', event=>{
     post({action:'diagramBotOverview'});
   }
   if(message.event==='autosave'&&!state.loading){state.dirty=true;setControls();}
-  if(message.event==='save'&&!state.loading)saveDocument().catch(e=>toast(e.message,true));
+  if(message.event==='save'&&!state.loading)guard(saveDocument)();
   if(message.event==='diagramBotDocument'||message.event==='diagramBotError'){
     const task=pending.get(message.requestId);if(task){clearTimeout(task.timer);pending.delete(message.requestId);message.error?task.reject(new Error(message.error)):task.resolve(message.xml);}
     else if(message.error)toast(message.error,true);
@@ -91,7 +94,7 @@ async function refreshSnapshots(preferred) {
 let snapshotSeq=0,viewSeq=0;
 async function loadSnapshot(id) {
   const seq=++snapshotSeq;
-  if(state.dirty)await saveDocument(false);
+  await flushEdits();
   clearNotice();
   const [snapshot,review]=await Promise.all([api(`/api/snapshots/${id}`),api(`/api/snapshots/${id}/findings`)]);
   if(seq!==snapshotSeq)return;
@@ -130,7 +133,7 @@ function renderSummary() {
   $('limitations').replaceChildren(...[...(m.practices||[]).map(s=>'반영한 권장 사항: '+s),...(m.limitations||[])].map(s=>el('li',s)));
 }
 function applyDocument(document) {
-  state.xml=document.xml;state.revision=document.revision;state.history=document.history||[];state.visible=new Set(document.visible||[]);state.counts=document.counts;
+  state.xml=document.xml;state.revision=document.revision;state.history=document.history||[];state.visible=new Set(document.visible||[]);
   const c=document.counts;
   $('view-scope').textContent=c?`표시 ${c.visible}개 / 수집 ${c.collected}개 · 참조 ${c.references}개 · 이 보기에서 숨김 ${c.hidden}개`+(c.filtered?` (경로 필터 ${c.filtered}개 포함)`:''):'';
 }
@@ -151,7 +154,7 @@ async function loadView() {
     const loaded=await api(documentUrl());if(seq!==viewSeq)return;
     applyDocument(loaded);state.dirty=false;
     const title=state.view==='detail'?vpcNode(state.vpc)?.name:state.view==='focus'?node(state.focus)?.name:'AWS 전체 구성';
-    $('environment-title').textContent=title||'AWS 구성도';$('crumb-view').textContent={overview:'전체 구성',detail:'상세 구성',focus:'선택 리소스'}[state.view];
+    $('environment-title').textContent=title||'AWS 구성도';$('crumb-view').textContent=viewNames[state.view];
     documentActive();if(state.selected&&node(state.selected))showResource(state.selected,false);
     if(state.ready)sendDocument();else{state.loading=false;setControls();}
   }catch(error){if(seq!==viewSeq)return;state.loading=false;setControls();throw error;}
@@ -166,13 +169,14 @@ async function switchView(view, options={}) {
   if(state.loading||state.busy)return;
   clearNotice();
   try{
-    if(state.dirty)await saveDocument(false);
+    await flushEdits();
     // A route filter belongs to one VPC's detail view.
     if(view!=='detail'||(options.vpc&&options.vpc!==state.vpc))state.routes=null;
     state.view=view;if(options.vpc)state.vpc=options.vpc;if(options.focus)state.focus=options.focus;
     await loadView();
   }catch(error){toast(error.message,true);}
 }
+async function flushEdits() {if(state.dirty)await saveDocument(false);}
 async function saveDocument(notify=true) {
   if(state.role==='viewer'){state.dirty=false;return;}
   if(state.busy)throw new Error('이전 작업을 완료한 뒤 다시 시도하세요.');
@@ -185,7 +189,7 @@ async function saveDocument(notify=true) {
   }finally{state.busy=false;setControls();}
 }
 async function replaceDocument(suffix, body, message) {
-  if(state.dirty)await saveDocument(false);
+  await flushEdits();
   state.busy=true;setControls();
   try{applyDocument(await api(documentUrl(suffix),{method:'POST',body:JSON.stringify({revision:state.revision,...body})}));}
   finally{state.busy=false;setControls();}
@@ -203,7 +207,6 @@ function renderInventory() {
   const active=Boolean($('search').value)||$('kind-filter').value!=='all';$('search-results').hidden=!active||state.mode==='inventory';$('search-results').replaceChildren();
   if(active){$('search-results').append(el('span',`${viewNames[state.view]} 범위 · ${matches.length}개`,'search-scope'));for(const item of matches.slice(0,30)){const button=el('button',item.name);button.onclick=()=>showResource(item.id);$('search-results').append(button);}if(!matches.length)$('search-results').append(el('span','검색 결과가 없습니다.'));}
 }
-const severityNames={high:'높음',medium:'중간',low:'낮음'},pillarNames={reliability:'안정성',security:'보안',operations:'운영',ai:'AI/ML',cost:'비용'};
 function renderReview() {
   const {summary,findings}=state.review||{summary:{},findings:[]};
   $('finding-count').textContent=summary.high?`${summary.high} 높음`:findings.length;
@@ -236,7 +239,7 @@ async function renderChanges() {
   $('changes-empty').hidden=Object.values(s).some(Boolean);
 }
 function relationsOf(id) {return state.snapshot.graph.edges.filter(e=>(e.source===id||e.target===id)&&e.relation!=='in_vpc');}
-function actionButton(label, handler) {const button=el('button',label,'button');button.onclick=()=>Promise.resolve().then(handler).catch(error=>toast(error.message,true));return button;}
+function actionButton(label, handler) {const button=el('button',label,'button');button.onclick=guard(handler);return button;}
 function showResource(id, select=true) {
   const item=node(id);if(!item)return;state.selected=id;setControls();
   const body=$('detail-body');body.replaceChildren(el('div',names[item.kind]||item.kind,'detail-kind'),el('h3',item.name,'detail-name'),el('div',item.resource_id,'detail-id'));
@@ -246,8 +249,8 @@ function showResource(id, select=true) {
   if(item.kind!=='vpc'&&!(state.view==='focus'&&state.focus===id))actions.append(actionButton('선택 리소스 보기',()=>switchView('focus',{focus:id})));
   if(state.view==='focus')actions.append(actionButton('상세 구성으로 돌아가기',()=>switchView('detail',{vpc:vpcOf(state.focus)||state.vpc})));
   if(state.view==='detail'&&['load_balancer','target_group'].includes(item.kind)&&state.routes!==id&&vpcOf(id)===state.vpc)
-    actions.append(actionButton('이 경로만 보기',async()=>{if(state.loading||state.busy)return;if(state.dirty)await saveDocument(false);state.routes=id;await loadView();}));
-  if(state.view==='detail'&&state.routes)actions.append(actionButton('모든 경로 보기',async()=>{if(state.loading||state.busy)return;if(state.dirty)await saveDocument(false);state.routes=null;await loadView();}));
+    actions.append(actionButton('이 경로만 보기',async()=>{if(state.loading||state.busy)return;await flushEdits();state.routes=id;await loadView();}));
+  if(state.view==='detail'&&state.routes)actions.append(actionButton('모든 경로 보기',async()=>{if(state.loading||state.busy)return;await flushEdits();state.routes=null;await loadView();}));
   const related=relationsOf(id).map(e=>e.id);
   if(related.length&&state.view!=='overview')actions.append(actionButton('직접 관계 강조',()=>post({action:'diagramBotSelect',resourceId:id,relations:related})));
   if(actions.children.length)body.append(actions);
@@ -297,7 +300,11 @@ async function downloadPng() {
   }finally{state.busy=false;setControls();$('download-png').disabled=false;}
 }
 function csvCell(value){let text=typeof value==='object'?JSON.stringify(value):String(value??'');if(/^\s*[=+\-@]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';}
-function downloadCsv(){const fields=['account','region','kind','resource_id','name','reference_only','source','attributes'];const rows=[fields,...state.snapshot.graph.nodes.map(n=>fields.map(f=>n[f]))];download('inventory.csv','﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
+// Excel opens UTF-8 CSV correctly only with a BOM.
+function downloadCsv(name, rows){download(name,'\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
+function downloadInventory(){const fields=['account','region','kind','resource_id','name','reference_only','source','attributes'];downloadCsv('inventory.csv',[fields,...state.snapshot.graph.nodes.map(n=>fields.map(f=>n[f]))]);}
+function downloadFindings(){const fields=['severity','pillar','rule','resource_name','resource','title','evidence','recommendation'];
+  downloadCsv(`diagram-bot-review-${state.snapshot.metadata.account_id}-${state.snapshot.metadata.region}.csv`,[fields,...(state.review?.findings||[]).map(f=>fields.map(k=>k==='severity'?severityNames[f[k]]:k==='pillar'?pillarNames[f[k]]:f[k]))]);}
 // CloudFormation draft from the stored snapshot (not the edited diagram); a combined snapshot gives one template per account × region.
 async function downloadCloudFormation(){
   const parts=state.snapshot.metadata.parts||[null];let unsupported=0;
@@ -309,7 +316,7 @@ async function downloadCloudFormation(){
   }
   toast(`CloudFormation 템플릿 초안 ${parts.length}개를 다운로드했습니다. 매개변수와 Metadata.DiagramBot(미지원 ${unsupported}개·가정)을 검토하세요.`);
 }
-function bind(id, handler) {$(id).onclick=()=>Promise.resolve().then(handler).catch(error=>toast(error.message,true));}
+function bind(id, handler) {$(id).onclick=guard(handler);}
 bind('all-environments',()=>switchView('overview'));
 bind('view-overview',()=>switchView('overview'));
 bind('view-detail',()=>switchView('detail',{vpc:state.vpc}));
@@ -402,7 +409,7 @@ bind('sso-login',async()=>{
   state.sso=flow;$('sso-code').textContent=flow.user_code;$('sso-link').href=flow.verification_uri_complete;$('sso-status').textContent='승인을 기다리는 중…';
   ssoView('device');state.ssoTimer=setTimeout(ssoPoll,flow.interval*1000);
 });
-$('sso-account').onchange=()=>ssoRoles().catch(error=>toast(error.message,true));
+$('sso-account').onchange=guard(ssoRoles);
 bind('sso-logout',async()=>{if(state.sso)await api(`/api/sso/login/${state.sso.id}/logout`,{method:'POST'});ssoStop();$('aws-account').value='';ssoView('form');
   if(state.identity?.via==='sso'){state.identity=null;renderProfile();}});
 bind('close-collection',()=>{$('collection-dialog').close();});
@@ -410,12 +417,12 @@ bind('note-button',()=>post({action:'diagramBotNote'}));
 bind('reset-button',()=>replaceDocument('/relayout',{},'자동 배치를 다시 실행했습니다. 이전 편집본은 보관되고 메모는 유지됩니다.'));
 bind('restore-button',()=>{const last=state.history.at(-1);return replaceDocument('/restore',{from_revision:last.revision},`보관된 v${last.revision} 편집본을 복원했습니다.`);});
 bind('download-drawio',downloadDiagram);bind('download-png',downloadPng);
-bind('download-json',()=>download('snapshot.json',JSON.stringify(state.snapshot,null,2),'application/json'));bind('download-csv',downloadCsv);bind('download-cfn',downloadCloudFormation);
-bind('download-findings',()=>{const fields=['severity','pillar','rule','resource_name','resource','title','evidence','recommendation'];const rows=[fields,...(state.review?.findings||[]).map(f=>fields.map(k=>k==='severity'?severityNames[f[k]]:k==='pillar'?pillarNames[f[k]]:f[k]))];download(`diagram-bot-review-${state.snapshot.metadata.account_id}-${state.snapshot.metadata.region}.csv`,'\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');});
+bind('download-json',()=>download('snapshot.json',JSON.stringify(state.snapshot,null,2),'application/json'));bind('download-csv',downloadInventory);bind('download-cfn',downloadCloudFormation);
+bind('download-findings',downloadFindings);
 bind('import-button',()=>$('import-file').click());
 const modes=['diagram','inventory','review','changes'];
 for(const mode of modes)bind(mode+'-tab',async()=>{state.mode=mode;$('canvas-area').hidden=mode!=='diagram';for(const panel of modes.slice(1))$(panel).hidden=mode!==panel;for(const tab of modes){$(tab+'-tab').classList.toggle('active',mode===tab);$(tab+'-tab').setAttribute('aria-selected',String(mode===tab));}renderInventory();if(mode==='changes')await renderChanges();});
-$('compare-select').onchange=()=>renderChanges().catch(e=>toast(e.message,true));
+$('compare-select').onchange=guard(renderChanges);
 $('severity-filter').onchange=renderReview;
 $('search').oninput=renderInventory;$('kind-filter').onchange=renderInventory;
 // Multi-account: pick account × region collections (not samples, designs or combined views) and merge them.
@@ -435,9 +442,9 @@ $('combine-form').onsubmit=async event=>{
     $('combine-dialog').close();await refreshSnapshots(result.id);await loadSnapshot(result.id);toast('계정 통합 보기를 만들었습니다.');
   }catch(error){toast(error.message,true);}
 };
-$('snapshot-select').onchange=()=>loadSnapshot($('snapshot-select').value).catch(e=>toast(e.message,true));
-$('references').onchange=async()=>{try{if(state.dirty)await saveDocument(false);state.references=$('references').checked;await loadView();}catch(e){toast(e.message,true);$('references').checked=state.references;}};
-$('route-filter').onchange=async()=>{const previous=state.routes;try{if(state.dirty)await saveDocument(false);state.routes=$('route-filter').value||null;clearNotice();await loadView();}catch(e){state.routes=previous;$('route-filter').value=previous||'';toast(e.message,true);}};
+$('snapshot-select').onchange=guard(()=>loadSnapshot($('snapshot-select').value));
+$('references').onchange=async()=>{try{await flushEdits();state.references=$('references').checked;await loadView();}catch(e){toast(e.message,true);$('references').checked=state.references;}};
+$('route-filter').onchange=async()=>{const previous=state.routes;try{await flushEdits();state.routes=$('route-filter').value||null;clearNotice();await loadView();}catch(e){state.routes=previous;$('route-filter').value=previous||'';toast(e.message,true);}};
 $('import-file').onchange=async()=>{
   try{const file=$('import-file').files[0];if(!file)return;if(file.size>15*1024*1024)throw new Error('스냅샷은 최대 15 MiB입니다.');const data=JSON.parse(await file.text());const result=await api('/api/snapshots',{method:'POST',body:JSON.stringify(data)});await refreshSnapshots(result.id);await loadSnapshot(result.id);toast('스냅샷을 가져왔습니다.');}catch(error){toast(error.message,true);}finally{$('import-file').value='';}
 };
@@ -492,7 +499,7 @@ $('chat-form').onsubmit=async event=>{
   state.chatBusy=true;$('chat-send').disabled=true;
   let loading=null;
   try{
-    if(state.dirty)await saveDocument(false);
+    await flushEdits();
     $('chat-input').value='';chatMessage('user',message);
     const waiting=chatMessage('system','설계하는 중…'),status=waiting.querySelector('.chat-text');
     let reply=null,text='',shown=null,pending=null,result;
@@ -523,8 +530,8 @@ for(const button of document.querySelectorAll('.chat-suggestion'))button.onclick
 window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefault();event.returnValue='';}});
 async function start() {
   const boot=await api('/api/bootstrap');state.token=boot.token;state.role=boot.user.role;
-  state.team=boot.team;state.egress=boot.egress;
-  if(boot.egress==='browser'){startRelay(api,{onRequests:n=>{state.relayed=(state.relayed||0)+n;}});$('egress-note').hidden=false;}
+  state.team=boot.team;
+  if(boot.egress==='browser'){startRelay(api);$('egress-note').hidden=false;}
   if(boot.team){const name=boot.user.name;$('user-avatar').textContent=name.slice(0,2).toUpperCase();$('user-avatar').title=`${name} · ${boot.user.role}`;
     $('user-role').textContent=`${name} · ${{viewer:'보기 전용',editor:'편집',admin:'관리자'}[boot.user.role]}`;$('user-role').hidden=false;$('logout-button').hidden=false;}
   bind('logout-button',async()=>{await api('/api/logout',{method:'POST'});location.href='/login';});
