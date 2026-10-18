@@ -20,16 +20,17 @@
   "schema_version": 1,
   "metadata": {
     "account_id": "111122223333",
-    "region": "ap-northeast-2",
+    "region": "us-east-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:32.892842+00:00",
-    "finished_at": "2026-10-17T21:52:32.892842+00:00",
+    "started_at": "2026-10-18T09:34:35.205922+00:00",
+    "finished_at": "2026-10-18T09:34:35.205922+00:00",
     "status": "complete",
     "demo": true,
     "sample": "gpu-training",
-    "sample_version": 3,
+    "sample_version": 6,
     "title": "GPU 분산 학습 클러스터 (EFA · Capacity Block · FSx for Lustre · HyperPod)",
     "practices": [
+      "리전은 us-east-2(오하이오): p5와 trn2를 같은 VPC에 두려면 두 유형을 모두 제공하는 리전이어야 함 (서울 리전에는 trn2가 없음)",
       "강결합 학습 노드는 한 AZ의 전용 /20 컴퓨트 서브넷에, 모든 EFA 노드가 자기 참조 전체 허용 보안 그룹 공유 (EFA는 AZ·VPC를 넘지 못함, HPCREL01-BP02)",
       "p5 학습 큐는 Capacity Block(UltraCluster 자동 배치), trn2 큐는 클러스터 배치 그룹 + 용량 예약(ODCR): 둘은 함께 쓸 수 없음 (EC2 Capacity Blocks)",
       "학습 데이터·체크포인트는 같은 AZ의 FSx for Lustre PERSISTENT_2 (GENREL06-BP01, HPCREL01-BP01, MLCOST06-BP03)",
@@ -62,11 +63,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
@@ -324,7 +330,7 @@
       {
         "SubnetId": "subnet-trn-pub-a",
         "VpcId": "vpc-0a1b2c3d4e5f60011",
-        "AvailabilityZone": "ap-northeast-2a",
+        "AvailabilityZone": "us-east-2a",
         "CidrBlock": "10.120.0.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
@@ -342,7 +348,7 @@
       {
         "SubnetId": "subnet-trn-pub-b",
         "VpcId": "vpc-0a1b2c3d4e5f60011",
-        "AvailabilityZone": "ap-northeast-2b",
+        "AvailabilityZone": "us-east-2b",
         "CidrBlock": "10.120.1.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
@@ -360,7 +366,7 @@
       {
         "SubnetId": "subnet-trn-head-a",
         "VpcId": "vpc-0a1b2c3d4e5f60011",
-        "AvailabilityZone": "ap-northeast-2a",
+        "AvailabilityZone": "us-east-2a",
         "CidrBlock": "10.120.10.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
@@ -378,7 +384,7 @@
       {
         "SubnetId": "subnet-trn-head-b",
         "VpcId": "vpc-0a1b2c3d4e5f60011",
-        "AvailabilityZone": "ap-northeast-2b",
+        "AvailabilityZone": "us-east-2b",
         "CidrBlock": "10.120.11.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
@@ -396,7 +402,7 @@
       {
         "SubnetId": "subnet-trn-compute-a",
         "VpcId": "vpc-0a1b2c3d4e5f60011",
-        "AvailabilityZone": "ap-northeast-2a",
+        "AvailabilityZone": "us-east-2a",
         "CidrBlock": "10.120.32.0/20",
         "MapPublicIpOnLaunch": false,
         "Tags": [
@@ -423,7 +429,7 @@
         },
         "PrivateIpAddress": "10.0.1.11",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a"
+          "AvailabilityZone": "us-east-2a"
         },
         "MetadataOptions": {
           "HttpTokens": "required"
@@ -463,7 +469,7 @@
         },
         "PrivateIpAddress": "10.0.2.12",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a"
+          "AvailabilityZone": "us-east-2a"
         },
         "MetadataOptions": {
           "HttpTokens": "required"
@@ -503,7 +509,7 @@
         },
         "PrivateIpAddress": "10.0.3.13",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2b"
+          "AvailabilityZone": "us-east-2b"
         },
         "MetadataOptions": {
           "HttpTokens": "required"
@@ -543,7 +549,7 @@
         },
         "PrivateIpAddress": "10.0.4.14",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a"
+          "AvailabilityZone": "us-east-2a"
         },
         "InstanceLifecycle": "capacity-block",
         "MetadataOptions": {
@@ -584,7 +590,7 @@
         },
         "PrivateIpAddress": "10.0.5.15",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a"
+          "AvailabilityZone": "us-east-2a"
         },
         "InstanceLifecycle": "capacity-block",
         "MetadataOptions": {
@@ -625,7 +631,7 @@
         },
         "PrivateIpAddress": "10.0.6.16",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a"
+          "AvailabilityZone": "us-east-2a"
         },
         "InstanceLifecycle": "capacity-block",
         "MetadataOptions": {
@@ -666,7 +672,7 @@
         },
         "PrivateIpAddress": "10.0.7.17",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a"
+          "AvailabilityZone": "us-east-2a"
         },
         "InstanceLifecycle": "capacity-block",
         "MetadataOptions": {
@@ -707,7 +713,7 @@
         },
         "PrivateIpAddress": "10.0.8.18",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a",
+          "AvailabilityZone": "us-east-2a",
           "GroupName": "trn2-pg"
         },
         "MetadataOptions": {
@@ -749,7 +755,7 @@
         },
         "PrivateIpAddress": "10.0.9.19",
         "Placement": {
-          "AvailabilityZone": "ap-northeast-2a",
+          "AvailabilityZone": "us-east-2a",
           "GroupName": "trn2-pg"
         },
         "MetadataOptions": {
@@ -970,12 +976,12 @@
         "Instances": [
           {
             "InstanceId": "i-trnlogina00000011",
-            "AvailabilityZone": "ap-northeast-2a",
+            "AvailabilityZone": "us-east-2a",
             "LifecycleState": "InService"
           },
           {
             "InstanceId": "i-trnloginb00000011",
-            "AvailabilityZone": "ap-northeast-2b",
+            "AvailabilityZone": "us-east-2b",
             "LifecycleState": "InService"
           }
         ]
@@ -987,7 +993,7 @@
         "VpcId": "vpc-0a1b2c3d4e5f60011",
         "VpcEndpointType": "Gateway",
         "State": "available",
-        "ServiceName": "com.amazonaws.ap-northeast-2.s3",
+        "ServiceName": "com.amazonaws.us-east-2.s3",
         "RouteTableIds": [
           "rtb-trn-private-a",
           "rtb-trn-private-b"
@@ -1004,7 +1010,7 @@
         "VpcId": "vpc-0a1b2c3d4e5f60011",
         "VpcEndpointType": "Interface",
         "State": "available",
-        "ServiceName": "com.amazonaws.ap-northeast-2.ssm",
+        "ServiceName": "com.amazonaws.us-east-2.ssm",
         "SubnetIds": [
           "subnet-trn-head-a",
           "subnet-trn-head-b"
@@ -1022,7 +1028,7 @@
         "VpcId": "vpc-0a1b2c3d4e5f60011",
         "VpcEndpointType": "Interface",
         "State": "available",
-        "ServiceName": "com.amazonaws.ap-northeast-2.ssmmessages",
+        "ServiceName": "com.amazonaws.us-east-2.ssmmessages",
         "SubnetIds": [
           "subnet-trn-head-a",
           "subnet-trn-head-b"
@@ -1040,7 +1046,7 @@
         "VpcId": "vpc-0a1b2c3d4e5f60011",
         "VpcEndpointType": "Interface",
         "State": "available",
-        "ServiceName": "com.amazonaws.ap-northeast-2.ec2messages",
+        "ServiceName": "com.amazonaws.us-east-2.ec2messages",
         "SubnetIds": [
           "subnet-trn-head-a",
           "subnet-trn-head-b"
@@ -1058,7 +1064,7 @@
         "VpcId": "vpc-0a1b2c3d4e5f60011",
         "VpcEndpointType": "Interface",
         "State": "available",
-        "ServiceName": "com.amazonaws.ap-northeast-2.logs",
+        "ServiceName": "com.amazonaws.us-east-2.logs",
         "SubnetIds": [
           "subnet-trn-head-a",
           "subnet-trn-head-b"
@@ -1076,7 +1082,7 @@
         "VpcId": "vpc-0a1b2c3d4e5f60011",
         "VpcEndpointType": "Interface",
         "State": "available",
-        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+        "ServiceName": "com.amazonaws.us-east-2.ecr.api",
         "SubnetIds": [
           "subnet-trn-head-a",
           "subnet-trn-head-b"
@@ -1094,7 +1100,7 @@
         "VpcId": "vpc-0a1b2c3d4e5f60011",
         "VpcEndpointType": "Interface",
         "State": "available",
-        "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
+        "ServiceName": "com.amazonaws.us-east-2.ecr.dkr",
         "SubnetIds": [
           "subnet-trn-head-a",
           "subnet-trn-head-b"
@@ -1112,7 +1118,7 @@
         "VpcId": "vpc-0a1b2c3d4e5f60011",
         "VpcEndpointType": "Interface",
         "State": "available",
-        "ServiceName": "com.amazonaws.ap-northeast-2.sts",
+        "ServiceName": "com.amazonaws.us-east-2.sts",
         "SubnetIds": [
           "subnet-trn-head-a",
           "subnet-trn-head-b"
@@ -1239,7 +1245,7 @@
         "SubnetIds": [
           "subnet-trn-compute-a"
         ],
-        "KmsKeyId": "arn:aws:kms:ap-northeast-2:111122223333:key/fsx",
+        "KmsKeyId": "arn:aws:kms:us-east-2:111122223333:key/fsx",
         "LustreConfiguration": {
           "DeploymentType": "PERSISTENT_2",
           "PerUnitStorageThroughput": 500,
@@ -1257,7 +1263,7 @@
     "sagemaker_clusters": [
       {
         "ClusterName": "hp-slurm",
-        "ClusterArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:cluster/hp-slurm",
+        "ClusterArn": "arn:aws:sagemaker:us-east-2:111122223333:cluster/hp-slurm",
         "ClusterStatus": "InService",
         "InstanceGroups": [
           {
@@ -1285,12 +1291,12 @@
   "graph": {
     "nodes": [
       {
-        "id": "111122223333/ap-northeast-2/auto_scaling_group/trn-login-asg",
+        "id": "111122223333/us-east-2/auto_scaling_group/trn-login-asg",
         "resource_id": "trn-login-asg",
         "kind": "auto_scaling_group",
         "name": "trn-login-asg",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "AutoScalingGroupName": "trn-login-asg",
           "MinSize": 2,
@@ -1302,12 +1308,12 @@
           "Instances": [
             {
               "InstanceId": "i-trnlogina00000011",
-              "AvailabilityZone": "ap-northeast-2a",
+              "AvailabilityZone": "us-east-2a",
               "LifecycleState": "InService"
             },
             {
               "InstanceId": "i-trnloginb00000011",
-              "AvailabilityZone": "ap-northeast-2b",
+              "AvailabilityZone": "us-east-2b",
               "LifecycleState": "InService"
             }
           ]
@@ -1316,12 +1322,12 @@
         "source": "DescribeAutoScalingGroups"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trnhead0000000011",
+        "id": "111122223333/us-east-2/ec2/i-trnhead0000000011",
         "resource_id": "i-trnhead0000000011",
         "kind": "ec2",
         "name": "slurm-head",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trnhead0000000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1332,7 +1338,7 @@
           },
           "PrivateIpAddress": "10.0.1.11",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a"
+            "AvailabilityZone": "us-east-2a"
           },
           "MetadataOptions": {
             "HttpTokens": "required"
@@ -1366,12 +1372,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trnlogina00000011",
+        "id": "111122223333/us-east-2/ec2/i-trnlogina00000011",
         "resource_id": "i-trnlogina00000011",
         "kind": "ec2",
         "name": "login-a",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trnlogina00000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1382,7 +1388,7 @@
           },
           "PrivateIpAddress": "10.0.2.12",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a"
+            "AvailabilityZone": "us-east-2a"
           },
           "MetadataOptions": {
             "HttpTokens": "required"
@@ -1416,12 +1422,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trnloginb00000011",
+        "id": "111122223333/us-east-2/ec2/i-trnloginb00000011",
         "resource_id": "i-trnloginb00000011",
         "kind": "ec2",
         "name": "login-b",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trnloginb00000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1432,7 +1438,7 @@
           },
           "PrivateIpAddress": "10.0.3.13",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2b"
+            "AvailabilityZone": "us-east-2b"
           },
           "MetadataOptions": {
             "HttpTokens": "required"
@@ -1466,12 +1472,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trnp500000000011",
+        "id": "111122223333/us-east-2/ec2/i-trnp500000000011",
         "resource_id": "i-trnp500000000011",
         "kind": "ec2",
         "name": "p5-train-1",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trnp500000000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1482,7 +1488,7 @@
           },
           "PrivateIpAddress": "10.0.4.14",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a"
+            "AvailabilityZone": "us-east-2a"
           },
           "InstanceLifecycle": "capacity-block",
           "MetadataOptions": {
@@ -1517,12 +1523,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trnp510000000011",
+        "id": "111122223333/us-east-2/ec2/i-trnp510000000011",
         "resource_id": "i-trnp510000000011",
         "kind": "ec2",
         "name": "p5-train-2",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trnp510000000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1533,7 +1539,7 @@
           },
           "PrivateIpAddress": "10.0.5.15",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a"
+            "AvailabilityZone": "us-east-2a"
           },
           "InstanceLifecycle": "capacity-block",
           "MetadataOptions": {
@@ -1568,12 +1574,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trnp520000000011",
+        "id": "111122223333/us-east-2/ec2/i-trnp520000000011",
         "resource_id": "i-trnp520000000011",
         "kind": "ec2",
         "name": "p5-train-3",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trnp520000000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1584,7 +1590,7 @@
           },
           "PrivateIpAddress": "10.0.6.16",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a"
+            "AvailabilityZone": "us-east-2a"
           },
           "InstanceLifecycle": "capacity-block",
           "MetadataOptions": {
@@ -1619,12 +1625,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trnp530000000011",
+        "id": "111122223333/us-east-2/ec2/i-trnp530000000011",
         "resource_id": "i-trnp530000000011",
         "kind": "ec2",
         "name": "p5-train-4",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trnp530000000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1635,7 +1641,7 @@
           },
           "PrivateIpAddress": "10.0.7.17",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a"
+            "AvailabilityZone": "us-east-2a"
           },
           "InstanceLifecycle": "capacity-block",
           "MetadataOptions": {
@@ -1670,12 +1676,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trntrn0000000011",
+        "id": "111122223333/us-east-2/ec2/i-trntrn0000000011",
         "resource_id": "i-trntrn0000000011",
         "kind": "ec2",
         "name": "trn2-train-1",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trntrn0000000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1686,7 +1692,7 @@
           },
           "PrivateIpAddress": "10.0.8.18",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a",
+            "AvailabilityZone": "us-east-2a",
             "GroupName": "trn2-pg"
           },
           "MetadataOptions": {
@@ -1722,12 +1728,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/ec2/i-trntrn1000000011",
+        "id": "111122223333/us-east-2/ec2/i-trntrn1000000011",
         "resource_id": "i-trntrn1000000011",
         "kind": "ec2",
         "name": "trn2-train-2",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InstanceId": "i-trntrn1000000011",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1738,7 +1744,7 @@
           },
           "PrivateIpAddress": "10.0.9.19",
           "Placement": {
-            "AvailabilityZone": "ap-northeast-2a",
+            "AvailabilityZone": "us-east-2a",
             "GroupName": "trn2-pg"
           },
           "MetadataOptions": {
@@ -1774,12 +1780,12 @@
         "source": "DescribeInstances"
       },
       {
-        "id": "111122223333/ap-northeast-2/fsx_file_system/fs-0trainingdata011",
+        "id": "111122223333/us-east-2/fsx_file_system/fs-0trainingdata011",
         "resource_id": "fs-0trainingdata011",
         "kind": "fsx_file_system",
         "name": "training-data",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "FileSystemId": "fs-0trainingdata011",
           "FileSystemType": "LUSTRE",
@@ -1790,7 +1796,7 @@
           "SubnetIds": [
             "subnet-trn-compute-a"
           ],
-          "KmsKeyId": "arn:aws:kms:ap-northeast-2:111122223333:key/fsx",
+          "KmsKeyId": "arn:aws:kms:us-east-2:111122223333:key/fsx",
           "LustreConfiguration": {
             "DeploymentType": "PERSISTENT_2",
             "PerUnitStorageThroughput": 500,
@@ -1807,12 +1813,12 @@
         "source": "DescribeFileSystems"
       },
       {
-        "id": "111122223333/ap-northeast-2/internet_gateway/igw-trn",
+        "id": "111122223333/us-east-2/internet_gateway/igw-trn",
         "resource_id": "igw-trn",
         "kind": "internet_gateway",
         "name": "trn-igw",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "InternetGatewayId": "igw-trn",
           "Attachments": [
@@ -1832,12 +1838,12 @@
         "source": "DescribeInternetGateways"
       },
       {
-        "id": "111122223333/ap-northeast-2/nat_gateway/nat-trn-a",
+        "id": "111122223333/us-east-2/nat_gateway/nat-trn-a",
         "resource_id": "nat-trn-a",
         "kind": "nat_gateway",
         "name": "trn-nat-a",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "NatGatewayId": "nat-trn-a",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1855,12 +1861,12 @@
         "source": "DescribeNatGateways"
       },
       {
-        "id": "111122223333/ap-northeast-2/nat_gateway/nat-trn-b",
+        "id": "111122223333/us-east-2/nat_gateway/nat-trn-b",
         "resource_id": "nat-trn-b",
         "kind": "nat_gateway",
         "name": "trn-nat-b",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "NatGatewayId": "nat-trn-b",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -1878,111 +1884,111 @@
         "source": "DescribeNatGateways"
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trnhead0000000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trnhead0000000011",
         "resource_id": "eni-trnhead0000000011",
         "kind": "network_interface",
         "name": "eni-trnhead0000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trnlogina00000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trnlogina00000011",
         "resource_id": "eni-trnlogina00000011",
         "kind": "network_interface",
         "name": "eni-trnlogina00000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trnloginb00000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trnloginb00000011",
         "resource_id": "eni-trnloginb00000011",
         "kind": "network_interface",
         "name": "eni-trnloginb00000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trnp500000000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trnp500000000011",
         "resource_id": "eni-trnp500000000011",
         "kind": "network_interface",
         "name": "eni-trnp500000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trnp510000000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trnp510000000011",
         "resource_id": "eni-trnp510000000011",
         "kind": "network_interface",
         "name": "eni-trnp510000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trnp520000000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trnp520000000011",
         "resource_id": "eni-trnp520000000011",
         "kind": "network_interface",
         "name": "eni-trnp520000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trnp530000000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trnp530000000011",
         "resource_id": "eni-trnp530000000011",
         "kind": "network_interface",
         "name": "eni-trnp530000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trntrn0000000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trntrn0000000011",
         "resource_id": "eni-trntrn0000000011",
         "kind": "network_interface",
         "name": "eni-trntrn0000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/network_interface/eni-trntrn1000000011",
+        "id": "111122223333/us-east-2/network_interface/eni-trntrn1000000011",
         "resource_id": "eni-trntrn1000000011",
         "kind": "network_interface",
         "name": "eni-trntrn1000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/placement_group/trn2-pg",
+        "id": "111122223333/us-east-2/placement_group/trn2-pg",
         "resource_id": "trn2-pg",
         "kind": "placement_group",
         "name": "trn2-pg",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "GroupName": "trn2-pg",
           "GroupId": "pg-7fdde3ae82c1973cc",
@@ -1993,12 +1999,12 @@
         "source": "DescribePlacementGroups"
       },
       {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-trn-main",
+        "id": "111122223333/us-east-2/route_table/rtb-trn-main",
         "resource_id": "rtb-trn-main",
         "kind": "route_table",
         "name": "trn-isolated",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "RouteTableId": "rtb-trn-main",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -2026,12 +2032,12 @@
         "source": "DescribeRouteTables"
       },
       {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-trn-private-a",
+        "id": "111122223333/us-east-2/route_table/rtb-trn-private-a",
         "resource_id": "rtb-trn-private-a",
         "kind": "route_table",
         "name": "trn-private-a",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "RouteTableId": "rtb-trn-private-a",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -2073,12 +2079,12 @@
         "source": "DescribeRouteTables"
       },
       {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-trn-private-b",
+        "id": "111122223333/us-east-2/route_table/rtb-trn-private-b",
         "resource_id": "rtb-trn-private-b",
         "kind": "route_table",
         "name": "trn-private-b",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "RouteTableId": "rtb-trn-private-b",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -2116,12 +2122,12 @@
         "source": "DescribeRouteTables"
       },
       {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-trn-public",
+        "id": "111122223333/us-east-2/route_table/rtb-trn-public",
         "resource_id": "rtb-trn-public",
         "kind": "route_table",
         "name": "trn-public",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "RouteTableId": "rtb-trn-public",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
@@ -2158,15 +2164,15 @@
         "source": "DescribeRouteTables"
       },
       {
-        "id": "111122223333/ap-northeast-2/sagemaker_cluster/hp-slurm",
+        "id": "111122223333/us-east-2/sagemaker_cluster/hp-slurm",
         "resource_id": "hp-slurm",
         "kind": "sagemaker_cluster",
         "name": "hp-slurm",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "ClusterName": "hp-slurm",
-          "ClusterArn": "arn:aws:sagemaker:ap-northeast-2:111122223333:cluster/hp-slurm",
+          "ClusterArn": "arn:aws:sagemaker:us-east-2:111122223333:cluster/hp-slurm",
           "ClusterStatus": "InService",
           "InstanceGroups": [
             {
@@ -2193,12 +2199,12 @@
         "source": "DescribeCluster"
       },
       {
-        "id": "111122223333/ap-northeast-2/security_group/sg-trn-efa",
+        "id": "111122223333/us-east-2/security_group/sg-trn-efa",
         "resource_id": "sg-trn-efa",
         "kind": "security_group",
         "name": "trn-efa",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "GroupId": "sg-trn-efa",
           "GroupName": "trn-efa",
@@ -2246,12 +2252,12 @@
         "source": "DescribeSecurityGroups"
       },
       {
-        "id": "111122223333/ap-northeast-2/security_group/sg-trn-head",
+        "id": "111122223333/us-east-2/security_group/sg-trn-head",
         "resource_id": "sg-trn-head",
         "kind": "security_group",
         "name": "trn-head",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "GroupId": "sg-trn-head",
           "GroupName": "trn-head",
@@ -2283,16 +2289,16 @@
         "source": "DescribeSecurityGroups"
       },
       {
-        "id": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "id": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "resource_id": "subnet-trn-compute-a",
         "kind": "subnet",
         "name": "compute-a",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "SubnetId": "subnet-trn-compute-a",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
-          "AvailabilityZone": "ap-northeast-2a",
+          "AvailabilityZone": "us-east-2a",
           "CidrBlock": "10.120.32.0/20",
           "MapPublicIpOnLaunch": false,
           "Tags": [
@@ -2313,16 +2319,16 @@
         "route_table": "rtb-trn-private-a"
       },
       {
-        "id": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "id": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "resource_id": "subnet-trn-head-a",
         "kind": "subnet",
         "name": "head-a",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "SubnetId": "subnet-trn-head-a",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
-          "AvailabilityZone": "ap-northeast-2a",
+          "AvailabilityZone": "us-east-2a",
           "CidrBlock": "10.120.10.0/24",
           "MapPublicIpOnLaunch": false,
           "Tags": [
@@ -2343,16 +2349,16 @@
         "route_table": "rtb-trn-private-a"
       },
       {
-        "id": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "id": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "resource_id": "subnet-trn-head-b",
         "kind": "subnet",
         "name": "head-b",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "SubnetId": "subnet-trn-head-b",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
-          "AvailabilityZone": "ap-northeast-2b",
+          "AvailabilityZone": "us-east-2b",
           "CidrBlock": "10.120.11.0/24",
           "MapPublicIpOnLaunch": false,
           "Tags": [
@@ -2373,16 +2379,16 @@
         "route_table": "rtb-trn-private-b"
       },
       {
-        "id": "111122223333/ap-northeast-2/subnet/subnet-trn-pub-a",
+        "id": "111122223333/us-east-2/subnet/subnet-trn-pub-a",
         "resource_id": "subnet-trn-pub-a",
         "kind": "subnet",
         "name": "public-a",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "SubnetId": "subnet-trn-pub-a",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
-          "AvailabilityZone": "ap-northeast-2a",
+          "AvailabilityZone": "us-east-2a",
           "CidrBlock": "10.120.0.0/24",
           "MapPublicIpOnLaunch": true,
           "Tags": [
@@ -2403,16 +2409,16 @@
         "route_table": "rtb-trn-public"
       },
       {
-        "id": "111122223333/ap-northeast-2/subnet/subnet-trn-pub-b",
+        "id": "111122223333/us-east-2/subnet/subnet-trn-pub-b",
         "resource_id": "subnet-trn-pub-b",
         "kind": "subnet",
         "name": "public-b",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "SubnetId": "subnet-trn-pub-b",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
-          "AvailabilityZone": "ap-northeast-2b",
+          "AvailabilityZone": "us-east-2b",
           "CidrBlock": "10.120.1.0/24",
           "MapPublicIpOnLaunch": true,
           "Tags": [
@@ -2433,111 +2439,111 @@
         "route_table": "rtb-trn-public"
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trnhead0000000011",
+        "id": "111122223333/us-east-2/volume/vol-trnhead0000000011",
         "resource_id": "vol-trnhead0000000011",
         "kind": "volume",
         "name": "vol-trnhead0000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trnlogina00000011",
+        "id": "111122223333/us-east-2/volume/vol-trnlogina00000011",
         "resource_id": "vol-trnlogina00000011",
         "kind": "volume",
         "name": "vol-trnlogina00000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trnloginb00000011",
+        "id": "111122223333/us-east-2/volume/vol-trnloginb00000011",
         "resource_id": "vol-trnloginb00000011",
         "kind": "volume",
         "name": "vol-trnloginb00000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trnp500000000011",
+        "id": "111122223333/us-east-2/volume/vol-trnp500000000011",
         "resource_id": "vol-trnp500000000011",
         "kind": "volume",
         "name": "vol-trnp500000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trnp510000000011",
+        "id": "111122223333/us-east-2/volume/vol-trnp510000000011",
         "resource_id": "vol-trnp510000000011",
         "kind": "volume",
         "name": "vol-trnp510000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trnp520000000011",
+        "id": "111122223333/us-east-2/volume/vol-trnp520000000011",
         "resource_id": "vol-trnp520000000011",
         "kind": "volume",
         "name": "vol-trnp520000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trnp530000000011",
+        "id": "111122223333/us-east-2/volume/vol-trnp530000000011",
         "resource_id": "vol-trnp530000000011",
         "kind": "volume",
         "name": "vol-trnp530000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trntrn0000000011",
+        "id": "111122223333/us-east-2/volume/vol-trntrn0000000011",
         "resource_id": "vol-trntrn0000000011",
         "kind": "volume",
         "name": "vol-trntrn0000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/volume/vol-trntrn1000000011",
+        "id": "111122223333/us-east-2/volume/vol-trntrn1000000011",
         "resource_id": "vol-trntrn1000000011",
         "kind": "volume",
         "name": "vol-trntrn1000000011",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {},
         "reference_only": true,
         "source": null
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "id": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "resource_id": "vpc-0a1b2c3d4e5f60011",
         "kind": "vpc",
         "name": "gpu-training",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "CidrBlock": "10.120.0.0/16",
@@ -2556,18 +2562,18 @@
         "source": "DescribeVpcs"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ec2messages",
+        "id": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ec2messages",
         "resource_id": "vpce-trn-ec2messages",
         "kind": "vpc_endpoint",
         "name": "ec2messages-endpoint",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcEndpointId": "vpce-trn-ec2messages",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "VpcEndpointType": "Interface",
           "State": "available",
-          "ServiceName": "com.amazonaws.ap-northeast-2.ec2messages",
+          "ServiceName": "com.amazonaws.us-east-2.ec2messages",
           "SubnetIds": [
             "subnet-trn-head-a",
             "subnet-trn-head-b"
@@ -2585,18 +2591,18 @@
         "source": "DescribeVpcEndpoints"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ecr-api",
+        "id": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ecr-api",
         "resource_id": "vpce-trn-ecr-api",
         "kind": "vpc_endpoint",
         "name": "ecr.api-endpoint",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcEndpointId": "vpce-trn-ecr-api",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "VpcEndpointType": "Interface",
           "State": "available",
-          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.api",
+          "ServiceName": "com.amazonaws.us-east-2.ecr.api",
           "SubnetIds": [
             "subnet-trn-head-a",
             "subnet-trn-head-b"
@@ -2614,18 +2620,18 @@
         "source": "DescribeVpcEndpoints"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ecr-dkr",
+        "id": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ecr-dkr",
         "resource_id": "vpce-trn-ecr-dkr",
         "kind": "vpc_endpoint",
         "name": "ecr.dkr-endpoint",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcEndpointId": "vpce-trn-ecr-dkr",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "VpcEndpointType": "Interface",
           "State": "available",
-          "ServiceName": "com.amazonaws.ap-northeast-2.ecr.dkr",
+          "ServiceName": "com.amazonaws.us-east-2.ecr.dkr",
           "SubnetIds": [
             "subnet-trn-head-a",
             "subnet-trn-head-b"
@@ -2643,18 +2649,18 @@
         "source": "DescribeVpcEndpoints"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-logs",
+        "id": "111122223333/us-east-2/vpc_endpoint/vpce-trn-logs",
         "resource_id": "vpce-trn-logs",
         "kind": "vpc_endpoint",
         "name": "logs-endpoint",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcEndpointId": "vpce-trn-logs",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "VpcEndpointType": "Interface",
           "State": "available",
-          "ServiceName": "com.amazonaws.ap-northeast-2.logs",
+          "ServiceName": "com.amazonaws.us-east-2.logs",
           "SubnetIds": [
             "subnet-trn-head-a",
             "subnet-trn-head-b"
@@ -2672,18 +2678,18 @@
         "source": "DescribeVpcEndpoints"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-s3",
+        "id": "111122223333/us-east-2/vpc_endpoint/vpce-trn-s3",
         "resource_id": "vpce-trn-s3",
         "kind": "vpc_endpoint",
         "name": "s3-gateway-endpoint",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcEndpointId": "vpce-trn-s3",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "VpcEndpointType": "Gateway",
           "State": "available",
-          "ServiceName": "com.amazonaws.ap-northeast-2.s3",
+          "ServiceName": "com.amazonaws.us-east-2.s3",
           "RouteTableIds": [
             "rtb-trn-private-a",
             "rtb-trn-private-b"
@@ -2700,18 +2706,18 @@
         "source": "DescribeVpcEndpoints"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ssm",
+        "id": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ssm",
         "resource_id": "vpce-trn-ssm",
         "kind": "vpc_endpoint",
         "name": "ssm-endpoint",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcEndpointId": "vpce-trn-ssm",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "VpcEndpointType": "Interface",
           "State": "available",
-          "ServiceName": "com.amazonaws.ap-northeast-2.ssm",
+          "ServiceName": "com.amazonaws.us-east-2.ssm",
           "SubnetIds": [
             "subnet-trn-head-a",
             "subnet-trn-head-b"
@@ -2729,18 +2735,18 @@
         "source": "DescribeVpcEndpoints"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ssmmessages",
+        "id": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ssmmessages",
         "resource_id": "vpce-trn-ssmmessages",
         "kind": "vpc_endpoint",
         "name": "ssmmessages-endpoint",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcEndpointId": "vpce-trn-ssmmessages",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "VpcEndpointType": "Interface",
           "State": "available",
-          "ServiceName": "com.amazonaws.ap-northeast-2.ssmmessages",
+          "ServiceName": "com.amazonaws.us-east-2.ssmmessages",
           "SubnetIds": [
             "subnet-trn-head-a",
             "subnet-trn-head-b"
@@ -2758,18 +2764,18 @@
         "source": "DescribeVpcEndpoints"
       },
       {
-        "id": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-sts",
+        "id": "111122223333/us-east-2/vpc_endpoint/vpce-trn-sts",
         "resource_id": "vpce-trn-sts",
         "kind": "vpc_endpoint",
         "name": "sts-endpoint",
         "account": "111122223333",
-        "region": "ap-northeast-2",
+        "region": "us-east-2",
         "attributes": {
           "VpcEndpointId": "vpce-trn-sts",
           "VpcId": "vpc-0a1b2c3d4e5f60011",
           "VpcEndpointType": "Interface",
           "State": "available",
-          "ServiceName": "com.amazonaws.ap-northeast-2.sts",
+          "ServiceName": "com.amazonaws.us-east-2.sts",
           "SubnetIds": [
             "subnet-trn-head-a",
             "subnet-trn-head-b"
@@ -2789,626 +2795,626 @@
     ],
     "edges": [
       {
-        "source": "111122223333/ap-northeast-2/auto_scaling_group/trn-login-asg",
-        "target": "111122223333/ap-northeast-2/ec2/i-trnlogina00000011",
+        "source": "111122223333/us-east-2/auto_scaling_group/trn-login-asg",
+        "target": "111122223333/us-east-2/ec2/i-trnlogina00000011",
         "relation": "asg_member",
         "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
         "qualifiers": {},
         "details": {
-          "availability_zone": "ap-northeast-2a"
+          "availability_zone": "us-east-2a"
         },
         "inferred": false,
-        "id": "rel-fed9cf6aeac52c26111f"
+        "id": "rel-d3dc6092a04c7860eb20"
       },
       {
-        "source": "111122223333/ap-northeast-2/auto_scaling_group/trn-login-asg",
-        "target": "111122223333/ap-northeast-2/ec2/i-trnloginb00000011",
+        "source": "111122223333/us-east-2/auto_scaling_group/trn-login-asg",
+        "target": "111122223333/us-east-2/ec2/i-trnloginb00000011",
         "relation": "asg_member",
         "evidence": "DescribeAutoScalingGroups.Instances[].InstanceId",
         "qualifiers": {},
         "details": {
-          "availability_zone": "ap-northeast-2b"
+          "availability_zone": "us-east-2b"
         },
         "inferred": false,
-        "id": "rel-2cf9f2d42ad5801e67db"
+        "id": "rel-093e68d1d0b986f1fba8"
       },
       {
-        "source": "111122223333/ap-northeast-2/auto_scaling_group/trn-login-asg",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/auto_scaling_group/trn-login-asg",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-d7a4b4cc08aa80f18789"
+        "id": "rel-8184cf6791e50d2e4adc"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnhead0000000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trnhead0000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnhead0000000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trnhead0000000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-f1c14e8f69528c2d33b9"
+        "id": "rel-ffe9becca82d1a9426aa"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnhead0000000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trnhead0000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnhead0000000011",
+        "target": "111122223333/us-east-2/volume/vol-trnhead0000000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-cd1f3bf45d2dd0936561"
+        "id": "rel-e631c707684d3266a629"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnhead0000000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/ec2/i-trnhead0000000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-dcb55bdd46b6f74d1ae5"
+        "id": "rel-c9c15c2ff6df8dc926ef"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnhead0000000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trnhead0000000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-03e654e4a590c2da0169"
+        "id": "rel-688f5802eb9d3a980075"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnhead0000000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-head",
+        "source": "111122223333/us-east-2/ec2/i-trnhead0000000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-head",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-6e780d3d75e6fcf0c46e"
+        "id": "rel-14b3f145dd76639b3c65"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnlogina00000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trnlogina00000011",
+        "source": "111122223333/us-east-2/ec2/i-trnlogina00000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trnlogina00000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-849c6e44f8c1ebd7f62f"
+        "id": "rel-76d48b165b5dacb957ff"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnlogina00000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trnlogina00000011",
+        "source": "111122223333/us-east-2/ec2/i-trnlogina00000011",
+        "target": "111122223333/us-east-2/volume/vol-trnlogina00000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-df1f27ad4b3f75e81b0c"
+        "id": "rel-304175431664a8618de0"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnlogina00000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/ec2/i-trnlogina00000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-8e6928b8674c0a8dffed"
+        "id": "rel-b3ab80d6115a9796550e"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnlogina00000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trnlogina00000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-466de9ccaac99b33e112"
+        "id": "rel-31937bcd3844cb7f3ce5"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnlogina00000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-head",
+        "source": "111122223333/us-east-2/ec2/i-trnlogina00000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-head",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-f66ecbf03dfdf11e7191"
+        "id": "rel-04f53bd93fa9f6b41836"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnloginb00000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trnloginb00000011",
+        "source": "111122223333/us-east-2/ec2/i-trnloginb00000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trnloginb00000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-17eb3745681e5a9b9859"
+        "id": "rel-e9e50230534d46b64b9b"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnloginb00000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trnloginb00000011",
+        "source": "111122223333/us-east-2/ec2/i-trnloginb00000011",
+        "target": "111122223333/us-east-2/volume/vol-trnloginb00000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-69f716caa79757be41e0"
+        "id": "rel-30161a9a99764c3a4828"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnloginb00000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/ec2/i-trnloginb00000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-feaa0ef851d2eed91aa6"
+        "id": "rel-b68caa9c1ca4813877c8"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnloginb00000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trnloginb00000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-b98910f1234e550228d1"
+        "id": "rel-326f64cda09057fb3a21"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnloginb00000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-head",
+        "source": "111122223333/us-east-2/ec2/i-trnloginb00000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-head",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-547ce8bf1b15ca6673a4"
+        "id": "rel-82dd2e63aa5988a4a61e"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp500000000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trnp500000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnp500000000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trnp500000000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-119b7ee16c16f098381a"
+        "id": "rel-9c5d2feb04f8b5e7783d"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp500000000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trnp500000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnp500000000011",
+        "target": "111122223333/us-east-2/volume/vol-trnp500000000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-6a569030f203d8cf86c7"
+        "id": "rel-603fad4fb92f14176227"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp500000000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/ec2/i-trnp500000000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-d00b0efae2efe845e0a8"
+        "id": "rel-1d4f2eb0c7e994e3e2f4"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp500000000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trnp500000000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-9879c2498cd755f6de09"
+        "id": "rel-48afa2b89eecf26f9276"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp500000000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-efa",
+        "source": "111122223333/us-east-2/ec2/i-trnp500000000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-efa",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-4203ebf9e4129a77998f"
+        "id": "rel-06486f3331f19a079144"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp510000000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trnp510000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnp510000000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trnp510000000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-53f46f3d04a109478570"
+        "id": "rel-b61091752eaa5f74b95f"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp510000000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trnp510000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnp510000000011",
+        "target": "111122223333/us-east-2/volume/vol-trnp510000000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-9aff5466c6fae3df9fd3"
+        "id": "rel-8eb318e736d3d4c7f1ee"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp510000000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/ec2/i-trnp510000000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-79a4264aa5f2d5cfcc69"
+        "id": "rel-5f9b03a994d23c5eee7d"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp510000000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trnp510000000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-539f83947613132a4901"
+        "id": "rel-e835756c92126a436a9e"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp510000000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-efa",
+        "source": "111122223333/us-east-2/ec2/i-trnp510000000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-efa",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-05624e04cf93e9c00531"
+        "id": "rel-fcb621f811ec60fd5d45"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp520000000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trnp520000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnp520000000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trnp520000000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-cc46f98c9fa1bd577a1c"
+        "id": "rel-fb4c282eb19e5cf6c509"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp520000000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trnp520000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnp520000000011",
+        "target": "111122223333/us-east-2/volume/vol-trnp520000000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-d6c9e9c33e00d9be1170"
+        "id": "rel-0a6a297314ca59878141"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp520000000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/ec2/i-trnp520000000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-6713c3e308bc2d3fa9e9"
+        "id": "rel-ec2c678954a595834825"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp520000000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trnp520000000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-0d2192bbf7bc164eb334"
+        "id": "rel-6e14024f812ce7391d3c"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp520000000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-efa",
+        "source": "111122223333/us-east-2/ec2/i-trnp520000000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-efa",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-9ae76163184bcdaec137"
+        "id": "rel-f5a093be7fca5e467da0"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp530000000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trnp530000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnp530000000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trnp530000000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-6c065cb9cf3b1a62855c"
+        "id": "rel-09481bc437a4090039e9"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp530000000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trnp530000000011",
+        "source": "111122223333/us-east-2/ec2/i-trnp530000000011",
+        "target": "111122223333/us-east-2/volume/vol-trnp530000000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-d5386d1739cc8e39e50c"
+        "id": "rel-afad27ece37a4970cb58"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp530000000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/ec2/i-trnp530000000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-091081e0bcd6018617d7"
+        "id": "rel-52e33d8789ae8c0e675d"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp530000000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trnp530000000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-83c7d422e5dec45d4dcb"
+        "id": "rel-72c96ffb041c50ae0d80"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trnp530000000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-efa",
+        "source": "111122223333/us-east-2/ec2/i-trnp530000000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-efa",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-fb18f87d0de5fdc11b1f"
+        "id": "rel-2c1fa55730fcb8e3dd0e"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn0000000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trntrn0000000011",
+        "source": "111122223333/us-east-2/ec2/i-trntrn0000000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trntrn0000000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-25d1dd1f7b735f343762"
+        "id": "rel-1b5fedeb597db3ec34f1"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn0000000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trntrn0000000011",
+        "source": "111122223333/us-east-2/ec2/i-trntrn0000000011",
+        "target": "111122223333/us-east-2/volume/vol-trntrn0000000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-9fcb5e1ff4e93664aeec"
+        "id": "rel-020a0d1b1411a6a999b2"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn0000000011",
-        "target": "111122223333/ap-northeast-2/placement_group/trn2-pg",
+        "source": "111122223333/us-east-2/ec2/i-trntrn0000000011",
+        "target": "111122223333/us-east-2/placement_group/trn2-pg",
         "relation": "in_placement_group",
         "evidence": "DescribeInstances.Placement.GroupName",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-06402caf38882d205396"
+        "id": "rel-3983f1931a3cc087ce9e"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn0000000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/ec2/i-trntrn0000000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-f4852db3785c2ed20373"
+        "id": "rel-2d69f68fccc3eb20b4e0"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn0000000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trntrn0000000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-88ebf045f1933bd7ed1b"
+        "id": "rel-2235bf4f6b44fb3b091b"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn0000000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-efa",
+        "source": "111122223333/us-east-2/ec2/i-trntrn0000000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-efa",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-5412bd865ee15455177a"
+        "id": "rel-99d07f9fcd9591c42a1b"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn1000000011",
-        "target": "111122223333/ap-northeast-2/network_interface/eni-trntrn1000000011",
+        "source": "111122223333/us-east-2/ec2/i-trntrn1000000011",
+        "target": "111122223333/us-east-2/network_interface/eni-trntrn1000000011",
         "relation": "attached_interface",
         "evidence": "DescribeInstances.NetworkInterfaces[].NetworkInterfaceId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-1ccb32be496fe2c4a7bb"
+        "id": "rel-b1ab0292fec2a3ea1fa1"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn1000000011",
-        "target": "111122223333/ap-northeast-2/volume/vol-trntrn1000000011",
+        "source": "111122223333/us-east-2/ec2/i-trntrn1000000011",
+        "target": "111122223333/us-east-2/volume/vol-trntrn1000000011",
         "relation": "attached_volume",
         "evidence": "DescribeInstances.BlockDeviceMappings[].Ebs.VolumeId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-a2818aaec5e6abb8b0f1"
+        "id": "rel-80ea5570c51c89eabc6c"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn1000000011",
-        "target": "111122223333/ap-northeast-2/placement_group/trn2-pg",
+        "source": "111122223333/us-east-2/ec2/i-trntrn1000000011",
+        "target": "111122223333/us-east-2/placement_group/trn2-pg",
         "relation": "in_placement_group",
         "evidence": "DescribeInstances.Placement.GroupName",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-8b315926c36810ef2d1d"
+        "id": "rel-f069e8f776580a610a43"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn1000000011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/ec2/i-trntrn1000000011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "in_subnet",
         "evidence": "DescribeInstances.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-a15bc64b20ea07e6335e"
+        "id": "rel-35a24c29b7c9588d94f9"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn1000000011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/ec2/i-trntrn1000000011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInstances.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-6b0cb87118649add875c"
+        "id": "rel-9bd782477e30d60b4719"
       },
       {
-        "source": "111122223333/ap-northeast-2/ec2/i-trntrn1000000011",
-        "target": "111122223333/ap-northeast-2/security_group/sg-trn-efa",
+        "source": "111122223333/us-east-2/ec2/i-trntrn1000000011",
+        "target": "111122223333/us-east-2/security_group/sg-trn-efa",
         "relation": "uses_security_group",
         "evidence": "DescribeInstances.SecurityGroups[].GroupId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-365dfe8045dd48c52a74"
+        "id": "rel-e9d0284e5ba43f9af3a1"
       },
       {
-        "source": "111122223333/ap-northeast-2/fsx_file_system/fs-0trainingdata011",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/fsx_file_system/fs-0trainingdata011",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "in_subnet",
         "evidence": "DescribeFileSystems.SubnetIds[]",
         "qualifiers": {
-          "availability_zone": "ap-northeast-2a"
+          "availability_zone": "us-east-2a"
         },
         "details": {
-          "availability_zone": "ap-northeast-2a"
+          "availability_zone": "us-east-2a"
         },
         "inferred": false,
-        "id": "rel-bca0f7e777fe14d75661"
+        "id": "rel-14c5ac6065f49a9f12a2"
       },
       {
-        "source": "111122223333/ap-northeast-2/fsx_file_system/fs-0trainingdata011",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/fsx_file_system/fs-0trainingdata011",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeFileSystems.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-75080836f62cd41738e3"
+        "id": "rel-cbbbe032edeb68f86f0e"
       },
       {
-        "source": "111122223333/ap-northeast-2/internet_gateway/igw-trn",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/internet_gateway/igw-trn",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeInternetGateways.Attachments[].VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-bcd9153e02931e0a2833"
+        "id": "rel-52a57196f20fffe00522"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-trn-a",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-pub-a",
+        "source": "111122223333/us-east-2/nat_gateway/nat-trn-a",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-pub-a",
         "relation": "in_subnet",
         "evidence": "DescribeNatGateways.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-d8f221f61f66d0f22c14"
+        "id": "rel-bfba0333a3b01509b3b0"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-trn-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/nat_gateway/nat-trn-a",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeNatGateways.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-0723d6e990402acdeb45"
+        "id": "rel-71b1b78b39c61d4e232f"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-trn-b",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-pub-b",
+        "source": "111122223333/us-east-2/nat_gateway/nat-trn-b",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-pub-b",
         "relation": "in_subnet",
         "evidence": "DescribeNatGateways.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-3a2e9eebebb7318b1add"
+        "id": "rel-33641be2e97cb1a875fa"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-trn-b",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/nat_gateway/nat-trn-b",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeNatGateways.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-64308e705ab683e6d75b"
+        "id": "rel-069f2f354b4dfbf16547"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-main",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-main",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-57614cd652dc5383a7fa"
+        "id": "rel-80d678f0ec7c88d39c02"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-a",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-a",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-4e01a41ddaea50dd9f5d"
+        "id": "rel-aba532be5096bb8e677a"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-a",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-a",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-17c6388fb29e74bd1233"
+        "id": "rel-748e9cc168a645661c21"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-a",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-ea8ba3705eff0d5db598"
+        "id": "rel-aa1b1b0f0e3b96d2fae0"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-a",
-        "target": "111122223333/ap-northeast-2/nat_gateway/nat-trn-a",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-a",
+        "target": "111122223333/us-east-2/nat_gateway/nat-trn-a",
         "relation": "routes_to",
         "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
         "qualifiers": {
@@ -3418,11 +3424,11 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-eb0eca8667b11746dec2"
+        "id": "rel-81e181a6d885ea2d188a"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-a",
-        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-s3",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-a",
+        "target": "111122223333/us-east-2/vpc_endpoint/vpce-trn-s3",
         "relation": "routes_to",
         "evidence": "DescribeRouteTables.Routes[].GatewayId",
         "qualifiers": {
@@ -3432,31 +3438,31 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-b9ea957bfeb4412244ce"
+        "id": "rel-fbd9095c16f60055fcc7"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-b",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-b",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-33c0ee618a7e3dd5aa45"
+        "id": "rel-3715f8140d7b23b22b06"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-b",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-b",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-e7f3924ecf9326ff8402"
+        "id": "rel-2223bd1f2d3efda5f822"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-b",
-        "target": "111122223333/ap-northeast-2/nat_gateway/nat-trn-b",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-b",
+        "target": "111122223333/us-east-2/nat_gateway/nat-trn-b",
         "relation": "routes_to",
         "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
         "qualifiers": {
@@ -3466,11 +3472,11 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-1a85137232f89839387d"
+        "id": "rel-bfa72ef931fdb741b404"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-private-b",
-        "target": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-s3",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-private-b",
+        "target": "111122223333/us-east-2/vpc_endpoint/vpce-trn-s3",
         "relation": "routes_to",
         "evidence": "DescribeRouteTables.Routes[].GatewayId",
         "qualifiers": {
@@ -3480,41 +3486,41 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-9d586813471da370364c"
+        "id": "rel-ec5d2b5738211f281bc9"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-public",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-pub-a",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-public",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-pub-a",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-75df95171b76982b52c2"
+        "id": "rel-7301a57168c2f4be0854"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-public",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-pub-b",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-public",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-pub-b",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-98796affa7d7ef0dd405"
+        "id": "rel-974172c48acd1e5ebbb0"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-public",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-public",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-e75bf748204e90ca5efc"
+        "id": "rel-cb0b161b18eac5ab7f73"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-trn-public",
-        "target": "111122223333/ap-northeast-2/internet_gateway/igw-trn",
+        "source": "111122223333/us-east-2/route_table/rtb-trn-public",
+        "target": "111122223333/us-east-2/internet_gateway/igw-trn",
         "relation": "routes_to",
         "evidence": "DescribeRouteTables.Routes[].GatewayId",
         "qualifiers": {
@@ -3524,321 +3530,321 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-6459c41861dea507dfe1"
+        "id": "rel-e2f6ba8552aae2028553"
       },
       {
-        "source": "111122223333/ap-northeast-2/sagemaker_cluster/hp-slurm",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
+        "source": "111122223333/us-east-2/sagemaker_cluster/hp-slurm",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
         "relation": "in_subnet",
         "evidence": "DescribeCluster.VpcConfig.Subnets[]",
         "qualifiers": {
-          "availability_zone": "ap-northeast-2a"
+          "availability_zone": "us-east-2a"
         },
         "details": {
-          "availability_zone": "ap-northeast-2a"
+          "availability_zone": "us-east-2a"
         },
         "inferred": false,
-        "id": "rel-c226c37f643bc00c9a60"
+        "id": "rel-a1b383193844b4b02b57"
       },
       {
-        "source": "111122223333/ap-northeast-2/sagemaker_cluster/hp-slurm",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/sagemaker_cluster/hp-slurm",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeCluster.VpcConfig.Subnets[] → DescribeSubnets.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-e6e643958a4850e60c84"
+        "id": "rel-dd9f913bf4509bf44da9"
       },
       {
-        "source": "111122223333/ap-northeast-2/subnet/subnet-trn-compute-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/subnet/subnet-trn-compute-a",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeSubnets.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-e90d3267f72a1a59b261"
+        "id": "rel-208e432625a0fc980808"
       },
       {
-        "source": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/subnet/subnet-trn-head-a",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeSubnets.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-e05c6854efce6f3296ae"
+        "id": "rel-cdd71e39ea3fb3275b20"
       },
       {
-        "source": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/subnet/subnet-trn-head-b",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeSubnets.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-d09c48665f5607bd4918"
+        "id": "rel-3b1090a85027d4f288db"
       },
       {
-        "source": "111122223333/ap-northeast-2/subnet/subnet-trn-pub-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/subnet/subnet-trn-pub-a",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeSubnets.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-c06054c773c7676ce410"
+        "id": "rel-8f02fbf1834e31b1190f"
       },
       {
-        "source": "111122223333/ap-northeast-2/subnet/subnet-trn-pub-b",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/subnet/subnet-trn-pub-b",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeSubnets.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-dc1d1340dd8f777e327d"
+        "id": "rel-18327fa6902343f517df"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ec2messages",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ec2messages",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-cb99573e21d09d08a3b9"
+        "id": "rel-df0ba4482f365ae64eb7"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ec2messages",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ec2messages",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-76334bc7b53e73c7b0a0"
+        "id": "rel-46cb9615b1cb1c769e5f"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ec2messages",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ec2messages",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-e68f377087049a5772ea"
+        "id": "rel-8025a491fd5869d8eb27"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ecr-api",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ecr-api",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-38e4b963cacaafb9bcb1"
+        "id": "rel-0d4d2f22be308c67b419"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ecr-api",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ecr-api",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-5c93fd75771353317483"
+        "id": "rel-2d746ca427137cad2bca"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ecr-api",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ecr-api",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-3e9ef06455274fa3083d"
+        "id": "rel-3cb15be0c659d4fee011"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ecr-dkr",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ecr-dkr",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-c29d5cc6bc40ba4f426b"
+        "id": "rel-2c32efd088f3ad52012c"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ecr-dkr",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ecr-dkr",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-a7561d173dc6ccdc329a"
+        "id": "rel-216f06a9237c486201aa"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ecr-dkr",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ecr-dkr",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-0556cb10612ee5cc66fd"
+        "id": "rel-d8a7d4f5812a5a5d9633"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-logs",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-logs",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-71a18d8cb24c6ab6778e"
+        "id": "rel-18df062a5bcc87352baf"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-logs",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-logs",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-ba0e964777ce053cef7a"
+        "id": "rel-7b5a63454e114421e1b2"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-logs",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-logs",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-99e6c8ea8b810aec46cf"
+        "id": "rel-7eb06e7a312307cc021e"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-s3",
-        "target": "111122223333/ap-northeast-2/route_table/rtb-trn-private-a",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-s3",
+        "target": "111122223333/us-east-2/route_table/rtb-trn-private-a",
         "relation": "endpoint_route_table",
         "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-b0908152c02404cc396e"
+        "id": "rel-40191d22963e7915f6dc"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-s3",
-        "target": "111122223333/ap-northeast-2/route_table/rtb-trn-private-b",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-s3",
+        "target": "111122223333/us-east-2/route_table/rtb-trn-private-b",
         "relation": "endpoint_route_table",
         "evidence": "DescribeVpcEndpoints.RouteTableIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-b32a11ac957fe28eeac6"
+        "id": "rel-f0e4352a99505b6e7150"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-s3",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-s3",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-1f77276d4330f4339eca"
+        "id": "rel-e5cfe22c7972e59b854c"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ssm",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ssm",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-6cf8b2e1bcf345b31e63"
+        "id": "rel-da37c21f365c80032674"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ssm",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ssm",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-b15aaf6193c96ae7460e"
+        "id": "rel-bbba0b2099af8acf6675"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ssm",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ssm",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-39b326b87ea143605e91"
+        "id": "rel-86508bb3706dd236ae00"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ssmmessages",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ssmmessages",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-bc804cfe78ef24885b8d"
+        "id": "rel-0c8f75c0a05424b8e6b6"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ssmmessages",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ssmmessages",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-40b3ffe0e9dc45183cd3"
+        "id": "rel-1c9bb8619b246652a51d"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-ssmmessages",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-ssmmessages",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-fe89029096dfa7b821d5"
+        "id": "rel-a08214c64252fb728611"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-sts",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-a",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-sts",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-a",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-8e78fd3248bed61fc473"
+        "id": "rel-63211da719affcc49fc3"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-sts",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-trn-head-b",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-sts",
+        "target": "111122223333/us-east-2/subnet/subnet-trn-head-b",
         "relation": "endpoint_subnet",
         "evidence": "DescribeVpcEndpoints.SubnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-ad8cdf2ac83bd6bd2abc"
+        "id": "rel-dc2be83c623118fa1306"
       },
       {
-        "source": "111122223333/ap-northeast-2/vpc_endpoint/vpce-trn-sts",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60011",
+        "source": "111122223333/us-east-2/vpc_endpoint/vpce-trn-sts",
+        "target": "111122223333/us-east-2/vpc/vpc-0a1b2c3d4e5f60011",
         "relation": "in_vpc",
         "evidence": "DescribeVpcEndpoints.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-d3b5411b73b57ce9f959"
+        "id": "rel-322e5e0dd91fa545a005"
       }
     ]
   }

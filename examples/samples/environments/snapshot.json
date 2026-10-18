@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:07:27.240761+00:00",
-    "finished_at": "2026-10-18T09:07:27.240761+00:00",
+    "started_at": "2026-10-18T09:34:34.522633+00:00",
+    "finished_at": "2026-10-18T09:34:34.522633+00:00",
     "status": "complete",
     "demo": true,
     "sample": "environments",
-    "sample_version": 4,
+    "sample_version": 6,
     "title": "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스 · 중앙 egress)",
     "practices": [
       "환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)",
@@ -45,11 +45,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },

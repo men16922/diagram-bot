@@ -31,8 +31,8 @@
     "account_id": "3개 계정",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:33.012370+00:00",
-    "finished_at": "2026-10-17T21:52:33.012690+00:00",
+    "started_at": "2026-10-18T09:34:35.313967+00:00",
+    "finished_at": "2026-10-18T09:34:35.314265+00:00",
     "status": "complete",
     "demo": true,
     "title": "멀티 계정 랜딩 존 (Network 계정 TGW 공유 · 중앙 egress · 워크로드 계정)",
@@ -40,30 +40,33 @@
       {
         "account_id": "111111111111",
         "region": "ap-northeast-2",
-        "finished_at": "2026-10-17T21:52:33.012370+00:00",
+        "finished_at": "2026-10-18T09:34:35.313967+00:00",
         "title": "Network 계정"
       },
       {
         "account_id": "222222222222",
         "region": "ap-northeast-2",
-        "finished_at": "2026-10-17T21:52:33.012616+00:00",
+        "finished_at": "2026-10-18T09:34:35.314202+00:00",
         "title": "prod 계정"
       },
       {
         "account_id": "333333333333",
         "region": "ap-northeast-2",
-        "finished_at": "2026-10-17T21:52:33.012690+00:00",
+        "finished_at": "2026-10-18T09:34:35.314265+00:00",
         "title": "staging 계정"
       }
     ],
     "scope": [
       "AutoScalingGroup",
+      "CloudFront",
+      "DirectConnect",
       "EC2",
       "ECS",
       "EFS",
       "EKS",
       "ELBv2",
       "ElastiCache",
+      "ElasticIP",
       "InternetGateway",
       "Lambda",
       "MSK",
@@ -76,10 +79,12 @@
       "Subnet",
       "TargetGroup",
       "TransitGateway",
+      "TransitGatewayRouteTable",
       "VPC",
       "VPN",
       "VpcEndpoint",
-      "VpcPeering"
+      "VpcPeering",
+      "WAF"
     ],
     "limitations": [
       "계정·리전별 수집을 합친 보기입니다. 수집 시점이 서로 다를 수 있습니다.",
@@ -87,7 +92,7 @@
       "설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다."
     ],
     "sample": "multi-account",
-    "sample_version": 3,
+    "sample_version": 6,
     "practices": [
       "워크로드·환경은 계정으로 분리하고 네트워크는 Network 계정이 소유 (Organizing Your AWS Environment, AWS SRA Network account)",
       "Transit Gateway는 Network 계정에 두고 RAM으로 워크로드 계정에 공유, 각 계정은 자기 VPC만 연결",
@@ -1022,12 +1027,12 @@
         "account_id": "111111111111",
         "region": "ap-northeast-2",
         "partition": "aws",
-        "started_at": "2026-10-17T21:52:33.012370+00:00",
-        "finished_at": "2026-10-17T21:52:33.012370+00:00",
+        "started_at": "2026-10-18T09:34:35.313967+00:00",
+        "finished_at": "2026-10-18T09:34:35.313967+00:00",
         "status": "complete",
         "demo": true,
         "sample": "multi-account",
-        "sample_version": 3,
+        "sample_version": 6,
         "title": "Network 계정",
         "practices": [],
         "scope": [
@@ -1053,11 +1058,16 @@
           "EFS",
           "Redshift",
           "VpcPeering",
-          "VPN"
+          "VPN",
+          "ElasticIP",
+          "TransitGatewayRouteTable",
+          "CloudFront",
+          "WAF",
+          "DirectConnect"
         ],
         "limitations": [
           "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-          "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+          "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
           "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
         ]
       },
@@ -1687,12 +1697,12 @@
         "account_id": "222222222222",
         "region": "ap-northeast-2",
         "partition": "aws",
-        "started_at": "2026-10-17T21:52:33.012616+00:00",
-        "finished_at": "2026-10-17T21:52:33.012616+00:00",
+        "started_at": "2026-10-18T09:34:35.314202+00:00",
+        "finished_at": "2026-10-18T09:34:35.314202+00:00",
         "status": "complete",
         "demo": true,
         "sample": "multi-account",
-        "sample_version": 3,
+        "sample_version": 6,
         "title": "prod 계정",
         "practices": [],
         "scope": [
@@ -1718,11 +1728,16 @@
           "EFS",
           "Redshift",
           "VpcPeering",
-          "VPN"
+          "VPN",
+          "ElasticIP",
+          "TransitGatewayRouteTable",
+          "CloudFront",
+          "WAF",
+          "DirectConnect"
         ],
         "limitations": [
           "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-          "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+          "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
           "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
         ]
       },
@@ -2551,12 +2566,12 @@
         "account_id": "333333333333",
         "region": "ap-northeast-2",
         "partition": "aws",
-        "started_at": "2026-10-17T21:52:33.012690+00:00",
-        "finished_at": "2026-10-17T21:52:33.012690+00:00",
+        "started_at": "2026-10-18T09:34:35.314265+00:00",
+        "finished_at": "2026-10-18T09:34:35.314265+00:00",
         "status": "complete",
         "demo": true,
         "sample": "multi-account",
-        "sample_version": 3,
+        "sample_version": 6,
         "title": "staging 계정",
         "practices": [],
         "scope": [
@@ -2582,11 +2597,16 @@
           "EFS",
           "Redshift",
           "VpcPeering",
-          "VPN"
+          "VPN",
+          "ElasticIP",
+          "TransitGatewayRouteTable",
+          "CloudFront",
+          "WAF",
+          "DirectConnect"
         ],
         "limitations": [
           "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-          "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+          "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
           "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
         ]
       },

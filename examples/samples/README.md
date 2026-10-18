@@ -169,6 +169,7 @@ VPC 1 · 서브넷 9 · 로드밸런서 1 · 대상 그룹 1 · NAT 3 · RDS/Aur
 
 VPC 1 · 서브넷 5 · EC2 9 · NAT 2 · Auto Scaling 그룹 1 · VPC 엔드포인트 8 · FSx 1 · HyperPod 1
 
+- 리전은 us-east-2(오하이오): p5와 trn2를 같은 VPC에 두려면 두 유형을 모두 제공하는 리전이어야 함 (서울 리전에는 trn2가 없음)
 - 강결합 학습 노드는 한 AZ의 전용 /20 컴퓨트 서브넷에, 모든 EFA 노드가 자기 참조 전체 허용 보안 그룹 공유 (EFA는 AZ·VPC를 넘지 못함, HPCREL01-BP02)
 - p5 학습 큐는 Capacity Block(UltraCluster 자동 배치), trn2 큐는 클러스터 배치 그룹 + 용량 예약(ODCR): 둘은 함께 쓸 수 없음 (EC2 Capacity Blocks)
 - 학습 데이터·체크포인트는 같은 AZ의 FSx for Lustre PERSISTENT_2 (GENREL06-BP01, HPCREL01-BP01, MLCOST06-BP03)

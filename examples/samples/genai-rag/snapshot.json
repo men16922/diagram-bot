@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:32.775891+00:00",
-    "finished_at": "2026-10-17T21:52:32.775891+00:00",
+    "started_at": "2026-10-18T09:34:35.099089+00:00",
+    "finished_at": "2026-10-18T09:34:35.099089+00:00",
     "status": "complete",
     "demo": true,
     "sample": "genai-rag",
-    "sample_version": 3,
+    "sample_version": 6,
     "title": "생성형 AI RAG 애플리케이션 (Bedrock · Aurora pgvector · 시맨틱 캐시)",
     "practices": [
       "채팅 API는 세 AZ의 ECS Fargate 태스크, 인터넷용 ALB는 퍼블릭 서브넷에만 (REL10-BP01, SEC05-BP01)",
@@ -44,11 +44,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },

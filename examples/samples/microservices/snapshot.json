@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:07:27.036118+00:00",
-    "finished_at": "2026-10-18T09:07:27.036118+00:00",
+    "started_at": "2026-10-18T09:34:34.303586+00:00",
+    "finished_at": "2026-10-18T09:34:34.303586+00:00",
     "status": "complete",
     "demo": true,
     "sample": "microservices",
-    "sample_version": 4,
+    "sample_version": 6,
     "title": "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4 · 3 AZ)",
     "practices": [
       "ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)",
@@ -43,11 +43,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },

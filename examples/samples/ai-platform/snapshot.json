@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:32.644571+00:00",
-    "finished_at": "2026-10-17T21:52:32.644571+00:00",
+    "started_at": "2026-10-18T09:34:34.987831+00:00",
+    "finished_at": "2026-10-18T09:34:34.987831+00:00",
     "status": "complete",
     "demo": true,
     "sample": "ai-platform",
-    "sample_version": 3,
+    "sample_version": 6,
     "title": "AI 플랫폼 (사설 EKS GPU 추론·학습 · Bedrock · Aurora pgvector)",
     "practices": [
       "인터넷 경로 없는 사설 VPC: IGW·NAT 없이 Transit Gateway로 사내망·중앙 egress에 연결 (MLSEC03-BP02)",
@@ -47,11 +47,16 @@
       "EFS",
       "Redshift",
       "VpcPeering",
-      "VPN"
+      "VPN",
+      "ElasticIP",
+      "TransitGatewayRouteTable",
+      "CloudFront",
+      "WAF",
+      "DirectConnect"
     ],
     "limitations": [
       "AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
-      "리스너 규칙·Direct Connect·CloudFront·WAF·Route 53은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
+      "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
       "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."
     ]
   },
