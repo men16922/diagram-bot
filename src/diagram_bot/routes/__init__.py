@@ -23,6 +23,7 @@ class Context:
     aws: AwsAccess
     audit: AuditLog
     auth: object = None  # Authenticator in team mode, else None (single local user)
+    standards: object = None  # StandardStore: company standards an admin adopted (routes.standards); None keeps them in memory
     oidc: object = None
     secure: bool = False
     token: str = ""  # per-process page token every mutation must carry (X-Diagram-Bot)

@@ -20,13 +20,14 @@ from .auth import AuditLog, Authenticator, allowed
 from .aws_access import AwsAccess
 from .version import app_version
 from .demo import demo_snapshot
+from .drawio_spec import PRESETS
 from .editor import VERSION, editor_path
 from .routes import Context, install_error_handlers, role
-from .routes import agent, aws, documents, session, snapshots
+from .routes import agent, aws, documents, session, snapshots, standards
 from .routes.agent import default_chat  # noqa: F401 - the default chat_factory, importable from here as before
 from .routes.session import COOKIE, PUBLIC
 from .samples import SAMPLE_VERSION, SAMPLES
-from .store import DocumentStore, SnapshotStore, data_path
+from .store import DocumentStore, SnapshotStore, StandardStore, data_path
 
 LOOPBACK = ["localhost", "127.0.0.1", "[::1]", "testserver"]
 MAX_BODY = 15 * 1024 * 1024
@@ -59,8 +60,9 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
     context = Context(snapshots=SnapshotStore(directory), documents=DocumentStore(directory),
                       aws=AwsAccess(egress, sso=sso, relay=relay, sso_start=sso_start), audit=AuditLog(directory / "audit.log"),
                       auth=Authenticator(users or {}) if users or oidc else None, oidc=oidc, secure=secure,
-                      token=secrets.token_urlsafe(32), chat_factory=chat_factory)
+                      token=secrets.token_urlsafe(32), chat_factory=chat_factory, standards=StandardStore(directory))
     context.snapshots.seed(demo_snapshot, SAMPLES, SAMPLE_VERSION)
+    standards.restore(context.standards)  # adopted company standards and the default spec, as before the restart
     auth, audit, token = context.auth, context.audit, context.token
     aws_routes = aws.router(context)
 
@@ -128,10 +130,10 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         except BotoCoreError:
             profiles = []
         return {"token": token, "editor_ready": (editor / "js/app.min.js").is_file(), "editor_version": VERSION, "profiles": profiles,
-                "version": app_version(), "team": bool(auth), "egress": context.aws.egress,
+                "version": app_version(), "team": bool(auth), "egress": context.aws.egress, "presets": list(PRESETS),
                 "user": {"name": request.state.user, "role": role(request)}}
 
-    for module in (session, snapshots, documents, agent):
+    for module in (session, snapshots, documents, agent, standards):
         app.include_router(module.router(context))
     app.include_router(aws_routes)
 

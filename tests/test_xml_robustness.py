@@ -12,7 +12,7 @@ import pytest
 from defusedxml.ElementTree import fromstring
 from fastapi.testclient import TestClient
 
-from diagram_bot import api
+from diagram_bot import api, drawio_spec
 from diagram_bot.drawio_spec import DrawioSpec, classify_cell, pages, read_document, request_spec
 from diagram_bot.errors import InputError
 from diagram_bot.server import create_app
@@ -276,6 +276,7 @@ def team(tmp_path):
         api.set_default_spec(None)
         for key in ("corp-team-std", "editor-std"):
             api.COMPANY_STANDARDS.pop(key, None)
+            drawio_spec.COMPANY_SPECS.pop(key, None)
 
 
 MXCELL_TEMPLATE = mx([v("vpc", "corp-vpc (10.9.0.0/16)", VPC, 0, 0, 400, 300),

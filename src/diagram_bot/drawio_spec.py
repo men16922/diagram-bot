@@ -583,6 +583,13 @@ PRESETS = {
 }
 
 _ACTIVE_DEFAULT_SPEC: DrawioSpec = DEFAULT_SPEC
+COMPANY_SPECS = {}  # standard name -> DrawioSpec of a company standard an admin adopted (routes.standards); request data may name one
+
+
+def register_spec(name, spec):
+    """Let request data name an adopted company standard's spec (`?spec=<name>`); the spec itself is already validated."""
+    COMPANY_SPECS[name] = spec
+    return spec
 
 
 def set_default_spec(spec=None) -> DrawioSpec:
@@ -631,13 +638,15 @@ def resolve_spec(spec=None) -> DrawioSpec:
 
 
 def request_spec(spec):
-    """A spec from request data: None, a preset name or an inline JSON object. Anything else (a path, XML) is refused."""
+    """A spec from request data: None, a preset name, an adopted company standard's name (a lookup in COMPANY_SPECS) or an
+    inline JSON object. Anything else (a path, XML) is refused; nothing here reads a file."""
     if spec is None or isinstance(spec, DrawioSpec):
         return spec
     if isinstance(spec, str):
-        if spec.strip() in PRESETS:
-            return PRESETS[spec.strip()]
-        raise InputError(f"spec은 프리셋 이름({', '.join(PRESETS)}) 또는 JSON 객체여야 합니다.")
+        name = spec.strip()
+        if name in PRESETS or name in COMPANY_SPECS:
+            return PRESETS.get(name) or COMPANY_SPECS[name]
+        raise InputError(f"spec은 프리셋 이름({', '.join(PRESETS)}), 사내 표준 이름 또는 JSON 객체여야 합니다.")
     return DrawioSpec.from_dict(spec)
 
 

@@ -141,10 +141,10 @@ class Authenticator:
 
 
 def allowed(role, method, path):
-    """viewer: read; editor: edit documents and import snapshots; admin: also start AWS collection."""
+    """viewer: read; editor: edit documents and import snapshots; admin: also start AWS collection and manage company standards."""
     if method in ("GET", "HEAD") or path in ("/api/logout",):
         return True
-    if path.startswith(("/api/collections", "/api/sso")):
+    if path.startswith(("/api/collections", "/api/sso", "/api/standards")):
         return role == "admin"
     return role in ("editor", "admin")
 

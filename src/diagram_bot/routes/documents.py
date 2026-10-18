@@ -8,7 +8,8 @@ from ..drawio import carry_annotations, generate_document, validate_document
 from ..drawio_spec import get_default_spec, request_spec
 from ..validation import REGION
 from ..views import view_graph
-from . import role
+from . import role, user
+from .standards import remember
 from ..xml_align import adopt_company_xml, align_report, import_drawio_xml, inspect_drawio_xml
 
 
@@ -136,12 +137,15 @@ def router(context):
     def adopt_xml_endpoint(payload: XmlAdoptRequest, request: Request):
         """Extract a company template's DrawioSpec, align it and import it, for this request only (editor).
 
-        make_default (admin, like collection): the spec becomes this process's default and the template a Design standard."""
+        make_default (admin, like collection): the spec becomes this process's default and the template a Design standard,
+        both stored (routes.standards) so they survive a restart."""
         if payload.make_default and role(request) != "admin":
             raise HTTPException(403, "서버 기본 규격 변경(make_default)은 admin 역할만 할 수 있습니다.")
         result = adopt_company_xml(payload.xml, name=payload.name, title=payload.title, region=payload.region,
                                    set_default=payload.make_default, register=payload.make_default, allow_path=False)
         identifier = snapshots.save(result["snapshot"]) if payload.save else None
+        if payload.make_default and context.standards:
+            remember(context.standards, result, payload.title, identifier, user(request))
         return {
             "id": identifier,
             "name": result["name"],

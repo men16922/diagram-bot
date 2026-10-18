@@ -177,3 +177,56 @@ class DocumentStore:
             saved = {"xml": xml, "revision": saved["revision"] + 1, "saved_at": now()}
             atomic_json(path, saved)
         return saved, history
+
+
+class StandardStore:
+    """Company standards an admin adopted as the server default (POST /api/xml/adopt with make_default): one JSON file per
+    name with the extracted spec and the imported snapshot, so they and the default spec survive a restart."""
+
+    def __init__(self, directory):
+        self.directory = Path(directory) / "standards"
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.lock = threading.Lock()
+
+    def path(self, name):
+        if not re.fullmatch(r"[a-z0-9-]{1,40}", name or ""):  # designer.slug names only
+            raise NotFound("사내 표준을 찾을 수 없습니다.")
+        return self.directory / f"{name}.json"
+
+    def list(self):
+        """Oldest first; an unreadable file is skipped and logged."""
+        records = []
+        for path in self.directory.glob("*.json"):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+                if record["name"] != path.stem or not isinstance(record["spec"], dict) or not isinstance(record["snapshot"], dict):
+                    raise ValueError("name, spec or snapshot")
+            except (OSError, ValueError, LookupError, TypeError):
+                logging.getLogger(__name__).warning("Skipping unreadable standard file %s", path.name, exc_info=True)
+                continue
+            records.append(record)
+        return sorted(records, key=lambda record: str(record.get("created_at")))
+
+    def save(self, record):
+        """Store (or replace) a standard; a default one takes the default flag from every other."""
+        path = self.path(record["name"])
+        with self.lock:
+            if record.get("default"):
+                for other in self.list():
+                    if other.get("default") and other["name"] != record["name"]:
+                        atomic_json(self.path(other["name"]), {**other, "default": False})
+            atomic_json(path, record)
+        return record
+
+    def delete(self, name):
+        """Remove a standard and return its record (NotFound if there is none)."""
+        path = self.path(name)
+        with self.lock:
+            if not path.is_file():
+                raise NotFound("사내 표준을 찾을 수 없습니다.")
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:  # an unreadable file can still be removed
+                record = {"name": name}
+            path.unlink()
+        return record

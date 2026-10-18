@@ -23,7 +23,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from .designer import STANDARDS, register_standard, slug
 from .drawio import generate_document
-from .drawio_spec import (AZ_CODE, REGION_CODE, classify_cell, format_style, iter_cells, pages, parse_style, patch_style,
+from .drawio_spec import (AZ_CODE, PRESETS, REGION_CODE, classify_cell, format_style, iter_cells, pages, parse_style, patch_style,
                           read_document, resolve_spec, set_default_spec, spec_from_xml, subnet_isolated)
 from .errors import InputError
 from .graph import build_graph
@@ -1239,7 +1239,7 @@ def adopt_company_xml(
     5. Optionally sets the extracted `DrawioSpec` as the process-wide default (`set_default=True`) and/or saves it as JSON (`save_spec`).
 
     `register=False` skips step 3's registration (the HTTP route registers only for an admin's make_default); a name that
-    collides with a built-in standard is refused. `allow_path=False` accepts XML text only (request data).
+    collides with a built-in standard or a spec preset is refused. `allow_path=False` accepts XML text only (request data).
     """
     if not allow_path and not (isinstance(xml_or_path, str) and xml_or_path.lstrip().startswith("<")):
         raise InputError("draw.io XML 본문이 필요합니다 (파일 경로는 CLI·라이브러리에서만).")
@@ -1255,8 +1255,8 @@ def adopt_company_xml(
         std_key = slug(name)
     except ValueError as exc:
         raise InputError(str(exc)) from exc
-    if register and std_key in STANDARDS:
-        raise InputError(f"기본 표준 아키텍처와 같은 이름은 쓸 수 없습니다: {std_key}")
+    if register and (std_key in STANDARDS or std_key in PRESETS):
+        raise InputError(f"기본 표준 아키텍처나 규격 프리셋과 같은 이름은 쓸 수 없습니다: {std_key}")
     before = inspect_drawio_xml(xml_text)
     spec = spec_from_xml(xml_text, name=name)
     aligned_xml = align_drawio_xml(xml_text, spec=spec, mode="preserve")
