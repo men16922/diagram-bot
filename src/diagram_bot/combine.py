@@ -5,6 +5,7 @@ The parts are stored unchanged; the graph is merged from them (graph.merge_graph
 between accounts beyond resource IDs the APIs report on both sides.
 """
 from .errors import InputError
+from .snapshot import make_snapshot
 
 
 def combine_snapshots(snapshots, title=None):
@@ -19,7 +20,7 @@ def combine_snapshots(snapshots, title=None):
     meta = [p["metadata"] for p in parts]
     accounts, regions = sorted({m["account_id"] for m in meta}), sorted({m["region"] for m in meta})
     scope = sorted({item for m in meta for item in m.get("scope", [])})
-    return {"schema_version": 1, "metadata": {
+    return make_snapshot({
         "combined": True, "accounts": accounts, "regions": regions,
         "account_id": accounts[0] if len(accounts) == 1 else f"{len(accounts)}개 계정",
         "region": regions[0] if len(regions) == 1 else f"{len(regions)}개 리전",
@@ -33,5 +34,5 @@ def combine_snapshots(snapshots, title=None):
         "limitations": ["계정·리전별 수집을 합친 보기입니다. 수집 시점이 서로 다를 수 있습니다.",
                         "계정 간 연결은 양쪽 API가 같은 리소스 ID(Transit Gateway, 피어링)를 보고할 때만 잇습니다.",
                         "설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다."]},
-        "coverage": [{**c, "account_id": m["account_id"], "region": m["region"]} for p, m in zip(parts, meta) for c in p["coverage"]],
-        "raw": {}, "parts": parts}
+        [{**c, "account_id": m["account_id"], "region": m["region"]} for p, m in zip(parts, meta) for c in p["coverage"]],
+        {}, parts=parts)

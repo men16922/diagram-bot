@@ -1,3 +1,4 @@
+import json
 from contextlib import ExitStack
 
 import boto3
@@ -393,3 +394,21 @@ def test_cli_combine_writes_one_report_for_several_accounts(monkeypatch, tmp_pat
     report = json.loads((tmp_path / "out" / "snapshot.json").read_text(encoding="utf-8"))
     assert report["metadata"]["combined"] and len(report["parts"]) == 3
     assert "AWS 계정 · 111111111111" in (tmp_path / "out" / "topology.drawio").read_text(encoding="utf-8")
+
+
+def test_every_producer_builds_the_same_envelope_and_files_are_checked_on_load(tmp_path):
+    from diagram_bot.combine import combine_snapshots
+    from diagram_bot.demo import demo_snapshot
+    from diagram_bot.samples import SAMPLES
+    from diagram_bot.snapshot import SCHEMA_VERSION, load_snapshot
+    sample = SAMPLES["three-tier"]()
+    other = {**sample, "metadata": {**sample["metadata"], "account_id": "444455556666"}}
+    for snapshot in (demo_snapshot(), sample, combine_snapshots([sample, other])):
+        assert list(snapshot)[:4] == ["schema_version", "metadata", "coverage", "raw"] and snapshot["schema_version"] == SCHEMA_VERSION
+    path = tmp_path / "snapshot.json"
+    path.write_text(json.dumps(sample), encoding="utf-8")
+    assert load_snapshot(path) == sample
+    for wrong in ({**sample, "schema_version": 2}, [sample]):
+        path.write_text(json.dumps(wrong), encoding="utf-8")
+        with pytest.raises(ValueError, match="schema_version"):
+            load_snapshot(path)

@@ -7,6 +7,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from .egress import RelayDisconnected
 from .errors import error_code
 from .sessions import credentials_session, sdk_session
+from .snapshot import make_snapshot
 
 
 def now():
@@ -328,10 +329,9 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
         coverage.append({"service": "elbv2", "operation": "describe_target_health",
                          "parameters": {}, "status": "not_discovered",
                          "reason": "대상 그룹 조회가 불완전하여 미발견 그룹의 대상은 조회하지 못했습니다."})
-    return {"schema_version": 1, "metadata": {
+    return make_snapshot({
         "account_id": account, "region": region, "profile": profile, "role_arn": role_arn,
         "partition": partition,
         "started_at": started, "finished_at": now(), "demo": False,
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
-        "scope": SCOPE, "limitations": LIMITATIONS},
-        "coverage": coverage, "raw": raw}
+        "scope": SCOPE, "limitations": LIMITATIONS}, coverage, raw)

@@ -1,9 +1,9 @@
 ---
 title: 스냅샷 데이터 모델
 summary: 스냅샷 JSON 계약 — schema_version, metadata(수집·샘플·설계·통합별 필드), coverage 행, raw 키 전체, 그래프 노드·관계 필드와 검증 규칙.
-sources: [src/diagram_bot/collector.py, src/diagram_bot/samples/, src/diagram_bot/designer.py, src/diagram_bot/combine.py, src/diagram_bot/store.py, src/diagram_bot/graph.py, src/diagram_bot/report.py, src/diagram_bot/demo.py]
+sources: [src/diagram_bot/snapshot.py, src/diagram_bot/collector.py, src/diagram_bot/samples/, src/diagram_bot/designer.py, src/diagram_bot/combine.py, src/diagram_bot/store.py, src/diagram_bot/graph.py, src/diagram_bot/report.py, src/diagram_bot/demo.py]
 related: [collection, graph, views, samples, storage, architecture]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 스냅샷 데이터 모델
 
@@ -11,7 +11,8 @@ updated: 2026-10-18
 > 파생 데이터다. 수집·샘플·채팅 설계·계정 통합 모두 같은 형식을 쓴다.
 
 ## 핵심
-- `schema_version`은 항상 `1`. `store.validate_snapshot`이 다른 값을 거부한다(`지원하지 않는 스냅샷 버전입니다.`). CLI의 `render`와 `export-cfn`도 같은 검사를 한다(`cli.py`; `review`·`diff`는 검사하지 않는다).
+- 봉투는 `snapshot.make_snapshot(metadata, coverage, raw, **extra)` 하나로 만든다(수집·샘플·데모·통합; 설계는 샘플 빌더를 거친다). 파일은 `snapshot.load_snapshot(path)`로 읽으면 버전이 다를 때 `ValueError`.
+- `schema_version`은 항상 `SCHEMA_VERSION`(`1`). `store.validate_snapshot`이 다른 값을 거부한다(`지원하지 않는 스냅샷 버전입니다.`). CLI의 `render`와 `export-cfn`도 같은 검사를 한다(`cli.py`; `review`·`diff`는 검사하지 않는다).
 - `validate_snapshot`이 확인하는 것: `metadata`의 `account_id`, `region`, `started_at`, `finished_at`, `status`가 문자열, `coverage`는 list, `raw`는 dict. 나머지 필드는 선택이다.
 - `graph`는 저장 시점에 다시 만든다. `SnapshotStore.save`는 받은 `graph`를 무시하고 `graph.build_graph(snapshot)`로 덮어쓰며, `report.write_report`도 같다. 읽을 때는 `SnapshotStore.get`이 `graph.upgrade_graph`를 적용한다([[graph]]).
 - 스냅샷은 저장 후 바뀌지 않는다. 사용자 편집은 draw.io 문서 쪽(`DocumentStore`)에만 남는다([[storage]]).
@@ -80,7 +81,7 @@ API 호출 하나(페이지 전체)가 한 행이다. `collector.query`와 `coll
 노드 종류·관계 이름·ID 규칙의 전체 목록은 [[graph]]에 있다.
 
 ## 바꿀 때 주의
-- 형식을 바꾸면 `schema_version`과 `validate_snapshot`, `upgrade_graph`(저장된 그래프 호환), `cli.py`의 버전 검사(`render`, `export_cfn`)를 함께 고친다.
+- 형식을 바꾸면 `snapshot.SCHEMA_VERSION`과 `validate_snapshot`, `upgrade_graph`(저장된 그래프 호환), `cli.py`의 버전 검사(`render`, `export_cfn`)를 함께 고친다.
 - `raw` 키를 추가하면 `Sample.__init__` 또는 `setdefault` 도우미, `Sample.snapshot`의 coverage 목록, 이 페이지의 목록을 함께 고친다([[howto-add-collected-service]]).
 - 관련 테스트: `tests/test_collector.py`(raw·coverage 모양), `tests/test_server.py`(샘플 버전 교체), `tests/test_graph_report.py::test_combined_accounts_share_one_transit_gateway_and_one_peering`.
 

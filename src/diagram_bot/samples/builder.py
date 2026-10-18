@@ -5,6 +5,7 @@ import ipaddress
 from itertools import islice
 
 from ..collector import OPERATIONS, now
+from ..snapshot import make_snapshot
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
 # Bumped whenever a sample's architecture changes; the server replaces stored samples of another version.
@@ -497,7 +498,7 @@ class Sample:
                          ("directconnect", "describe_direct_connect_gateways", "dx_gateways", {}),
                          ("directconnect", "describe_direct_connect_gateway_associations", "dx_gateway_associations", {}))
                      if key in raw]
-        return {"schema_version": 1, "metadata": {
+        return make_snapshot({
             "account_id": self.account, "region": self.region, "partition": "aws", "started_at": timestamp, "finished_at": timestamp,
             "status": "complete", "demo": True, "sample": self.key, "sample_version": SAMPLE_VERSION, "title": self.title, "practices": self.practices,
             "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget", "InternetGateway", "NatGateway",
@@ -507,4 +508,4 @@ class Sample:
             "limitations": ["AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
                             "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
                             "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."]},
-            "coverage": coverage, "raw": raw}
+            coverage, raw)

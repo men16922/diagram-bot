@@ -1,7 +1,7 @@
 ---
 title: 전체 구조
 summary: 수집 → 스냅샷 → 그래프 → 보기 → 배치 → draw.io의 데이터 흐름과, 라이브러리·저장소·AWS 접근·HTTP 라우터·프런트엔드로 나뉜 모듈 지도.
-sources: [src/diagram_bot/api.py, src/diagram_bot/server.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/store.py, src/diagram_bot/aws_access.py, src/diagram_bot/sessions.py, src/diagram_bot/egress.py]
+sources: [src/diagram_bot/api.py, src/diagram_bot/server.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/store.py, src/diagram_bot/aws_access.py, src/diagram_bot/sessions.py, src/diagram_bot/snapshot.py, src/diagram_bot/egress.py]
 related: [snapshot-model, collection, graph, views, layout-and-drawio, http-api, web-app, aws-access-and-sso, browser-egress, porting-guide]
 updated: 2026-10-19
 ---
@@ -36,7 +36,7 @@ updated: 2026-10-19
 | --- | --- | --- | --- |
 | 라이브러리 | `api.py` | 웹 없이 쓰는 공개 함수: `collect_snapshot`, `render`, `view`, `review_snapshot`, `diff_snapshots`, `combine_snapshots`, `cloudformation`, `Design`, `BrowserRelay` | 회사 백엔드가 직접 import |
 | 수집 | `collector.py` | 서비스별 읽기 호출, 페이지·부분 실패 처리, `prepare` 훅 | — |
-| 모델 | `graph.py`, `views.py` | 노드·관계 생성, 보기별 선택과 개수 | — |
+| 모델 | `snapshot.py`, `graph.py`, `views.py` | 스냅샷 봉투, 노드·관계 생성, 보기별 선택과 개수 | — |
 | 출력 | `layout.py`, `drawio.py`, `report.py` | 배치, draw.io XML, 단독 HTML 보고서 | — |
 | 분석 | `findings.py`, `diff.py`, `combine.py`, `iac/` | 검토, 변경 비교, 계정 통합, CloudFormation | — |
 | 설계·채팅 | `designer.py`, `agent.py` | 표준·브라운필드 설계, Strands + Bedrock 에이전트 | 모델 목록(`MODELS`) |
@@ -58,7 +58,7 @@ updated: 2026-10-19
 - **CLI·CI:** `collect`, `review --fail-on`, `diff --fail-on-change`, `export-cfn`([[cli]]).
 
 ## 바꿀 때 주의
-- 스냅샷 형식(`schema_version: 1`)을 바꾸면 저장된 스냅샷 호환(`graph.upgrade_graph`, `store.validate_snapshot`)과 [[snapshot-model]]을 함께 고친다.
+- 스냅샷 형식(`snapshot.SCHEMA_VERSION`, 봉투는 `snapshot.make_snapshot`)을 바꾸면 저장된 스냅샷 호환(`graph.upgrade_graph`, `store.validate_snapshot`)과 [[snapshot-model]]을 함께 고친다.
 - 검증 묶음: `make check`(오프라인 게이트), `scripts/verify_demo.py`(브라우저 35개 확인), `scripts/verify_team.py`, 실제 AWS는 `scripts/verify_browser_egress.py`([[cli]]).
 
 ## 관련
