@@ -59,6 +59,20 @@ routes, no shared segment between unrelated routes, identical output on rerun, f
 Rendered draw.io output of the sample was reviewed visually; the 100-resource view is
 structurally correct but dense (≈170 drawn relations), so readability at that size is limited.
 
+Focus views (2026-10-18): every focus document of every sample, the demo and a chat design — all resource kinds, with
+and without references — is checked to carry explicit orthogonal routes whose end points match the exit/entry
+constraints (no edge left to draw.io's auto-routing, load balancer subnet placements included) and to keep routes off
+icons, labels and container captions (group icon and title). The caption check found routes in the left gutter
+cutting through the reference box's title; the box now starts right of the widest left gutter, so those routes enter
+it from the side, and its title is two lines so it ends before the first gutter between AZ columns.
+
+Route filter (2026-10-18): a detail view can be narrowed to one load balancer or target group (`views.route_filter`).
+Other load balancers, target groups and the targets drawn only through them are hidden and counted as hidden; placed
+resources stay, dimmed. On the 100-resource fixture (one VPC: 42 routes, 376 right-angle route crossings) one target
+group leaves 7 routes and 0 crossings, one load balancer 14 routes and 30 crossings; in the 300-instance VPC one target
+group leaves ≤ 18 routes and 0 crossings (`test_route_filter_keeps_dense_views_readable`). Edge bundling was not
+needed for these bounds and is not implemented.
+
 ## Visual conventions (AWS Architecture Icons)
 
 Diagrams follow the AWS Architecture Icons conventions (2023+ group styles) as shipped in

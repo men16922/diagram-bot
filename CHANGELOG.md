@@ -26,6 +26,10 @@
   `OPS-GPU-S3-ENDPOINT`, `SEC-SAGEMAKER-VPC`, `REL-SAGEMAKER-AZ`, `SEC-HYPERPOD-PUBLIC`). 샘플 10종(`genai-rag`, `gpu-training` 추가, `SAMPLE_VERSION` 3).
   읽기 전용 정책·CloudFormation 역할에 새 권한 추가.
 - `scripts/render_samples.py`: examples/samples 산출물·PNG·README 재생성.
+- **경로 필터 (밀집 보기 가독성):** 상세 구성을 로드 밸런서 하나나 대상 그룹 하나의 경로로 좁힙니다(앱의 `경로 필터`, 속성 패널 `이 경로만 보기`,
+  API `routes=`). 다른 로드 밸런서·대상 그룹과 그것으로만 그려지던 대상(IP·미조회 대상, 참조)은 숨기고 숨김 수에 포함(`counts.filtered`),
+  나머지 배치 리소스는 흐리게 남깁니다. 문서 머리말에 필터·숨긴 수·생략한 관계 수를 적고, 필터한 보기는 별도 편집본으로 저장됩니다.
+  100개 리소스 합성 VPC에서 대상 그룹 하나로 좁히면 연결선 교차 376 → 0(테스트로 고정).
 
 ### Changed
 - 샘플: data-platform은 피어링·VGW 대신 Transit Gateway 허브(두 VPC + VPN)와 Redshift Multi-AZ 서브넷 그룹 3개·AZ당 2노드,
@@ -43,8 +47,13 @@
 - **전체 구성 = 네트워크 연결도:** VPC 카드와 Transit Gateway·피어링·VPN 게이트웨이, VPN으로 이어진 온프레미스 고객 게이트웨이를 연결선으로 그립니다
   (예전에는 카드만 나열). VPC가 하나이고 이런 연결이 없는 스냅샷은 상세 구성부터 엽니다. 저장된 전체 구성 편집본은 `자동 배치 다시 실행`으로 새 배치를 받습니다.
 - 상세 보기는 최소 60 % 줌으로 열리고(너비 맞춤), 알림은 화면 위쪽에 표시. 대상 그룹마다 등록 경로 색을 구분.
+- 샘플 선택 항목(ARCHITECTURE.md §4 #7, `SAMPLE_VERSION` 4): microservices 3 AZ, eks-platform 전용 /28 클러스터 서브넷·Aurora reader 3번째 AZ·
+  ELB 역할 태그, environments 중앙 egress VPC(AZ별 NAT, 운영·스테이징 VPC는 NAT 없이 0.0.0.0/0 → TGW).
+- `VPC 밖 리전 리소스` 상자는 VPC 왼쪽 통로 오른쪽에서 시작하고 제목을 두 줄로 나눠, 참조·TGW 연결선이 제목을 가로지르지 않고 옆에서 들어갑니다.
 
 ### Fixed
+- 선택 리소스 보기에서 서브넷이 보기 밖일 뿐인 VPC에 `이 VPC에서 조회된 서브넷이 없습니다`라고 표시하던 문제.
+- 선택 리소스 보기의 모든 연결선(로드 밸런서 서브넷 배치 포함)이 명시 경로를 갖고 draw.io 자동 경로에 맡기지 않음을 모든 샘플·리소스 종류에 대해 테스트로 고정.
 - VPC에 연결되지 않은 Lambda 함수가 리소스 목록·CSV에서 빠지던 문제. 전체 구성에 `VPC 미연결 리전 서비스` 카드로 표시하고 상세 구성에는 그리지 않습니다.
 - 종료(terminated)된 EC2 인스턴스가 약 1시간 동안 `배치 미확인` 리소스로 그려지고 리소스 목록에 남던 문제.
 - 채팅 에이전트의 리소스 찾기가 VPC 이름으로 범위를 좁히지 못하던 문제(`vpc` 범위 추가).
