@@ -42,6 +42,10 @@ mxGraph·maxGraph 같은 JavaScript 라이브러리를 서버에서 쓰지도 �
   - **상세 구성(detail):** VPC 하나와 그 안의 모든 리소스, 등록 대상, 리전 리소스(TGW, VPN)를 그립니다.
   - **선택 리소스(focus):** 리소스 하나와 직접 관계, 그리고 위치를 읽는 데 필요한 상위 경계만 그립니다.
   - SG·ENI·EBS 같은 참조 리소스는 옵션을 켤 때만 그립니다(`AUXILIARY`).
+  - **엣지·전용 연결:** CloudFront는 리전 상자 밖, AWS Cloud 안 왼쪽의 엣지 열에 두고(`EDGE`), 아이콘을 자기 경로의 차선 높이에 맞춰 곧게 오리진 ALB(전체 구성은
+    VPC 카드 위쪽)로 잇습니다. 엣지 열과 리전 사이 통로는 CloudFront 경로 전용입니다. WAF 웹 ACL은 보호 대상 아이콘의 자식 셀(WAF 표식)로 함께 움직입니다.
+    Direct Connect 연결은 고객 게이트웨이와 같은 데이터 센터 상자에 두고(`REMOTE`), DX 게이트웨이 → TGW·VGW 연결은 허브 줄 아래 전용 차선으로 그립니다.
+    Elastic IP·WAF 웹 ACL·TGW 라우팅 테이블은 도형 없이 라벨·속성으로만 보입니다(`UNDRAWN_KINDS`).
 
 ## 2. 자동 정렬 알고리즘 (`layout.py`)
 

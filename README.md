@@ -62,7 +62,7 @@ diagram-bot serve
 
 화면 우측 상단 **로그인**(AWS 콘솔의 계정 메뉴와 같은 위치)에서 IAM Identity Center(SSO, device code)나 이 기기의 프로파일·기본 인증 체인으로 로그인하면 `역할 @ 계정`이 표시됩니다. 같은 메뉴의 **AWS 리소스 수집**에서 예상 계정 ID와 리전을 지정합니다. 로그인하지 않으면 boto3의 기본 인증 체인을 사용합니다. 기존 `AWS_CONFIG_FILE`·`AWS_PROFILE`·`credential_process`도 SDK가 처리합니다. STS의 실제 계정 ID와 예상 계정 ID가 다르면 리소스를 수집하지 않습니다. SSO 토큰과 자격 증명은 서버 메모리에만 두고 저장하지 않습니다.
 
-수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 읽기 API(EC2·ELBv2·RDS·Auto Scaling·EKS·ECS·MSK·ElastiCache·OpenSearch·EFS·Redshift·Lambda·FSx·SageMaker)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
+수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 읽기 API(EC2·ELBv2·RDS·Auto Scaling·EKS·ECS·MSK·ElastiCache·OpenSearch·EFS·Redshift·Lambda·FSx·SageMaker·CloudFront·WAFv2·Direct Connect)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
 
 | 범위 | API 근거 |
 | --- | --- |
@@ -97,10 +97,18 @@ diagram-bot serve
 | FSx (Lustre·ONTAP·OpenZFS·Windows) | fsx DescribeFileSystems.SubnetIds·LustreConfiguration |
 | SageMaker 실시간 엔드포인트 | sagemaker ListEndpoints·DescribeEndpoint·DescribeEndpointConfig(인스턴스 유형)·DescribeModel.VpcConfig(서브넷) |
 | SageMaker HyperPod | sagemaker ListClusters·DescribeCluster(InstanceGroups·VpcConfig·Orchestrator) |
+| Elastic IP (NAT·NLB·EC2·ENI에 표시) | DescribeAddresses의 AllocationId = DescribeNatGateways.NatGatewayAddresses[]·DescribeLoadBalancers.LoadBalancerAddresses[], InstanceId·NetworkInterfaceId |
+| TGW 라우팅 테이블 (라우팅 도메인) | DescribeTransitGatewayRouteTables, GetTransitGatewayRouteTableAssociations·Propagations, SearchTransitGatewayRoutes(state = active·blackhole, 최대 1,000개) |
+| CloudFront와 오리진 | cloudfront ListDistributions(전역), 오리진 DomainName = DescribeLoadBalancers.DNSName일 때만 ALB에 연결 (S3·사용자 지정 오리진은 속성) |
+| AWS WAF 웹 ACL | wafv2 ListWebACLs(REGIONAL은 수집 리전, CLOUDFRONT는 us-east-1)·ListResourcesForWebACL(ALB), ListDistributions.WebACLId |
+| Direct Connect | directconnect DescribeConnections·DescribeVirtualInterfaces(VGW·DX 게이트웨이)·DescribeDirectConnectGateways·DescribeDirectConnectGatewayAssociations |
 | 교차 계정 수집 | sts:AssumeRole (+ ReadOnlyAccess 세션 정책), GetCallerIdentity로 계정 확인 |
 | IP 대상의 서브넷 | 대상 그룹 VPC 안에서 IP를 포함하는 서브넷 CIDR이 하나이고 AZ가 일치할 때만 |
 
-ALB는 여러 서브넷에 걸쳐도 VPC 수준에 한 번만 그리며, 서브넷 연결은 속성 패널과 선택 리소스 보기에서 확인합니다. 대상 그룹은 논리 자원으로 서브넷 밖에 둡니다. 관계 ID는 출발·대상·관계 종류와 포트·AZ로 정해지므로 조회 순서나 상태가 바뀌어도 유지됩니다. ENI·EBS는 **참조만** 표시합니다. 보안 그룹은 규칙을 조회해 검토와 속성 패널에 쓰지만 구성도에는 참조 선택 시에만 그립니다. IP·Lambda 대상은 별도 등록 대상으로 남기고 EC2와 추측으로 합치지 않습니다. IP 대상은 서브넷 CIDR·AZ가 하나로 일치할 때만 서브넷에 두고, ECS 서비스가 그 대상 그룹을 지정하고 태스크 ENI IP가 같을 때만 태스크로 표시합니다. 그래프 관계에는 API 근거와 `inferred: false`가 기록됩니다. 보안 그룹 허용 규칙과 실제 통신을 혼동하지 않습니다.
+ALB는 여러 서브넷에 걸쳐도 VPC 수준에 한 번만 그리며, 서브넷 연결은 속성 패널과 선택 리소스 보기에서 확인합니다. 대상 그룹은 논리 자원으로 서브넷 밖에 둡니다. 관계 ID는 출발·대상·관계 종류와 포트·AZ로 정해지므로 조회 순서나 상태가 바뀌어도 유지됩니다. ENI·EBS는 **참조만** 표시합니다. 보안 그룹은 규칙을 조회해 검토와 속성 패널에 쓰지만 구성도에는 참조 선택 시에만 그립니다. IP·Lambda 대상은 별도 등록 대상으로 남기고 EC2와 추측으로 합치지 않습니다. IP 대상은 서브넷 CIDR·AZ가 하나로 일치할 때만 서브넷에 두고, ECS 서비스가 그 대상 그룹을 지정하고 태스크 ENI IP가 같을 때만 태스크로 표시합니다.
+CloudFront는 리전 상자 밖 AWS Cloud 안의 엣지 열에 두고 오리진 ALB(전체 구성은 그 VPC 카드)로 잇습니다. WAF 웹 ACL이 연결된 CloudFront·ALB 아이콘에는 WAF 표식을 붙입니다.
+Direct Connect 연결은 VPN 고객 게이트웨이와 같은 데이터 센터 상자에 두고 가상 인터페이스로 VGW·DX 게이트웨이에, DX 게이트웨이는 연결된 TGW·VGW에 잇습니다.
+Elastic IP는 붙은 리소스의 라벨(`EIP 203.0.113.10`, NLB는 `EIP 2`)에, TGW 라우팅 테이블은 TGW 라벨·VPC 카드(`TGW 라우팅 테이블 · 이름`)·속성 패널에 표시합니다. 그래프 관계에는 API 근거와 `inferred: false`가 기록됩니다. 보안 그룹 허용 규칙과 실제 통신을 혼동하지 않습니다.
 
 SDK 페이지네이션·재시도·타임아웃을 적용합니다. `partial`은 일부 페이지 실패, `unavailable`은 한 페이지도 조회하지 못한 상태이며 리소스가 없다는 뜻이 아닙니다. 앞서 조회한 데이터는 보존합니다. 수집 시작·종료 시각과 범위를 기록합니다. 서비스별로 병렬 조회하며 adaptive 재시도를 씁니다. 여러 API를 조회한 결과이므로 원자적 스냅샷은 아닙니다.
 
@@ -165,7 +173,7 @@ python scripts/verify_demo.py
 
 자동 테스트 **90개**(AWS API 에뮬레이터 통합 테스트·팀 모드·SSO 포함)와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
 
-SAML 직접 연동(인증 프록시로 연결), 동시 편집 병합, 수집 작업의 재시작 복구, 내장 예약 수집(cron·CI에서 `collect`·`review`·`diff` 종료 코드 사용), 리스너 규칙·NACL·Direct Connect·실제 트래픽 분석은 포함하지 않습니다. 실제 AWS 계정 수집은 한 계정·리전(IAM 사용자 키)에서 CLI와 웹 앱으로 검증했고, SSO 프로파일·교차 계정 역할·실제 워크로드가 있는 계정은 아직 검증하지 않았습니다. 수집 로직은 API별 모의 응답 테스트와 AWS API 에뮬레이터(moto)에 구성한 환경 전체를 수집하는 통합 테스트로 검증했습니다.
+SAML 직접 연동(인증 프록시로 연결), 동시 편집 병합, 수집 작업의 재시작 복구, 내장 예약 수집(cron·CI에서 `collect`·`review`·`diff` 종료 코드 사용), 리스너 규칙·NACL·실제 트래픽 분석은 포함하지 않습니다. CloudFront·WAF·Direct Connect·Elastic IP·TGW 라우팅 테이블 수집은 모의 응답(Stubber)·에뮬레이터로만 검증했습니다. 실제 AWS 계정 수집은 한 계정·리전(IAM 사용자 키)에서 CLI와 웹 앱으로 검증했고, SSO 프로파일·교차 계정 역할·실제 워크로드가 있는 계정은 아직 검증하지 않았습니다. 수집 로직은 API별 모의 응답 테스트와 AWS API 에뮬레이터(moto)에 구성한 환경 전체를 수집하는 통합 테스트로 검증했습니다.
 
 ## 라이선스
 

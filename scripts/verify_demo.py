@@ -229,6 +229,13 @@ def main():
         expect(detail).to_contain_text('Multi-AZ 대기')
         frame.get_by_text(starts('public-a')).click()
         expect(detail).to_contain_text('퍼블릭 · 0.0.0.0/0 → IGW')
+        # The edge outside the Region: CloudFront with its WAF web ACL and the ALB origin; Elastic IPs on the NAT gateways.
+        frame.get_by_text(starts('www.example.com')).click()
+        expect(detail).to_contain_text('CloudFront distribution')
+        expect(detail).to_contain_text('prod-edge-acl')
+        expect(detail).to_contain_text('CloudFront 오리진')
+        frame.get_by_text(starts('prod-nat-a')).click()
+        expect(detail).to_contain_text('203.0.113.101')
         shot('infrastructure.png')
         page.locator('#snapshot-select').select_option('sample-eks-platform')
         ready()
@@ -248,6 +255,7 @@ def main():
         expect(page.locator('#view-overview')).to_have_class('view-button active')
         frame.get_by_text(starts('data-tgw')).click()
         expect(detail).to_contain_text('Transit Gateway')
+        expect(detail).to_contain_text('라우팅 테이블 dp-spokes')
         frame.get_by_text(starts('corp-dc-cgw-2')).click()
         expect(detail).to_contain_text('198.51.100.20')
         shot('network-overview.png')
@@ -444,9 +452,10 @@ def main():
                          'SG/ENI/EBS references', 'native keyboard move', 'native note edit', 'save/reload',
                          'drawio XML download with moved geometry', 'PNG 2x white', 'PNG 1x transparent', 'PNG 3x',
                          'JSON/CSV/review CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
-                         'single-VPC sample opens in detail; infrastructure sample: ASG frame, RDS standby, route-classified subnet',
+                         'single-VPC sample opens in detail; infrastructure sample: ASG frame, RDS standby, route-classified subnet, '
+                         'CloudFront + WAF at the edge, NAT Elastic IPs',
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
-                         'network overview (TGW, customer gateways); data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
+                         'network overview (TGW and its route tables, customer gateways); data platform: ECS service frame, OpenSearch standby AZ, read replica, redundant TGW VPN customer gateways',
                          'AI platform: single-AZ EFA training, Bedrock endpoint, GPU node groups, GPU review',
                          'GPU training: EFA, Capacity Block, placement group, FSx for Lustre, HyperPod; GenAI RAG: SageMaker endpoint',
                          'multi-account: account frames, shared TGW, combine dialog',

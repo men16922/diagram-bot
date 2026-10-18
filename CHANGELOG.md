@@ -26,6 +26,19 @@
   `OPS-GPU-S3-ENDPOINT`, `SEC-SAGEMAKER-VPC`, `REL-SAGEMAKER-AZ`, `SEC-HYPERPOD-PUBLIC`). 샘플 10종(`genai-rag`, `gpu-training` 추가, `SAMPLE_VERSION` 3).
   읽기 전용 정책·CloudFormation 역할에 새 권한 추가.
 - `scripts/render_samples.py`: examples/samples 산출물·PNG·README 재생성.
+- **수집 범위 확장 (엣지·고정 IP·라우팅 도메인·전용 연결):** Elastic IP(`ec2:DescribeAddresses`), TGW 라우팅 테이블
+  (`ec2:DescribeTransitGatewayRouteTables`·`GetTransitGatewayRouteTableAssociations`·`GetTransitGatewayRouteTablePropagations`·`SearchTransitGatewayRoutes`),
+  CloudFront(`cloudfront:ListDistributions`, 전역), AWS WAF(`wafv2:ListWebACLs` REGIONAL·CLOUDFRONT(us-east-1), `wafv2:ListResourcesForWebACL`),
+  Direct Connect(`directconnect:DescribeConnections`·`DescribeVirtualInterfaces`·`DescribeDirectConnectGateways`·`DescribeDirectConnectGatewayAssociations`).
+  거부·부분 조회는 기존처럼 필요한 IAM 액션과 함께 표시(경로가 1,000개를 넘으면 `AdditionalRoutesAvailable` 부분 조회). 읽기 전용 정책·역할 템플릿에 추가.
+- 구성도: CloudFront는 리전 밖 엣지 열에서 오리진 ALB(전체 구성은 VPC 카드)로 연결, WAF 웹 ACL이 붙은 CloudFront·ALB에 WAF 표식.
+  Direct Connect 연결은 데이터 센터 상자에서 VIF로 VGW·DX 게이트웨이에, DX 게이트웨이는 TGW·VGW에 연결(전체 구성 허브 줄 아래 전용 차선).
+  Elastic IP는 NAT·EC2·NLB 라벨, TGW 라우팅 테이블은 TGW 라벨·VPC 카드·속성 패널(연결·전파·경로·blackhole)에 표시. CloudFront·WAF(CloudFront용)·DX 게이트웨이는
+  계정 전역 ID(`<계정>/global/…`)라 여러 리전을 합쳐도 하나로 그립니다.
+- 검토 규칙(모두 low): `SEC-ALB-WAF`(인터넷 ALB에 WAF 없음, WAF가 붙은 CloudFront 뒤면 제외, WAF 조회가 완전할 때만), `SEC-CF-ORIGIN-OPEN`
+  (CloudFront 오리진 ALB의 보안 그룹이 0.0.0.0/0 허용 — 설정 근거만), `COST-EIP-IDLE`(연결 안 된 Elastic IP, 새 `비용` 영역), `REL-TGW-BLACKHOLE`.
+- 샘플(`SAMPLE_VERSION` 4): three-tier에 CloudFront(+WAF, S3 정적 오리진)·NAT Elastic IP·ALB SG는 CloudFront 접두사 목록만, nlb-alb에 NLB AZ별 Elastic IP와
+  ALB WAF, hybrid에 Direct Connect 2개 위치·transit VIF·DX 게이트웨이(VPN은 백업), data-platform에 TGW 라우팅 테이블 2개(스포크·사내망).
 
 ### Changed
 - 샘플: data-platform은 피어링·VGW 대신 Transit Gateway 허브(두 VPC + VPN)와 Redshift Multi-AZ 서브넷 그룹 3개·AZ당 2노드,
