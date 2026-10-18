@@ -1,9 +1,9 @@
 ---
 title: 배치와 draw.io 문서
-summary: layout.py의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
-sources: [src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md, tests/test_golden.py]
+summary: layout/ 패키지의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
+sources: [src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md, tests/test_golden.py, tests/test_layout_package.py]
 related: [drawio-format-and-alignment, views, graph, samples, web-app, storage, howto-add-collected-service]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 배치와 draw.io 문서
 
@@ -14,6 +14,7 @@ updated: 2026-10-18
 - 진입점: `drawio.layout_document(snapshot, view, vpc_id, resource, include_references, graph, routes)` = `layout_view(snapshot, graph, view_graph(...))`. `generate_document(..., spec=None)`가 XML을 만든다(회사별 포맷 커스터마이징과 기존 XML 정렬은 [[drawio-format-and-alignment]]).
 - 엔진 표시: `layout.ENGINE, VERSION = "diagram-bot-layered", 2`. 범위 캡션 셀(`id="scope"`)에 `layout="diagram-bot-layered/2"`와 `view`, `vpc`, `focus`, `references`, `routes` 속성이 들어간다.
 - 셀 ID: `layout.cell_id(value) = "r-" + sha256(value)[:24]`. 리소스 셀은 노드 ID, 관계 셀은 `"edge/" + 관계 ID`에서 만든다. 고정 ID 셀은 `0`, `1`, `heading`, `scope`, `cloud`, `region`, `references`, `onprem`(`drawio.GENERATED`).
+- 모듈(`src/diagram_bot/layout/`): `base.py`(크기 상수 `ICON`·`SLOT`·`ROW`·`SUBNET_HEADER` 등, `cell_id`, `is_public`·`tier_rank`·`outside_vpc`), `text.py`(`text_width`·`fit_label`·`fit_name`·`label_lines`, 종류별 라벨 함수 표 `LABELERS`와 `resource_label`, `icon_variant`, `icon_label`, `group_title`), `overview.py`(요약 카드·허브 띠), `detail.py`(VPC 띠·AZ 열·틀·참조/데이터 센터 상자), `routing.py`(`route`, `edge_entry`·`edge_between`), `edge_column.py`(CloudFront 엣지 열), `__init__.py`(`Canvas`, `layout_view`). 예전 `layout.py`의 모듈 수준 이름은 모두 `__all__`로 `diagram_bot.layout`에서 그대로 import된다.
 - 배치 결과(`layout_view`의 반환): `engine`, `version`, `view`, `counts`, `width`, `height`, `shapes`(역할·부모·상대 좌표), `edges`(`path` 전체 경로, `points` 중간점, `constraints` exit/entry), `absolute`(셀별 절대 좌표), `labels`(라벨 상자).
 
 ## 공통 머리말
@@ -21,7 +22,8 @@ updated: 2026-10-18
 - `scope`: 수집 상태(`조회 완료` 또는 `부분 조회: operation(error_code)…`), 완료 시각, `표시 N개 / 수집 N개 · 참조 N개 · 숨김 N개`, 경로 필터 설명, 서브넷 구분 기준(라우팅 테이블이 있으면 `0.0.0.0/0` 경로, 없으면 `MapPublicIpOnLaunch`·이름·Tier 태그).
 - 컨테이너 계층은 AWS Architecture Icons 관례를 따른다: AWS Cloud(`cloud`) > Region(`region`) > VPC > AZ > 서브넷.
 
-## detail 배치 (`layout.detail`)
+## detail 배치 (`layout/detail.py`)
+`detail`이 Region을 그리고 VPC마다 `vpc_block`을 부른다: `vpc_members`(띠·서브넷·틀·미확인 띠·AZ 열 배정) → `gutter_demand` → `size_columns` → `draw_bands` → `subnet_rows`·`tier_tops` → `draw_az_columns`·`draw_subnet` → `draw_frames` → `suppress_registrations`. 배치한 셀과 경로용 사실(`placed`, `lanes`, `frames_at`, `suppressed`, `refs_votes`)은 `Detail` 객체가 들고, 그래프 관계는 보기마다 한 번만 색인한다(`by_relation`, `group_members`, `asg_of`).
 VPC마다 위에서 아래로:
 1. **연결 행**: `EDGE_KINDS` 순서(IGW, VGW, 피어링, TGW attachment, VPC 엔드포인트, EKS, 태스크를 수집하지 못한 ECS 서비스, Lambda, SageMaker 엔드포인트). VPC 폭을 넘으면 줄을 바꾼다.
 2. **로드 밸런서 행**: 인터넷용을 왼쪽에. **대상 그룹 행**: 연결 LB 위치의 무게중심 순.
@@ -32,19 +34,19 @@ VPC마다 위에서 아래로:
 - 거터 폭은 지나가는 경로 수에 맞춘다(`max(28, 16 + 8 * n)`). 행마다 들어오는 경로 수만큼 위 여백(lane)을 둔다.
 - VPC 밖 리전 리소스(참조·배치 미확인)는 Region 안 `references` 상자, `outside_vpc`인 것(고객 게이트웨이, DX 연결, `AvailabilityZone=all` IP 대상)은 AWS Cloud 오른쪽의 `onprem` 상자("Corporate data center")에 한 줄로 둔다.
 - CloudFront 배포는 Region 왼쪽, AWS Cloud 안의 **엣지 열**(`edge_column`, 캡션 "엣지 · CloudFront (리전 밖)")에 둔다. Region의 x는 `edge_offset`이 엣지 열과 경로 통로 폭만큼 민다.
-- 경로(`layout.route`): 모든 관계에 직교 경로를 명시한다. 대상 그룹은 자기 채널 줄로 줄기를 내리고(버스), 거터마다 출발 그룹별 세로 칸, 행마다 들어오는 관계별 lane을 쓴다. VPN·DX VIF는 AWS Cloud 오른쪽 통로를 거쳐 `onprem` 상자로, CloudFront는 Region 왼쪽 통로를 내려와 LB 행 위 lane으로 들어간다. 대상 그룹 경로 색은 `TG_STROKES` 다섯 가지를 순환한다.
+- 경로(`layout/routing.py`의 `route`): 모든 관계에 직교 경로를 명시한다. 단계는 `edge_spec`(종류 분류) → `gutter_slots` → `corridor_slots` → `entry_points` → `row_lanes` → `align_cloudfront` → `frame_entries` → 종류별 `EMIT` 함수. 대상 그룹은 자기 채널 줄로 줄기를 내리고(버스), 거터마다 출발 그룹별 세로 칸, 행마다 들어오는 관계별 lane을 쓴다. VPN·DX VIF는 AWS Cloud 오른쪽 통로를 거쳐 `onprem` 상자로, CloudFront는 Region 왼쪽 통로를 내려와 LB 행 위 lane으로 들어간다. 대상 그룹 경로 색은 `TG_STROKES` 다섯 가지를 순환한다.
 - 경로 필터가 있으면 경로 밖 리소스·틀을 `muted`로 표시한다(XML에서 `opacity=30;textOpacity=45;`).
 
-## overview 배치 (`layout.overview`)
+## overview 배치 (`layout/overview.py`)
 - VPC 요약 카드(`summary`, 폭 320, 3열). 카드 제목은 VPC 이름·CIDR·AZ 수·서브넷 수, 계정 통합이면 계정, TGW attachment가 연결된 라우팅 테이블.
 - 카드 안 **요약 아이콘**(`vpc_glance`): 층(퍼블릭·프라이빗·격리)별로 종류를 세어 `EC2 × 6` 아래 `ASG 2개`, `ALB × 2` 아래 `인터넷 · WAF`, `RDS × 2` 아래 `Multi-AZ`처럼 두 줄로 표시한다(`glance_label`, `GLANCE`, `GLANCE_KINDS`). 아이콘을 누르면 첫 리소스 속성이 열린다.
-- 추가 카드: VPC에 붙지 않은 Lambda·SageMaker 엔드포인트("VPC 미연결 리전 서비스"), VPC가 확인되지 않은 수집 리소스("VPC 외 · 배치 미확인"), VPC가 없을 때 이유(`describe_vpcs`가 완료가 아니면 "권한·조회 실패일 수 있습니다").
-- 허브 연결이 없고 통합 스냅샷이 아니면 카드 격자만 그린다. 아니면 `network()`: 연결된 VPC 카드 행 → 허브 띠(`HUB_ORDER` 순: TGW, VGW, 피어링, DX 게이트웨이) → 나머지 카드. 경로마다 카드 아래 변의 출발점, 카드 오른쪽 틈, 허브 위 lane을 따로 쓴다. DX 게이트웨이 연결(허브↔허브)은 허브 띠 아래 자기 lane. 고객 게이트웨이·DX 연결은 AWS Cloud 오른쪽 데이터 센터 상자(DX가 있으면 캡션 끝 `·DX`).
+- 추가 카드(`unplaced_cards`): VPC에 붙지 않은 Lambda·SageMaker 엔드포인트("VPC 미연결 리전 서비스"), VPC가 확인되지 않은 수집 리소스("VPC 외 · 배치 미확인"), VPC가 없을 때 이유(`describe_vpcs`가 완료가 아니면 "권한·조회 실패일 수 있습니다").
+- 허브 연결이 없고 통합 스냅샷이 아니면 카드 격자만 그린다. 아니면 `network()`(`card_rows`·`card_grid`·`draw_cards`·`hub_ports`·`card_routes`·`peer_routes`·`site_box`): 연결된 VPC 카드 행 → 허브 띠(`HUB_ORDER` 순: TGW, VGW, 피어링, DX 게이트웨이) → 나머지 카드. 경로마다 카드 아래 변의 출발점, 카드 오른쪽 틈, 허브 위 lane을 따로 쓴다. DX 게이트웨이 연결(허브↔허브)은 허브 띠 아래 자기 lane. 고객 게이트웨이·DX 연결은 AWS Cloud 오른쪽 데이터 센터 상자(DX가 있으면 캡션 끝 `·DX`).
 - 계정 통합이면 계정별 카드를 `account` 틀로 묶는다(행에 계정을 섞지 않음).
 - CloudFront(`overview_edge`): 엣지 열의 아이콘에서 통로를 내려와 오리진 LB의 요약 아이콘 위에서 카드 윗변으로 들어간다. 아이콘 높이를 첫 경로 lane에 맞춘다(`align_edge`).
 
 ## 라벨과 아이콘
-- `resource_label(node)`: 이름, 유형, 고가용성 역할 순. 예: RDS `primary`/`standby`/`Single-AZ`/`db_role`, ElastiCache `샤드 0001 · primary`, OpenSearch `data 2 · master 1`과 `standby`, Redshift `primary`/`secondary`, EC2 `GPU · EFA · EIP …`와 `Capacity Block`/`ODCR`/`PG …`, LB `AZ 2개 · EIP 2 · WAF`, DX 연결 `Direct Connect · 10Gbps`·위치·`VIF n`, TGW `라우팅 테이블 n`. 근거 값은 [[graph]]의 파생 필드.
+- `resource_label(node)`: 이름, 유형, 고가용성 역할 순. 종류별 함수는 `text.LABELERS`에 있고, 없는 종류(또는 `Type` 없는 LB, `Protocol` 없는 대상 그룹)는 이름만 쓴다. 예: RDS `primary`/`standby`/`Single-AZ`/`db_role`, ElastiCache `샤드 0001 · primary`, OpenSearch `data 2 · master 1`과 `standby`, Redshift `primary`/`secondary`, EC2 `GPU · EFA · EIP …`와 `Capacity Block`/`ODCR`/`PG …`, LB `AZ 2개 · EIP 2 · WAF`, DX 연결 `Direct Connect · 10Gbps`·위치·`VIF n`, TGW `라우팅 테이블 n`. 근거 값은 [[graph]]의 파생 필드.
 - 라벨은 아래(폭 140, 4줄) 또는 오른쪽(폭 200, 3줄)에 두고 `fit_label`·`fit_name`으로 자른다. 전체 이름은 `tooltip`.
 - `icon_variant`: LB 유형, DB·캐시 엔진, EFS 클래스, FSx 유형, 가속 인스턴스(`ACCELERATED_ICON`, trn·inf), Bedrock·SageMaker 엔드포인트, VPC 안 IP 대상.
 - `drawio.resource_style`: 변형 → `RESOURCE_ICONS`(리소스 수준 아이콘) → `ICONS`(서비스 아이콘 타일) → 기본 둥근 사각형. 참조 노드는 `dashed=1;opacity=65;`, 강조는 굵은 글씨·노란 배경. WAF 보호 리소스에는 `badge` 자식 셀(`waf_badge`).
@@ -75,7 +77,8 @@ VPC마다 위에서 아래로:
 
 ## 바꿀 때 주의
 - 배치 규칙을 바꾸면 `VERSION`과 `docs/DRAWIO.md`를 함께 고치고, 샘플 그림을 다시 만든다([[samples]]).
-- 새 종류는 `EDGE_KINDS`·`SUBNET_KINDS`·`outside_vpc`·overview의 `outside` 제외 목록·`GLANCE_KINDS` 중 어디에 속하는지 정해야 한다([[howto-add-collected-service]]).
+- 새 종류는 `EDGE_KINDS`·`SUBNET_KINDS`·`outside_vpc`·`unplaced_cards`의 `outside` 제외 목록·`GLANCE_KINDS` 중 어디에 속하는지 정해야 한다([[howto-add-collected-service]]).
+- 모듈을 나누거나 이름을 옮겨도 `layout/__init__.py`의 `__all__`(그리고 `tests/test_layout_package.py`)이 `diagram_bot.layout`에서 import하는 이름을 지킨다. `xml_align.py` 같은 호출자는 크기 상수를 그 경로로 가져온다. 리팩터링은 `tests/golden.json`을 다시 쓰지 않고 통과해야 한다.
 
 ## 관련
 - [[drawio-format-and-alignment]] — 회사별 `DrawioSpec`과 기존 `drawio.xml` 인플레이스 정렬·스냅샷 이식.

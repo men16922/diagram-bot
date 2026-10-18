@@ -3,7 +3,7 @@ title: 수집 서비스 추가 방법
 summary: 새 AWS 읽기 호출을 수집기부터 정책·그래프·라벨·보기·배치·검토·CloudFormation·샘플·테스트·문서까지 잇는 순서. Direct Connect와 Elastic IP를 추가한 방식을 기준으로 한다.
 sources: [src/diagram_bot/collector.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, src/diagram_bot/views.py, src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/diff.py, src/diagram_bot/samples/, tests/test_collector.py, tests/test_aws_emulator.py, tests/test_graph_report.py, tests/test_drawio.py, tests/test_findings.py, tests/test_iac.py, tests/fixtures.py, tests/test_golden.py]
 related: [collection, graph, views, layout-and-drawio, samples, snapshot-model]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 수집 서비스 추가 방법
 
@@ -43,10 +43,10 @@ updated: 2026-10-18
 - 서브넷 안에 그릴 종류 → `SUBNET_KINDS`. 도형 없이 다른 것의 라벨·배지로만 보일 종류 → `UNDRAWN_KINDS`(EIP, 웹 ACL, TGW 라우팅 테이블).
 - VPC 상세에 함께 그릴 리전 연결 → `REGIONAL`, AWS 밖으로 나가면 `REMOTE`와 `SITE_KINDS`(DX: `dx_virtual_interface`, `dx_connection`). 전체 구성 허브면 `HUB_ORDER`와 `overview_links`(DX: `dx_gateway`, `dx_gateway_association`). 리전 밖 엣지 → `EDGE`.
 
-## 6. 배치·아이콘 (`layout.py`, `drawio.py`)
-- `layout.resource_label`에 종류별 라벨(이름 → 유형 → 핵심 사실). DX: `dx_gateway`(ASN), `dx_connection`(대역폭·위치·VIF 수, 참조면 "(참조)"). EIP: NAT·EC2·LB 라벨에 `EIP …`.
-- 위치: VPC 연결 행이면 `EDGE_KINDS`, 데이터 센터 상자면 `outside_vpc`(SITE_KINDS로 자동), 전체 구성에서 VPC 밖이 정상인 종류는 `overview`의 `outside` 제외 목록(빠지면 "VPC 외 · 배치 미확인" 카드가 생겨 `test_overview_cards_differ_per_sample_and_hide_drawn_groups`가 실패). 요약 카드 아이콘은 `GLANCE_KINDS`.
-- 아이콘: `drawio.RESOURCE_ICONS`(리소스 수준) 또는 `ICONS`(서비스 타일, DX는 `direct_connect`). 변형이 필요하면 `layout.icon_variant`.
+## 6. 배치·아이콘 (`layout/`, `drawio.py`)
+- `layout/text.py`의 `LABELERS`에 종류별 라벨 함수(이름 → 유형 → 핵심 사실, `stack`으로 줄을 잇고 `resource_label`이 종류로 고른다). DX: `dx_gateway`(ASN), `dx_connection`(대역폭·위치·VIF 수, 참조면 "(참조)"). EIP: NAT·EC2·LB 라벨에 `EIP …`.
+- 위치: VPC 연결 행이면 `layout/detail.py`의 `EDGE_KINDS`, 데이터 센터 상자면 `outside_vpc`(SITE_KINDS로 자동), 전체 구성에서 VPC 밖이 정상인 종류는 `layout/overview.py` `unplaced_cards`의 `outside` 제외 목록(빠지면 "VPC 외 · 배치 미확인" 카드가 생겨 `test_overview_cards_differ_per_sample_and_hide_drawn_groups`가 실패). 요약 카드 아이콘은 `GLANCE_KINDS`.
+- 아이콘: `drawio.RESOURCE_ICONS`(리소스 수준) 또는 `ICONS`(서비스 타일, DX는 `direct_connect`). 변형이 필요하면 `layout/text.py`의 `icon_variant`.
 
 ## 7. 검토 규칙 (`findings.py`, 있으면)
 - API 필드로만 판정하고 근거(`evidence`)에 API 이름을 쓴다. EIP 예: `edge_review`의 `COST-EIP-IDLE`(연결 필드가 모두 없고 `eip_associated`도 없을 때, `low`, `cost`). 조회가 불완전하면 판정하지 않는다(`waf_collected`).

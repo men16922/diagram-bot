@@ -3,7 +3,7 @@ title: 채팅 도구 추가하기
 summary: 설계 단계(Design 메서드)와 그 단계를 부르는 Strands 도구를 추가하는 절차. add_fsx_lustre·add_subnet_tier를 본보기로 DesignError 메시지, record(), @tool docstring, 도구 수 단언, SYSTEM_PROMPT, CloudFormation 범위, 테스트를 다룬다.
 sources: [src/diagram_bot/designer.py, src/diagram_bot/agent.py, src/diagram_bot/samples/, src/diagram_bot/iac/, src/diagram_bot/graph.py, tests/test_agent.py, tests/test_iac.py]
 related: [chat-agent, http-api, storage, cloudformation, graph, snapshot-model, views]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 채팅 도구 추가하기
 
@@ -45,7 +45,7 @@ def add_thing(self, vpc, name, size=2):
 기존 `raw` 키(예: `fsx_file_systems`)를 쓰면 이 단계는 필요 없다. 새 키라면 FSx의 경로를 따라간다.
 - `samples.Sample.__init__`의 `self.raw` 키 목록과 헬퍼 메서드. 같은 키를 `Sample.snapshot()`의 `coverage` 목록에도 넣을지 확인한다.
 - `graph.build_graph`의 노드·관계 생성(`raw.get("fsx_file_systems")` → `node("fsx_file_system", ...)`).
-- 배치·표시: `views.SUBNET_KINDS` 같은 분류, `layout.py`의 라벨·아이콘 분기, `drawio.py`의 아이콘 표, 프런트엔드 `static/js/labels.js`의 `names`.
+- 배치·표시: `views.SUBNET_KINDS` 같은 분류, `layout/text.py`의 라벨(`LABELERS`)·아이콘(`icon_variant`) 분기, `drawio.py`의 아이콘 표, 프런트엔드 `static/js/labels.js`의 `names`.
 - 검토 규칙이 필요하면 `findings.py`.
 - 수집기에서도 읽으려면 `collector.py`의 호출 목록과 `readonly-policy.json`까지 바뀐다. 이 페이지 범위 밖이다.
 

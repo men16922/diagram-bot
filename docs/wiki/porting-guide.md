@@ -3,7 +3,7 @@ title: 회사 스택으로 옮기기 (React + Vite, FastAPI, 브라우저 egress
 summary: 표준 drawio.xml을 직접 고치던 회사 버전을 인플레이스 자동 정렬(align_xml)·회사 규격(DrawioSpec)·스냅샷 파이프라인으로 이식하는 코딩 에이전트용 토큰 최적화 플레이북(라이브러리 명세, Level 0~4 파일 복사 목록, 계약 치트시트 포함).
 sources: [pyproject.toml, src/diagram_bot/api.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/designer.py, src/diagram_bot/samples/, src/diagram_bot/graph.py, src/diagram_bot/views.py, src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/routes/__init__.py, src/diagram_bot/server.py, src/diagram_bot/aws_access.py, src/diagram_bot/store.py, src/diagram_bot/egress.py, src/diagram_bot/agent.py, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js]
 related: [architecture, drawio-format-and-alignment, snapshot-model, layout-and-drawio, chat-agent, browser-egress, aws-access-and-sso, storage, http-api, web-app, team-mode-security]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 회사 스택으로 옮기기 (Coding Agent Playbook)
 
@@ -24,7 +24,7 @@ updated: 2026-10-18
 
 | 구분 | 패키지 / 자산 | 버전 | 실제 import하는 모듈 (`src/diagram_bot/`) | 역할 및 대체 가능 여부 |
 | --- | --- | --- | --- | --- |
-| **무의존 코어** | Python 표준 라이브러리 (`ipaddress`, `hashlib`, `re`, `json`, `dataclasses`, `xml.etree.ElementTree`) | `>=3.11` | `graph.py`, `views.py`, `layout.py`, `findings.py`, `iac/`, `diff.py`, `combine.py` | 그래프 조인, 보기 필터, 결정적 좌표·직교 경로 계산, 47개 검토 규칙, CloudFormation 생성 |
+| **무의존 코어** | Python 표준 라이브러리 (`ipaddress`, `hashlib`, `re`, `json`, `dataclasses`, `xml.etree.ElementTree`) | `>=3.11` | `graph.py`, `views.py`, `layout/`, `findings.py`, `iac/`, `diff.py`, `combine.py` | 그래프 조인, 보기 필터, 결정적 좌표·직교 경로 계산, 47개 검토 규칙, CloudFormation 생성 |
 | **필수 1 (XML 보안)** | `defusedxml` | `>=0.7,<1` | `drawio_spec.py`, `xml_align.py`, `drawio.py` | 외부/사용자 XML 파싱 시 XXE 차단. **Level 0·Level 1 이식 시 유일한 외부 패키지** |
 | **필수 2 (AWS 호출)** | `boto3` (`botocore`) | `>=1.35,<2` | `collector.py`, `aws_access.py`, `sso.py`, `egress.py`, `agent.py` | 읽기 전용 AWS 수집, Identity Center device code, `before-send` 훅 기반 브라우저 egress 서명 |
 | **필수 3 (웹 서버)** | `fastapi`, `uvicorn` (`pydantic`, `starlette`) | `>=0.115,<1`, `>=0.30,<1` | `server.py`, `routes/*.py` | HTTP 라우터·요청 검증. **라이브러리 모드(`api.py`)로만 쓸 때는 설치 불필요** |
@@ -38,7 +38,7 @@ updated: 2026-10-18
 
 | 단계 | 목적 | 복사할 파일 (`src/diagram_bot/` 기준) | 필요한 pip 패키지 | 진입점 함수 / 클래스 |
 | --- | --- | --- | --- | --- |
-| **Level 0. 기존 `drawio.xml` 자동 정렬 + 회사 규격(`DrawioSpec`)** | 회사 기존 XML 생성기는 그대로 두고, 결과 XML의 겹침·컨테이너 크기·AZ 서브넷 정렬·직교 배선만 자동 교정하거나 회사 XML 포맷 추출 | `drawio_spec.py`, `xml_align.py`, `drawio.py`, `layout.py`, `views.py`, `graph.py`, `samples/` (`collector.py`는 `OPERATIONS` 상수만 쓰거나 함께 복사) | `defusedxml` (1개) | `xml_align.align_drawio_xml`, `xml_align.inspect_drawio_xml`, `xml_align.import_drawio_xml`, `drawio_spec.spec_from_xml` |
+| **Level 0. 기존 `drawio.xml` 자동 정렬 + 회사 규격(`DrawioSpec`)** | 회사 기존 XML 생성기는 그대로 두고, 결과 XML의 겹침·컨테이너 크기·AZ 서브넷 정렬·직교 배선만 자동 교정하거나 회사 XML 포맷 추출 | `drawio_spec.py`, `xml_align.py`, `drawio.py`, `layout/`, `views.py`, `graph.py`, `samples/` (`collector.py`는 `OPERATIONS` 상수만 쓰거나 함께 복사) | `defusedxml` (1개) | `xml_align.align_drawio_xml`, `xml_align.inspect_drawio_xml`, `xml_align.import_drawio_xml`, `drawio_spec.spec_from_xml` |
 | **Level 1. 다이어그램·설계·검토·CFN 코어 엔진** | 표준 아키텍처 생성 + 코드/도구 기반 설계(`Design`) + 회사 규격 XML 출력 + 주석 보존 + 47개 검토 규칙 + CloudFormation 내보내기 | Level 0 + `designer.py`, `findings.py`, `iac/`, `diff.py`, `combine.py` | `defusedxml` (1개) | `designer.Design`, `drawio.generate_document(..., spec=...)`, `drawio.carry_annotations`, `findings.review`, `iac.template` |
 | **Level 2. AWS 수집 + 브라우저 Egress + 통합 퍼사드** | Level 1 + 실제 계정 읽기 전용 수집 + 서버 서명·브라우저 전송(`--aws-egress browser`) + `api.py` 단일 진입점 | Level 1 + `collector.py`, `egress.py`, `aws_access.py`, `sso.py`, `store.py`, `api.py` + 프런트 `static/js/relay.js` | `defusedxml`, `boto3` | `api.collect_snapshot`, `api.render`, `api.align_xml`, `api.import_xml`, `egress.BrowserRelay`, 프런트 `startRelay(api)` |
 | **Level 3. FastAPI 라우터 장착** | Level 2 + 회사 FastAPI 앱에 `/diagram/*` 엔드포인트(`/api/xml/align`, `/api/xml/import` 포함)와 리비전 저장소 장착 | Level 2 + `auth.py`, `routes/__init__.py`, `routes/snapshots.py`, `routes/documents.py`, `routes/aws.py` | + `fastapi`, `pydantic` | `routes.Context`, `snapshots.router(ctx)`, `documents.router(ctx)`, `aws.router(ctx)` |
@@ -129,7 +129,7 @@ result = api.review_snapshot(snapshot); draft = api.cloudformation(snapshot)
 
 1. **컨텍스트 절약**: 전체 코드베이스를 읽지 말고 `llms.txt` → 이 문서(`docs/wiki/porting-guide.md`) → 필요한 주제의 위키 1~2개만 읽는다.
 2. **파일 단위 복사**: 위 3절의 Level 0~4 표에 적힌 파일만 대상 저장소에 복사한다.
-3. **레이아웃 불변식 보호**: `layout.py`의 좌표 수식을 임의로 수정하지 않는다. 회사 포맷 변경은 반드시 `drawio_spec.DrawioSpec`(`spec_from_xml` 또는 프리셋)으로 처리하고, 기존 XML 정렬은 `xml_align.align_drawio_xml`을 호출한다.
+3. **레이아웃 불변식 보호**: `layout/` 패키지의 좌표 수식을 임의로 수정하지 않는다. 회사 포맷 변경은 반드시 `drawio_spec.DrawioSpec`(`spec_from_xml` 또는 프리셋)으로 처리하고, 기존 XML 정렬은 `xml_align.align_drawio_xml`을 호출한다.
 4. **즉시 검증**: 복사·연결 직후 `pytest tests/test_api.py tests/test_xml_align.py tests/test_drawio.py -q`로 무결성을 확인한다.
 
 ## 바꿀 때 주의
