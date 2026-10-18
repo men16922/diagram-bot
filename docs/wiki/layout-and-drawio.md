@@ -1,7 +1,7 @@
 ---
 title: 배치와 draw.io 문서
 summary: layout.py의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
-sources: [src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md, tests/test_golden.py]
+sources: [src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md, tests/test_golden.py]
 related: [drawio-format-and-alignment, views, graph, samples, web-app, storage, howto-add-collected-service]
 updated: 2026-10-18
 ---

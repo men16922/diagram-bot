@@ -1,7 +1,7 @@
 ---
 title: 여러 계정 통합 보기
 summary: combine.py의 combine_snapshots가 계정 × 리전 스냅샷을 parts로 묶는 방식, graph.merge_graphs의 공유 TGW·계정 간 피어링 합치기와 전역 ID, 전체 구성의 계정 프레임, CLI combine과 /api/snapshots/combine, 계정별 CloudFormation.
-sources: [src/diagram_bot/combine.py, src/diagram_bot/graph.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/cli.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/samples/, src/diagram_bot/static/app.html, tests/test_graph_report.py, tests/test_collector.py, tests/test_server.py, tests/test_iac.py, tests/test_drawio.py]
+sources: [src/diagram_bot/combine.py, src/diagram_bot/graph.py, src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/cli.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/samples/, src/diagram_bot/static/app.html, tests/test_graph_report.py, tests/test_collector.py, tests/test_server.py, tests/test_iac.py, tests/test_drawio.py]
 related: [cloudformation, review-rules, change-review, cli, graph, collection, snapshot-model]
 updated: 2026-10-18
 ---

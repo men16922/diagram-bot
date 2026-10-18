@@ -1,7 +1,7 @@
 ---
 title: 회사 스택으로 옮기기 (React + Vite, FastAPI, 브라우저 egress, 회사 draw.io 규격)
 summary: 표준 drawio.xml을 직접 고치던 회사 버전을 인플레이스 자동 정렬(align_xml)·회사 규격(DrawioSpec)·스냅샷 파이프라인으로 이식하는 코딩 에이전트용 토큰 최적화 플레이북(라이브러리 명세, Level 0~4 파일 복사 목록, 계약 치트시트 포함).
-sources: [pyproject.toml, src/diagram_bot/api.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/designer.py, src/diagram_bot/samples/, src/diagram_bot/graph.py, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/routes/__init__.py, src/diagram_bot/server.py, src/diagram_bot/aws_access.py, src/diagram_bot/store.py, src/diagram_bot/egress.py, src/diagram_bot/agent.py, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js]
+sources: [pyproject.toml, src/diagram_bot/api.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/designer.py, src/diagram_bot/samples/, src/diagram_bot/graph.py, src/diagram_bot/views.py, src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/routes/__init__.py, src/diagram_bot/server.py, src/diagram_bot/aws_access.py, src/diagram_bot/store.py, src/diagram_bot/egress.py, src/diagram_bot/agent.py, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js]
 related: [architecture, drawio-format-and-alignment, snapshot-model, layout-and-drawio, chat-agent, browser-egress, aws-access-and-sso, storage, http-api, web-app, team-mode-security]
 updated: 2026-10-18
 ---

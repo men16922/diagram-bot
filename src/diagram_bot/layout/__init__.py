@@ -6,20 +6,21 @@ Resources outside every drawn VPC go to a separate reference container. Edges fr
 groups run through the channel and the gutters between AZ columns, so they never cross a
 subnet or an icon. Identical input and options always yield identical coordinates.
 """
-import hashlib
-import re
+from ..views import AUXILIARY, EDGE, GROUP_TARGETS, GROUPS, HUB_ORDER, REGIONAL, REMOTE, SITE_KINDS, UNDRAWN_KINDS, containment, edge_links, overview_links
+from .base import (AZ_HEADER, BOTTOM_LABEL, ENGINE, ICON, LANE_TOP, LINE, MAX_LINES, ROW, SIDE_LABEL, SIDE_LINES, SIDE_SLOT, SLOT, SUBNET_HEADER, VERSION,
+                   VPC_HEADER, cell_id, is_public, outside_vpc, tier_rank)
+from .text import (ACCELERATED_ICON, ENGINES, GPU, LABELERS, ML_ENDPOINTS, accelerated_icon, cloud_label, fit_label, fit_name, group_title, icon_label,
+                   icon_variant, instance_family, label_lines, resource_label, text_width)
 
-from .views import (AUXILIARY, EDGE, GROUP_TARGETS, GROUPS, HUB_ORDER, REGIONAL, REMOTE, SITE_KINDS, UNDRAWN_KINDS, containment, edge_links,
-                    overview_links)
+__all__ = ["ACCELERATED_ICON", "AZ_HEADER", "BOTTOM_LABEL", "EDGE_COLUMN", "EDGE_KINDS", "EDGE_SLOT", "ENGINE", "ENGINES", "GLANCE", "GLANCE_ICON",
+           "GLANCE_KINDS", "GLANCE_LEFT", "GPU", "ICON", "KIND_ORDER", "LABELERS", "LANE_TOP", "LINE", "MAX_LINES", "ML_ENDPOINTS", "OUTSIDE_BOXES", "ROUTES",
+           "ROW", "SIDE_LABEL", "SIDE_LINES", "SIDE_SLOT", "SLOT", "SLOT_W", "SUBNET_HEADER", "TG_STROKES", "TIER_NAMES", "VERSION", "VPC_HEADER",
+           "Canvas", "accelerated_icon", "align_edge", "arrange", "cell_id", "cloud_label", "detail", "draw_glance", "edge_between", "edge_column",
+           "edge_entry", "edge_offset", "edge_path", "fit_label", "fit_name", "glance_height", "glance_key", "glance_label", "glance_lines",
+           "group_title", "icon_label", "icon_variant", "instance_family", "is_public", "label_lines", "layout_view", "network", "outside_vpc",
+           "overview", "overview_edge", "resource_label", "route", "target_on_right", "text_width", "tg_stroke", "tier_rank", "vpc_glance",
+           "waf_badge"]
 
-ENGINE, VERSION = "diagram-bot-layered", 2
-ICON, LINE, MAX_LINES = 52, 15, 4
-SIDE_LINES = 3  # labels beside an icon stay within the icon row
-BOTTOM_LABEL, SIDE_LABEL = 140, 200
-SLOT, SIDE_SLOT = 150, 290
-LANE_TOP = 36  # space above an icon row for up to LANES entering routes
-ROW = LANE_TOP + ICON + 8 + MAX_LINES * LINE + 8
-SUBNET_HEADER, AZ_HEADER, VPC_HEADER = 46, 32, 38
 # The VPC's attachment row: edges to the internet, AWS services and other networks, and managed
 # services whose network interfaces span several subnets (EKS control plane, VPC Lambda, ECS services
 # whose tasks were not collected).
@@ -27,51 +28,6 @@ EDGE_KINDS = {"internet_gateway": 0, "vpn_gateway": 1, "vpc_peering": 2, "tgw_at
               "eks_cluster": 5, "ecs_service": 6, "lambda_function": 7, "sagemaker_endpoint": 8}
 KIND_ORDER = {"transit_gateway": -1, "load_balancer": 0, "target_group": 1, "ec2": 2, "registered_target": 3,
               "security_group": 4, "network_interface": 5, "volume": 6}
-
-
-def cell_id(value):
-    return "r-" + hashlib.sha256(value.encode()).hexdigest()[:24]
-
-
-def text_width(text, size=12):
-    # Conservative Arial estimate: CJK glyphs are about one em, Latin about 0.6 em.
-    return sum(size if ord(c) > 0x2E7F else size * 0.62 for c in text)
-
-
-def fit_label(text, width, lines=MAX_LINES, size=12):
-    """Truncate so the label fits `lines` wrapped lines; full text stays in the inspector."""
-    # Wrapped labels lose width at word breaks; a single truncated line does not.
-    budget = width * lines * (0.95 if lines == 1 else 0.85)
-    if text_width(text, size) <= budget:
-        return text
-    out = ""
-    for c in text:
-        if text_width(out + c + "…", size) > budget:
-            break
-        out += c
-    # Cut at a word break when one is near, so a half word next to the ellipsis does not read
-    # as running into the type line below ("…전용 인스…" over "m6i.large").
-    space = out.rfind(" ")
-    if space >= len(out) * 0.6:
-        out = out[:space].rstrip(" (·-")
-    return out + "…"
-
-
-def fit_name(text, width):
-    """One-line name: names ending in a number (node, shard, replica) keep their tail, others their start."""
-    if text_width(text) <= width * 0.95 or not text[-1:].isdigit():
-        return fit_label(text, width, 1)
-    keep = len(fit_label(text, width, 1)) - 1  # characters that fit beside the ellipsis
-    back = max(4, keep // 2)
-    return text[:keep - back] + "…" + text[-back:]
-
-
-def label_lines(text, width, size=12):
-    """Estimated wrapped lines, using the same single-line allowance as fit_label."""
-    def lines(part):
-        measured = text_width(part, size)
-        return 1 if measured <= width * 0.95 else -(-int(measured / 0.85) // width)
-    return sum(lines(part) for part in text.split("\n"))
 
 
 class Canvas:
@@ -101,67 +57,6 @@ ROUTES = {"public": "0.0.0.0/0 → IGW", "nat": "0.0.0.0/0 → NAT", "tgw": "0.0
           "isolated": "인터넷 경로 없음"}
 
 
-def is_public(subnet):
-    """Route table decides when collected; otherwise MapPublicIpOnLaunch or the name/Tier tag."""
-    if subnet.get("route_class"):
-        return subnet["route_class"] == "public"
-    tags = {t["Key"]: t.get("Value", "") for t in subnet["attributes"].get("Tags", [])}
-    return bool(subnet["attributes"].get("MapPublicIpOnLaunch")) or "public" in (tags.get("Tier", "") + " " + subnet["name"]).lower()
-
-
-def tier_rank(subnet):
-    """Order subnets the way architecture diagrams read: public, then web, app, data tiers."""
-    if is_public(subnet):
-        return 0
-    tags = {t["Key"]: t.get("Value", "") for t in subnet["attributes"].get("Tags", [])}
-    words = (tags.get("Tier", "") + " " + subnet["name"]).lower()
-    for rank, names in enumerate((("web", "front"), ("app", "service", "private"), ("data", "db", "database")), 1):
-        if any(name in words for name in names):
-            return rank
-    return 3 if subnet.get("route_class") == "isolated" else 2
-
-
-# Accelerated EC2 families that have their own AWS Architecture Icon. The GPU icons print their
-# family (P3, P4d, G4dn), so newer GPU families (p5, g6e…) keep the generic icon and a "GPU" label.
-ACCELERATED_ICON = {"p3": "p3", "p3dn": "p3", "p4d": "p4d", "p4de": "p4de", "g4dn": "g4dn", "g4ad": "g4ad", "dl1": "dl1"}
-GPU = re.compile(r"^(p|g)\d")
-ML_ENDPOINTS = re.compile(r"\.(bedrock|sagemaker)[.-]?")
-
-
-def instance_family(node):
-    return str(node["attributes"].get("InstanceType", "")).split(".")[0]
-
-
-def accelerated_icon(node):
-    family = instance_family(node)
-    return ACCELERATED_ICON.get(family) or ("trainium" if family.startswith("trn") else "inferentia" if family.startswith("inf") else None)
-
-
-def icon_variant(node):
-    """Icon choice within a kind: load balancer type, database and cache engine, file system class,
-    accelerated instance family and AI service endpoints."""
-    attrs = node["attributes"]
-    if node["kind"] == "ec2" and accelerated_icon(node):
-        return accelerated_icon(node)
-    if node["kind"] == "vpc_endpoint":
-        match = ML_ENDPOINTS.search(str(attrs.get("ServiceName", "")) + ".")
-        return match.group(1) if match else None
-    if node["kind"] == "load_balancer":
-        return attrs.get("Type")
-    if node["kind"] in ("db_instance", "db_standby"):
-        engine = str(attrs.get("Engine", ""))
-        return "aurora" if engine.startswith("aurora") else {"docdb": "documentdb", "neptune": "neptune"}.get(engine)
-    if node["kind"] == "cache_node":
-        return str(attrs.get("Engine", "redis"))
-    if node["kind"] == "efs_mount_target":
-        return "efs_one_zone" if attrs.get("OneZone") else "efs_standard"
-    if node["kind"] == "fsx_file_system":
-        return {"LUSTRE": "fsx_lustre", "ONTAP": "fsx_ontap", "OPENZFS": "fsx_openzfs", "WINDOWS": "fsx_windows"}.get(attrs.get("FileSystemType"))
-    if node["kind"] == "registered_target" and attrs.get("TargetType") == "ip" and not outside_vpc(node):
-        return "ip_target"
-    return None
-
-
 def arrange(kids, size, asg_of, nodes):
     """Slots inside a subnet: members of one Auto Scaling group share rows, each group starting a new row,
     so a group's frame across AZ columns never encloses another group's instance."""
@@ -173,135 +68,6 @@ def arrange(kids, size, asg_of, nodes):
         slots += [(kid, row + i // size, i % size) for i, kid in enumerate(groups[key])]
         row += -(-len(groups[key]) // size)
     return slots, row
-
-
-ENGINES = {"aurora-postgresql": "Aurora PostgreSQL", "aurora-mysql": "Aurora MySQL", "postgres": "PostgreSQL", "mysql": "MySQL",
-           "mariadb": "MariaDB", "redis": "Redis", "valkey": "Valkey", "memcached": "Memcached", "docdb": "DocumentDB",
-           "neptune": "Neptune", "oracle-ee": "Oracle EE", "oracle-se2": "Oracle SE2", "sqlserver-ee": "SQL Server EE",
-           "sqlserver-se": "SQL Server SE", "sqlserver-ex": "SQL Server Express", "sqlserver-web": "SQL Server Web"}
-
-
-def resource_label(node):
-    """Name first, then type and the high-availability role; full detail stays in the inspector."""
-    attrs, kind, name = node["attributes"], node["kind"], node["name"]
-    lines = lambda *parts: "\n".join(str(p) for p in parts if p not in (None, ""))
-    if kind == "registered_target":
-        target = attrs.get("Target", {})
-        return f"{target.get('Id', name)}:{target.get('Port', '')}"
-    if kind == "ec2":
-        # AI/ML placement facts from DescribeInstances: EFA interface, Capacity Block or reservation, cluster placement group.
-        efa = any(i.get("InterfaceType") == "efa" for i in attrs.get("NetworkInterfaces", []))
-        capacity = {"capacity-block": "Capacity Block", "spot": "spot"}.get(attrs.get("InstanceLifecycle")) \
-            or ("ODCR" if attrs.get("CapacityReservationId") else None)
-        group = (attrs.get("Placement") or {}).get("GroupName")
-        eip = node.get("elastic_ips") or []
-        # One fact group per line so a 140 px label never cuts EFA or the capacity source.
-        return lines(name, attrs.get("InstanceType"),
-                     " · ".join(filter(None, ("GPU" if GPU.match(instance_family(node)) else None, "EFA" if efa else None,
-                                              f"EIP {eip[0]}" if eip else None))),
-                     " · ".join(filter(None, (capacity, f"PG {group}" if group else None))))
-    if kind == "load_balancer" and attrs.get("Type"):
-        short = {"application": "ALB", "network": "NLB", "gateway": "GWLB"}.get(attrs["Type"], attrs["Type"])
-        zones = len(attrs.get("AvailabilityZones", []))
-        eips = len(node.get("elastic_ips") or [])
-        facts = " · ".join(filter(None, (f"AZ {zones}개" if zones else None, f"EIP {eips}" if eips else None, "WAF" if node.get("waf") else None)))
-        return lines(name, f"{short} · {attrs.get('Scheme', '')}".rstrip(" ·"), facts)
-    if kind == "cloudfront_distribution":
-        kinds = [t for t, _ in node.get("origins") or []]
-        origins = " · ".join(f"{t} {kinds.count(t)}" for t in dict.fromkeys(kinds))
-        return lines(name, "CloudFront" + ("" if attrs.get("Enabled", True) else " · 비활성"),
-                     attrs.get("DomainName") if attrs.get("DomainName") != name else None, f"오리진 {origins}" if origins else None)
-    if kind == "dx_gateway":
-        return lines(name, "Direct Connect gateway", f"ASN {attrs['amazonSideAsn']}" if attrs.get("amazonSideAsn") else None)
-    if kind == "dx_connection":
-        vifs = node.get("virtual_interfaces") or []
-        if node["reference_only"]:
-            return lines(name, "Direct Connect 연결 (참조)", f"VIF {len(vifs)}" if vifs else None)
-        return lines(name, f"Direct Connect · {attrs.get('bandwidth', '')}".rstrip(" ·"), attrs.get("location"),
-                     " · ".join(filter(None, (f"VIF {len(vifs)}" if vifs else None, attrs.get("connectionState")))))
-    if kind == "internet_gateway":
-        return lines(name, "Internet gateway")
-    if kind == "vpn_gateway":
-        return lines(name, "Virtual private gateway", f"ASN {attrs['AmazonSideAsn']}" if attrs.get("AmazonSideAsn") else None)
-    if kind == "vpc_peering":
-        cidr = lambda side: (attrs.get(side) or {}).get("CidrBlock", "?")
-        status = (attrs.get("Status") or {}).get("Code", "")
-        return lines(name, f"VPC peering · {status}".rstrip(" ·"), f"{cidr('RequesterVpcInfo')}↔{cidr('AccepterVpcInfo')}")
-    if kind == "customer_gateway":
-        tunnels = attrs.get("VpnTunnels") or []
-        return lines(name, "Customer gateway", attrs.get("IpAddress"), f"VPN 터널 {', '.join(tunnels)} UP" if tunnels else None)
-    if kind == "vpc_endpoint":
-        endpoint = attrs.get("VpcEndpointType", "")
-        where = f" · 서브넷 {len(attrs.get('SubnetIds', []))}개" if endpoint == "Interface" else ""
-        return lines(attrs.get("ServiceShortName") or name, f"{endpoint}{where}")
-    if kind == "tgw_attachment":
-        return lines(name, "TGW attachment")
-    if kind == "transit_gateway":
-        asn = (attrs.get("Options") or {}).get("AmazonSideAsn")
-        tables = node.get("route_tables") or []
-        return lines(name, "Transit Gateway", " · ".join(filter(None, (f"ASN {asn}" if asn else None,
-                                                                         f"라우팅 테이블 {len(tables)}" if tables else None))))
-    if kind == "nat_gateway":
-        eip = node.get("elastic_ips") or []
-        address = f"EIP {eip[0]}" if eip else next((a.get("PublicIp") for a in attrs.get("NatGatewayAddresses", []) if a.get("PublicIp")), None)
-        return lines(name, "NAT gateway", address or ("private NAT" if attrs.get("ConnectivityType") == "private" else None))
-    if kind == "eks_cluster":
-        config = attrs.get("resourcesVpcConfig") or {}
-        access = "+".join(a for a, on in (("public", config.get("endpointPublicAccess")), ("private", config.get("endpointPrivateAccess"))) if on)
-        return lines(name, f"EKS {attrs.get('version', '')} control plane".replace("  ", " "), f"endpoint {access}" if access else None)
-    if kind == "ecs_service":
-        return lines(name, f"ECS service · {attrs.get('LaunchSummary') or ''}".rstrip(" ·"),
-                     f"태스크 {attrs.get('runningCount', 0)}/{attrs.get('desiredCount', 0)}")
-    if kind == "ecs_task":
-        return lines(attrs.get("ServiceName") or name, f"{attrs.get('launchType') or 'ECS'} task", attrs.get("PrivateIp"))
-    if kind == "lambda_function":
-        return lines(name, f"Lambda · {attrs.get('Runtime', '')}".rstrip(" ·"), f"서브넷 {len((attrs.get('VpcConfig') or {}).get('SubnetIds', []))}개")
-    if kind == "msk_broker":
-        ids = attrs.get("BrokerIds") or []
-        return lines(attrs.get("ClusterName") or name, f"MSK 브로커 {attrs.get('Brokers', '')}개", attrs.get("InstanceType"),
-                     f"broker {', '.join(str(i) for i in ids)}" if ids else None)
-    if kind == "search_node":
-        engine, _, version = str(attrs.get("EngineVersion") or "OpenSearch").partition("_")
-        counts = " · ".join(f"{label} {attrs[key]}" for key, label in (("Data", "data"), ("Master", "master"), ("Warm", "warm")) if attrs.get(key))
-        state = "standby" if attrs.get("Standby") else ("active" if attrs.get("MultiAZWithStandby") else attrs.get("InstanceType"))
-        return lines(attrs.get("DomainName") or name, f"{engine} {version}".strip(), ("~" if attrs.get("Estimated") else "") + counts, state)
-    if kind == "efs_mount_target":
-        return lines(name, "EFS mount target", "One Zone" if attrs.get("OneZone") else "Regional", attrs.get("IpAddress"))
-    if kind == "fsx_file_system":
-        kind_name = {"LUSTRE": "Lustre", "ONTAP": "NetApp ONTAP", "OPENZFS": "OpenZFS", "WINDOWS": "Windows File Server"}.get(
-            attrs.get("FileSystemType"), attrs.get("FileSystemType", ""))
-        config = attrs.get("LustreConfiguration") or attrs.get("OntapConfiguration") or attrs.get("OpenZFSConfiguration") \
-            or attrs.get("WindowsConfiguration") or {}
-        size = f"{attrs['StorageCapacity'] / 1024:g} TiB" if attrs.get("StorageCapacity") else None
-        return lines(name, f"FSx for {kind_name}", config.get("DeploymentType"), size)
-    if kind == "sagemaker_endpoint":
-        return lines(name, f"SageMaker · {attrs.get('EndpointStatus', '')}".rstrip(" ·"),
-                     f"{attrs.get('InstanceType', '')} × {attrs.get('InstanceCount', 0)}")
-    if kind == "sagemaker_cluster":
-        groups = attrs.get("InstanceGroups", [])
-        orchestrator = "EKS" if (attrs.get("Orchestrator") or {}).get("Eks") else "Slurm"
-        # The largest instance groups, without the "ml." prefix (full types in the inspector).
-        top = sorted(groups, key=lambda g: -(g.get("CurrentCount") or g.get("TargetCount") or 0))[:2]
-        return lines(name, f"HyperPod · {orchestrator}",
-                     *[f"{str(g.get('InstanceType', '')).removeprefix('ml.')} × {g.get('CurrentCount', g.get('TargetCount', ''))}" for g in top])
-    if kind == "redshift_cluster":
-        role = attrs.get("Role") or "single-AZ"
-        return lines(attrs.get("ClusterIdentifier") or name, "Redshift", f"{attrs.get('NodeType', '')} × {attrs.get('NodesHere', '')}", role)
-    if kind == "cache_node":
-        engine = f"{ENGINES.get(attrs.get('Engine'), attrs.get('Engine', ''))} {attrs.get('EngineVersion', '')}".strip()
-        role = attrs.get("CurrentRole")
-        if role and attrs.get("Shard"):
-            role = f"샤드 {int(attrs['Shard']) if str(attrs['Shard']).isdigit() else attrs['Shard']} · {role}"
-        return lines(name, engine, role, attrs.get("CacheNodeType"))
-    if kind in ("db_instance", "db_standby"):
-        replicas = attrs.get("ReadReplicaDBInstanceIdentifiers")
-        role = node.get("db_role") or ("standby" if kind == "db_standby" else ("primary" if attrs.get("MultiAZ") or replicas else "Single-AZ"))
-        size = "Serverless v2" if attrs.get("DBInstanceClass") == "db.serverless" else attrs.get("DBInstanceClass")
-        return lines(attrs.get("DBInstanceIdentifier", name).replace(" (standby)", ""), ENGINES.get(attrs.get("Engine"), attrs.get("Engine", "")),
-                     role, size)
-    if kind == "target_group" and attrs.get("Protocol"):
-        return lines(name, f"{attrs['Protocol']}:{attrs.get('Port', '')} · {attrs.get('TargetType', '')}")
-    return name
 
 
 def layout_view(snapshot, graph, selection):
@@ -349,21 +115,6 @@ def layout_view(snapshot, graph, selection):
     labels = {s["id"]: canvas.label_box(s) for s in canvas.shapes if s.get("label_side")}
     return {"engine": ENGINE, "version": VERSION, "view": view, "counts": counts, "width": width, "height": height,
             "shapes": canvas.shapes, "edges": canvas.edges, "absolute": dict(canvas.abs), "labels": labels}
-
-
-def cloud_label(meta):
-    if meta.get("combined"):
-        return f"AWS Cloud · 계정 {len(meta['accounts'])}개 (계정·리전별 수집 통합)"
-    return "AWS Cloud · 설계안 (실제 계정 아님)" if meta.get("design") else f"AWS Cloud · 계정 {meta['account_id']}"
-
-
-def icon_label(n, side):
-    width = SIDE_LABEL if side == "right" else BOTTOM_LABEL
-    parts = resource_label(n).split("\n")
-    # The name may wrap into whatever the detail lines leave of the label's line budget.
-    first = max(1, (SIDE_LINES if side == "right" else MAX_LINES) - len(parts) + 1)
-    return "\n".join((fit_name(part, width) if first == 1 else fit_label(part, width, first)) if i == 0 else fit_label(part, width, 1)
-                     for i, part in enumerate(parts))
 
 
 def edge_between(e, source, target, path, constraints):
@@ -1060,20 +811,6 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     route(canvas, [e for e in drawn_edges if e["id"] not in suppressed], vpc_of, placed, lanes, tg_order, subnet_at, frames_at)
 
 
-def group_title(graph, nodes, key):
-    """Frame caption: what the group is and its capacity."""
-    attrs = nodes[key]["attributes"]
-    if nodes[key]["kind"] == "ecs_service":
-        return (f"ECS service · {nodes[key]['name']} · {attrs.get('LaunchSummary') or ''} · 태스크 {attrs.get('runningCount', 0)}"
-                f"/{attrs.get('desiredCount', 0)}").replace(" ·  ·", " ·")
-    capacity = f"min {attrs.get('MinSize', '?')} · desired {attrs.get('DesiredCapacity', '?')} · max {attrs.get('MaxSize', '?')}"
-    # An EKS managed node group is backed by this Auto Scaling group (DescribeNodegroup.resources).
-    owner = next((e for e in graph["edges"] if e["relation"] == "eks_nodegroup" and e["target"] == key), None)
-    if owner:
-        return f"EKS node group · {owner['details'].get('nodegroup')} ({nodes[owner['source']]['name']}) · {capacity}"
-    return f"Auto Scaling group · {nodes[key]['name']} · {capacity}"
-
-
 def route(canvas, drawn_edges, vpc_of, placed, lanes, tg_order, subnet_at, frames_at):
     """Explicit orthogonal routes. Only edges sharing a source (a bus) or a target may share a segment.
 
@@ -1276,12 +1013,6 @@ TG_STROKES = ("#1F5FAD", "#B4387A", "#8A6D00", "#2E7D32", "#7A4E2D")
 
 def tg_stroke(tg_order, tg):
     return TG_STROKES[tg_order[tg] % len(TG_STROKES)] if tg in tg_order else None
-
-
-def outside_vpc(node):
-    """On premises: a target registered with AvailabilityZone=all, a VPN customer gateway or a Direct Connect connection."""
-    return node["kind"] in SITE_KINDS or \
-        node["kind"] == "registered_target" and node["attributes"].get("Target", {}).get("AvailabilityZone") == "all"
 
 
 def target_on_right(canvas, target, geometry):
