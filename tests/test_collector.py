@@ -4,7 +4,7 @@ import boto3
 import pytest
 from botocore.stub import Stubber
 
-from diagram_bot.collector import OPERATIONS, collect, query
+from diagram_bot.collector import DETAILS, OPERATIONS, collect, opensearch, query, transit_routes
 
 
 def client(service):
@@ -298,6 +298,30 @@ def test_target_health_error_is_scoped_to_group():
         rows, coverage = query(elb, "describe_target_health", "TargetHealthDescriptions", {"TargetGroupArn": arn})
         assert rows == [] and coverage["status"] == "unavailable"
         assert coverage["parameters"]["TargetGroupArn"] == arn
+
+
+def stub_call(answers):
+    """A collect() call stand-in: logs each request and answers from {operation: rows}."""
+    def call(log, service, operation, key, params=None, client=None):
+        log.append({"service": service, "operation": operation, "parameters": params, "status": "complete"})
+        return answers.get(operation, [])
+    return call
+
+
+def test_detail_steps_run_on_a_stub_call():
+    empty = {name: [] for *_, name in OPERATIONS}
+    assert all(value == [] for detail in DETAILS for value in detail(empty, stub_call({}), []).values())
+    log = []
+    names = [{"DomainName": f"d{i}"} for i in range(7)]
+    domains = opensearch({**empty, "opensearch_domain_names": names}, stub_call({"describe_domains": [{"DomainName": "d0", "VPCOptions": {"SubnetIds": ["s"]}}]}), log)
+    assert [c["parameters"]["DomainNames"] for c in log[:2]] == [[f"d{i}" for i in range(5)], ["d5", "d6"]]  # five names per call
+    assert [c["operation"] for c in log[2:]] == ["describe_domain_nodes"] * 2 and len(domains["opensearch_domains"]) == 2
+    log = []
+    tables = [{"TransitGatewayRouteTableId": "tgw-rtb-1"}]
+    routes = transit_routes({**empty, "transit_gateway_route_tables": tables},
+                            stub_call({"search_transit_gateway_routes": [{"Routes": [{"State": "active"}], "AdditionalRoutesAvailable": True}]}), log)
+    assert routes["transit_gateway_routes"] == [{"State": "active", "TransitGatewayRouteTableId": "tgw-rtb-1"}]
+    assert log[-1]["status"] == "partial" and log[-1]["items"] == 1 and log[-1]["error_code"] == "AdditionalRoutesAvailable"
 
 
 def test_assume_role_caps_session_to_read_only_and_checks_the_assumed_account(monkeypatch):
