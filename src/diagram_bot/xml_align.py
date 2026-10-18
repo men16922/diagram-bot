@@ -24,7 +24,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 from .designer import STANDARDS, register_standard, slug
 from .drawio import generate_document
 from .drawio_spec import (AZ_CODE, REGION_CODE, classify_cell, format_style, iter_cells, pages, parse_style, patch_style,
-                          read_document, resolve_spec, set_default_spec, spec_from_xml)
+                          read_document, resolve_spec, set_default_spec, spec_from_xml, subnet_isolated)
 from .errors import InputError
 from .graph import build_graph
 from .layout import AZ_HEADER, ICON, LANE_TOP, ROW, SLOT, SUBNET_HEADER, VPC_HEADER
@@ -1058,7 +1058,8 @@ def import_drawio_xml(xml_text, *, title=None, region="ap-northeast-2", account=
         subnets[key] = None
         pending.append((pi, v, vid, key, nets[vid].claim(network), letter, name))
     for i, (pi, v, vid, key, cidr, letter, name) in enumerate(pending):
-        tier = TIER_NAMES[v["tier"] if v["tier"] is not None else 2]
+        # A subnet drawn without an internet route is the data tier (isolated route table), even when its name says "private".
+        tier = "data" if subnet_isolated(v["label"], v["style"]) else TIER_NAMES[v["tier"] if v["tier"] is not None else 2]
         sid = _own_id(v, "subnet") or f"subnet-{i + 1}-{letter}"
         subnets[key] = sample.subnet(sid, vid, letter, cidr or nets[vid].allocate(), name, tier)
         tier_subnets.setdefault((vid, tier), []).append(sid)

@@ -276,6 +276,13 @@ LABEL_KINDS = (
 TIER_WORDS = {"웹": "web", "앱": "app", "데이터": "data", "프라이빗": "private"}  # Korean names layout.tier_rank does not read
 
 
+def subnet_isolated(label, style):
+    """A drawn subnet without an internet route: the isolated style colours or the bot's "인터넷 경로 없음" caption."""
+    _, kv = parse_style(style)
+    fill, stroke, text = kv.get("fillColor", "").upper(), kv.get("strokeColor", "").upper(), (label or "").lower()
+    return bool(fill in ("#ECEFF8", "#EDE7F6") or stroke == "#3F51B5" or "인터넷 경로 없음" in text or re.search(r"\bisolated\b|격리", text))
+
+
 def subnet_tier(label, style):
     """Tier of a drawn subnet, ranked like layout.tier_rank (public 0, web 1, app 2, data 3).
 
@@ -284,7 +291,7 @@ def subnet_tier(label, style):
     fill, stroke, text = kv.get("fillColor", "").upper(), kv.get("strokeColor", "").upper(), (label or "").lower()
     if fill in ("#F2F6E8", "#E8F5E9") or stroke == "#7AA116" or "→ igw" in text or re.search(r"\b(public|pub|dmz|ingress)\b|퍼블릭", text):
         return 0
-    isolated = fill in ("#ECEFF8", "#EDE7F6") or stroke == "#3F51B5" or "인터넷 경로 없음" in text or re.search(r"\bisolated\b|격리", text)
+    isolated = subnet_isolated(label, style)
     words = text.splitlines()[0] if text else ""
     for korean, english in TIER_WORDS.items():
         words = words.replace(korean, f" {english} ")

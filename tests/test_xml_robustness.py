@@ -571,3 +571,20 @@ def test_single_sources_for_styles_icons_and_geometry():
     ys = sorted({float(g.get("y")) for g in geos.values()})
     assert all(float(g.get("width")) == layout.ICON for g in geos.values())
     assert all(round(b - a) == layout.SLOT for a, b in zip(xs, xs[1:])) and all(round(b - a) == layout.ROW for a, b in zip(ys, ys[1:]))
+
+
+def test_an_adopted_template_keeps_its_data_tier_and_can_be_extended(monkeypatch):
+    # data-private-* subnets have no internet route; "private" in the name must not make them app subnets.
+    from diagram_bot import designer
+    from diagram_bot.samples import SAMPLES
+    from diagram_bot.xml_align import adopt_company_xml
+    monkeypatch.setattr(designer, "COMPANY_STANDARDS", {})
+    from diagram_bot.drawio import generate_document
+    xml = generate_document(SAMPLES["three-tier"]())
+    result = adopt_company_xml(xml, name="corp-web", register=True)
+    tiers = {n["name"]: n["attributes"]["Tags"] for n in result["snapshot"]["graph"]["nodes"] if n["kind"] == "subnet"}
+    assert {"Key": "Tier", "Value": "data"} in tiers["data-private-a"]
+    d = designer.Design()
+    vpc = d.apply_standard("corp-web")["vpcs"][0]["name"]
+    assert d.vpcs[vpc]["tiers"].keys() >= {"public", "web", "app", "data"}
+    d.add_database(vpc, "orders-db")
