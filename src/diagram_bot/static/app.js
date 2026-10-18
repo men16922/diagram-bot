@@ -471,27 +471,32 @@ async function openChat() {
 }
 $('chat-form').onsubmit=async event=>{
   event.preventDefault();const message=$('chat-input').value.trim();if(!message||state.chatBusy)return;
-  if(state.dirty)await saveDocument(false);
-  state.chatBusy=true;$('chat-send').disabled=true;$('chat-input').value='';chatMessage('user',message);
-  const waiting=chatMessage('system','설계하는 중…'),status=waiting.querySelector('.chat-text');
-  let reply=null,text='',shown=null,pending=null,loading=null;
-  // Each design step the agent saves opens on the canvas as it arrives; only the newest waits while one loads.
-  const show=id=>{pending=id;if(!loading)loading=(async()=>{while(pending&&pending!==shown){const next=pending;shown=next;
-    await refreshSnapshots(next);await loadSnapshot(next);}loading=null;})();};
+  state.chatBusy=true;$('chat-send').disabled=true;
+  let loading=null;
   try{
-    const result=await streamApi('/api/agent/chat/stream',{message,model:$('chat-model').value,snapshot:state.snapshotId},event=>{
-      if(event.type==='tool')status.textContent=event.status==='start'?`도구 실행 중: ${event.name}`:`도구 ${event.status==='error'?'오류':'완료'}: ${event.name}`;
-      else if(event.type==='model'&&event.fallback)status.textContent=`${event.model_label}(대체 모델)로 응답하는 중…`;
-      else if(event.type==='snapshot')show(event.id);
-      else if(event.type==='text'){text+=event.text;if(!reply){reply=chatMessage('assistant','');}
-        reply.querySelector('.chat-text').replaceWith(Object.assign(el('div',undefined,'chat-text'),{textContent:text}));$('chat-log').scrollTop=$('chat-log').scrollHeight;}
-    });
+    if(state.dirty)await saveDocument(false);
+    $('chat-input').value='';chatMessage('user',message);
+    const waiting=chatMessage('system','설계하는 중…'),status=waiting.querySelector('.chat-text');
+    let reply=null,text='',shown=null,pending=null,result;
+    // Each design step the agent saves opens on the canvas as it arrives; only the newest waits while one loads.
+    // A step that fails to open is reported and the loop moves on, so later steps still open.
+    const show=id=>{pending=id;if(!loading)loading=(async()=>{while(pending&&pending!==shown){const next=pending;shown=next;
+      try{await refreshSnapshots(next);await loadSnapshot(next);}catch(error){toast(error.message,true);}}loading=null;})();};
+    try{
+      result=await streamApi('/api/agent/chat/stream',{message,model:$('chat-model').value,snapshot:state.snapshotId},event=>{
+        if(event.type==='tool')status.textContent=event.status==='start'?`도구 실행 중: ${event.name}`:`도구 ${event.status==='error'?'오류':'완료'}: ${event.name}`;
+        else if(event.type==='model'&&event.fallback)status.textContent=`${event.model_label}(대체 모델)로 응답하는 중…`;
+        else if(event.type==='snapshot')show(event.id);
+        else if(event.type==='text'){text+=event.text;if(!reply){reply=chatMessage('assistant','');}
+          reply.querySelector('.chat-text').replaceWith(Object.assign(el('div',undefined,'chat-text'),{textContent:text}));$('chat-log').scrollTop=$('chat-log').scrollHeight;}
+      });
+    }catch(error){waiting.remove();reply?.remove();if(text)chatMessage('assistant',text);chatMessage('system',error.message);return;}
     waiting.remove();reply?.remove();
     const meta=`${result.model_label}${result.fallback?' · 대체 모델(기본 모델 사용 불가)':''} · 도구 ${result.tools_used.length}회`+(result.snapshots.length?` · 구성도 ${result.snapshots.length}회 갱신`:'');
     chatMessage('assistant',result.reply||'(응답 없음)',meta);
-    const last=result.snapshots.at(-1);if(last)show(last);if(loading)await loading;
-  }catch(error){waiting.remove();reply?.remove();if(text)chatMessage('assistant',text);chatMessage('system',error.message);}
-  finally{state.chatBusy=false;$('chat-send').disabled=false;$('chat-input').focus();}
+    const last=result.snapshots.at(-1);if(last)show(last);
+  }catch(error){toast(error.message,true);}
+  finally{if(loading)await loading;state.chatBusy=false;$('chat-send').disabled=false;$('chat-input').focus();}
 };
 $('chat-input').onkeydown=event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('chat-form').requestSubmit();}};
 bind('chat-button',openChat);bind('chat-close',()=>setChat(false));
