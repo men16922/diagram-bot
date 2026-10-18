@@ -14,6 +14,7 @@ manipulated at the code level) with Diagram Bot's deterministic layout and snaps
   diffed with `diff.diff`, or exported to CloudFormation with `iac.template`.
 """
 import copy
+import ipaddress
 import json
 import math
 from pathlib import Path
@@ -22,8 +23,8 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from .designer import STANDARDS, register_standard, slug
 from .drawio import generate_document
-from .drawio_spec import (classify_cell, format_style, iter_cells, parse_style, patch_style, read_document, resolve_spec,
-                          set_default_spec, spec_from_xml)
+from .drawio_spec import (AZ_CODE, REGION_CODE, classify_cell, format_style, iter_cells, pages, parse_style, patch_style,
+                          read_document, resolve_spec, set_default_spec, spec_from_xml)
 from .errors import InputError
 from .graph import build_graph
 from .samples import Sample
@@ -278,23 +279,35 @@ def _counts(report):
 
 
 def inspect_drawio_xml(xml_text) -> dict:
-    """Inspect a `drawio.xml` string and return layout/routing diagnostics and its extracted `DrawioSpec`."""
+    """Layout and routing diagnostics of every page of a `drawio.xml` string, and its extracted `DrawioSpec`.
+
+    The issue lists and counts cover all pages; `pages` has each page's counts and whether it holds AWS cells at all
+    (a cover or legend page does not, and import skips it)."""
     root = read_document(xml_text)
-    graph_root = root.find("diagram/mxGraphModel/root") if root.tag == "mxfile" else root.find("root")
-    page = _inspect_page(graph_root)
-    vertices = page["vertices"]
-    roles = {}
-    for v in vertices.values():
-        roles[v["role"]] = roles.get(v["role"], 0) + 1
+    roles, totals, page_reports = {}, {key: [] for key in ISSUES}, []
+    nodes = containers = edge_count = 0
+    for name, graph_root in pages(root):
+        page = _inspect_page(graph_root)
+        vertices = page["vertices"].values()
+        for v in vertices:
+            roles[v["role"]] = roles.get(v["role"], 0) + 1
+        for key in ISSUES:
+            totals[key] += page[key]
+        page_nodes = sum(1 for v in vertices if v["role"] == "resource")
+        nodes, edge_count = nodes + page_nodes, edge_count + len(page["edges"])
+        containers += sum(1 for v in vertices if v["role"] in CONTAINER_ROLES)
+        page_reports.append({"name": name, "aws": any(v["role"] in ("vpc", "subnet", "resource", "summary") for v in vertices),
+                             "node_count": page_nodes, **_counts(page), "clean": not any(page[key] for key in ISSUES)})
     extracted = spec_from_xml(xml_text)
     return {
         "wrapper": extracted.cell_wrapper,
-        "node_count": sum(1 for v in vertices.values() if v["role"] == "resource"),
-        "container_count": sum(1 for v in vertices.values() if v["role"] in CONTAINER_ROLES),
-        "edge_count": len(page["edges"]),
+        "node_count": nodes,
+        "container_count": containers,
+        "edge_count": edge_count,
         "roles": roles,
-        **{key: page[key] for key in ISSUES},
-        "clean": not any(page[key] for key in ISSUES),
+        **totals,
+        "clean": not any(totals.values()),
+        "pages": page_reports,
         "spec": extracted.to_dict(),
     }
 
@@ -862,225 +875,331 @@ def align_drawio_xml(xml_text, *, mode="preserve", spec=None, reparent=True, rou
                         normalize_styles=normalize_styles, grid_size=grid_size)["xml"]
 
 
-def import_drawio_xml(xml_text, *, title=None, region="ap-northeast-2", account="000000000000") -> dict:
-    """Convert an existing AWS `drawio.xml` diagram into a valid Diagram Bot `Snapshot` (`raw` + `graph`)."""
-    root = read_document(xml_text)
-    graph_root = root.find("diagram/mxGraphModel/root") if root.tag == "mxfile" else root.find("root")
-    vertices, edges = _parse_page_model(graph_root)
-    _reparent_visual_children(vertices)
+# Availability Zone letters per region, in order; a label's AZ is used only when it is one of these.
+REGION_AZS = {"us-east-1": "abcdef", "us-east-2": "abc", "us-west-1": "bc", "us-west-2": "abcd", "ca-central-1": "abd",
+              "eu-west-1": "abc", "eu-west-2": "abc", "eu-central-1": "abc", "ap-northeast-1": "acd", "ap-northeast-2": "abcd",
+              "ap-northeast-3": "abc", "ap-southeast-1": "abc", "ap-southeast-2": "abc", "ap-south-1": "abc", "sa-east-1": "abc"}
+TIER_NAMES = {0: "public", 1: "web", 2: "app", 3: "data"}
+INSTANCE_TYPES = {"p3": "p3.2xlarge", "p4d": "p4d.24xlarge", "p4de": "p4de.24xlarge", "g4dn": "g4dn.xlarge", "g4ad": "g4ad.xlarge",
+                  "trainium": "trn1.32xlarge", "inferentia": "inf2.xlarge", "dl1": "dl1.24xlarge"}
+IMPORTED_KINDS = {"internet_gateway", "nat_gateway", "application", "network", "gateway", "load_balancer", "target_group", "ec2",
+                  *INSTANCE_TYPES, "db_instance", "db_standby", "documentdb", "neptune", "aurora", "redis", "valkey", "memcached",
+                  "eks_cluster", "ecs_service", "ecs_task", "lambda_function", "vpc_endpoint", "bedrock", "sagemaker", "efs_standard",
+                  "efs_one_zone", "fsx_lustre", "fsx_file_system", "fsx_ontap", "fsx_openzfs", "fsx_windows", "sagemaker_endpoint",
+                  "cloudfront_distribution"}
+CIDR = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}\b")
 
-    # Detect region / title from heading or region containers if present
-    for v in vertices.values():
-        if v["role"] == "title" and not title:
-            title = v["label"].split("·")[0].replace("SAMPLE", "").replace("DESIGN", "").strip(" /")
-        m = re.search(r"\b(ap|us|eu|sa|ca|me|af)-[a-z0-9]+-\d\b", v["label"])
-        if m:
-            region = m.group(0)
 
-    sample = Sample("imported", title or "draw.io 가져온 아키텍처", ["draw.io XML에서 가져온 구성"], region=region, account=account)
+def _network(text):
+    """The first IPv4 network written in a label (0.0.0.0/0 route captions excluded), or None."""
+    for match in CIDR.finditer(text or ""):
+        try:
+            network = ipaddress.ip_network(match.group(0), strict=False)
+        except ValueError:
+            continue
+        if network.prefixlen >= 8:
+            return network
+    return None
 
-    def ancestor_of_role(cid, target_role):
-        cur = vertices.get(cid)
-        seen = set()
-        while cur and cur["id"] not in seen:
-            seen.add(cur["id"])
-            if cur["role"] == target_role:
-                return cur
-            cur = vertices.get(cur["parent"])
+
+def _name(label, fallback):
+    """A resource name from a label's first line, without its '(cidr)' part, 'VPC ·' captions or CIDR parts."""
+    first = (label or "").splitlines()[0] if label else ""
+    parts = [p.strip() for p in re.sub(r"\s*\([^)]*\)", "", first).split("·")]
+    parts = [p for p in parts if p and p.lower() != "vpc" and not CIDR.fullmatch(p)]
+    return (parts[0] if parts else "")[:60] or fallback
+
+
+def _az_letter(label, region, letters):
+    """The AZ letter a label names, if it is a real AZ of `region`: 'ap-northeast-2a', 'AZ a', 'Zone B', 'AZ 2'."""
+    text = (label or "").lower()
+    match = AZ_CODE.search(text)
+    if match:
+        return match.group(2) if match.group(1) == region and match.group(2) in letters else None
+    match = re.search(r"(?:\baz|\bzone|가용\s*영역|availability zone)\s*[-_:]?\s*([a-f])\b", text)
+    if match:
+        return match.group(1) if match.group(1) in letters else None
+    match = re.search(r"\baz\s*[-_]?\s*([1-9])\b", text)
+    return letters[int(match.group(1)) - 1] if match and int(match.group(1)) <= len(letters) else None
+
+
+class _Cidrs:
+    """Subnet CIDRs inside one VPC: labels' CIDRs when they fit, then free blocks of the VPC for the rest."""
+
+    def __init__(self, network):
+        self.network, self.used = network, []
+
+    def claim(self, network):
+        if network and network.version == self.network.version and network.subnet_of(self.network) \
+                and not any(network.overlaps(u) for u in self.used):
+            self.used.append(network)
+            return str(network)
         return None
 
-    # 1. VPCs
-    vpc_cells = [v for v in vertices.values() if v["role"] == "vpc"]
-    vpc_map = {}  # vertex_id -> vpc_id
-    if not vpc_cells:
-        default_vpc = sample.vpc("vpc-main", "10.0.0.0/16", "main-vpc")
-    else:
-        for idx, v in enumerate(vpc_cells):
-            raw_name = (v["label"].splitlines()[0] if v["label"] else f"vpc-{idx + 1}").strip()
-            name = re.sub(r"\s*\([^)]*\)", "", raw_name).strip() or raw_name
-            cidr_m = re.search(r"\b\d+\.\d+\.\d+\.\d+/\d+\b", v["label"])
-            cidr = cidr_m.group(0) if cidr_m else f"10.{idx}.0.0/16"
-            slug_id = "vpc-" + (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:20] or f"imported-{idx + 1}")
-            if slug_id in vpc_map.values():
-                slug_id = f"{slug_id}-{idx + 1}"
-            vpc_map[v["id"]] = sample.vpc(slug_id, cidr, name)
-        default_vpc = next(iter(vpc_map.values()))
+    def allocate(self):
+        prefix = min(28, max(24, self.network.prefixlen + 4))
+        for candidate in self.network.subnets(new_prefix=max(prefix, self.network.prefixlen)):
+            if self.claim(candidate):
+                return str(candidate)
+        raise InputError(f"VPC {self.network}에 서브넷을 더 둘 주소가 없습니다.")
 
-    # 2. AZs & Subnets
-    az_letters = "abcdef"
-    az_map = {}
-    for idx, v in enumerate(sorted([v for v in vertices.values() if v["role"] == "az"], key=lambda a: (a["x"], a["id"]))):
-        m = re.search(r"([a-f])\b", v["label"].lower())
-        az_map[v["id"]] = m.group(1) if m else az_letters[idx % 3]
 
-    subnet_cells = sorted([v for v in vertices.values() if v["role"] == "subnet"], key=lambda s: (s["y"], s["x"], s["id"]))
-    subnet_map = {}  # vertex_id -> subnet_id
-    vpc_tier_subnets = {}  # (vpc_id, tier_name) -> [subnet_ids]
-    tier_names = {0: "public", 1: "web", 2: "app", 3: "data"}
+def _own_id(v, prefix):
+    """The AWS id in a Diagram Bot cell's resourceId when it has the right form (vpc-, subnet-, i-...), else None."""
+    rid = (v["wrapper"].get("resourceId") or "").rsplit("/", 1)[-1]
+    return rid if re.fullmatch(prefix + r"-[0-9a-z][0-9a-z-]{2,60}", rid) else None
 
-    if not subnet_cells:
-        # Synthesize default public/app/data subnets across 2 AZs so resources can be placed cleanly
-        for ai, az_ch in enumerate(("a", "b")):
-            pub = sample.subnet(f"subnet-pub-{az_ch}", default_vpc, az_ch, f"10.0.{ai}.0/24", f"public-{az_ch}", "public")
-            app = sample.subnet(f"subnet-app-{az_ch}", default_vpc, az_ch, f"10.0.{ai + 10}.0/24", f"app-{az_ch}", "app")
-            dat = sample.subnet(f"subnet-data-{az_ch}", default_vpc, az_ch, f"10.0.{ai + 20}.0/24", f"data-{az_ch}", "data")
-            vpc_tier_subnets.setdefault((default_vpc, "public"), []).append(pub)
-            vpc_tier_subnets.setdefault((default_vpc, "app"), []).append(app)
-            vpc_tier_subnets.setdefault((default_vpc, "data"), []).append(dat)
-    else:
-        for idx, s in enumerate(subnet_cells):
-            vpc_cell = ancestor_of_role(s["id"], "vpc")
-            vpc_id = vpc_map.get(vpc_cell["id"], default_vpc) if vpc_cell else default_vpc
-            az_cell = ancestor_of_role(s["id"], "az")
-            az_ch = az_map.get(az_cell["id"], az_letters[idx % 2]) if az_cell else az_letters[idx % 2]
-            t_name = tier_names.get(s["tier"] if s["tier"] is not None else 2, "app")
-            cidr_m = re.search(r"\b\d+\.\d+\.\d+\.\d+/\d+\b", s["label"])
-            cidr = cidr_m.group(0) if cidr_m else f"10.0.{idx + 1}.0/24"
-            raw_name = (s["label"].splitlines()[0] if s["label"] else f"{t_name}-{az_ch}").strip()
-            name = re.sub(r"\s*\([^)]*\)", "", raw_name).strip() or raw_name
-            sid = f"subnet-{idx + 1}-{az_ch}"
-            sample.subnet(sid, vpc_id, az_ch, cidr, name, t_name)
-            subnet_map[s["id"]] = sid
-            vpc_tier_subnets.setdefault((vpc_id, t_name), []).append(sid)
 
-    def pick_subnet(v, preferred_tier="app"):
-        sub_cell = ancestor_of_role(v["id"], "subnet")
-        if sub_cell and sub_cell["id"] in subnet_map:
-            return subnet_map[sub_cell["id"]]
-        vpc_cell = ancestor_of_role(v["id"], "vpc")
-        vid = vpc_map.get(vpc_cell["id"], default_vpc) if vpc_cell else default_vpc
-        for t in (preferred_tier, "app", "web", "public", "data"):
-            if vpc_tier_subnets.get((vid, t)):
-                return vpc_tier_subnets[(vid, t)][0]
-        return sample.raw["subnets"][0]["SubnetId"]
+def import_drawio_xml(xml_text, *, title=None, region="ap-northeast-2", account="000000000000") -> dict:
+    """Convert an existing AWS `drawio.xml` diagram, every page, into a Diagram Bot `Snapshot` (`raw` + `graph`).
 
-    def pick_vpc(v):
-        vpc_cell = ancestor_of_role(v["id"], "vpc")
-        return vpc_map.get(vpc_cell["id"], default_vpc) if vpc_cell else default_vpc
+    Pages without AWS cells (a cover, a legend) are skipped. A resource drawn on several pages (an overview card and its
+    detail page) is imported once: Diagram Bot's own cells match by resourceId, others by kind, name and VPC.
+    `metadata.import` records `cells` (draw.io cell id -> snapshot resource id), `pages`, `unmapped` cells (shapes the
+    importer has no resource for, reported instead of guessed) and what was `synthesized` (a default VPC, subnets, an IGW).
+    Labels are inference, not API evidence: the snapshot is marked `metadata.imported`."""
+    root = read_document(xml_text)
+    models = []
+    for name, graph_root in pages(root):
+        vertices, edges = _parse_page_model(graph_root)
+        _reparent_visual_children(vertices)
+        for v in vertices.values():  # the counts and glance icons inside an overview card are not resources
+            if v["role"] != "summary" and _ancestor(vertices, v["parent"], "summary"):
+                v["role"] = "glance"
+        models.append({"name": name, "vertices": vertices, "edges": edges,
+                       "aws": any(v["role"] in ("vpc", "subnet", "resource", "summary") for v in vertices.values())})
+    used = [m for m in models if m["aws"]]
+    cells = [(pi, v) for pi, m in enumerate(used) for v in sorted(m["vertices"].values(), key=lambda c: (c["y"], c["x"], c["id"]))]
+    report = {"cells": {}, "pages": [{"name": m["name"], "imported": m["aws"]} for m in models], "unmapped": [], "synthesized": []}
 
-    # 3. Resources
-    lb_by_vertex = {}
-    tg_by_vertex = {}
-    ec2_by_vertex = {}
-    res_cells = [v for v in vertices.values() if v["role"] == "resource"]
+    def own_parts(v):
+        parts = (v["wrapper"].get("resourceId") or "").split("/")
+        return parts if len(parts) >= 4 else None
 
-    def az_letter_of(subnet_id):
-        sub = next((s for s in sample.raw["subnets"] if s["SubnetId"] == subnet_id), None)
-        return sub["AvailabilityZone"][-1] if sub else "a"
+    detected = next((p[1] for _, v in cells if (p := own_parts(v)) and REGION_CODE.fullmatch(p[1])), None)
+    for _, v in cells:
+        match = None if detected else (AZ_CODE.search(v["label"].lower()) or REGION_CODE.search(v["label"].lower()))
+        detected = detected or (match and (match.group(1) if match.re is AZ_CODE else match.group(0)))
+    region = detected or region
+    for m in used:
+        for v in m["vertices"].values():
+            if v["role"] == "title" and not title:
+                title = v["label"].split("·")[0].replace("SAMPLE", "").replace("DESIGN", "").strip(" /")
+    sample = Sample("imported", title or "draw.io 가져온 아키텍처", ["draw.io XML에서 가져온 구성"], region=region, account=account)
+    letters = REGION_AZS.get(region, "abc")
+    imported = {}  # (page index, cell id) -> resource id
 
-    for idx, v in enumerate(res_cells):
-        kind = v["kind"]
-        name = (v["label"].splitlines()[0] if v["label"] else f"{kind}-{idx + 1}").strip()[:48] or f"{kind}-{idx + 1}"
-        vid = pick_vpc(v)
+    def record(pi, v, resource_id):
+        imported[(pi, v["id"])] = resource_id
+        key = v["id"] if report["cells"].get(v["id"], resource_id) == resource_id else f"{used[pi]['name']}/{v['id']}"
+        report["cells"][key] = resource_id
+
+    def owner(pi, v, role):
+        cell = _ancestor(used[pi]["vertices"], v["id"], role)
+        return imported.get((pi, cell["id"])) if cell else None
+
+    # 1. VPCs: containers, and overview cards whose VPC has no detail page.
+    seen, nets = {}, {}
+    for pi, v in cells:
+        own = own_parts(v)
+        if v["role"] != "vpc" and not (v["role"] == "summary" and own and own[2] == "vpc"):
+            continue
+        network = _network(v["label"])
+        name = _name(v["label"], f"vpc-{len(nets) + 1}")
+        key = v["wrapper"].get("resourceId") or ("vpc", str(network) if network else name)
+        if key not in seen:
+            network = network or ipaddress.ip_network(f"10.{len(nets) % 256}.0.0/16")
+            vid = _own_id(v, "vpc") or "vpc-" + (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:20] or "imported")
+            vid = vid if vid not in nets else f"{vid}-{len(nets) + 1}"
+            seen[key] = sample.vpc(vid, str(network), name)
+            nets[vid] = _Cidrs(network)
+        record(pi, v, seen[key])
+    if not nets:
+        nets[sample.vpc("vpc-main", "10.0.0.0/16", "main-vpc")] = _Cidrs(ipaddress.ip_network("10.0.0.0/16"))
+        report["synthesized"].append("vpc-main")
+    default_vpc = next(iter(nets))
+
+    # 2. AZ columns: the label's AZ when it is real in this region, else the region's AZs in column order.
+    az_of = {}
+    for vid in nets:
+        columns = [(pi, v) for pi, v in cells if v["role"] == "az" and (owner(pi, v, "vpc") or default_vpc) == vid]
+        named = {(pi, v["id"]): _az_letter(v["label"], region, letters) for pi, v in columns}
+        spare = [letter for letter in letters if letter not in named.values()] or list(letters)
+        for i, (pi, v) in enumerate(sorted(columns, key=lambda c: (c[0], c[1]["x"], c[1]["id"]))):
+            az_of[(pi, v["id"])] = named[(pi, v["id"])] or spare[i % len(spare)]
+
+    # 3. Subnets: a label's CIDR when it lies inside its VPC (and is free), else the next free block of that VPC.
+    subnets, tier_subnets, pending = {}, {}, []
+    for pi, v in cells:
+        if v["role"] != "subnet":
+            continue
+        vid = owner(pi, v, "vpc") or default_vpc
+        network = _network(v["label"])
+        name = _name(v["label"], f"subnet-{len(pending) + 1}")
+        key = v["wrapper"].get("resourceId") or ("subnet", vid, str(network) if network else name)
+        if key in subnets:
+            record(pi, v, subnets[key])
+            continue
+        az_cell = _ancestor(used[pi]["vertices"], v["id"], "az")
+        letter = az_of.get((pi, az_cell["id"])) if az_cell else letters[len(pending) % min(2, len(letters))]
+        subnets[key] = None
+        pending.append((pi, v, vid, key, nets[vid].claim(network), letter, name))
+    for i, (pi, v, vid, key, cidr, letter, name) in enumerate(pending):
+        tier = TIER_NAMES[v["tier"] if v["tier"] is not None else 2]
+        sid = _own_id(v, "subnet") or f"subnet-{i + 1}-{letter}"
+        subnets[key] = sample.subnet(sid, vid, letter, cidr or nets[vid].allocate(), name, tier)
+        tier_subnets.setdefault((vid, tier), []).append(sid)
+        record(pi, v, sid)
+    resources = [(pi, v) for pi, v in cells if v["role"] == "resource"]
+    if not pending and resources:
+        for letter in letters[:2]:
+            for tier in ("public", "app", "data"):
+                sid = sample.subnet(f"subnet-{tier}-{letter}", default_vpc, letter, nets[default_vpc].allocate(), f"{tier}-{letter}", tier)
+                tier_subnets.setdefault((default_vpc, tier), []).append(sid)
+                report["synthesized"].append(sid)
+
+    def subnet_for(pi, v, vid, preferred="app"):
+        return owner(pi, v, "subnet") or next((tier_subnets[(vid, t)][0] for t in (preferred, "app", "web", "public", "data")
+                                              if tier_subnets.get((vid, t))), None) or sample.raw["subnets"][0]["SubnetId"]
+
+    def tier_of(vid, tier, pi, v):
+        return (tier_subnets.get((vid, tier)) or [subnet_for(pi, v, vid, tier)])[:2]
+
+    def az_letter(subnet_id):
+        return sample.az_of(subnet_id)[-1]
+
+    # 4. Resources, once each.
+    done, lbs, tgs, ec2s = {}, {}, {}, {}
+    for idx, (pi, v) in enumerate(resources):
+        kind, vid = v["kind"], owner(pi, v, "vpc") or default_vpc
+        name = _name(v["label"], f"{kind or 'resource'}-{idx + 1}")[:48]
+        slug_name = re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"{kind}-{idx + 1}"
+        key = v["wrapper"].get("resourceId") or (kind, name, vid)
+        if kind == "target_group":  # created after every page is read, wired by the edges drawn to it
+            tgs.setdefault(key, (slug_name, vid, []))[2].append((pi, v["id"]))
+            continue
+        if key in done:
+            if done[key]:
+                record(pi, v, done[key])
+            continue
+        if kind not in IMPORTED_KINDS:
+            done[key] = None
+            report["unmapped"].append({"page": used[pi]["name"], "id": v["id"], "label": name, "kind": kind})
+            continue
+        rid = None
         if kind == "internet_gateway":
-            sample.internet_gateway(f"igw-{idx + 1}", vid, name)
+            rid = sample.internet_gateway(_own_id(v, "igw") or f"igw-{idx + 1}", vid, name)
         elif kind == "nat_gateway":
-            sample.nat_gateway(f"nat-{idx + 1}", vid, pick_subnet(v, "public"), name)
+            rid = sample.nat_gateway(_own_id(v, "nat") or f"nat-{idx + 1}", vid, subnet_for(pi, v, vid, "public"), name)
         elif kind in ("application", "network", "gateway", "load_balancer"):
-            lb_type = kind if kind in ("application", "network", "gateway") else "application"
-            sub_cell = ancestor_of_role(v["id"], "subnet")
-            is_internal = (sub_cell and sub_cell.get("tier") not in (0, None)) or "internal" in v["label"].lower() or "내부" in v["label"]
-            subs = vpc_tier_subnets.get((vid, "app" if is_internal else "public")) or [pick_subnet(v, "public")]
-            lb_by_vertex[v["id"]] = sample.load_balancer(
-                re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"lb-{idx + 1}",
-                vid, subs[:2], kind=lb_type, scheme="internal" if is_internal else "internet-facing",
-            )
-        elif kind == "target_group":
-            tg_by_vertex[v["id"]] = name
-        elif kind in ("ec2", "p3", "p4d", "p4de", "g4dn", "g4ad", "trainium", "inferentia", "dl1"):
-            itype = {"p3": "p3.2xlarge", "p4d": "p4d.24xlarge", "g4dn": "g4dn.xlarge", "trainium": "trn1.32xlarge", "inferentia": "inf2.xlarge"}.get(kind, "t3.medium")
-            ec2_by_vertex[v["id"]] = sample.instance(f"i-imp{idx + 1:04d}", pick_subnet(v, "app"), name, kind=itype)
+            subnet = _ancestor(used[pi]["vertices"], v["id"], "subnet")
+            internal = (subnet and subnet.get("tier") not in (0, None)) or "internal" in v["label"].lower() or "내부" in v["label"]
+            rid = sample.load_balancer(slug_name, vid, tier_of(vid, "app" if internal else "public", pi, v),
+                                       kind=kind if kind != "load_balancer" else "application",
+                                       scheme="internal" if internal else "internet-facing")
+            lbs[(pi, v["id"])] = rid
+        elif kind == "ec2" or kind in INSTANCE_TYPES:
+            rid = sample.instance(_own_id(v, "i") or f"i-imp{idx + 1:04d}", subnet_for(pi, v, vid), name,
+                                  kind=INSTANCE_TYPES.get(kind, "t3.medium"))
+            ec2s[(pi, v["id"])] = rid
         elif kind in ("db_instance", "db_standby", "documentdb", "neptune"):
-            engine = "docdb" if kind == "documentdb" else ("neptune" if kind == "neptune" else "postgres")
-            subs = vpc_tier_subnets.get((vid, "data")) or [pick_subnet(v, "data")]
-            primary_az = az_letter_of(subs[0])
-            standby_az = az_letter_of(subs[1]) if len(subs) > 1 and az_letter_of(subs[1]) != primary_az else None
-            sample.database(
-                re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"db-{idx + 1}",
-                vid, subs[:2], primary=primary_az, engine=engine, standby=standby_az,
-            )
+            subs = tier_of(vid, "data", pi, v)
+            standby = az_letter(subs[1]) if len(subs) > 1 and az_letter(subs[1]) != az_letter(subs[0]) else None
+            rid = re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"db-{idx + 1}"
+            sample.database(rid, vid, subs, primary=az_letter(subs[0]), standby=standby,
+                            engine={"documentdb": "docdb", "neptune": "neptune"}.get(kind, "postgres"))
         elif kind == "aurora":
-            subs = (vpc_tier_subnets.get((vid, "data")) or [pick_subnet(v, "data")])[:2]
-            writer = az_letter_of(subs[0])
-            readers = [az_letter_of(s) for s in subs[1:]]
-            sample.aurora(re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"aurora-{idx + 1}", vid, subs, writer=writer, readers=readers)
+            subs = tier_of(vid, "data", pi, v)
+            rid = re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"aurora-{idx + 1}"
+            sample.aurora(rid, vid, subs, writer=az_letter(subs[0]), readers=[az_letter(s) for s in subs[1:]])
         elif kind in ("redis", "valkey", "memcached"):
-            subs = (vpc_tier_subnets.get((vid, "data")) or [pick_subnet(v, "data")])[:2]
-            primary = az_letter_of(subs[0])
-            replicas = [az_letter_of(s) for s in subs[1:]]
-            sample.redis(re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"cache-{idx + 1}", vid, subs, primary=primary, replicas=replicas)
+            subs = tier_of(vid, "data", pi, v)
+            rid = re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-") or f"cache-{idx + 1}"
+            sample.redis(rid, vid, subs, primary=az_letter(subs[0]), replicas=[az_letter(s) for s in subs[1:]])
         elif kind == "eks_cluster":
-            subs = (vpc_tier_subnets.get((vid, "app")) or [pick_subnet(v, "app")])[:2]
-            sample.eks(re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"eks-{idx + 1}", vid, subs, nodegroups=[])
+            rid = slug_name
+            sample.eks(rid, vid, tier_of(vid, "app", pi, v), nodegroups=[])
         elif kind in ("ecs_service", "ecs_task"):
-            subs = (vpc_tier_subnets.get((vid, "app")) or [pick_subnet(v, "app")])[:2]
-            tasks = [(s, sample.address(s, 50 + i)) for i, s in enumerate(subs)]
-            sample.ecs_service("imported-cluster", re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"ecs-{idx + 1}", vid, tasks)
+            rid = slug_name
+            subs = tier_of(vid, "app", pi, v)
+            sample.ecs_service("imported-cluster", rid, vid, [(s, sample.address(s, 50 + i)) for i, s in enumerate(subs)])
         elif kind == "lambda_function":
-            subs = (vpc_tier_subnets.get((vid, "app")) or [pick_subnet(v, "app")])[:2]
-            sample.function(re.sub(r"[^a-zA-Z0-9-_]+", "-", name).strip("-") or f"fn-{idx + 1}", vid, subs)
+            rid = re.sub(r"[^a-zA-Z0-9-_]+", "-", name).strip("-") or f"fn-{idx + 1}"
+            sample.function(rid, vid, tier_of(vid, "app", pi, v))
         elif kind in ("vpc_endpoint", "bedrock", "sagemaker"):
-            svc = "bedrock-runtime" if kind == "bedrock" else ("sagemaker.runtime" if kind == "sagemaker" else "ssm")
-            subs = (vpc_tier_subnets.get((vid, "app")) or [pick_subnet(v, "app")])[:2]
-            sample.interface_endpoint(f"vpce-imp{idx + 1:04d}", vid, svc, subs)
+            rid = _own_id(v, "vpce") or f"vpce-imp{idx + 1:04d}"
+            service = {"bedrock": "bedrock-runtime", "sagemaker": "sagemaker.runtime"}.get(kind, "ssm")
+            sample.interface_endpoint(rid, vid, service, tier_of(vid, "app", pi, v))
         elif kind in ("efs_standard", "efs_one_zone"):
-            subs = (vpc_tier_subnets.get((vid, "data")) or [pick_subnet(v, "data")])[:2]
-            sample.efs(f"fs-imp{idx + 1:04d}", name, vid, subs, one_zone=az_letter_of(subs[0]) if kind == "efs_one_zone" else None)
-        elif kind in ("fsx_lustre", "fsx_file_system", "fsx_ontap", "fsx_openzfs", "fsx_windows"):
-            sample.fsx_lustre(f"fs-fsx{idx + 1:04d}", name, vid, pick_subnet(v, "data"))
-        elif kind in ("sagemaker_endpoint",):
-            sample.sagemaker_endpoint(re.sub(r"[^a-zA-Z0-9-]+", "-", name).strip("-") or f"sm-{idx + 1}", "ml.g5.2xlarge", 2, [pick_subnet(v, "app")])
+            subs = tier_of(vid, "data", pi, v)
+            rid = _own_id(v, "fs") or f"fs-imp{idx + 1:04d}"
+            sample.efs(rid, name, vid, subs, one_zone=az_letter(subs[0]) if kind == "efs_one_zone" else None)
+        elif kind.startswith("fsx_"):
+            rid = f"fs-fsx{idx + 1:04d}"
+            sample.fsx_lustre(rid, name, vid, subnet_for(pi, v, vid, "data"))
+        elif kind == "sagemaker_endpoint":
+            rid = slug_name
+            sample.sagemaker_endpoint(rid, "ml.g5.2xlarge", 2, [subnet_for(pi, v, vid)])
         elif kind == "cloudfront_distribution":
-            origins = list(lb_by_vertex.values())[:1] or ["imported-origin"]
-            sample.cloudfront(f"EIMP{idx + 1:08d}", name, origins)
+            rid = f"EIMP{idx + 1:08d}"
+            sample.cloudfront(rid, name, list(lbs.values())[:1] or ["imported-origin"])
+        done[key] = rid
+        if rid:
+            record(pi, v, rid)
 
-    # Wire Target Groups from edges (LB -> TG -> EC2, or LB -> EC2 directly)
-    adj = {}
-    for e in edges:
-        adj.setdefault(e["source"], []).append(e["target"])
-        adj.setdefault(e["target"], []).append(e["source"])
+    # Target groups: wired to the load balancers and instances their edges reach (on any page they are drawn).
+    neighbours = {}
+    for pi, m in enumerate(used):
+        for e in m["edges"]:
+            neighbours.setdefault((pi, e["source"]), []).append((pi, e["target"]))
+            neighbours.setdefault((pi, e["target"]), []).append((pi, e["source"]))
+    for name, vid, drawn in tgs.values():
+        near = [n for cell in drawn for n in neighbours.get(cell, ())]
+        arn = sample.target_group(name, vid, "HTTP", 80, list(dict.fromkeys(ec2s[n] for n in near if n in ec2s)),
+                                  lbs=list(dict.fromkeys(lbs[n] for n in near if n in lbs)))
+        for pi, cid in drawn:
+            record(pi, used[pi]["vertices"][cid], arn)
+    if lbs and ec2s and not tgs:
+        sample.target_group("tg-imported", default_vpc, "HTTP", 80, list(dict.fromkeys(ec2s.values())), lbs=list(lbs.values())[:1])
+        report["synthesized"].append("tg-imported")
 
-    for tg_vid, tg_name in tg_by_vertex.items():
-        neighbors = adj.get(tg_vid, [])
-        lbs = [lb_by_vertex[n] for n in neighbors if n in lb_by_vertex]
-        targets = [ec2_by_vertex[n] for n in neighbors if n in ec2_by_vertex]
-        vid = pick_vpc(vertices[tg_vid])
-        sample.target_group(
-            re.sub(r"[^a-zA-Z0-9-]+", "-", tg_name).strip("-") or "tg-imported",
-            vid, "HTTP", 80, targets or list(ec2_by_vertex.values())[:2], lbs=lbs or list(lb_by_vertex.values())[:1],
-        )
-
-    if lb_by_vertex and ec2_by_vertex and not tg_by_vertex:
-        sample.target_group("tg-imported", default_vpc, "HTTP", 80, list(ec2_by_vertex.values()), lbs=list(lb_by_vertex.values())[:1])
-
-    # Ensure basic route tables exist for public/private/isolated subnet classification
-    if not sample.raw["route_tables"] and sample.raw["subnets"]:
-        for vid in set(vpc_map.values()) | {default_vpc}:
-            v_subs = [s for s in sample.raw["subnets"] if s["VpcId"] == vid]
-            if not v_subs:
-                continue
-            igw_id = next((g["InternetGatewayId"] for g in sample.raw["internet_gateways"]
-                           if any(a.get("VpcId") == vid for a in g.get("Attachments", []))), None)
-            if not igw_id:
-                igw_id = sample.internet_gateway(f"igw-{vid}", vid, f"{vid}-igw")
-            pub_subs = [s["SubnetId"] for s in v_subs if s.get("MapPublicIpOnLaunch")]
-            priv_subs = [
-                s["SubnetId"] for s in v_subs
-                if not s.get("MapPublicIpOnLaunch")
-                and not any(t.get("Key") == "Tier" and t.get("Value") == "data" for t in s.get("Tags", []))
-            ]
-            if pub_subs:
-                sample.route_table(f"rtb-{vid}-public", vid, f"{vid}-public", subnets=pub_subs, gateway=igw_id)
-            nat_id = next((n["NatGatewayId"] for n in sample.raw["nat_gateways"] if n.get("VpcId") == vid), None)
-            if not nat_id and pub_subs:
-                nat_id = sample.nat_gateway(f"nat-{vid}-a", vid, pub_subs[0], f"{vid}-nat-a")
-            if priv_subs:
-                sample.route_table(f"rtb-{vid}-private", vid, f"{vid}-private", subnets=priv_subs, nat=nat_id)
-            sample.route_table(f"rtb-{vid}-main", vid, f"{vid}-isolated", main=True)
+    # Route tables from what is drawn: public subnets to an internet gateway (added when none is drawn), private
+    # subnets to a drawn NAT gateway (none is invented), the rest on the main table (isolated).
+    for vid in nets:
+        vpc_subnets = [s for s in sample.raw["subnets"] if s["VpcId"] == vid]
+        if not vpc_subnets:
+            continue
+        public = [s["SubnetId"] for s in vpc_subnets if s["MapPublicIpOnLaunch"]]
+        private = [s["SubnetId"] for s in vpc_subnets if not s["MapPublicIpOnLaunch"]
+                   and not any(t["Key"] == "Tier" and t["Value"] == "data" for t in s["Tags"])]
+        if public:
+            igw = next((g["InternetGatewayId"] for g in sample.raw["internet_gateways"]
+                        if any(a.get("VpcId") == vid for a in g["Attachments"])), None)
+            if not igw:
+                igw = sample.internet_gateway(f"igw-{vid}", vid, f"{vid}-igw")
+                report["synthesized"].append(igw)
+            sample.route_table(f"rtb-{vid}-public", vid, f"{vid}-public", subnets=public, gateway=igw)
+        nat = next((n["NatGatewayId"] for n in sample.raw["nat_gateways"] if n["VpcId"] == vid), None)
+        if private and nat:
+            sample.route_table(f"rtb-{vid}-private", vid, f"{vid}-private", subnets=private, nat=nat)
+        sample.route_table(f"rtb-{vid}-main", vid, f"{vid}-isolated", main=True)
 
     snap = sample.snapshot()
+    snap["metadata"]["imported"] = True
+    snap["metadata"]["import"] = report
     snap["graph"] = build_graph(snap)
     return snap
+
+
+def _ancestor(vertices, cid, role):
+    """The nearest cell of `role` among `cid` and its ancestors (`cid` itself included)."""
+    cur, seen = vertices.get(cid), set()
+    while cur and cur["id"] not in seen:
+        if cur["role"] == role:
+            return cur
+        seen.add(cur["id"])
+        cur = vertices.get(cur["parent"])
+    return None
 
 
 def adopt_company_xml(

@@ -1,10 +1,12 @@
 """Regression tests for the company draw.io XML feature: hostile input, spec validation, coordinate frames, roles."""
 import base64
+import ipaddress
 import json
 import subprocess
 import sys
 import urllib.parse
 import zlib
+from collections import Counter
 
 import pytest
 from defusedxml.ElementTree import fromstring
@@ -14,6 +16,7 @@ from diagram_bot import api
 from diagram_bot.drawio_spec import DrawioSpec, classify_cell, pages, read_document, request_spec
 from diagram_bot.errors import InputError
 from diagram_bot.server import create_app
+from diagram_bot.store import validate_snapshot
 from test_xml_align import MESSY_COMPANY_XML
 
 VPC = "shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_vpc2;container=1;strokeColor=#8C4FFF;fillColor=none;"
@@ -477,3 +480,71 @@ def test_spec_extraction_learns_only_what_the_template_shows():
                           ("arch", [v("vpc", "vpc-a", VPC, 0, 0, 600, 400), v("d", "data-a", isolated, 20, 40, 200, 120, "vpc")])])
     spec = api.spec_from_xml(two_pages)
     assert spec.isolated_subnet_distinct is True and spec.styles["vpc"] == VPC
+
+
+# --- i. every page: inspect, import and align; own multi-page output round-trips --------------------------------------
+
+def test_multi_page_inspect_and_import_skip_the_cover_page():
+    xml = mx(pages=[("cover", [v("t", "Cover", "text;", 0, 0, 200, 40), v("l", "Legend", "rounded=1;", 0, 60, 120, 40)]),
+                    ("arch", ARCH)])
+    report = api.inspect_xml(xml)
+    assert report["node_count"] == 1 and [p["aws"] for p in report["pages"]] == [False, True]
+    snapshot = api.import_xml(xml)
+    assert [x["CidrBlock"] for x in snapshot["raw"]["vpcs"]] == ["10.2.0.0/16"]
+    assert [i["Tags"][0]["Value"] for i in snapshot["raw"]["instances"]] == ["web-1"]
+    meta = snapshot["metadata"]
+    assert meta["imported"] is True and [p["imported"] for p in meta["import"]["pages"]] == [False, True]
+    assert meta["import"]["cells"] == {"vpc": "vpc-prod-vpc", "s": snapshot["raw"]["subnets"][0]["SubnetId"],
+                                       "i": snapshot["raw"]["instances"][0]["InstanceId"]}
+
+
+@pytest.mark.parametrize("name", sorted(api.SAMPLES))
+def test_own_multi_page_output_round_trips(name):
+    snapshot = api.SAMPLES[name]()
+    original_nodes = api.build_graph(snapshot)["nodes"]
+    original = Counter(n["kind"] for n in original_nodes)
+    imported = api.import_xml(api.render(snapshot))
+    got = Counter(n["kind"] for n in imported["graph"]["nodes"])
+    for kind in ("vpc", "subnet", "ec2", "load_balancer", "target_group", "nat_gateway", "internet_gateway"):
+        assert got[kind] == original[kind], (kind, original[kind], got[kind])
+    for kind in ("vpc", "subnet", "ec2"):  # Diagram Bot's own cells keep their AWS ids through resourceId
+        assert {n["resource_id"] for n in imported["graph"]["nodes"] if n["kind"] == kind} == \
+            {n["resource_id"] for n in original_nodes if n["kind"] == kind}
+    for subnet in imported["raw"]["subnets"]:
+        vpc = next(x for x in imported["raw"]["vpcs"] if x["VpcId"] == subnet["VpcId"])
+        assert ipaddress.ip_network(subnet["CidrBlock"]).subnet_of(ipaddress.ip_network(vpc["CidrBlock"]))
+    cells = imported["metadata"]["import"]["cells"]
+    raw_ids = {x["VpcId"] for x in imported["raw"]["vpcs"]} | {x["SubnetId"] for x in imported["raw"]["subnets"]}
+    assert raw_ids <= set(cells.values())
+    validate_snapshot(imported)
+    api.render(imported)
+
+
+def test_import_az_names_and_fallback_cidrs():
+    cells = [v("vpc", "vpc-x (10.1.0.0/16)", VPC, 0, 0, 700, 400),
+             v("za", "가용 영역 Zone A", AZ, 20, 40, 300, 300, "vpc"), v("zb", "가용 영역 Zone B", AZ, 340, 40, 300, 300, "vpc"),
+             v("sa", "app-subnet-1", PRIV, 10, 40, 200, 120, "za"), v("sb", "app-subnet-2 (192.168.9.0/24)", PRIV, 10, 40, 200, 120, "zb"),
+             v("pa", "public-1 (10.1.7.0/24)", PUB, 10, 180, 200, 100, "za")]
+    subnets = {s["Tags"][0]["Value"]: s for s in api.import_xml(mx(cells))["raw"]["subnets"]}
+    assert subnets["app-subnet-1"]["AvailabilityZone"] == "ap-northeast-2a" and subnets["app-subnet-2"]["AvailabilityZone"] == "ap-northeast-2b"
+    assert subnets["public-1"]["CidrBlock"] == "10.1.7.0/24"
+    vpc = ipaddress.ip_network("10.1.0.0/16")
+    assert all(ipaddress.ip_network(s["CidrBlock"]).subnet_of(vpc) for s in subnets.values())
+    assert len({s["CidrBlock"] for s in subnets.values()}) == 3
+    # AZ names that are not AZs of the region fall back to the region's AZs in column order.
+    tokyo = [v("vpc", "vpc-t (10.3.0.0/16) ap-northeast-1", VPC, 0, 0, 700, 400),
+             v("za", "us-east-1b", AZ, 20, 40, 300, 300, "vpc"), v("zb", "AZ b", AZ, 340, 40, 300, 300, "vpc"),
+             v("sa", "app-1", PRIV, 10, 40, 200, 120, "za"), v("sb", "app-2", PRIV, 10, 40, 200, 120, "zb")]
+    imported = api.import_xml(mx(tokyo))
+    assert imported["metadata"]["region"] == "ap-northeast-1"
+    assert sorted(s["AvailabilityZone"] for s in imported["raw"]["subnets"]) == ["ap-northeast-1a", "ap-northeast-1c"]
+
+
+def test_import_reports_unmapped_shapes_instead_of_inventing_resources():
+    cells = ARCH + [v("leg", "Legend", "rounded=1;", 600, 0, 120, 40), v("s3", "logs", "shape=mxgraph.aws4.s3;", 40, 140, 52, 52, "s"),
+                    e("x", "i", "s3"), '<mxCell id="lbl" value="HTTPS" style="edgeLabel;" vertex="1" connectable="0" parent="x">'
+                    '<mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry></mxCell>']
+    snapshot = api.import_xml(mx(cells))
+    assert [i["Tags"][0]["Value"] for i in snapshot["raw"]["instances"]] == ["web-1"]
+    assert snapshot["metadata"]["import"]["unmapped"] == [{"page": "p1", "id": "s3", "label": "logs", "kind": None}]
+    assert not snapshot["raw"]["nat_gateways"]  # no NAT gateway is invented for private subnets
