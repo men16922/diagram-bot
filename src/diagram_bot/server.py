@@ -29,6 +29,22 @@ from .samples import SAMPLE_VERSION, SAMPLES
 from .store import DocumentStore, SnapshotStore, data_path
 
 LOOPBACK = ["localhost", "127.0.0.1", "[::1]", "testserver"]
+MAX_BODY = 15 * 1024 * 1024
+
+
+async def read_capped(request, limit=MAX_BODY):
+    """The request body, or None once it exceeds `limit`: a declared Content-Length is rejected before reading, and a
+    body without one (chunked) is read only up to the limit, so an unauthenticated client cannot fill the memory."""
+    length = request.headers.get("content-length", "")
+    if length.isdigit() and int(length) > limit:
+        return None
+    chunks, size = [], 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > limit:
+            return None
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False, oidc=None, chat_factory=None,
@@ -79,8 +95,10 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
             # Login has no page token yet; it is protected by the Origin check, JSON body and throttling.
             if path != "/api/login" and request.headers.get("x-diagram-bot") != token:
                 return JSONResponse({"detail": "앱 세션이 만료되었습니다. 새로고침하세요."}, status_code=403)
-            if len(await request.body()) > 15 * 1024 * 1024:
+            body = await read_capped(request)
+            if body is None:
                 return JSONResponse({"detail": "파일은 최대 15 MiB입니다."}, status_code=413)
+            request._body = body  # what request.body() caches: BaseHTTPMiddleware replays it to the route
         response = await call_next(request)
         # Relay answers are one per AWS request; the collection or chat turn they serve is audited instead.
         if mutation and path not in ("/api/login", "/api/logout") and not path.startswith("/api/relay/"):

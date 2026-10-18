@@ -1,13 +1,14 @@
 """Regression tests for server, auth and store robustness (audit items 2.3-2.5, 2.22, 3.7)."""
+import asyncio
 import json
 import stat
 
 import pytest
 from fastapi.testclient import TestClient
 
-from diagram_bot.auth import AuditLog, load_users, remove_user, save_user, verify_password
+from diagram_bot.auth import AuditLog, hash_password, load_users, remove_user, save_user, verify_password
 from diagram_bot.demo import demo_snapshot
-from diagram_bot.server import create_app
+from diagram_bot.server import create_app, read_capped
 from diagram_bot.store import SnapshotStore
 
 PASSWORD = "correct horse battery"
@@ -48,6 +49,35 @@ def test_user_file_writes_are_atomic_and_private(tmp_path):
     assert stat.S_IMODE(users.stat().st_mode) == 0o600
     assert [u["name"] for u in json.loads(users.read_text(encoding="utf-8"))["users"]] == ["eddie"]
     assert [p.name for p in tmp_path.iterdir()] == ["users.json"]  # no temporary file left behind
+
+
+def test_body_limit_rejects_a_declared_length_before_reading(tmp_path):
+    app = create_app(tmp_path / "data", tmp_path / "no-editor", users={"bob": {"name": "bob", "role": "admin",
+                                                                               "password_hash": hash_password(PASSWORD)}})
+    client = TestClient(app, base_url="https://testserver")
+    body = json.dumps({"name": "bob", "password": PASSWORD}).encode()
+    declared = client.post("/api/login", content=body, headers={"Content-Type": "application/json", "Content-Length": str(64 * 1024 * 1024)})
+    assert declared.status_code == 413 and declared.json()["detail"] == "파일은 최대 15 MiB입니다."
+    assert client.post("/api/login", json={"name": "bob", "password": PASSWORD}).status_code == 200
+
+
+def test_body_limit_stops_reading_a_chunked_body(tmp_path):
+    sent = []
+
+    class Chunked:  # no Content-Length: the body must be read only up to the limit
+        headers = {}
+
+        async def stream(self):
+            for _ in range(64):
+                sent.append(1)
+                yield b" " * (1024 * 1024)
+
+    assert asyncio.run(read_capped(Chunked())) is None and len(sent) == 16
+    client = TestClient(create_app(tmp_path / "data", tmp_path / "no-editor"))
+    client.headers["X-Diagram-Bot"] = client.get("/api/bootstrap").json()["token"]
+    big = (b" " * (1024 * 1024) for _ in range(16))
+    assert client.post("/api/snapshots", content=big, headers={"Content-Type": "application/json"}).status_code == 413
+    assert client.post("/api/snapshots", json=demo_snapshot()).status_code == 201  # a normal body still reaches the route
 
 
 def test_snapshot_list_skips_one_corrupt_file(tmp_path):
