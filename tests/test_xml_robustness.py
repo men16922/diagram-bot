@@ -141,6 +141,8 @@ BAD_DOCUMENTS = {
                                                                          '</Array></mxGeometry>')]),
     "1500-deep chain": mx([v(f"c{i}", "box", "container=1;", 1, 1, 100, 100, f"c{i - 1}") for i in range(1500, 0, -1)]
                           + [v("c0", "box", "container=1;", 0, 0, 100, 100)]),
+    "3000-deep chain, parents first": mx([v("c0", "box", "container=1;", 0, 0, 100, 100)]
+                                         + [v(f"c{i}", "box", "container=1;", 1, 1, 100, 100, f"c{i - 1}") for i in range(1, 3000)]),
     "parent cycle": mx([v("a", "box", "container=1;", 0, 0, 100, 100, "b"), v("b", "box", "container=1;", 0, 0, 100, 100, "a")]),
 }
 
@@ -357,15 +359,16 @@ def test_relayout_keeps_notes_and_skips_id_less_cells(client):
 def test_align_and_inspect_do_linear_work(monkeypatch):
     from diagram_bot import xml_align
     calls = []
-    original = xml_align._boxes_overlap
-    monkeypatch.setattr(xml_align, "_boxes_overlap", lambda *a, **k: calls.append(1) or original(*a, **k))
-    for n in (300, 1200):
+    for name in ("_boxes_overlap", "_segment_hits"):
+        original = getattr(xml_align, name)
+        monkeypatch.setattr(xml_align, name, lambda *a, _f=original, **k: calls.append(1) or _f(*a, **k))
+    for n in (300, 1200):  # straight edges across the grid: the guard measures them before aligning
         cells = [v("vpc", "vpc-x (10.0.0.0/16)", VPC, 0, 0, 2000, 2000), v("s", "app-subnet", PRIV, 20, 50, 1900, 1900, "vpc")]
         cells += [v(f"i{k}", f"web-{k}", EC2, (k % 30) * 60, (k // 30) * 60, 52, 52, "s") for k in range(n)]
         cells += [e(f"e{k}", f"i{k}", f"i{(k * 7 + 3) % n}") for k in range(n)]
         calls.clear()
         api.inspect_xml(api.align_xml(mx(cells)))
-        assert len(calls) < 200 * n, (n, len(calls))  # the pairwise scan made ~20,000 checks per shape at n=1,600
+        assert len(calls) < 400 * n, (n, len(calls))  # the pairwise scan made ~20,000 checks per shape at n=1,600
 
 
 # --- f. align never returns something worse than its input; preserve keeps custom attributes -------------------------

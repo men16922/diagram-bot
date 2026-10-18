@@ -105,7 +105,7 @@ def _compute_abs(vertices):
     """Page coordinates `(abs_x, abs_y)` of every vertex; iterative, so a hostile parent chain cannot exhaust the stack.
 
     A parent cycle or nesting deeper than MAX_DEPTH is an InputError; a parent that is not a vertex counts as the page."""
-    abs_pos = {"0": (0.0, 0.0), "1": (0.0, 0.0)}
+    abs_pos, depth = {"0": (0.0, 0.0), "1": (0.0, 0.0)}, {}
     for start in vertices:
         chain, cid = [], start
         while cid not in abs_pos and cid in vertices:
@@ -113,10 +113,12 @@ def _compute_abs(vertices):
                 raise InputError(f"셀 {start}의 부모 관계가 순환하거나 {MAX_DEPTH}단계보다 깊습니다.")
             chain.append(cid)
             cid = vertices[cid]["parent"]
-        x, y = abs_pos.get(cid, (0.0, 0.0))
+        (x, y), level = abs_pos.get(cid, (0.0, 0.0)), depth.get(cid, 0)
         for cid in reversed(chain):
-            x, y = x + vertices[cid]["x"], y + vertices[cid]["y"]
-            abs_pos[cid] = (x, y)
+            x, y, level = x + vertices[cid]["x"], y + vertices[cid]["y"], level + 1
+            if level > MAX_DEPTH:
+                raise InputError(f"셀 {cid}의 부모 관계가 {MAX_DEPTH}단계보다 깊습니다.")
+            abs_pos[cid], depth[cid] = (x, y), level
     return abs_pos
 
 
@@ -164,6 +166,17 @@ class _Grid:
             keys = list(seen)
         self.checks += len(keys)
         return keys
+
+    def along(self, a, b):
+        """Keys of the boxes near the segment a-b, querying it in cell-sized pieces (a long diagonal's bounding box would
+        cover cells the line never crosses)."""
+        steps = max(1, math.ceil(max(abs(b[0] - a[0]), abs(b[1] - a[1])) / self.SIZE))
+        keys = {}
+        for i in range(steps):
+            p = (a[0] + (b[0] - a[0]) * i / steps, a[1] + (b[1] - a[1]) * i / steps)
+            q = (a[0] + (b[0] - a[0]) * (i + 1) / steps, a[1] + (b[1] - a[1]) * (i + 1) / steps)
+            keys.update(dict.fromkeys(self.near((min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]) + 0.1, max(p[1], q[1]) + 0.1))))
+        return list(keys)
 
 
 def _boxes_overlap(a, b, pad=0.0):
@@ -267,8 +280,7 @@ def _inspect_page(graph_root):
                 report["unrouted_edges"].append(e["id"])
         hit = set()
         for a, b in zip(path, path[1:]):
-            seg = (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]) + 0.1, max(a[1], b[1]) + 0.1)
-            for rid in resource_grid.near(seg):
+            for rid in resource_grid.along(a, b):
                 if rid not in (src, dst) and rid not in hit and _segment_hits(a, b, resource_boxes[rid]):
                     hit.add(rid)
                     report["edge_collisions"].append((e["id"], rid))
