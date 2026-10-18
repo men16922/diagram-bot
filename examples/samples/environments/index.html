@@ -22,21 +22,23 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:32.186140+00:00",
-    "finished_at": "2026-10-17T21:52:32.186140+00:00",
+    "started_at": "2026-10-18T09:07:27.240761+00:00",
+    "finished_at": "2026-10-18T09:07:27.240761+00:00",
     "status": "complete",
     "demo": true,
     "sample": "environments",
-    "sample_version": 3,
-    "title": "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스)",
+    "sample_version": 4,
+    "title": "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스 · 중앙 egress)",
     "practices": [
       "환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)",
-      "운영은 3 AZ·AZ별 NAT, 스테이징은 비용을 고려한 2 AZ·NAT 1개",
+      "운영은 3 AZ, 스테이징은 비용을 고려한 2 AZ",
+      "인터넷 egress는 egress VPC의 AZ별 NAT로 집중: 운영·스테이징 VPC에는 NAT 없이 0.0.0.0/0 → TGW (Multi-VPC 백서: centralized egress)",
+      "egress VPC는 AZ마다 TGW attachment 전용 /28 서브넷과 같은 AZ의 NAT, 퍼블릭 경로에 10.0.0.0/8 → TGW 복귀 경로",
+      "인터넷 진입(ALB)은 각 환경 VPC의 퍼블릭 서브넷에 그대로 둠 (집중하는 것은 egress)",
       "공용 서비스 VPC에는 내부 도구만 두고 인터넷 경로 없음",
       "VPC 간 연결은 Transit Gateway 허브로 일원화 (VPC 피어링 그물망 대신)",
       "Environment 태그로 소유·비용 구분",
-      "스테이징 NAT 1개는 비운영 환경의 비용 절충 (REL10-BP01은 운영 워크로드 기준)",
-      "도형 밖 권고: 환경별 AWS 계정 분리, Network 계정의 TGW를 RAM으로 공유, 운영·스테이징 TGW 라우팅 테이블 분리 (수집 범위 밖)"
+      "도형 밖 권고: 환경별 AWS 계정 분리, Network 계정의 TGW를 RAM으로 공유, 운영·스테이징 TGW 라우팅 테이블 분리, egress VPC 앞 검사(Network Firewall) (수집 범위 밖)"
     ],
     "scope": [
       "VPC",
@@ -75,14 +77,14 @@
       "operation": "describe_vpcs",
       "status": "complete",
       "pages": 1,
-      "items": 3
+      "items": 4
     },
     {
       "service": "ec2",
       "operation": "describe_subnets",
       "status": "complete",
       "pages": 1,
-      "items": 12
+      "items": 18
     },
     {
       "service": "ec2",
@@ -110,21 +112,21 @@
       "operation": "describe_internet_gateways",
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 3
     },
     {
       "service": "ec2",
       "operation": "describe_nat_gateways",
       "status": "complete",
       "pages": 1,
-      "items": 4
+      "items": 3
     },
     {
       "service": "ec2",
       "operation": "describe_route_tables",
       "status": "complete",
       "pages": 1,
-      "items": 10
+      "items": 12
     },
     {
       "service": "rds",
@@ -152,7 +154,7 @@
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
-      "items": 3
+      "items": 4
     },
     {
       "service": "rds",
@@ -353,6 +355,20 @@
         ]
       },
       {
+        "VpcId": "vpc-egress00000000004",
+        "CidrBlock": "10.43.0.0/16",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-vpc"
+          },
+          {
+            "Key": "Environment",
+            "Value": "shared"
+          }
+        ]
+      },
+      {
         "VpcId": "vpc-shared000000000004",
         "CidrBlock": "10.42.0.0/16",
         "Tags": [
@@ -547,6 +563,114 @@
           }
         ],
         "AvailableIpAddressCount": 250
+      },
+      {
+        "SubnetId": "subnet-egress-pub-a",
+        "VpcId": "vpc-egress00000000004",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.43.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-public-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-egress-pub-b",
+        "VpcId": "vpc-egress00000000004",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.43.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-public-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-egress-pub-c",
+        "VpcId": "vpc-egress00000000004",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.43.2.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-public-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "public"
+          }
+        ],
+        "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-egress-tgw-a",
+        "VpcId": "vpc-egress00000000004",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.43.10.0/28",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-tgw-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 11
+      },
+      {
+        "SubnetId": "subnet-egress-tgw-b",
+        "VpcId": "vpc-egress00000000004",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.43.10.16/28",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-tgw-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 11
+      },
+      {
+        "SubnetId": "subnet-egress-tgw-c",
+        "VpcId": "vpc-egress00000000004",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.43.10.32/28",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-tgw-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 11
       },
       {
         "SubnetId": "subnet-shared-a",
@@ -1054,58 +1178,60 @@
             "Value": "staging-igw"
           }
         ]
+      },
+      {
+        "InternetGatewayId": "igw-egress",
+        "Attachments": [
+          {
+            "VpcId": "vpc-egress00000000004",
+            "State": "available"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-igw"
+          }
+        ]
       }
     ],
     "nat_gateways": [
       {
-        "NatGatewayId": "nat-prod-a",
-        "VpcId": "vpc-prod0000000000004",
-        "SubnetId": "subnet-prod-pub-a",
+        "NatGatewayId": "nat-egress-a",
+        "VpcId": "vpc-egress00000000004",
+        "SubnetId": "subnet-egress-pub-a",
         "State": "available",
         "ConnectivityType": "public",
         "Tags": [
           {
             "Key": "Name",
-            "Value": "prod-nat-a"
+            "Value": "egress-nat-a"
           }
         ]
       },
       {
-        "NatGatewayId": "nat-prod-b",
-        "VpcId": "vpc-prod0000000000004",
-        "SubnetId": "subnet-prod-pub-b",
+        "NatGatewayId": "nat-egress-b",
+        "VpcId": "vpc-egress00000000004",
+        "SubnetId": "subnet-egress-pub-b",
         "State": "available",
         "ConnectivityType": "public",
         "Tags": [
           {
             "Key": "Name",
-            "Value": "prod-nat-b"
+            "Value": "egress-nat-b"
           }
         ]
       },
       {
-        "NatGatewayId": "nat-prod-c",
-        "VpcId": "vpc-prod0000000000004",
-        "SubnetId": "subnet-prod-pub-c",
+        "NatGatewayId": "nat-egress-c",
+        "VpcId": "vpc-egress00000000004",
+        "SubnetId": "subnet-egress-pub-c",
         "State": "available",
         "ConnectivityType": "public",
         "Tags": [
           {
             "Key": "Name",
-            "Value": "prod-nat-c"
-          }
-        ]
-      },
-      {
-        "NatGatewayId": "nat-staging-a",
-        "VpcId": "vpc-staging0000000000004",
-        "SubnetId": "subnet-staging-pub-a",
-        "State": "available",
-        "ConnectivityType": "public",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "staging-nat-a"
+            "Value": "egress-nat-c"
           }
         ]
       }
@@ -1148,7 +1274,7 @@
         ]
       },
       {
-        "RouteTableId": "rtb-prod-private-a",
+        "RouteTableId": "rtb-prod-private",
         "VpcId": "vpc-prod0000000000004",
         "Routes": [
           {
@@ -1158,91 +1284,28 @@
           },
           {
             "DestinationCidrBlock": "0.0.0.0/0",
-            "NatGatewayId": "nat-prod-a",
-            "State": "active"
-          },
-          {
-            "DestinationCidrBlock": "10.0.0.0/8",
             "TransitGatewayId": "tgw-corp0000000004",
             "State": "active"
           }
         ],
         "Associations": [
           {
-            "RouteTableAssociationId": "rtbassoc-prod-private-a-0",
+            "RouteTableAssociationId": "rtbassoc-prod-private-0",
             "SubnetId": "subnet-prod-app-a"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "prod-private-a"
-          }
-        ]
-      },
-      {
-        "RouteTableId": "rtb-prod-private-b",
-        "VpcId": "vpc-prod0000000000004",
-        "Routes": [
-          {
-            "DestinationCidrBlock": "10.40.0.0/16",
-            "GatewayId": "local",
-            "State": "active"
           },
           {
-            "DestinationCidrBlock": "0.0.0.0/0",
-            "NatGatewayId": "nat-prod-b",
-            "State": "active"
-          },
-          {
-            "DestinationCidrBlock": "10.0.0.0/8",
-            "TransitGatewayId": "tgw-corp0000000004",
-            "State": "active"
-          }
-        ],
-        "Associations": [
-          {
-            "RouteTableAssociationId": "rtbassoc-prod-private-b-0",
+            "RouteTableAssociationId": "rtbassoc-prod-private-1",
             "SubnetId": "subnet-prod-app-b"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "prod-private-b"
-          }
-        ]
-      },
-      {
-        "RouteTableId": "rtb-prod-private-c",
-        "VpcId": "vpc-prod0000000000004",
-        "Routes": [
-          {
-            "DestinationCidrBlock": "10.40.0.0/16",
-            "GatewayId": "local",
-            "State": "active"
           },
           {
-            "DestinationCidrBlock": "0.0.0.0/0",
-            "NatGatewayId": "nat-prod-c",
-            "State": "active"
-          },
-          {
-            "DestinationCidrBlock": "10.0.0.0/8",
-            "TransitGatewayId": "tgw-corp0000000004",
-            "State": "active"
-          }
-        ],
-        "Associations": [
-          {
-            "RouteTableAssociationId": "rtbassoc-prod-private-c-0",
+            "RouteTableAssociationId": "rtbassoc-prod-private-2",
             "SubnetId": "subnet-prod-app-c"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "prod-private-c"
+            "Value": "prod-private"
           }
         ]
       },
@@ -1302,7 +1365,7 @@
         ]
       },
       {
-        "RouteTableId": "rtb-staging-private-a",
+        "RouteTableId": "rtb-staging-private",
         "VpcId": "vpc-staging0000000000004",
         "Routes": [
           {
@@ -1312,58 +1375,24 @@
           },
           {
             "DestinationCidrBlock": "0.0.0.0/0",
-            "NatGatewayId": "nat-staging-a",
-            "State": "active"
-          },
-          {
-            "DestinationCidrBlock": "10.0.0.0/8",
             "TransitGatewayId": "tgw-corp0000000004",
             "State": "active"
           }
         ],
         "Associations": [
           {
-            "RouteTableAssociationId": "rtbassoc-staging-private-a-0",
+            "RouteTableAssociationId": "rtbassoc-staging-private-0",
             "SubnetId": "subnet-staging-app-a"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "staging-private-a"
-          }
-        ]
-      },
-      {
-        "RouteTableId": "rtb-staging-private-b",
-        "VpcId": "vpc-staging0000000000004",
-        "Routes": [
-          {
-            "DestinationCidrBlock": "10.41.0.0/16",
-            "GatewayId": "local",
-            "State": "active"
           },
           {
-            "DestinationCidrBlock": "0.0.0.0/0",
-            "NatGatewayId": "nat-staging-a",
-            "State": "active"
-          },
-          {
-            "DestinationCidrBlock": "10.0.0.0/8",
-            "TransitGatewayId": "tgw-corp0000000004",
-            "State": "active"
-          }
-        ],
-        "Associations": [
-          {
-            "RouteTableAssociationId": "rtbassoc-staging-private-b-0",
+            "RouteTableAssociationId": "rtbassoc-staging-private-1",
             "SubnetId": "subnet-staging-app-b"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "staging-private-b"
+            "Value": "staging-private"
           }
         ]
       },
@@ -1387,6 +1416,154 @@
           {
             "Key": "Name",
             "Value": "staging-isolated"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-egress-public",
+        "VpcId": "vpc-egress00000000004",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.43.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "GatewayId": "igw-egress",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "10.0.0.0/8",
+            "TransitGatewayId": "tgw-corp0000000004",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-egress-public-0",
+            "SubnetId": "subnet-egress-pub-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-egress-public-1",
+            "SubnetId": "subnet-egress-pub-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-egress-public-2",
+            "SubnetId": "subnet-egress-pub-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-public"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-egress-private-a",
+        "VpcId": "vpc-egress00000000004",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.43.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-egress-a",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-egress-private-a-0",
+            "SubnetId": "subnet-egress-tgw-a"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-private-a"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-egress-private-b",
+        "VpcId": "vpc-egress00000000004",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.43.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-egress-b",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-egress-private-b-0",
+            "SubnetId": "subnet-egress-tgw-b"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-private-b"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-egress-private-c",
+        "VpcId": "vpc-egress00000000004",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.43.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          },
+          {
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "NatGatewayId": "nat-egress-c",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-egress-private-c-0",
+            "SubnetId": "subnet-egress-tgw-c"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-private-c"
+          }
+        ]
+      },
+      {
+        "RouteTableId": "rtb-egress-main",
+        "VpcId": "vpc-egress00000000004",
+        "Routes": [
+          {
+            "DestinationCidrBlock": "10.43.0.0/16",
+            "GatewayId": "local",
+            "State": "active"
+          }
+        ],
+        "Associations": [
+          {
+            "RouteTableAssociationId": "rtbassoc-egress-main-main",
+            "Main": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-isolated"
           }
         ]
       },
@@ -1489,22 +1666,6 @@
     ],
     "transit_gateway_attachments": [
       {
-        "TransitGatewayAttachmentId": "tgw-attach-shared",
-        "TransitGatewayId": "tgw-corp0000000004",
-        "VpcId": "vpc-shared000000000004",
-        "SubnetIds": [
-          "subnet-shared-a",
-          "subnet-shared-b"
-        ],
-        "State": "available",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "shared-attachment"
-          }
-        ]
-      },
-      {
         "TransitGatewayAttachmentId": "tgw-attach-prod",
         "TransitGatewayId": "tgw-corp0000000004",
         "VpcId": "vpc-prod0000000000004",
@@ -1534,6 +1695,39 @@
           {
             "Key": "Name",
             "Value": "staging-attachment"
+          }
+        ]
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-egress",
+        "TransitGatewayId": "tgw-corp0000000004",
+        "VpcId": "vpc-egress00000000004",
+        "SubnetIds": [
+          "subnet-egress-tgw-a",
+          "subnet-egress-tgw-b",
+          "subnet-egress-tgw-c"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "egress-attachment"
+          }
+        ]
+      },
+      {
+        "TransitGatewayAttachmentId": "tgw-attach-shared",
+        "TransitGatewayId": "tgw-corp0000000004",
+        "VpcId": "vpc-shared000000000004",
+        "SubnetIds": [
+          "subnet-shared-a",
+          "subnet-shared-b"
+        ],
+        "State": "available",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "shared-attachment"
           }
         ]
       }
@@ -2016,6 +2210,31 @@
         "source": "DescribeInstances"
       },
       {
+        "id": "111122223333/ap-northeast-2/internet_gateway/igw-egress",
+        "resource_id": "igw-egress",
+        "kind": "internet_gateway",
+        "name": "egress-igw",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "InternetGatewayId": "igw-egress",
+          "Attachments": [
+            {
+              "VpcId": "vpc-egress00000000004",
+              "State": "available"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-igw"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeInternetGateways"
+      },
+      {
         "id": "111122223333/ap-northeast-2/internet_gateway/igw-prod",
         "resource_id": "igw-prod",
         "kind": "internet_gateway",
@@ -2130,22 +2349,22 @@
         "source": "DescribeLoadBalancers"
       },
       {
-        "id": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
-        "resource_id": "nat-prod-a",
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-egress-a",
+        "resource_id": "nat-egress-a",
         "kind": "nat_gateway",
-        "name": "prod-nat-a",
+        "name": "egress-nat-a",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {
-          "NatGatewayId": "nat-prod-a",
-          "VpcId": "vpc-prod0000000000004",
-          "SubnetId": "subnet-prod-pub-a",
+          "NatGatewayId": "nat-egress-a",
+          "VpcId": "vpc-egress00000000004",
+          "SubnetId": "subnet-egress-pub-a",
           "State": "available",
           "ConnectivityType": "public",
           "Tags": [
             {
               "Key": "Name",
-              "Value": "prod-nat-a"
+              "Value": "egress-nat-a"
             }
           ]
         },
@@ -2153,22 +2372,22 @@
         "source": "DescribeNatGateways"
       },
       {
-        "id": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
-        "resource_id": "nat-prod-b",
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-egress-b",
+        "resource_id": "nat-egress-b",
         "kind": "nat_gateway",
-        "name": "prod-nat-b",
+        "name": "egress-nat-b",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {
-          "NatGatewayId": "nat-prod-b",
-          "VpcId": "vpc-prod0000000000004",
-          "SubnetId": "subnet-prod-pub-b",
+          "NatGatewayId": "nat-egress-b",
+          "VpcId": "vpc-egress00000000004",
+          "SubnetId": "subnet-egress-pub-b",
           "State": "available",
           "ConnectivityType": "public",
           "Tags": [
             {
               "Key": "Name",
-              "Value": "prod-nat-b"
+              "Value": "egress-nat-b"
             }
           ]
         },
@@ -2176,45 +2395,22 @@
         "source": "DescribeNatGateways"
       },
       {
-        "id": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
-        "resource_id": "nat-prod-c",
+        "id": "111122223333/ap-northeast-2/nat_gateway/nat-egress-c",
+        "resource_id": "nat-egress-c",
         "kind": "nat_gateway",
-        "name": "prod-nat-c",
+        "name": "egress-nat-c",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {
-          "NatGatewayId": "nat-prod-c",
-          "VpcId": "vpc-prod0000000000004",
-          "SubnetId": "subnet-prod-pub-c",
+          "NatGatewayId": "nat-egress-c",
+          "VpcId": "vpc-egress00000000004",
+          "SubnetId": "subnet-egress-pub-c",
           "State": "available",
           "ConnectivityType": "public",
           "Tags": [
             {
               "Key": "Name",
-              "Value": "prod-nat-c"
-            }
-          ]
-        },
-        "reference_only": false,
-        "source": "DescribeNatGateways"
-      },
-      {
-        "id": "111122223333/ap-northeast-2/nat_gateway/nat-staging-a",
-        "resource_id": "nat-staging-a",
-        "kind": "nat_gateway",
-        "name": "staging-nat-a",
-        "account": "111122223333",
-        "region": "ap-northeast-2",
-        "attributes": {
-          "NatGatewayId": "nat-staging-a",
-          "VpcId": "vpc-staging0000000000004",
-          "SubnetId": "subnet-staging-pub-a",
-          "State": "available",
-          "ConnectivityType": "public",
-          "Tags": [
-            {
-              "Key": "Name",
-              "Value": "staging-nat-a"
+              "Value": "egress-nat-c"
             }
           ]
         },
@@ -2299,6 +2495,204 @@
         "source": null
       },
       {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-egress-main",
+        "resource_id": "rtb-egress-main",
+        "kind": "route_table",
+        "name": "egress-isolated",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-egress-main",
+          "VpcId": "vpc-egress00000000004",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.43.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-egress-main-main",
+              "Main": true
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-isolated"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-egress-private-a",
+        "resource_id": "rtb-egress-private-a",
+        "kind": "route_table",
+        "name": "egress-private-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-egress-private-a",
+          "VpcId": "vpc-egress00000000004",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.43.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-egress-a",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-egress-private-a-0",
+              "SubnetId": "subnet-egress-tgw-a"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-private-a"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-egress-private-b",
+        "resource_id": "rtb-egress-private-b",
+        "kind": "route_table",
+        "name": "egress-private-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-egress-private-b",
+          "VpcId": "vpc-egress00000000004",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.43.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-egress-b",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-egress-private-b-0",
+              "SubnetId": "subnet-egress-tgw-b"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-private-b"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-egress-private-c",
+        "resource_id": "rtb-egress-private-c",
+        "kind": "route_table",
+        "name": "egress-private-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-egress-private-c",
+          "VpcId": "vpc-egress00000000004",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.43.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "NatGatewayId": "nat-egress-c",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-egress-private-c-0",
+              "SubnetId": "subnet-egress-tgw-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-private-c"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/route_table/rtb-egress-public",
+        "resource_id": "rtb-egress-public",
+        "kind": "route_table",
+        "name": "egress-public",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "RouteTableId": "rtb-egress-public",
+          "VpcId": "vpc-egress00000000004",
+          "Routes": [
+            {
+              "DestinationCidrBlock": "10.43.0.0/16",
+              "GatewayId": "local",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "0.0.0.0/0",
+              "GatewayId": "igw-egress",
+              "State": "active"
+            },
+            {
+              "DestinationCidrBlock": "10.0.0.0/8",
+              "TransitGatewayId": "tgw-corp0000000004",
+              "State": "active"
+            }
+          ],
+          "Associations": [
+            {
+              "RouteTableAssociationId": "rtbassoc-egress-public-0",
+              "SubnetId": "subnet-egress-pub-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-egress-public-1",
+              "SubnetId": "subnet-egress-pub-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-egress-public-2",
+              "SubnetId": "subnet-egress-pub-c"
+            }
+          ],
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-public"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeRouteTables"
+      },
+      {
         "id": "111122223333/ap-northeast-2/route_table/rtb-prod-main",
         "resource_id": "rtb-prod-main",
         "kind": "route_table",
@@ -2332,14 +2726,14 @@
         "source": "DescribeRouteTables"
       },
       {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
-        "resource_id": "rtb-prod-private-a",
+        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-private",
+        "resource_id": "rtb-prod-private",
         "kind": "route_table",
-        "name": "prod-private-a",
+        "name": "prod-private",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {
-          "RouteTableId": "rtb-prod-private-a",
+          "RouteTableId": "rtb-prod-private",
           "VpcId": "vpc-prod0000000000004",
           "Routes": [
             {
@@ -2349,111 +2743,28 @@
             },
             {
               "DestinationCidrBlock": "0.0.0.0/0",
-              "NatGatewayId": "nat-prod-a",
-              "State": "active"
-            },
-            {
-              "DestinationCidrBlock": "10.0.0.0/8",
               "TransitGatewayId": "tgw-corp0000000004",
               "State": "active"
             }
           ],
           "Associations": [
             {
-              "RouteTableAssociationId": "rtbassoc-prod-private-a-0",
+              "RouteTableAssociationId": "rtbassoc-prod-private-0",
               "SubnetId": "subnet-prod-app-a"
-            }
-          ],
-          "Tags": [
-            {
-              "Key": "Name",
-              "Value": "prod-private-a"
-            }
-          ]
-        },
-        "reference_only": false,
-        "source": "DescribeRouteTables"
-      },
-      {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
-        "resource_id": "rtb-prod-private-b",
-        "kind": "route_table",
-        "name": "prod-private-b",
-        "account": "111122223333",
-        "region": "ap-northeast-2",
-        "attributes": {
-          "RouteTableId": "rtb-prod-private-b",
-          "VpcId": "vpc-prod0000000000004",
-          "Routes": [
-            {
-              "DestinationCidrBlock": "10.40.0.0/16",
-              "GatewayId": "local",
-              "State": "active"
             },
             {
-              "DestinationCidrBlock": "0.0.0.0/0",
-              "NatGatewayId": "nat-prod-b",
-              "State": "active"
-            },
-            {
-              "DestinationCidrBlock": "10.0.0.0/8",
-              "TransitGatewayId": "tgw-corp0000000004",
-              "State": "active"
-            }
-          ],
-          "Associations": [
-            {
-              "RouteTableAssociationId": "rtbassoc-prod-private-b-0",
+              "RouteTableAssociationId": "rtbassoc-prod-private-1",
               "SubnetId": "subnet-prod-app-b"
-            }
-          ],
-          "Tags": [
-            {
-              "Key": "Name",
-              "Value": "prod-private-b"
-            }
-          ]
-        },
-        "reference_only": false,
-        "source": "DescribeRouteTables"
-      },
-      {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
-        "resource_id": "rtb-prod-private-c",
-        "kind": "route_table",
-        "name": "prod-private-c",
-        "account": "111122223333",
-        "region": "ap-northeast-2",
-        "attributes": {
-          "RouteTableId": "rtb-prod-private-c",
-          "VpcId": "vpc-prod0000000000004",
-          "Routes": [
-            {
-              "DestinationCidrBlock": "10.40.0.0/16",
-              "GatewayId": "local",
-              "State": "active"
             },
             {
-              "DestinationCidrBlock": "0.0.0.0/0",
-              "NatGatewayId": "nat-prod-c",
-              "State": "active"
-            },
-            {
-              "DestinationCidrBlock": "10.0.0.0/8",
-              "TransitGatewayId": "tgw-corp0000000004",
-              "State": "active"
-            }
-          ],
-          "Associations": [
-            {
-              "RouteTableAssociationId": "rtbassoc-prod-private-c-0",
+              "RouteTableAssociationId": "rtbassoc-prod-private-2",
               "SubnetId": "subnet-prod-app-c"
             }
           ],
           "Tags": [
             {
               "Key": "Name",
-              "Value": "prod-private-c"
+              "Value": "prod-private"
             }
           ]
         },
@@ -2578,14 +2889,14 @@
         "source": "DescribeRouteTables"
       },
       {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-staging-private-a",
-        "resource_id": "rtb-staging-private-a",
+        "id": "111122223333/ap-northeast-2/route_table/rtb-staging-private",
+        "resource_id": "rtb-staging-private",
         "kind": "route_table",
-        "name": "staging-private-a",
+        "name": "staging-private",
         "account": "111122223333",
         "region": "ap-northeast-2",
         "attributes": {
-          "RouteTableId": "rtb-staging-private-a",
+          "RouteTableId": "rtb-staging-private",
           "VpcId": "vpc-staging0000000000004",
           "Routes": [
             {
@@ -2595,68 +2906,24 @@
             },
             {
               "DestinationCidrBlock": "0.0.0.0/0",
-              "NatGatewayId": "nat-staging-a",
-              "State": "active"
-            },
-            {
-              "DestinationCidrBlock": "10.0.0.0/8",
               "TransitGatewayId": "tgw-corp0000000004",
               "State": "active"
             }
           ],
           "Associations": [
             {
-              "RouteTableAssociationId": "rtbassoc-staging-private-a-0",
+              "RouteTableAssociationId": "rtbassoc-staging-private-0",
               "SubnetId": "subnet-staging-app-a"
-            }
-          ],
-          "Tags": [
-            {
-              "Key": "Name",
-              "Value": "staging-private-a"
-            }
-          ]
-        },
-        "reference_only": false,
-        "source": "DescribeRouteTables"
-      },
-      {
-        "id": "111122223333/ap-northeast-2/route_table/rtb-staging-private-b",
-        "resource_id": "rtb-staging-private-b",
-        "kind": "route_table",
-        "name": "staging-private-b",
-        "account": "111122223333",
-        "region": "ap-northeast-2",
-        "attributes": {
-          "RouteTableId": "rtb-staging-private-b",
-          "VpcId": "vpc-staging0000000000004",
-          "Routes": [
-            {
-              "DestinationCidrBlock": "10.41.0.0/16",
-              "GatewayId": "local",
-              "State": "active"
             },
             {
-              "DestinationCidrBlock": "0.0.0.0/0",
-              "NatGatewayId": "nat-staging-a",
-              "State": "active"
-            },
-            {
-              "DestinationCidrBlock": "10.0.0.0/8",
-              "TransitGatewayId": "tgw-corp0000000004",
-              "State": "active"
-            }
-          ],
-          "Associations": [
-            {
-              "RouteTableAssociationId": "rtbassoc-staging-private-b-0",
+              "RouteTableAssociationId": "rtbassoc-staging-private-1",
               "SubnetId": "subnet-staging-app-b"
             }
           ],
           "Tags": [
             {
               "Key": "Name",
-              "Value": "staging-private-b"
+              "Value": "staging-private"
             }
           ]
         },
@@ -2772,6 +3039,186 @@
         "source": null
       },
       {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-a",
+        "resource_id": "subnet-egress-pub-a",
+        "kind": "subnet",
+        "name": "egress-public-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-egress-pub-a",
+          "VpcId": "vpc-egress00000000004",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.43.0.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-public-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-egress-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-b",
+        "resource_id": "subnet-egress-pub-b",
+        "kind": "subnet",
+        "name": "egress-public-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-egress-pub-b",
+          "VpcId": "vpc-egress00000000004",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.43.1.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-public-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-egress-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-c",
+        "resource_id": "subnet-egress-pub-c",
+        "kind": "subnet",
+        "name": "egress-public-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-egress-pub-c",
+          "VpcId": "vpc-egress00000000004",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.43.2.0/24",
+          "MapPublicIpOnLaunch": true,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-public-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "public"
+            }
+          ],
+          "AvailableIpAddressCount": 251
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "public",
+        "route_table": "rtb-egress-public"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-a",
+        "resource_id": "subnet-egress-tgw-a",
+        "kind": "subnet",
+        "name": "egress-tgw-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-egress-tgw-a",
+          "VpcId": "vpc-egress00000000004",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.43.10.0/28",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-tgw-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 11
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-egress-private-a"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-b",
+        "resource_id": "subnet-egress-tgw-b",
+        "kind": "subnet",
+        "name": "egress-tgw-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-egress-tgw-b",
+          "VpcId": "vpc-egress00000000004",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.43.10.16/28",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-tgw-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 11
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-egress-private-b"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-c",
+        "resource_id": "subnet-egress-tgw-c",
+        "kind": "subnet",
+        "name": "egress-tgw-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-egress-tgw-c",
+          "VpcId": "vpc-egress00000000004",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.43.10.32/28",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-tgw-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 11
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-egress-private-c"
+      },
+      {
         "id": "111122223333/ap-northeast-2/subnet/subnet-prod-app-a",
         "resource_id": "subnet-prod-app-a",
         "kind": "subnet",
@@ -2798,8 +3245,8 @@
         },
         "reference_only": false,
         "source": "DescribeSubnets",
-        "route_class": "nat",
-        "route_table": "rtb-prod-private-a"
+        "route_class": "tgw",
+        "route_table": "rtb-prod-private"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-prod-app-b",
@@ -2828,8 +3275,8 @@
         },
         "reference_only": false,
         "source": "DescribeSubnets",
-        "route_class": "nat",
-        "route_table": "rtb-prod-private-b"
+        "route_class": "tgw",
+        "route_table": "rtb-prod-private"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-prod-app-c",
@@ -2858,8 +3305,8 @@
         },
         "reference_only": false,
         "source": "DescribeSubnets",
-        "route_class": "nat",
-        "route_table": "rtb-prod-private-c"
+        "route_class": "tgw",
+        "route_table": "rtb-prod-private"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-a",
@@ -3038,8 +3485,8 @@
         },
         "reference_only": false,
         "source": "DescribeSubnets",
-        "route_class": "nat",
-        "route_table": "rtb-staging-private-a"
+        "route_class": "tgw",
+        "route_table": "rtb-staging-private"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-staging-app-b",
@@ -3068,8 +3515,8 @@
         },
         "reference_only": false,
         "source": "DescribeSubnets",
-        "route_class": "nat",
-        "route_table": "rtb-staging-private-b"
+        "route_class": "tgw",
+        "route_table": "rtb-staging-private"
       },
       {
         "id": "111122223333/ap-northeast-2/subnet/subnet-staging-pub-a",
@@ -3174,6 +3621,33 @@
         },
         "reference_only": false,
         "source": "DescribeTargetGroups"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-egress",
+        "resource_id": "tgw-attach-egress",
+        "kind": "tgw_attachment",
+        "name": "egress-attachment",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "TransitGatewayAttachmentId": "tgw-attach-egress",
+          "TransitGatewayId": "tgw-corp0000000004",
+          "VpcId": "vpc-egress00000000004",
+          "SubnetIds": [
+            "subnet-egress-tgw-a",
+            "subnet-egress-tgw-b",
+            "subnet-egress-tgw-c"
+          ],
+          "State": "available",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-attachment"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeTransitGatewayVpcAttachments"
       },
       {
         "id": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-prod",
@@ -3351,6 +3825,30 @@
         "attributes": {},
         "reference_only": true,
         "source": null
+      },
+      {
+        "id": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "resource_id": "vpc-egress00000000004",
+        "kind": "vpc",
+        "name": "egress-vpc",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "VpcId": "vpc-egress00000000004",
+          "CidrBlock": "10.43.0.0/16",
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "egress-vpc"
+            },
+            {
+              "Key": "Environment",
+              "Value": "shared"
+            }
+          ]
+        },
+        "reference_only": false,
+        "source": "DescribeVpcs"
       },
       {
         "id": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
@@ -3877,6 +4375,16 @@
         "id": "rel-01674db5e77759236866"
       },
       {
+        "source": "111122223333/ap-northeast-2/internet_gateway/igw-egress",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeInternetGateways.Attachments[].VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5b724b75454bf303950d"
+      },
+      {
         "source": "111122223333/ap-northeast-2/internet_gateway/igw-prod",
         "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
         "relation": "in_vpc",
@@ -4007,84 +4515,244 @@
         "id": "rel-6d7a8f249b7b77ef2876"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-a",
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-egress-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-a",
         "relation": "in_subnet",
         "evidence": "DescribeNatGateways.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-0b244357493e68a3086b"
+        "id": "rel-fc46c77e9fc15b3b64ba"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-egress-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
         "relation": "in_vpc",
         "evidence": "DescribeNatGateways.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-37289de1af98595b1ffd"
+        "id": "rel-b5c07a73e7a49c879238"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-b",
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-egress-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-b",
         "relation": "in_subnet",
         "evidence": "DescribeNatGateways.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-88c92a6cf18dc310be5d"
+        "id": "rel-9a092f333dfa78ea9a46"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-egress-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
         "relation": "in_vpc",
         "evidence": "DescribeNatGateways.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-ccc3d992314fe6566ae3"
+        "id": "rel-6febe81d81485a6553be"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-prod-pub-c",
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-egress-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-c",
         "relation": "in_subnet",
         "evidence": "DescribeNatGateways.SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-da0b2fdebb363319fa0e"
+        "id": "rel-30e48a84065cb4db2627"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
+        "source": "111122223333/ap-northeast-2/nat_gateway/nat-egress-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
         "relation": "in_vpc",
         "evidence": "DescribeNatGateways.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-35da06a3b8a06e8fb8da"
+        "id": "rel-8d28009a19ee9cea02f3"
       },
       {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-staging-a",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-staging-pub-a",
-        "relation": "in_subnet",
-        "evidence": "DescribeNatGateways.SubnetId",
-        "qualifiers": {},
-        "details": {},
-        "inferred": false,
-        "id": "rel-05a272128cc526f3d32a"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/nat_gateway/nat-staging-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-main",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
         "relation": "in_vpc",
-        "evidence": "DescribeNatGateways.VpcId",
+        "evidence": "DescribeRouteTables.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-33764496aa004ca03517"
+        "id": "rel-141df9a56e2d7ff94d53"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-78475c8b3859abd77efd"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-045e9cc75092b12582c3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-a",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-egress-a",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-ad7f000487609e67a5d1"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4260984a0da5dafdc938"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-990cd15f94b143a39af7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-b",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-egress-b",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-b413063d9e2e1275a114"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-444991e2ab4c1e7b56a7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-24ce4e2f81d9504d2609"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-private-c",
+        "target": "111122223333/ap-northeast-2/nat_gateway/nat-egress-c",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-591ce1d5e9fb927d0e05"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-12db2a52eca67489ca36"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-68428629286c8b5cb808"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-public",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-f6a36417f7d200985d50"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-public",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeRouteTables.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-80386756a8111f4996f3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-public",
+        "target": "111122223333/ap-northeast-2/internet_gateway/igw-egress",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].GatewayId",
+        "qualifiers": {
+          "destination": "0.0.0.0/0"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-684230a27d30a57376f5"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-egress-public",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "routes_to",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
+        "qualifiers": {
+          "destination": "10.0.0.0/8"
+        },
+        "details": {
+          "state": "active"
+        },
+        "inferred": false,
+        "id": "rel-8c9373ff28aa60359923"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-prod-main",
@@ -4097,126 +4765,50 @@
         "id": "rel-e28f63baa2d7c5c992cc"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private",
         "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-a",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-518c05a1d2900f7b4048"
+        "id": "rel-4be33cdce99950fc8c94"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
-        "relation": "in_vpc",
-        "evidence": "DescribeRouteTables.VpcId",
-        "qualifiers": {},
-        "details": {},
-        "inferred": false,
-        "id": "rel-a3118b279e453229b355"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
-        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-a",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
-        "qualifiers": {
-          "destination": "0.0.0.0/0"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-3bee7d576eb1b3f1cd8c"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-a",
-        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
-        "qualifiers": {
-          "destination": "10.0.0.0/8"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-b6639c0966f76283ae30"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private",
         "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-b",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-9d28d4943719fbeceb35"
+        "id": "rel-e0f11435484a0976ccd0"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
-        "relation": "in_vpc",
-        "evidence": "DescribeRouteTables.VpcId",
-        "qualifiers": {},
-        "details": {},
-        "inferred": false,
-        "id": "rel-245a15ee1381c95ffdec"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
-        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-b",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
-        "qualifiers": {
-          "destination": "0.0.0.0/0"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-96e9d8efbd169c8dd41a"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-b",
-        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
-        "qualifiers": {
-          "destination": "10.0.0.0/8"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-a62ade1fed714b7b8e16"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private",
         "target": "111122223333/ap-northeast-2/subnet/subnet-prod-app-c",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-e447e503b0ec7b80bd8f"
+        "id": "rel-3658b5b7f375a6334cba"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private",
         "target": "111122223333/ap-northeast-2/vpc/vpc-prod0000000000004",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-929444f937fcaff6fdce"
+        "id": "rel-3ade2bdac30eb9801f96"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
-        "target": "111122223333/ap-northeast-2/nat_gateway/nat-prod-c",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
         "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
         "qualifiers": {
           "destination": "0.0.0.0/0"
         },
@@ -4224,21 +4816,7 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-aac8dbc40153eb0a282d"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-prod-private-c",
-        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
-        "qualifiers": {
-          "destination": "10.0.0.0/8"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-9be048c7345bcdcc0345"
+        "id": "rel-62b82c6206b74e664f04"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-prod-public",
@@ -4353,78 +4931,40 @@
         "id": "rel-0aab7146dae1cf0d71f6"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-a",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private",
         "target": "111122223333/ap-northeast-2/subnet/subnet-staging-app-a",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-f81901d2f975e78523e3"
+        "id": "rel-87c2e29fefeb51984179"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-a",
-        "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
-        "relation": "in_vpc",
-        "evidence": "DescribeRouteTables.VpcId",
-        "qualifiers": {},
-        "details": {},
-        "inferred": false,
-        "id": "rel-7206519d3409791899a7"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-a",
-        "target": "111122223333/ap-northeast-2/nat_gateway/nat-staging-a",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
-        "qualifiers": {
-          "destination": "0.0.0.0/0"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-3c731a71f3335e25802a"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-a",
-        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
-        "qualifiers": {
-          "destination": "10.0.0.0/8"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-9f8f25756e64a30ffcf4"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-b",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private",
         "target": "111122223333/ap-northeast-2/subnet/subnet-staging-app-b",
         "relation": "associated_subnet",
         "evidence": "DescribeRouteTables.Associations[].SubnetId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-580db6ea4e9b12059e10"
+        "id": "rel-661722d8a9f192f97fbc"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-b",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private",
         "target": "111122223333/ap-northeast-2/vpc/vpc-staging0000000000004",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-f24c6b9b295b834ea326"
+        "id": "rel-021c3c65a64248a763cf"
       },
       {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-b",
-        "target": "111122223333/ap-northeast-2/nat_gateway/nat-staging-a",
+        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
         "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].NatGatewayId",
+        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
         "qualifiers": {
           "destination": "0.0.0.0/0"
         },
@@ -4432,21 +4972,7 @@
           "state": "active"
         },
         "inferred": false,
-        "id": "rel-86bce02712e184fb15e8"
-      },
-      {
-        "source": "111122223333/ap-northeast-2/route_table/rtb-staging-private-b",
-        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
-        "relation": "routes_to",
-        "evidence": "DescribeRouteTables.Routes[].TransitGatewayId",
-        "qualifiers": {
-          "destination": "10.0.0.0/8"
-        },
-        "details": {
-          "state": "active"
-        },
-        "inferred": false,
-        "id": "rel-688146b670fee80fe2dd"
+        "id": "rel-049de39f53c88b59ef69"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-staging-public",
@@ -4491,6 +5017,66 @@
         },
         "inferred": false,
         "id": "rel-4d80a9d09a42c69dc11e"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-85503ed85fff5176c4b4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-d843321c1054c5ae40da"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-egress-pub-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-ffe4b601cfeef8dff8de"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-645f3b7fd50c7d3bdbf2"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-1fd718b4e0fe200ee7ad"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-12d63c7dfb0dfe0fafae"
       },
       {
         "source": "111122223333/ap-northeast-2/subnet/subnet-prod-app-a",
@@ -4751,6 +5337,56 @@
         },
         "inferred": false,
         "id": "rel-10fdb14cb0adc85a6cd8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-egress",
+        "target": "111122223333/ap-northeast-2/transit_gateway/tgw-corp0000000004",
+        "relation": "attached_transit_gateway",
+        "evidence": "DescribeTransitGatewayVpcAttachments.TransitGatewayId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-adf681b2178c605b3f19"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-egress",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-a",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-e82e25d1062c9e875e1a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-egress",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-b",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-aa92b582bb528a534e28"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-egress",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-egress-tgw-c",
+        "relation": "attachment_subnet",
+        "evidence": "DescribeTransitGatewayVpcAttachments.SubnetIds[]",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-bc5c90ea6fa72d18235a"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-egress",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-egress00000000004",
+        "relation": "in_vpc",
+        "evidence": "DescribeTransitGatewayVpcAttachments.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-4eaae17ba9251c34eae0"
       },
       {
         "source": "111122223333/ap-northeast-2/tgw_attachment/tgw-attach-prod",

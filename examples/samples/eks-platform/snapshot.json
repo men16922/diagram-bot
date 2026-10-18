@@ -4,17 +4,18 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-17T21:52:32.411696+00:00",
-    "finished_at": "2026-10-17T21:52:32.411696+00:00",
+    "started_at": "2026-10-18T09:07:27.139912+00:00",
+    "finished_at": "2026-10-18T09:07:27.139912+00:00",
     "status": "complete",
     "demo": true,
     "sample": "eks-platform",
-    "sample_version": 3,
+    "sample_version": 4,
     "title": "EKS 플랫폼 (EKS · MSK · ElastiCache · Aurora · Lambda)",
     "practices": [
       "EKS 컨트롤 플레인 엔드포인트는 비공개, 관리형 노드 그룹은 세 AZ 프라이빗 서브넷에 분산",
-      "인그레스는 AWS Load Balancer Controller의 ALB → IP 대상(파드)",
-      "Aurora PostgreSQL writer/reader를 서로 다른 AZ에, ElastiCache Redis는 primary/replica 자동 장애 조치",
+      "클러스터 서브넷(컨트롤 플레인 ENI)은 AZ마다 전용 /28로 노드 서브넷과 분리해 노드·파드 확장이 클러스터 IP를 잠식하지 않음 (EKS 서브넷 모범 사례)",
+      "인그레스는 AWS Load Balancer Controller의 ALB → IP 대상(파드), 서브넷은 kubernetes.io/role/elb·internal-elb 태그로 지정",
+      "Aurora PostgreSQL writer와 다른 두 AZ의 reader (어느 AZ가 장애여도 승격 대상), ElastiCache Redis는 primary/replica 자동 장애 조치",
       "MSK 브로커는 AZ마다 하나, 클라이언트-브로커 TLS",
       "데이터 계층(Aurora·Redis·MSK)은 인터넷 경로 없는 격리 서브넷",
       "ECR API·Docker·STS 인터페이스와 S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로",
@@ -64,7 +65,7 @@
       "operation": "describe_subnets",
       "status": "complete",
       "pages": 1,
-      "items": 9
+      "items": 12
     },
     {
       "service": "ec2",
@@ -113,7 +114,7 @@
       "operation": "describe_db_instances",
       "status": "complete",
       "pages": 1,
-      "items": 2
+      "items": 3
     },
     {
       "service": "autoscaling",
@@ -326,6 +327,10 @@
           {
             "Key": "Tier",
             "Value": "public"
+          },
+          {
+            "Key": "kubernetes.io/role/elb",
+            "Value": "1"
           }
         ],
         "AvailableIpAddressCount": 251
@@ -344,6 +349,10 @@
           {
             "Key": "Tier",
             "Value": "public"
+          },
+          {
+            "Key": "kubernetes.io/role/elb",
+            "Value": "1"
           }
         ],
         "AvailableIpAddressCount": 251
@@ -362,6 +371,10 @@
           {
             "Key": "Tier",
             "Value": "public"
+          },
+          {
+            "Key": "kubernetes.io/role/elb",
+            "Value": "1"
           }
         ],
         "AvailableIpAddressCount": 251
@@ -380,6 +393,10 @@
           {
             "Key": "Tier",
             "Value": "app"
+          },
+          {
+            "Key": "kubernetes.io/role/internal-elb",
+            "Value": "1"
           }
         ],
         "AvailableIpAddressCount": 4089
@@ -398,6 +415,10 @@
           {
             "Key": "Tier",
             "Value": "app"
+          },
+          {
+            "Key": "kubernetes.io/role/internal-elb",
+            "Value": "1"
           }
         ],
         "AvailableIpAddressCount": 4089
@@ -416,6 +437,10 @@
           {
             "Key": "Tier",
             "Value": "app"
+          },
+          {
+            "Key": "kubernetes.io/role/internal-elb",
+            "Value": "1"
           }
         ],
         "AvailableIpAddressCount": 4089
@@ -473,6 +498,60 @@
           }
         ],
         "AvailableIpAddressCount": 251
+      },
+      {
+        "SubnetId": "subnet-pf-eks-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2a",
+        "CidrBlock": "10.60.3.0/28",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "eks-cluster-a"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 11
+      },
+      {
+        "SubnetId": "subnet-pf-eks-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2b",
+        "CidrBlock": "10.60.3.16/28",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "eks-cluster-b"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 11
+      },
+      {
+        "SubnetId": "subnet-pf-eks-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60006",
+        "AvailabilityZone": "ap-northeast-2c",
+        "CidrBlock": "10.60.3.32/28",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "eks-cluster-c"
+          },
+          {
+            "Key": "Tier",
+            "Value": "app"
+          }
+        ],
+        "AvailableIpAddressCount": 11
       }
     ],
     "instances": [
@@ -961,6 +1040,10 @@
           {
             "RouteTableAssociationId": "rtbassoc-platform-private-a-0",
             "SubnetId": "subnet-pf-app-a"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-private-a-1",
+            "SubnetId": "subnet-pf-eks-a"
           }
         ],
         "Tags": [
@@ -994,6 +1077,10 @@
           {
             "RouteTableAssociationId": "rtbassoc-platform-private-b-0",
             "SubnetId": "subnet-pf-app-b"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-private-b-1",
+            "SubnetId": "subnet-pf-eks-b"
           }
         ],
         "Tags": [
@@ -1027,6 +1114,10 @@
           {
             "RouteTableAssociationId": "rtbassoc-platform-private-c-0",
             "SubnetId": "subnet-pf-app-c"
+          },
+          {
+            "RouteTableAssociationId": "rtbassoc-platform-private-c-1",
+            "SubnetId": "subnet-pf-eks-c"
           }
         ],
         "Tags": [
@@ -1101,6 +1192,40 @@
         "Engine": "aurora-postgresql",
         "DBInstanceClass": "db.r6g.large",
         "AvailabilityZone": "ap-northeast-2b",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "StorageEncrypted": true,
+        "DBSubnetGroup": {
+          "DBSubnetGroupName": "platform-aurora-subnets",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "Subnets": [
+            {
+              "SubnetIdentifier": "subnet-pf-data-a",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2a"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-pf-data-b",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2b"
+              }
+            },
+            {
+              "SubnetIdentifier": "subnet-pf-data-c",
+              "SubnetAvailabilityZone": {
+                "Name": "ap-northeast-2c"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "DBInstanceIdentifier": "platform-aurora-3",
+        "DBClusterIdentifier": "platform-aurora",
+        "Engine": "aurora-postgresql",
+        "DBInstanceClass": "db.r6g.large",
+        "AvailabilityZone": "ap-northeast-2c",
         "MultiAZ": false,
         "PubliclyAccessible": false,
         "StorageEncrypted": true,
@@ -1277,6 +1402,10 @@
           {
             "DBInstanceIdentifier": "platform-aurora-2",
             "IsClusterWriter": false
+          },
+          {
+            "DBInstanceIdentifier": "platform-aurora-3",
+            "IsClusterWriter": false
           }
         ]
       }
@@ -1430,9 +1559,9 @@
         "resourcesVpcConfig": {
           "vpcId": "vpc-0a1b2c3d4e5f60006",
           "subnetIds": [
-            "subnet-pf-app-a",
-            "subnet-pf-app-b",
-            "subnet-pf-app-c"
+            "subnet-pf-eks-a",
+            "subnet-pf-eks-b",
+            "subnet-pf-eks-c"
           ],
           "endpointPublicAccess": false,
           "endpointPrivateAccess": true
@@ -1661,6 +1790,10 @@
             {
               "DBInstanceIdentifier": "platform-aurora-2",
               "IsClusterWriter": false
+            },
+            {
+              "DBInstanceIdentifier": "platform-aurora-3",
+              "IsClusterWriter": false
             }
           ]
         },
@@ -1725,6 +1858,51 @@
           "Engine": "aurora-postgresql",
           "DBInstanceClass": "db.r6g.large",
           "AvailabilityZone": "ap-northeast-2b",
+          "MultiAZ": false,
+          "PubliclyAccessible": false,
+          "StorageEncrypted": true,
+          "DBSubnetGroup": {
+            "DBSubnetGroupName": "platform-aurora-subnets",
+            "VpcId": "vpc-0a1b2c3d4e5f60006",
+            "Subnets": [
+              {
+                "SubnetIdentifier": "subnet-pf-data-a",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2a"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-pf-data-b",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2b"
+                }
+              },
+              {
+                "SubnetIdentifier": "subnet-pf-data-c",
+                "SubnetAvailabilityZone": {
+                  "Name": "ap-northeast-2c"
+                }
+              }
+            ]
+          }
+        },
+        "reference_only": false,
+        "source": "DescribeDBInstances",
+        "db_role": "reader"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/db_instance/platform-aurora-3",
+        "resource_id": "platform-aurora-3",
+        "kind": "db_instance",
+        "name": "platform-aurora-3",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "DBInstanceIdentifier": "platform-aurora-3",
+          "DBClusterIdentifier": "platform-aurora",
+          "Engine": "aurora-postgresql",
+          "DBInstanceClass": "db.r6g.large",
+          "AvailabilityZone": "ap-northeast-2c",
           "MultiAZ": false,
           "PubliclyAccessible": false,
           "StorageEncrypted": true,
@@ -2119,9 +2297,9 @@
           "resourcesVpcConfig": {
             "vpcId": "vpc-0a1b2c3d4e5f60006",
             "subnetIds": [
-              "subnet-pf-app-a",
-              "subnet-pf-app-b",
-              "subnet-pf-app-c"
+              "subnet-pf-eks-a",
+              "subnet-pf-eks-b",
+              "subnet-pf-eks-c"
             ],
             "endpointPublicAccess": false,
             "endpointPrivateAccess": true
@@ -2609,6 +2787,10 @@
             {
               "RouteTableAssociationId": "rtbassoc-platform-private-a-0",
               "SubnetId": "subnet-pf-app-a"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-private-a-1",
+              "SubnetId": "subnet-pf-eks-a"
             }
           ],
           "Tags": [
@@ -2652,6 +2834,10 @@
             {
               "RouteTableAssociationId": "rtbassoc-platform-private-b-0",
               "SubnetId": "subnet-pf-app-b"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-private-b-1",
+              "SubnetId": "subnet-pf-eks-b"
             }
           ],
           "Tags": [
@@ -2695,6 +2881,10 @@
             {
               "RouteTableAssociationId": "rtbassoc-platform-private-c-0",
               "SubnetId": "subnet-pf-app-c"
+            },
+            {
+              "RouteTableAssociationId": "rtbassoc-platform-private-c-1",
+              "SubnetId": "subnet-pf-eks-c"
             }
           ],
           "Tags": [
@@ -2796,6 +2986,10 @@
             {
               "Key": "Tier",
               "Value": "app"
+            },
+            {
+              "Key": "kubernetes.io/role/internal-elb",
+              "Value": "1"
             }
           ],
           "AvailableIpAddressCount": 4089
@@ -2826,6 +3020,10 @@
             {
               "Key": "Tier",
               "Value": "app"
+            },
+            {
+              "Key": "kubernetes.io/role/internal-elb",
+              "Value": "1"
             }
           ],
           "AvailableIpAddressCount": 4089
@@ -2856,6 +3054,10 @@
             {
               "Key": "Tier",
               "Value": "app"
+            },
+            {
+              "Key": "kubernetes.io/role/internal-elb",
+              "Value": "1"
             }
           ],
           "AvailableIpAddressCount": 4089
@@ -2956,6 +3158,96 @@
         "route_table": "rtb-platform-main"
       },
       {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-a",
+        "resource_id": "subnet-pf-eks-a",
+        "kind": "subnet",
+        "name": "eks-cluster-a",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-eks-a",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2a",
+          "CidrBlock": "10.60.3.0/28",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "eks-cluster-a"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 11
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-platform-private-a"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-b",
+        "resource_id": "subnet-pf-eks-b",
+        "kind": "subnet",
+        "name": "eks-cluster-b",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-eks-b",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2b",
+          "CidrBlock": "10.60.3.16/28",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "eks-cluster-b"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 11
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-platform-private-b"
+      },
+      {
+        "id": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-c",
+        "resource_id": "subnet-pf-eks-c",
+        "kind": "subnet",
+        "name": "eks-cluster-c",
+        "account": "111122223333",
+        "region": "ap-northeast-2",
+        "attributes": {
+          "SubnetId": "subnet-pf-eks-c",
+          "VpcId": "vpc-0a1b2c3d4e5f60006",
+          "AvailabilityZone": "ap-northeast-2c",
+          "CidrBlock": "10.60.3.32/28",
+          "MapPublicIpOnLaunch": false,
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": "eks-cluster-c"
+            },
+            {
+              "Key": "Tier",
+              "Value": "app"
+            }
+          ],
+          "AvailableIpAddressCount": 11
+        },
+        "reference_only": false,
+        "source": "DescribeSubnets",
+        "route_class": "nat",
+        "route_table": "rtb-platform-private-c"
+      },
+      {
         "id": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-a",
         "resource_id": "subnet-pf-pub-a",
         "kind": "subnet",
@@ -2976,6 +3268,10 @@
             {
               "Key": "Tier",
               "Value": "public"
+            },
+            {
+              "Key": "kubernetes.io/role/elb",
+              "Value": "1"
             }
           ],
           "AvailableIpAddressCount": 251
@@ -3006,6 +3302,10 @@
             {
               "Key": "Tier",
               "Value": "public"
+            },
+            {
+              "Key": "kubernetes.io/role/elb",
+              "Value": "1"
             }
           ],
           "AvailableIpAddressCount": 251
@@ -3036,6 +3336,10 @@
             {
               "Key": "Tier",
               "Value": "public"
+            },
+            {
+              "Key": "kubernetes.io/role/elb",
+              "Value": "1"
             }
           ],
           "AvailableIpAddressCount": 251
@@ -3459,6 +3763,18 @@
         "id": "rel-a70638ed22b0ca5493fb"
       },
       {
+        "source": "111122223333/ap-northeast-2/db_cluster/platform-aurora",
+        "target": "111122223333/ap-northeast-2/db_instance/platform-aurora-3",
+        "relation": "cluster_member",
+        "evidence": "DescribeDBClusters.DBClusterMembers[]",
+        "qualifiers": {},
+        "details": {
+          "writer": false
+        },
+        "inferred": false,
+        "id": "rel-e05a5251cf67ebc136e7"
+      },
+      {
         "source": "111122223333/ap-northeast-2/db_instance/platform-aurora-1",
         "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-a",
         "relation": "in_subnet",
@@ -3501,6 +3817,28 @@
         "details": {},
         "inferred": false,
         "id": "rel-cd34ed7143bc41e19056"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/platform-aurora-3",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-data-c",
+        "relation": "in_subnet",
+        "evidence": "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]",
+        "qualifiers": {},
+        "details": {
+          "availability_zone": "ap-northeast-2c"
+        },
+        "inferred": false,
+        "id": "rel-7815b5b5f844e51b0df4"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/db_instance/platform-aurora-3",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeDBInstances.DBSubnetGroup.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-9344ee068040cd6790d2"
       },
       {
         "source": "111122223333/ap-northeast-2/ec2/i-eksbata00000006",
@@ -3844,33 +4182,33 @@
       },
       {
         "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-a",
         "relation": "eks_subnet",
         "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-63881d0ccecb5b0f27d4"
+        "id": "rel-b7048a0648015d84c6dc"
       },
       {
         "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-b",
         "relation": "eks_subnet",
         "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-2804ce7a2492047ae546"
+        "id": "rel-374ebd5c0f73744d3592"
       },
       {
         "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
-        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-app-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-c",
         "relation": "eks_subnet",
         "evidence": "DescribeCluster.resourcesVpcConfig.subnetIds[]",
         "qualifiers": {},
         "details": {},
         "inferred": false,
-        "id": "rel-de836884c95ff991ef4b"
+        "id": "rel-3cc81cab687a898acff7"
       },
       {
         "source": "111122223333/ap-northeast-2/eks_cluster/platform-eks",
@@ -4284,6 +4622,16 @@
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-a",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-a",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-b02d8132aad5a26ab804"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-a",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
@@ -4332,6 +4680,16 @@
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-b",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-b",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-c59b7caecca198ea93c7"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-b",
         "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
         "relation": "in_vpc",
         "evidence": "DescribeRouteTables.VpcId",
@@ -4377,6 +4735,16 @@
         "details": {},
         "inferred": false,
         "id": "rel-06ce4768f2dc289199e3"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-c",
+        "target": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-c",
+        "relation": "associated_subnet",
+        "evidence": "DescribeRouteTables.Associations[].SubnetId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-15ebb722778b8d6c0d5f"
       },
       {
         "source": "111122223333/ap-northeast-2/route_table/rtb-platform-private-c",
@@ -4529,6 +4897,36 @@
         "details": {},
         "inferred": false,
         "id": "rel-58ec3b01e635786139e8"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-a",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-92d738d3f90d85de5437"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-b",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-7f2de49fe1f32131867c"
+      },
+      {
+        "source": "111122223333/ap-northeast-2/subnet/subnet-pf-eks-c",
+        "target": "111122223333/ap-northeast-2/vpc/vpc-0a1b2c3d4e5f60006",
+        "relation": "in_vpc",
+        "evidence": "DescribeSubnets.VpcId",
+        "qualifiers": {},
+        "details": {},
+        "inferred": false,
+        "id": "rel-5f88e1b00d2503fffcda"
       },
       {
         "source": "111122223333/ap-northeast-2/subnet/subnet-pf-pub-a",
