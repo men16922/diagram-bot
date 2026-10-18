@@ -8,8 +8,11 @@ import re
 import secrets
 import threading
 import time
+from datetime import UTC, datetime
 
 import boto3
+import botocore.session
+from botocore.credentials import DeferredRefreshableCredentials
 from botocore.exceptions import ClientError
 
 GRANT = "urn:ietf:params:oauth:grant-type:device_code"
@@ -64,19 +67,33 @@ class SsoLogins:
                 "expires_in": int(device.get("expiresIn", 600)), "interval": max(1, int(device.get("interval", 5)))}
 
     def poll(self, identifier, owner):
-        """Advance the device grant at most once per interval and report the state; accounts once authorized."""
+        """Advance the device grant at most once per interval and report the state; accounts once authorized.
+        Identity Center is called outside the lock (copy under it, call, commit under it): one slow answer must not stall
+        every other user's sign-in, role list and session."""
         with self.lock:
             flow = self.flow(identifier, owner)
             now = self.clock()
             if flow["status"] == "authorized" and now >= flow["token_expires_at"]:
                 flow.update(status="expired", token=None)
-            if flow["status"] == "pending":
-                if now >= flow["expires_at"]:
-                    flow["status"] = "expired"
-                elif now >= flow["next_poll"]:
-                    self.exchange(flow, now)
-            if flow["status"] == "authorized" and flow["accounts"] is None:
-                flow["accounts"] = self.accounts(flow)
+            if flow["status"] == "pending" and now >= flow["expires_at"]:
+                flow["status"] = "expired"
+            grant = None
+            if flow["status"] == "pending" and now >= flow["next_poll"]:
+                grant = {k: flow[k] for k in ("region", "client_id", "client_secret", "device_code", "interval")}
+                flow["next_poll"] = now + flow["interval"]  # a concurrent poll waits for this exchange instead of repeating it
+        if grant:
+            outcome = self.exchange(grant, now)
+            with self.lock:
+                if flow["status"] == "pending":
+                    flow.update(outcome)
+        with self.lock:
+            listing = (flow["region"], flow["token"]) if flow["status"] == "authorized" and flow["accounts"] is None else None
+        if listing:
+            accounts = self.accounts(*listing)
+            with self.lock:
+                if flow["token"] == listing[1]:
+                    flow["accounts"] = accounts
+        with self.lock:
             view = {"id": identifier, "status": flow["status"], "interval": flow["interval"]}
             if flow["status"] != "pending" and not flow.get("reported"):
                 flow["reported"] = view["changed"] = True  # first poll after the outcome: the server audits it once
@@ -85,31 +102,27 @@ class SsoLogins:
                 view["expires_in"] = int(flow["token_expires_at"] - now)
             return view
 
-    def exchange(self, flow, now):
+    def exchange(self, grant, now):
+        """One CreateToken call for a pending device grant; returns the changes to the flow."""
         try:
-            token = self.client("sso-oidc", flow["region"]).create_token(
-                clientId=flow["client_id"], clientSecret=flow["client_secret"], grantType=GRANT, deviceCode=flow["device_code"])
+            token = self.client("sso-oidc", grant["region"]).create_token(
+                clientId=grant["client_id"], clientSecret=grant["client_secret"], grantType=GRANT, deviceCode=grant["device_code"])
         except ClientError as exc:
             code = exc.response["Error"]["Code"]
             if code == "AuthorizationPendingException":
-                flow["next_poll"] = now + flow["interval"]
-            elif code == "SlowDownException":
-                flow["interval"] += 5
-                flow["next_poll"] = now + flow["interval"]
-            elif code in ("ExpiredTokenException", "InvalidGrantException"):
-                flow["status"] = "expired"
-            elif code == "AccessDeniedException":
-                flow["status"] = "denied"
-            else:
-                flow["status"] = "failed"
-            return
-        flow.update(status="authorized", token=token["accessToken"], token_expires_at=now + int(token.get("expiresIn", 3600)),
-                    client_secret=None, device_code=None)
+                return {}
+            if code == "SlowDownException":
+                return {"interval": grant["interval"] + 5, "next_poll": now + grant["interval"] + 5}
+            if code in ("ExpiredTokenException", "InvalidGrantException"):
+                return {"status": "expired"}
+            return {"status": "denied" if code == "AccessDeniedException" else "failed"}
+        return {"status": "authorized", "token": token["accessToken"], "token_expires_at": now + int(token.get("expiresIn", 3600)),
+                "client_secret": None, "device_code": None}
 
-    def accounts(self, flow):
-        sso = self.client("sso", flow["region"])
+    def accounts(self, region, token):
+        sso = self.client("sso", region)
         rows = []
-        for page in sso.get_paginator("list_accounts").paginate(accessToken=flow["token"]):
+        for page in sso.get_paginator("list_accounts").paginate(accessToken=token):
             rows += [{"id": a["accountId"], "name": a.get("accountName") or a["accountId"]} for a in page.get("accountList", [])]
         return sorted(rows, key=lambda a: (a["name"], a["id"]))
 
@@ -135,8 +148,8 @@ class SsoLogins:
             raise SsoError("SSO 로그인이 완료되지 않았거나 만료됐습니다. 다시 로그인하세요.")
         return flow
 
-    def session(self, identifier, owner, account_id, role_name, region):
-        """A boto3 session with the role's short-lived credentials (fetched for each collection)."""
+    def credentials(self, identifier, owner, account_id, role_name):
+        """The role's short-lived credentials (GetRoleCredentials) in botocore's refresh format."""
         with self.lock:
             flow = self.authorized(identifier, owner)
             token, sso_region = flow["token"], flow["region"]
@@ -145,8 +158,15 @@ class SsoLogins:
                 accessToken=token, accountId=account_id, roleName=role_name)["roleCredentials"]
         except ClientError as exc:
             raise SsoError(f"SSO 역할 자격 증명을 받지 못했습니다({exc.response['Error']['Code']}). 계정·역할 할당을 확인하세요.") from exc
-        return boto3.Session(aws_access_key_id=credentials["accessKeyId"], aws_secret_access_key=credentials["secretAccessKey"],
-                             aws_session_token=credentials["sessionToken"], region_name=region)
+        expires = credentials.get("expiration") or (time.time() + 900) * 1000  # epoch milliseconds
+        return {"access_key": credentials["accessKeyId"], "secret_key": credentials["secretAccessKey"],
+                "token": credentials["sessionToken"], "expiry_time": datetime.fromtimestamp(expires / 1000, UTC).isoformat()}
+
+    def session(self, identifier, owner, account_id, role_name, region):
+        """A boto3 session with the role's short-lived credentials (fetched for each collection)."""
+        credentials = self.credentials(identifier, owner, account_id, role_name)
+        return boto3.Session(aws_access_key_id=credentials["access_key"], aws_secret_access_key=credentials["secret_key"],
+                             aws_session_token=credentials["token"], region_name=region)
 
     def logout(self, identifier, owner):
         with self.lock:
@@ -160,6 +180,14 @@ class SsoLogins:
             except ClientError:
                 pass  # the local token is discarded either way
         return True
+
+
+def refreshing_session(fetch, region):
+    """A session whose credentials come from fetch() on first use and again before they expire (botocore refreshes),
+    for a client that outlives one role session, such as the chat's Bedrock model. Nothing is fetched here."""
+    core = botocore.session.Session()
+    core._credentials = DeferredRefreshableCredentials(fetch, "diagram-bot-sso")
+    return boto3.Session(botocore_session=core, region_name=region)
 
 
 def discover_start_url(session=None, region=None):
