@@ -11,7 +11,7 @@ updated: 2026-10-18
 
 ## 핵심
 - 본보기: `Design.add_fsx_lustre`(새 리소스 하나를 기존 서브넷에 두는 단계)와 `Design.add_subnet_tier`(네트워크 구조를 바꾸는 단계), 대응 도구 `add_fsx_lustre`·`add_subnet_tier`.
-- 바꿀 파일: `designer.py`, `agent.py`(도구와 `SYSTEM_PROMPT`), `tests/test_agent.py`(도구 수 29 → 30), 필요하면 `samples/`·`iac.py`와 `tests/test_iac.py`.
+- 바꿀 파일: `designer.py`, `agent.py`(도구와 `SYSTEM_PROMPT`), `tests/test_agent.py`(도구 수 29 → 30), 필요하면 `samples/`·`iac/`와 `tests/test_iac.py`.
 - 실제 AWS는 호출하지 않는다. 설계는 제안이고 `Sample` 헬퍼로 `raw`만 쓴다.
 
 ## 1. Design 메서드
@@ -70,8 +70,8 @@ def add_thing(vpc: str, name: str, size: int = 2) -> dict:
 - 일반 단계는 docstring만으로 충분하다. 모델이 **언제** 써야 하는지가 중요한 도구(순서, 대체 관계, Well-Architected 기본값)는 `SYSTEM_PROMPT`의 해당 원칙 줄에 이름을 넣는다. 예: AI/GPU 원칙의 `add_gpu_node_group training=true`, `add_fsx_lustre`.
 - 프롬프트에는 도구에 없는 동작(실제 계정 변경 등)을 약속하지 않는다.
 
-## 5. CloudFormation 범위 (`iac.py`)
-- 설계 스냅샷은 `GET /api/snapshots/{id}/cloudformation`과 `export-cfn`으로 템플릿 초안이 된다. `iac.Template.build`가 단계별 메서드(`network`, …, `file_systems`, …, `not_expressible`)를 차례로 부른다.
+## 5. CloudFormation 범위 (`iac/`)
+- 설계 스냅샷은 `GET /api/snapshots/{id}/cloudformation`과 `export-cfn`으로 템플릿 초안이 된다. `iac.Template.build`가 단계별 메서드(`network`, …, `file_systems`, …, `not_expressible`)를 차례로 부른다. 메서드는 영역별 믹스인 파일(`iac/network.py`, `balancing.py`, `compute.py`, `data.py`)에 있다.
 - 새 `raw` 키는 해당 단계 메서드에서 리소스로 만들거나(`self.add(...)`, 서브넷은 `self.subnet_refs`), 정확히 표현할 수 없으면 `self.skip(kind, id, reason, name)`으로 `Metadata.DiagramBot.Unsupported`에 남긴다. 지어내지 않는다(모듈 docstring). 데이터를 가진 리소스 유형이면 `STATEFUL`에 삭제 정책을 더한다.
 - `tests/test_iac.py`의 `test_design_snapshot_exports_every_designer_resource`는 모든 설계 단계를 한 번씩 부르고 나온 CloudFormation 유형을 확인한다. `Unsupported`는 정확히 `{"LambdaFunction", "SageMakerEndpoint"}`여야 한다. 새 단계를 이 테스트에 넣고 기대 유형이나 `Unsupported` 집합을 고친다.
 

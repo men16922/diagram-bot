@@ -1,7 +1,7 @@
 ---
 title: 여러 계정 통합 보기
 summary: combine.py의 combine_snapshots가 계정 × 리전 스냅샷을 parts로 묶는 방식, graph.merge_graphs의 공유 TGW·계정 간 피어링 합치기와 전역 ID, 전체 구성의 계정 프레임, CLI combine과 /api/snapshots/combine, 계정별 CloudFormation.
-sources: [src/diagram_bot/combine.py, src/diagram_bot/graph.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/cli.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/samples/, src/diagram_bot/static/app.html, tests/test_graph_report.py, tests/test_collector.py, tests/test_server.py, tests/test_iac.py]
+sources: [src/diagram_bot/combine.py, src/diagram_bot/graph.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/cli.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/samples/, src/diagram_bot/static/app.html, tests/test_graph_report.py, tests/test_collector.py, tests/test_server.py, tests/test_iac.py, tests/test_drawio.py]
 related: [cloudformation, review-rules, change-review, cli, graph, collection, snapshot-model]
 updated: 2026-10-18
 ---
@@ -29,6 +29,7 @@ updated: 2026-10-18
 - `layout.cloud_label`: 합친 스냅샷이면 `AWS Cloud · 계정 N개 (계정·리전별 수집 통합)`.
 - 전체 구성에서 VPC 카드는 계정별로 모아 정렬하고(`vpcs.sort` 키에 계정), 카드 라벨에 `계정 <ID>`(리전이 둘 이상이면 `· 리전`)를 붙인다.
 - `layout.network(..., account_of=...)`가 계정마다 카드 묶음 뒤에 `account` 스타일 프레임(`AWS 계정 · <ID>`, `drawio.py`의 `mxgraph.aws4.group_account` 도형, 컨테이너 아님)을 그린다. 한 행에 계정이 섞이지 않는다.
+- VPC가 하나도 없는 합친 스냅샷(모든 part에서 `DescribeVpcs`가 거부되었거나 Lambda만 있는 계정)은 `network()` 대신 일반 카드 격자로 그린다(`test_combined_overview_without_vpcs`).
 - VPC 상세·초점 보기는 그 VPC(또는 리소스)의 계정·리전으로 `metadata`를 바꿔 그린다(일반 단일 계정 보기와 같음).
 
 ## 검토와 비교

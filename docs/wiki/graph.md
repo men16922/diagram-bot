@@ -16,7 +16,7 @@ updated: 2026-10-18
 - 내부 도우미 두 개가 모든 것을 만든다.
   - `node(kind, resource_id, attrs, source, reference=False)`: 키가 없거나 `reference=False`이면 노드를 (다시) 쓴다. 이미 있는 키에 `reference=True`로 부르면 기존 노드를 그대로 둔다.
   - `link(source, kind, resource_id, relation, evidence, details, qualifiers)`: 대상이 없으면 `reference_only` 노드를 만든 뒤 관계를 넣는다. `resource_id`가 비면 아무것도 하지 않는다. 같은 ID의 관계는 한 번만 들어간다(`edges.setdefault`).
-- `build_graph`의 처리 순서: 기본 5종(`vpcs`, `subnets`, `instances`, `load_balancers`, `target_groups`) → `ecs_tasks` → `target_health` → `security_groups` → `endpoints_and_transit` → `infrastructure` → `services` → `more_services` → `connectivity` → `ai_infrastructure` → `elastic_ips` → `transit_routing` → `edge_services` → `direct_connect` → `classify_subnets`.
+- `build_graph`의 처리 순서: `core_resources`(기본 5종 `vpcs`, `subnets`, `instances`, `load_balancers`, `target_groups`) → `target_registrations`(`ecs_tasks` → `target_health`) → `security_groups` → `endpoints_and_transit` → `gateways` → `route_tables` → `databases` → `scaling_groups` → `db_clusters` → `caches` → `kafka` → `lambdas` → `kubernetes` → `search_domains` → `file_systems` → `warehouses` → `connectivity` → `ai_infrastructure` → `elastic_ips` → `transit_routing` → `edge_services` → `direct_connect` → `classify_subnets`.
 
 ## 노드 종류
 
@@ -24,11 +24,12 @@ updated: 2026-10-18
 
 | 함수 | 종류 |
 | --- | --- |
-| `build_graph` | `vpc`, `subnet`, `ec2`, `load_balancer`, `target_group`, `registered_target`, `security_group`, 참조 전용 `network_interface`·`volume` |
-| `infrastructure` | `internet_gateway`, `nat_gateway`, `route_table`, `db_instance`, `db_standby`, `auto_scaling_group` |
+| `core_resources` / `target_registrations` / `build_graph` | `vpc`, `subnet`, `ec2`, `load_balancer`, `target_group`, 참조 전용 `network_interface`·`volume` / `registered_target` / `security_group` |
+| `gateways` / `route_tables` / `databases` / `scaling_groups` | `internet_gateway`, `nat_gateway` / `route_table` / `db_instance`, `db_standby` / `auto_scaling_group` |
 | `endpoints_and_transit` | `vpc_endpoint`, `transit_gateway`, `tgw_attachment` |
-| `services` / `ecs_tasks` | `db_cluster`, `cache_replication_group`, `cache_node`, `msk_cluster`, `msk_broker`, `lambda_function`, `eks_cluster` / `ecs_service`, `ecs_task` |
-| `more_services` | `opensearch_domain`, `search_node`, `efs_file_system`, `efs_mount_target`, `redshift_cluster` |
+| `db_clusters` / `caches` / `kafka` | `db_cluster` / `cache_replication_group`, `cache_node` / `msk_cluster`, `msk_broker` |
+| `lambdas` / `kubernetes` / `ecs_tasks` | `lambda_function` / `eks_cluster` / `ecs_service`, `ecs_task` |
+| `search_domains` / `file_systems` / `warehouses` | `opensearch_domain`, `search_node` / `efs_file_system`, `efs_mount_target` / `redshift_cluster` |
 | `ai_infrastructure` | `placement_group`, `fsx_file_system`, `sagemaker_endpoint`, `sagemaker_cluster` |
 | `connectivity` | `vpc_peering`, `vpn_gateway`, `customer_gateway` |
 | `elastic_ips` / `transit_routing` | `elastic_ip` / `tgw_route_table` |

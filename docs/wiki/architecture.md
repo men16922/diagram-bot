@@ -38,7 +38,7 @@ updated: 2026-10-18
 | 수집 | `collector.py` | 서비스별 읽기 호출, 페이지·부분 실패 처리, `prepare` 훅 | — |
 | 모델 | `graph.py`, `views.py` | 노드·관계 생성, 보기별 선택과 개수 | — |
 | 출력 | `layout.py`, `drawio.py`, `report.py` | 배치, draw.io XML, 단독 HTML 보고서 | — |
-| 분석 | `findings.py`, `diff.py`, `combine.py`, `iac.py` | 검토, 변경 비교, 계정 통합, CloudFormation | — |
+| 분석 | `findings.py`, `diff.py`, `combine.py`, `iac/` | 검토, 변경 비교, 계정 통합, CloudFormation | — |
 | 설계·채팅 | `designer.py`, `agent.py` | 표준·브라운필드 설계, Strands + Bedrock 에이전트 | 모델 목록(`MODELS`) |
 | 저장소 | `store.py` | `SnapshotStore`, `DocumentStore`(리비전·이력) | **DB·S3로 교체** ([[storage]]) |
 | AWS 접근 | `aws_access.py`, `sso.py`, `egress.py` | Identity Center 로그인, 역할 세션, 서버/브라우저 egress | **회사 인증으로 교체** ([[aws-access-and-sso]]) |

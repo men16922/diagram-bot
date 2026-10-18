@@ -1,7 +1,7 @@
 ---
 title: 수집 서비스 추가 방법
 summary: 새 AWS 읽기 호출을 수집기부터 정책·그래프·라벨·보기·배치·검토·CloudFormation·샘플·테스트·문서까지 잇는 순서. Direct Connect와 Elastic IP를 추가한 방식을 기준으로 한다.
-sources: [src/diagram_bot/collector.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/diff.py, src/diagram_bot/samples/, tests/test_collector.py, tests/test_aws_emulator.py, tests/test_graph_report.py, tests/test_drawio.py, tests/test_findings.py, tests/test_iac.py, tests/fixtures.py]
+sources: [src/diagram_bot/collector.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/diff.py, src/diagram_bot/samples/, tests/test_collector.py, tests/test_aws_emulator.py, tests/test_graph_report.py, tests/test_drawio.py, tests/test_findings.py, tests/test_iac.py, tests/fixtures.py, tests/test_golden.py]
 related: [collection, graph, views, layout-and-drawio, samples, snapshot-model]
 updated: 2026-10-18
 ---
@@ -19,16 +19,16 @@ updated: 2026-10-18
 1. 목록 호출은 `OPERATIONS`에 `(service, operation, 응답 키, raw 이름)`을 넣는다. Direct Connect 예: `("directconnect", "describe_connections", "connections", "dx_connections")` 외 2개, EIP 예: `("ec2", "describe_addresses", "Addresses", "elastic_ips")`. 응답 키가 중첩이면 점 표기(`"DistributionList.Items"`).
 2. IAM 이름이 boto3 이름과 다르면 `IAM_PREFIX`(서비스 접두사) 또는 `ACTIONS`(대소문자, 예: `ListWebACLs`)에 넣는다. `collector.permission`의 결과가 실제 IAM 액션과 같아야 한다.
 3. boto3 paginator가 없고 마커로 넘기는 호출이면 `MARKERS`에 등록한다(`list_web_acls` → `NextMarker`).
-4. 리소스별 상세 호출이 필요하면 `collect` 안에 `def 이름(log)` 함수를 만들어 `call(log, service, operation, key, params)`로 부르고 `{raw 키: 행}`을 돌려준 뒤 `details` 튜플에 넣는다. 예: `direct_connect(log)`가 게이트웨이마다 `describe_direct_connect_gateway_associations`. 2단계 입력으로만 쓰는 목록은 반환 전 `raw.pop` 목록에 넣는다.
+4. 리소스별 상세 호출이 필요하면 모듈 수준에 `def 이름(raw, call, log)` 함수를 만들어 `call(log, service, operation, key, params)`로 부르고 `{raw 키: 행}`을 돌려준 뒤 `DETAILS` 튜플에 넣는다. 가짜 `call`로 단위 테스트할 수 있다(`test_detail_steps_run_on_a_stub_call`). 예: `direct_connect(raw, call, log)`가 게이트웨이마다 `describe_direct_connect_gateway_associations`. 2단계 입력으로만 쓰는 목록은 반환 전 `raw.pop` 목록에 넣는다.
 5. 전역 API는 클라이언트 리전을 정한다. 리전 무관 응답이면 그대로(CloudFront), 특정 리전에서만 응답하면 `clients["…/global"]`처럼 별도 클라이언트와 `GLOBAL_REGION`(WAF CLOUDFRONT 범위).
-6. `metadata.scope`에 유형 이름(예: `"DirectConnect"`, `"ElasticIP"`)을, 해석 한계가 있으면 `limitations`에 문장을 더한다.
+6. `metadata.scope`가 되는 `SCOPE`에 유형 이름(예: `"DirectConnect"`, `"ElasticIP"`)을, 해석 한계가 있으면 `LIMITATIONS`에 문장을 더한다.
 
 ## 2. 정책 파일
 - `readonly-policy.json`의 `Action`과 `deploy/readonly-role.cfn.json`의 `CollectionRole` 인라인 정책(알파벳 순, `sts:GetCallerIdentity` 포함)에 **목록·상세 호출 모두**의 액션을 넣는다.
 - 지키는 테스트: `test_deploy_template_grants_exactly_the_collector_actions`(템플릿 = 정책 ∪ `sts:GetCallerIdentity`, 액션은 `Describe`/`List`/`Get`/`Search`로만 시작), `test_edge_routing_and_direct_connect_calls_keep_partial_and_denied_results`(실제 coverage의 `permission` ⊆ 정책). 2단계 호출은 `OPERATIONS`에 없으므로 둘째 테스트처럼 실제로 호출되는 시나리오가 있어야 확인된다.
 
 ## 3. 그래프 (`graph.py`)
-1. 서비스별 함수를 만든다. 예: `direct_connect(raw, region, nodes, node, link)`, `elastic_ips(raw, nodes, node, link)`. `build_graph`의 호출 순서에 넣는다(다른 노드를 참조하면 그 뒤에).
+1. 서비스별 함수를 만든다. 예: `direct_connect(raw, region, nodes, node, link)`, `elastic_ips(raw, nodes, node, link)`, `caches(raw, node, link)`. `build_graph`의 호출 순서에 넣는다(다른 노드를 참조하면 그 뒤에).
 2. `node(kind, ID, {**attrs, "DisplayName": …}, "근거API")`로 노드를 만든다. 삭제·거부 상태는 건너뛴다(`direct_connect`의 `connectionState` 검사).
 3. `link(source, kind, ID, relation, "API.필드" 근거, details, qualifiers)`로 잇는다. 같은 두 노드 사이에 관계가 여럿일 수 있으면 `qualifiers={"destination": …}`를 준다(VIF ID, 경로 CIDR, 오리진 ID). 상태처럼 바뀌는 값은 `details`에만.
 4. 짐작하지 않는다: 근거 필드가 없으면 관계를 만들지 않고 `properties(node, (라벨, 값))`나 파생 필드로 남긴다(다른 리전 DX 연결, 연결 없는 EIP). EIP처럼 도형 대신 소유자 라벨에 보일 값은 소유자 노드에 파생 필드(`elastic_ips`)로 쓴다. 수집 노드를 다시 쓰면 파생 필드가 사라지므로 모든 노드를 만든 뒤에 쓴다.
@@ -53,8 +53,8 @@ updated: 2026-10-18
 - 테스트: `tests/test_findings.py::test_edge_address_and_routing_rules_need_their_inputs` 같은 "입력이 있을 때만" 테스트.
 - 수집할 때마다 바뀌는 상태 필드는 `diff.VOLATILE`에 넣어 변경 비교가 설정 변경으로 오인하지 않게 한다.
 
-## 8. CloudFormation 초안 (`iac.py`)
-- 표현할 수 있으면 `Template.build`의 단계 목록에 함수를 넣는다(EIP: `elastic_ips` — NAT·NLB 주소는 소유자와 함께, 인스턴스 주소는 `AWS::EC2::EIP` + `EIPAssociation`).
+## 8. CloudFormation 초안 (`iac/`)
+- 표현할 수 있으면 알맞은 믹스인(`iac/network.py`·`balancing.py`·`compute.py`·`data.py`)에 메서드를 만들고 `Template.build`의 단계 목록에 넣는다(EIP: `network.py`의 `elastic_ips` — NAT·NLB 주소는 소유자와 함께, 인스턴스 주소는 `AWS::EC2::EIP` + `EIPAssociation`).
 - 표현할 수 없으면 `not_expressible`에서 `self.skip(Type, Id, 이유, 이름)`으로 `Metadata.DiagramBot.Unsupported`에 남긴다(DX 연결·VIF·게이트웨이, CloudFront, WAF). 지어내지 않는다.
 - 테스트: `tests/test_iac.py::test_routing_domains_edge_and_dedicated_links_are_drafted_or_listed`, cfn-lint 테스트, 모든 샘플 내보내기 테스트.
 

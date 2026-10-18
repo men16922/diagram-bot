@@ -1,7 +1,7 @@
 ---
 title: 배치와 draw.io 문서
 summary: layout.py의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
-sources: [src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md]
+sources: [src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md, tests/test_golden.py]
 related: [drawio-format-and-alignment, views, graph, samples, web-app, storage, howto-add-collected-service]
 updated: 2026-10-18
 ---
@@ -67,7 +67,7 @@ VPC마다 위에서 아래로:
 - `assert_no_shared_segments`: 두 경로가 같은 선분을 공유하는 것은 끝점을 공유할 때뿐(대상 그룹 버스).
 - `assert_routed`: 모든 관계가 명시 경로를 가짐(자동 경로 없음), 경로 양 끝이 exit/entry 제약 위치와 1px 안에서 일치하고 제약은 테두리 위. `assert_xml_routed`: XML의 모든 관계 셀에 `exitX`·`entryX`·`orthogonalEdgeStyle`과 중간점.
 - `assert_captions_clear`: 경로가 컨테이너 캡션(그룹 아이콘·제목)을 지나지 않음. `assert_routes_avoid_cards`: 전체 구성 경로가 다른 요약 카드를 지나지 않음.
-- 결정성: 같은 입력이면 `shapes`와 XML이 같다(`test_views_are_readable_and_reproducible`, 엣지 문서).
+- 결정성: 같은 입력이면 `shapes`와 XML이 같다(`test_views_are_readable_and_reproducible`, 엣지 문서). `tests/test_golden.py`는 모든 샘플·데모·엣지·설계안의 overview, VPC별 detail, focus 하나의 XML SHA-256을 `tests/golden.json`에 고정한다(수집 시각 고정). 그림을 일부러 바꿨으면 `python tests/test_golden.py`로 다시 쓴다.
 - 샘플 단위: `test_best_practice_samples_are_readable`(모든 샘플의 overview·VPC별 detail ± references·주요 종류 focus), `test_every_focus_document_routes_its_edges`(샘플·데모·설계안의 모든 노드 focus), `test_overview_draws_the_network_between_vpcs`(샘플별 전체 구성 관계 목록이 표와 정확히 같아야 함), `test_overview_cards_differ_per_sample_and_hide_drawn_groups`("VPC 외 · 배치 미확인" 카드 없음).
 - 배치 정직성: 참조와 IP 대상은 배치를 지어내지 않음(`test_references_and_ip_targets_do_not_invent_placement`), focus는 숨긴 서브넷을 "없음"이라 하지 않음.
 - 규모: 100개 리소스 5초 미만, 한 VPC 300 인스턴스·18 대상 그룹 5초 미만, 2,500개 리소스 계정 20초 미만·51페이지. 경로 필터: 대상 그룹 하나면 교차 0, LB 하나면 전체 교차의 1/10 이하(`test_route_filter_keeps_dense_views_readable`).

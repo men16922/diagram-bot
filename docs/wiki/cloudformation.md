@@ -1,13 +1,13 @@
 ---
 title: CloudFormation 초안 내보내기
-summary: iac.py의 Template이 스냅샷 raw를 CloudFormation JSON 초안으로 바꾸는 단계 순서, Ref/GetAtt 규칙, 매개변수, DeletionPolicy, Metadata.DiagramBot의 Unsupported·Assumptions 전체 목록, export-cfn·API·테스트.
-sources: [src/diagram_bot/iac/, src/diagram_bot/cli.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/api.py, tests/test_iac.py, tests/test_aws_emulator.py]
+summary: iac/ 패키지의 Template이 스냅샷 raw를 CloudFormation JSON 초안으로 바꾸는 단계 순서, Ref/GetAtt 규칙, 매개변수, DeletionPolicy, Metadata.DiagramBot의 Unsupported·Assumptions 전체 목록, export-cfn·API·테스트.
+sources: [src/diagram_bot/iac/, src/diagram_bot/cli.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/api.py, tests/test_iac.py, tests/test_aws_emulator.py, tests/test_golden.py]
 related: [multi-account, review-rules, cli, snapshot-model, http-api]
 updated: 2026-10-18
 ---
 # CloudFormation 초안 내보내기
 
-> `src/diagram_bot/iac.py`는 스냅샷(설계·샘플·수집)의 `raw`(API 응답 모양 데이터)가 말하는 것만 CloudFormation 리소스로 다시 만든다. API가 돌려주지 않는 값(AMI, 이미지, IAM 역할, 인증서, 리스너 규칙, 비밀번호)은 매개변수나 가정으로, 충실히 표현할 수 없는 것은 `Metadata.DiagramBot.Unsupported`에 이유와 함께 남긴다. 검토용 초안이며 앱이 배포하지 않는다.
+> `src/diagram_bot/iac/` 패키지는 스냅샷(설계·샘플·수집)의 `raw`(API 응답 모양 데이터)가 말하는 것만 CloudFormation 리소스로 다시 만든다. API가 돌려주지 않는 값(AMI, 이미지, IAM 역할, 인증서, 리스너 규칙, 비밀번호)은 매개변수나 가정으로, 충실히 표현할 수 없는 것은 `Metadata.DiagramBot.Unsupported`에 이유와 함께 남긴다. 검토용 초안이며 앱이 배포하지 않는다.
 
 ## 핵심
 - 진입점: `template(snapshot)`(계정 × 리전 하나; `parts`가 있으면 `ValueError`), `templates(snapshot)`(`[(f"{account}-{region}", template)]`, 합친 스냅샷은 part마다), `dumps(value)`(`ensure_ascii=False`, 들여쓰기 2, 끝 줄바꿈).
@@ -16,6 +16,7 @@ updated: 2026-10-18
 - `GONE` 상태(`deleted`·`deleting`·`terminated`·`shutting-down`·`failed`·`rejected`·`expired`) 리소스는 조용히 건너뛴다.
 
 ## Template 클래스
+- 파일: `Template`(`iac/__init__.py`)은 믹스인 `Network`, `Balancing`, `Compute`, `Data`, `Base`를 합친 클래스이고 상태는 `self` 하나다. `base.py`(`__init__` 상태, `logical`·`unique`·`add`·`ref`·`param`·`skip`·`assume`·`tags`·`zone`·`image`·`security_group(s)`, `clean`·`ascii_text`·`GONE`·`GRAVITON`), `network.py`(`network`~`placement_groups`, `vpn`·`tgw_routing`·`elastic_ips`, SG 규칙 도우미 `default_egress`·`rules`), `balancing.py`(`load_balancers`·리스너·`targets`), `compute.py`(`auto_scaling`·`standalone_instances`, `kubernetes`·`containers`), `data.py`(`databases`~`warehouse`). `build`·`not_expressible`·`template`·`templates`·`dumps`·`PSEUDO`·`STATEFUL`은 `__init__.py`에 있고, 예전 `iac.py`의 공개 이름을 모두 다시 내보낸다.
 - 상태: `resources`, `parameters`, `outputs`, `ids`(물리 ID·ARN·이름 → 논리 ID), `unsupported`, `assumptions`, `attachments`(게이트웨이 → VPC attachment 논리 ID, 경로의 `DependsOn`에 씀), `listeners`, `default_vpcs`.
 - `logical(prefix, *labels)`: 접두사 + 읽을 수 있는 첫 레이블의 CamelCase, 200자 제한, 충돌하면 숫자 접미사. 예: `SecurityGroupProdDb`, `DbProdOrdersDb`.
 - `unique(base)`: 파생 ID(`…Attachment`, `…Eip`, `…LaunchTemplate`, `…TaskDefinition`, `…Association`, `…Image` 파라미터)는 이름을 이어 붙인 뒤 이 함수를 거친다. 리소스·파라미터가 이미 그 ID를 쓰면 `base2`, `base3`… 이름이 `edge`와 `edge-attachment`인 IGW 두 개가 서로를 덮어쓰지 않는다.
@@ -25,6 +26,7 @@ updated: 2026-10-18
 - `skip(kind, identifier, reason, name=None)` → `Unsupported`에 `{Type, Id, Reason[, Name]}`(중복 제거). `assume(text)` → `Assumptions`(중복 제거).
 
 ## build() 단계 순서
+단계 목록은 믹스인에 흩어지지 않고 `Template.build`의 튜플 하나에 있다.
 `network` → `gateways` → `nat_gateways` → `security_group_resources` → `route_tables` → `endpoints` → `security_group_rules` → `placement_groups` → `load_balancers` → `auto_scaling` → `standalone_instances` → `targets` → `databases` → `caches` → `kafka` → `search` → `file_systems` → `warehouse` → `kubernetes` → `containers` → `vpn` → `tgw_routing` → `elastic_ips` → `not_expressible`, 마지막으로 DeletionPolicy 적용. 뒤 단계가 앞 단계의 `ids`를 참조하므로 순서가 곧 의존 관계다(예: 보안 그룹 규칙은 모든 그룹이 만들어진 뒤, 대상 등록은 리스너가 생긴 뒤).
 
 ## Ref·GetAtt 규칙
@@ -94,6 +96,7 @@ DB 비밀번호는 `ManageMasterUserPassword`(Redshift는 `ManageMasterPassword`
 - `test_cfn_lint_accepts_every_template`: `cfnlint.api`가 있으면(moto[cloudformation] extra) 모든 템플릿에 E·W 규칙 문제가 없어야 한다. 없으면 skip.
 - `test_emulated_stack_creates_the_resources[three-tier|microservices]`: moto에서 `create_stack`이 `CREATE_COMPLETE`가 되고 VPC·서브넷·LB·RDS·ASG·ECS 서비스 수가 템플릿과 일치. SG 인그레스 중 `SourcePrefixListId` 규칙은 moto 한계로 에뮬레이터 스택에서만 뺀다.
 - `test_routing_domains_edge_and_dedicated_links_are_drafted_or_listed`, `test_api_downloads_the_template_per_account`, `test_cli_exports_files_and_stdout`.
+- `tests/test_golden.py`: 모든 샘플과 데모·엣지·설계안의 `templates()` 출력(키 순서 포함) SHA-256을 `tests/golden.json`에 고정한다. 리팩터링은 이 값을 바꾸지 않아야 한다.
 
 ## 바꿀 때 주의
 - 새 리소스 종류는 대상(서브넷·VPC·SG)이 템플릿에 없으면 반드시 `skip()`하고, 물리 ID를 속성 값으로 쓰지 않는다. 새 raw 키의 ID 필드는 `ID_FIELDS`에 넣어 유출 검사를 받게 한다.

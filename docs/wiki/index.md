@@ -33,7 +33,7 @@ updated: 2026-10-18
 - [[review-rules]] (review-rules.md) — **아키텍처 검토 규칙**: findings.py의 review(graph, coverage)가 수집된 API 필드만으로 판정하는 47개 규칙(안정성·보안·운영·AI/ML·비용), 결과 필드, 수집 공백 처리, review --fail-on 게이트.
 - [[change-review]] (change-review.md) — **변경 비교 (diff)**: diff.py가 두 스냅샷의 그래프를 노드 ID·관계 ID로 맞춰 리소스 추가·삭제, 설정 필드 변경, 관계 추가·삭제를 내는 방식과 CLI diff --fail-on-change, /api/snapshots/{id}/diff/{other}.
 - [[multi-account]] (multi-account.md) — **여러 계정 통합 보기**: combine.py의 combine_snapshots가 계정 × 리전 스냅샷을 parts로 묶는 방식, graph.merge_graphs의 공유 TGW·계정 간 피어링 합치기와 전역 ID, 전체 구성의 계정 프레임, CLI combine과 /api/snapshots/combine, 계정별 CloudFormation.
-- [[cloudformation]] (cloudformation.md) — **CloudFormation 초안 내보내기**: iac.py의 Template이 스냅샷 raw를 CloudFormation JSON 초안으로 바꾸는 단계 순서, Ref/GetAtt 규칙, 매개변수, DeletionPolicy, Metadata.DiagramBot의 Unsupported·Assumptions 전체 목록, export-cfn·API·테스트.
+- [[cloudformation]] (cloudformation.md) — **CloudFormation 초안 내보내기**: iac/ 패키지의 Template이 스냅샷 raw를 CloudFormation JSON 초안으로 바꾸는 단계 순서, Ref/GetAtt 규칙, 매개변수, DeletionPolicy, Metadata.DiagramBot의 Unsupported·Assumptions 전체 목록, export-cfn·API·테스트.
 
 ## AWS 접근과 인증
 

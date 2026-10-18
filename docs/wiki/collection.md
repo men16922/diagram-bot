@@ -74,7 +74,7 @@ updated: 2026-10-18
 
 ## 2단계: 상세 호출
 
-`collect` 안의 함수 10개(`details` 튜플). 각 함수는 `call(log, …)`로 호출하고 자기 coverage 목록에 기록한다.
+모듈 수준 함수 10개(`DETAILS` 튜플). 각 함수는 `(raw, call, log)`를 받아 1단계 목록을 읽고, `collect`의 `call(log, …)`로 호출해 자기 coverage 목록에 기록한 뒤 `{raw 키: 행}`을 돌려준다. 가짜 `call`로 따로 시험할 수 있다(`test_detail_steps_run_on_a_stub_call`).
 - `target_health`: 대상 그룹마다 `elbv2.describe_target_health` → `target_health`.
 - `eks`: 클러스터마다 `describe_cluster`, `list_nodegroups`, 노드 그룹마다 `describe_nodegroup` → `eks_clusters`(각 항목에 `nodegroups`).
 - `msk`: `ClusterType`이 `PROVISIONED`인 클러스터만 `kafka.list_nodes` → `msk_nodes`.
@@ -91,7 +91,7 @@ updated: 2026-10-18
 ## 병렬 처리와 순서
 - 1단계: 서비스마다 스레드 하나(`ThreadPoolExecutor(max_workers=workers)`), 한 서비스 안의 호출은 순서대로 실행한다. 서비스별 스로틀링이 서로 섞이지 않게 하려는 구조다.
 - coverage는 완료 순서와 무관하게 `OPERATIONS` 순서로 합친다(`logs[index]`).
-- 2단계: 상세 함수 10개를 같은 크기의 풀에서 동시에 실행하고, `details` 순서대로 `raw`와 coverage에 합친다.
+- 2단계: 상세 함수 10개를 같은 크기의 풀에서 동시에 실행하고, `DETAILS` 순서대로 `raw`와 coverage에 합친다.
 
 ## 페이지 처리와 실패 기록 (`query`)
 - `client.can_paginate(operation)`이면 boto3 paginator, `MARKERS`에 있으면(`list_web_acls` → `NextMarker`) `marker_pages`로 직접 넘긴다. 빈 페이지는 마커가 있어도 끝으로 본다. 둘 다 아니면 한 번 호출한다.
@@ -123,7 +123,7 @@ updated: 2026-10-18
 - 호출을 추가하면 정책 파일 두 개를 같이 고친다. 순서는 [[howto-add-collected-service]].
 - `test_collector.py`의 `Session.clients`에 서비스가 없으면 Stubber 테스트가 실패한다. 응답 키가 점 표기면 `EMPTY`에 빈 응답을 등록한다.
 - 에뮬레이터(moto) 테스트는 moto가 구현하지 않은 호출을 `EMULATOR_GAPS`로 허용한다(`list_nodes`, `describe_domain_nodes`, `describe_placement_groups`, `describe_virtual_interfaces`, `describe_direct_connect_gateways`).
-- 수집은 설정만 읽는다. 실제 통신 여부·트래픽은 판단하지 않는다(`metadata.limitations`).
+- 수집은 설정만 읽는다. 실제 통신 여부·트래픽은 판단하지 않는다(`metadata.limitations` = `LIMITATIONS`, 범위 목록은 `SCOPE`).
 
 ## 관련
 - [[snapshot-model]] — coverage·raw 필드 정의.

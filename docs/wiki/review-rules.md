@@ -1,7 +1,7 @@
 ---
 title: 아키텍처 검토 규칙
 summary: findings.py의 review(graph, coverage)가 수집된 API 필드만으로 판정하는 47개 규칙(안정성·보안·운영·AI/ML·비용), 결과 필드, 수집 공백 처리, review --fail-on 게이트.
-sources: [src/diagram_bot/findings.py, src/diagram_bot/cli.py, src/diagram_bot/report.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/api.py, src/diagram_bot/agent.py, src/diagram_bot/designer.py, tests/test_findings.py, docs/ARCHITECTURE.md]
+sources: [src/diagram_bot/findings.py, src/diagram_bot/cli.py, src/diagram_bot/report.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/api.py, src/diagram_bot/agent.py, src/diagram_bot/designer.py, tests/test_findings.py, docs/ARCHITECTURE.md, tests/test_golden.py]
 related: [howto-add-review-rule, change-review, multi-account, cli, graph, snapshot-model]
 updated: 2026-10-18
 ---
@@ -17,10 +17,12 @@ updated: 2026-10-18
 - 실제 트래픽·도달성은 시험하지 않는다. `markdown()` 머리말도 "수집된 설정만으로 판정"이라고 밝힌다.
 
 ## 구조
-- `review()` 본문: 안정성 규칙 → 보안 규칙 → `ai_review(...)` → `edge_review(...)` → `OPS-COVERAGE` → 정렬.
+- `review()` 본문: `reliability_review(...)` → `security_review(...)` → `ai_review(...)` → `edge_review(...)` → `OPS-COVERAGE` → 정렬. 호출 순서가 같은 정렬 키 안의 순서를 정한다.
+- `reliability_review(nodes, edges, collected, out, add)`: LB·대상 그룹·ASG·RDS·클러스터·캐시·NAT·OpenSearch·MSK·Redshift·EFS·VPN·ECS의 AZ 분산·장애 조치·상태.
+- `security_review(edges, collected, add)`: 퍼블릭 접근, 저장·전송 암호화, IMDS, 인터넷 개방 SG 규칙, EFA SG, EKS 엔드포인트.
 - `ai_review(graph, nodes, edges, collected, out, add)`: GPU·EFA·SageMaker·Bedrock·FSx 규칙(Well-Architected Generative AI·ML·HPC 렌즈 근거).
 - `edge_review(nodes, edges, collected, coverage, add)`: WAF, CloudFront 오리진 노출, 유휴 Elastic IP, TGW blackhole 경로.
-- 내부 헬퍼 `add(rule, severity, pillar, key, title, evidence, recommendation)`가 결과 딕셔너리를 만든다. `out(key, relation)`은 한 노드에서 나가는 특정 관계의 엣지 목록.
+- 내부 헬퍼 `add(rule, severity, pillar, key, title, evidence, recommendation)`가 결과 딕셔너리를 만든다. `out(key, relation)`은 한 노드에서 나가는 특정 관계의 엣지 목록(`(source, relation)`로 한 번 색인해 둔 것).
 - 모듈 상수: `ADMIN_PORTS`(22, 3389), `DATA_PORTS`(3306·5432·1433·1521·6379·11211·9200·27017·9092·5439·2049), `WORLD`(`0.0.0.0/0`, `::/0`), `AI_PORTS`(8888·6006·8265·10001·5000·7860·8501·11434·8000·8001), 인스턴스 유형 정규식 `TRAINING`(`p4d|p5|p6|trn`), `INFERENCE`(`g\d|inf`), `ACCELERATED`(`(p|g|trn|inf|dl)\d`), `NODE_IPS`(EKS 81, 그 밖 32), `ML_ENDPOINT`(bedrock*·sagemaker.* 서비스 이름).
 - `efa_node(attrs)`: EFA 인터페이스(`NetworkInterfaces[].InterfaceType == "efa"`)가 있거나 `TRAINING` 유형이면 강결합 학습 노드.
 
@@ -122,6 +124,7 @@ AI/ML(`ai_review`, 모두 `pillar = "ai"`):
 ## 바꿀 때 주의
 - 결과 `id`는 `rule|key|title` 해시다. 제목 문구를 바꾸면 ID가 바뀐다(같은 리소스에 제목이 다른 결과가 둘이면 둘 다 남는다).
 - 모든 샘플은 high·medium 결과가 없어야 한다(`test_reference_samples_have_no_high_or_medium_findings`, `review --fail-on medium` 종료 코드 0).
+- `tests/test_golden.py`가 샘플·데모·엣지·설계안과 규칙이 많이 걸리는 변형(`degraded`, `exposed`, `gpu`)의 `review()` 결과 SHA-256을 고정한다. 규칙을 바꾸면 `python tests/test_golden.py`로 `tests/golden.json`을 다시 쓴다.
 - 데모 스냅샷의 정확한 결과 집합과 `summary` 값을 `test_demo_findings_name_resource_evidence_and_fix`가 고정한다. 데모에 걸리는 규칙을 바꾸면 이 테스트를 함께 고친다.
 - 엣지 규칙은 `tests/fixtures.py`의 `edge_snapshot()`과 `test_edge_address_and_routing_rules_need_their_inputs`가 입력 누락 시 침묵까지 확인한다.
 - 규칙 카탈로그 문서는 `docs/ARCHITECTURE.md` 4.1절(엣지 규칙 표)과 5.8절(AI/ML 규칙 표)에만 있다. 본문 REL·SEC 규칙은 코드가 유일한 목록이다.
