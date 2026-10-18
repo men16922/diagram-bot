@@ -56,6 +56,7 @@
   ALB WAF, hybrid에 Direct Connect 2개 위치·transit VIF·DX 게이트웨이(VPN은 백업), data-platform에 TGW 라우팅 테이블 2개(스포크·사내망).
 
 ### Changed
+- 테스트 클라이언트가 `httpx2`로 동작합니다(`[test]`의 `httpx` → `httpx2`). Starlette의 `httpx` 대체 경로 경고는 테스트 오류로 처리해 다시 생기지 않게 막았습니다.
 - CloudFormation 내보내기가 새 수집 항목을 다룹니다: TGW 라우팅 테이블(연결·전파·정적/blackhole 경로)과 인스턴스 Elastic IP는 초안에 만들고,
   CloudFront·WAF 규칙·Direct Connect·유휴 Elastic IP·VPN/DX 연결의 TGW 라우팅 연결은 `Unsupported`에 이유와 함께 남깁니다.
 - `gpu-training` 샘플을 us-east-2로 옮김(서울 리전에는 trn2가 없어 p5·trn2를 한 VPC에 둘 수 없음; cfn-lint 지역별 인스턴스 목록). `SAMPLE_VERSION` 6.

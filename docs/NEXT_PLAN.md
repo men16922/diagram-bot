@@ -50,7 +50,6 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
 - Live check of the AI/ML calls with real resources: owner declined on 2026-10-18. The new CloudFront/WAF/Direct Connect
   calls are also stub-verified only; a live read-only collection on an account that has them would confirm the shapes.
 - Deploy one CloudFormation draft (e.g. three-tier) to a scratch account to prove it end to end (costs; owner decision).
-- Starlette `TestClient` deprecation: move tests to `httpx2` when Starlette drops `httpx` support.
 - Edge bundling for dense overviews (route filter covers detail views); CloudFront/WAF rule bodies (`GetWebACL`) if wanted.
 - Confirm the plugin auto-install on the next cloud session.
 

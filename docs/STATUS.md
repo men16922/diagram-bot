@@ -115,4 +115,3 @@ Last Updated: 2026-10-18
   ElastiCache Serverless, MSK Serverless, EKS Fargate profiles and Aurora Global Database are not drawn.
 - Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.
 - CloudFormation drafts were never deployed to AWS (cfn-lint + moto only; moto skips EKS/ElastiCache/Aurora/FSx/MSK/OpenSearch).
-- Starlette warns that `TestClient` over `httpx` is deprecated (CI's newer Starlette); switching to `httpx2` is not done.
