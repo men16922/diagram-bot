@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:34:34.197486+00:00",
-    "finished_at": "2026-10-18T09:34:34.197486+00:00",
+    "started_at": "2026-10-18T14:24:44.001922+00:00",
+    "finished_at": "2026-10-18T14:24:44.001922+00:00",
     "status": "complete",
     "demo": true,
     "sample": "three-tier",
-    "sample_version": 6,
+    "sample_version": 7,
     "title": "3계층 웹 애플리케이션 (3 AZ)",
     "practices": [
       "세 AZ에 같은 구성을 배치해 AZ 장애를 견딤 (Reliability)",
@@ -139,6 +139,13 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -159,6 +166,20 @@
       "items": 0
     },
     {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
       "service": "kafka",
       "operation": "list_clusters_v2",
       "status": "complete",
@@ -174,6 +195,104 @@
     },
     {
       "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "list_domain_names",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_cluster_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 5
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
       "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
@@ -216,77 +335,7 @@
     },
     {
       "service": "efs",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "efs",
       "operation": "describe_mount_targets",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "redshift",
-      "operation": "describe_clusters",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpc_peering_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_gateways",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_security_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 5
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_placement_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "fsx",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_endpoints",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -592,7 +641,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.1.11",
+        "PrivateIpAddress": "10.10.10.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a"
         },
@@ -632,7 +681,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.2.12",
+        "PrivateIpAddress": "10.10.11.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2b"
         },
@@ -672,7 +721,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.3.13",
+        "PrivateIpAddress": "10.10.12.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2c"
         },
@@ -712,7 +761,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.4.14",
+        "PrivateIpAddress": "10.10.20.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a"
         },
@@ -752,7 +801,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.5.15",
+        "PrivateIpAddress": "10.10.21.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2b"
         },
@@ -792,7 +841,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.6.16",
+        "PrivateIpAddress": "10.10.22.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2c"
         },
@@ -899,72 +948,6 @@
         "HealthCheckPath": "/health",
         "LoadBalancerArns": [
           "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/prod-internal-alb/0000000000000002"
-        ]
-      }
-    ],
-    "target_health": [
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-web-https/0000000000000001",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "i-weba000000000001",
-              "Port": 443
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "i-webb000000000001",
-              "Port": 443
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "i-webc000000000001",
-              "Port": 443
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
-        ]
-      },
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-app-http/0000000000000002",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "i-appa000000000001",
-              "Port": 8080
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "i-appb000000000001",
-              "Port": 8080
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "i-appc000000000001",
-              "Port": 8080
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
         ]
       }
     ],
@@ -1439,15 +1422,11 @@
     "replication_groups": [],
     "cache_subnet_groups": [],
     "msk_clusters": [],
-    "msk_nodes": [],
     "lambda_functions": [],
     "eks_clusters": [],
     "opensearch_domains": [],
-    "opensearch_nodes": [],
     "ecs_services": [],
-    "ecs_tasks": [],
     "efs_file_systems": [],
-    "efs_mount_targets": [],
     "redshift_clusters": [],
     "redshift_subnet_groups": [],
     "vpc_peering_connections": [],
@@ -1595,6 +1574,76 @@
     "fsx_file_systems": [],
     "sagemaker_endpoints": [],
     "sagemaker_clusters": [],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-web-https/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "i-weba000000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-webb000000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-webc000000000001",
+              "Port": 443
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/prod-app-http/0000000000000002",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "i-appa000000000001",
+              "Port": 8080
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-appb000000000001",
+              "Port": 8080
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-appc000000000001",
+              "Port": 8080
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ],
+    "msk_nodes": [],
+    "opensearch_nodes": [],
+    "ecs_tasks": [],
+    "efs_mount_targets": [],
     "waf_web_acls": [
       {
         "Name": "prod-edge-acl",
@@ -1894,7 +1943,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.4.14",
+          "PrivateIpAddress": "10.10.20.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -1944,7 +1993,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.5.15",
+          "PrivateIpAddress": "10.10.21.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
@@ -1994,7 +2043,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.6.16",
+          "PrivateIpAddress": "10.10.22.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2c"
           },
@@ -2044,7 +2093,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.1.11",
+          "PrivateIpAddress": "10.10.10.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -2094,7 +2143,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.2.12",
+          "PrivateIpAddress": "10.10.11.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
@@ -2144,7 +2193,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.3.13",
+          "PrivateIpAddress": "10.10.12.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2c"
           },

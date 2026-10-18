@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:34:34.987831+00:00",
-    "finished_at": "2026-10-18T09:34:34.987831+00:00",
+    "started_at": "2026-10-18T14:24:42.680405+00:00",
+    "finished_at": "2026-10-18T14:24:42.680405+00:00",
     "status": "complete",
     "demo": true,
     "sample": "ai-platform",
-    "sample_version": 6,
+    "sample_version": 7,
     "title": "AI 플랫폼 (사설 EKS GPU 추론·학습 · Bedrock · Aurora pgvector)",
     "practices": [
       "인터넷 경로 없는 사설 VPC: IGW·NAT 없이 Transit Gateway로 사내망·중앙 egress에 연결 (MLSEC03-BP02)",
@@ -140,6 +140,13 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -155,6 +162,20 @@
     {
       "service": "elasticache",
       "operation": "describe_cache_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -181,36 +202,15 @@
       "items": 1
     },
     {
-      "service": "kafka",
-      "operation": "list_nodes",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
       "service": "opensearch",
-      "operation": "describe_domains",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "opensearch",
-      "operation": "describe_domain_nodes",
+      "operation": "list_domain_names",
       "status": "complete",
       "pages": 1,
       "items": 0
     },
     {
       "service": "ecs",
-      "operation": "describe_services",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ecs",
-      "operation": "describe_tasks",
+      "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -223,15 +223,15 @@
       "items": 1
     },
     {
-      "service": "efs",
-      "operation": "describe_mount_targets",
+      "service": "redshift",
+      "operation": "describe_clusters",
       "status": "complete",
       "pages": 1,
-      "items": 3
+      "items": 0
     },
     {
       "service": "redshift",
-      "operation": "describe_clusters",
+      "operation": "describe_cluster_subnet_groups",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -253,6 +253,13 @@
     {
       "service": "ec2",
       "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -291,6 +298,48 @@
       "status": "complete",
       "pages": 1,
       "items": 0
+    },
+    {
+      "service": "kafka",
+      "operation": "list_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domains",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domain_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_services",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_tasks",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_mount_targets",
+      "status": "complete",
+      "pages": 1,
+      "items": 3
     },
     {
       "service": "elbv2",
@@ -457,7 +506,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.1.11",
+        "PrivateIpAddress": "10.80.0.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a"
         },
@@ -505,7 +554,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.2.12",
+        "PrivateIpAddress": "10.80.32.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2b"
         },
@@ -553,7 +602,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.3.13",
+        "PrivateIpAddress": "10.80.64.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2c"
         },
@@ -601,7 +650,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.4.14",
+        "PrivateIpAddress": "10.80.0.11",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a"
         },
@@ -649,7 +698,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.5.15",
+        "PrivateIpAddress": "10.80.32.11",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2b"
         },
@@ -697,7 +746,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.6.16",
+        "PrivateIpAddress": "10.80.64.11",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2c"
         },
@@ -745,7 +794,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.7.17",
+        "PrivateIpAddress": "10.80.96.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a",
           "GroupName": "ai-train-pg"
@@ -794,7 +843,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.8.18",
+        "PrivateIpAddress": "10.80.96.11",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a",
           "GroupName": "ai-train-pg"
@@ -873,43 +922,6 @@
         "HealthCheckPath": "/healthz",
         "LoadBalancerArns": [
           "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/ai-inference-alb/0000000000000001"
-        ]
-      }
-    ],
-    "target_health": [
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "10.80.0.40",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2a"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.80.32.40",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2b"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.80.64.40",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2c"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
         ]
       }
     ],
@@ -1429,7 +1441,6 @@
     "replication_groups": [],
     "cache_subnet_groups": [],
     "msk_clusters": [],
-    "msk_nodes": [],
     "lambda_functions": [],
     "eks_clusters": [
       {
@@ -1505,9 +1516,7 @@
       }
     ],
     "opensearch_domains": [],
-    "opensearch_nodes": [],
     "ecs_services": [],
-    "ecs_tasks": [],
     "efs_file_systems": [
       {
         "FileSystemId": "fs-0ai0000000000009",
@@ -1523,35 +1532,6 @@
             "Value": "ai-model-cache"
           }
         ]
-      }
-    ],
-    "efs_mount_targets": [
-      {
-        "MountTargetId": "fsmt-0ai00000000000090",
-        "FileSystemId": "fs-0ai0000000000009",
-        "SubnetId": "subnet-ai-app-a",
-        "VpcId": "vpc-0a1b2c3d4e5f60009",
-        "AvailabilityZoneName": "ap-northeast-2a",
-        "LifeCycleState": "available",
-        "IpAddress": "10.80.0.200"
-      },
-      {
-        "MountTargetId": "fsmt-0ai00000000000091",
-        "FileSystemId": "fs-0ai0000000000009",
-        "SubnetId": "subnet-ai-app-b",
-        "VpcId": "vpc-0a1b2c3d4e5f60009",
-        "AvailabilityZoneName": "ap-northeast-2b",
-        "LifeCycleState": "available",
-        "IpAddress": "10.80.32.200"
-      },
-      {
-        "MountTargetId": "fsmt-0ai00000000000092",
-        "FileSystemId": "fs-0ai0000000000009",
-        "SubnetId": "subnet-ai-app-c",
-        "VpcId": "vpc-0a1b2c3d4e5f60009",
-        "AvailabilityZoneName": "ap-northeast-2c",
-        "LifeCycleState": "available",
-        "IpAddress": "10.80.64.200"
       }
     ],
     "redshift_clusters": [],
@@ -1730,7 +1710,76 @@
       }
     ],
     "sagemaker_endpoints": [],
-    "sagemaker_clusters": []
+    "sagemaker_clusters": [],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/inference-pods/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "10.80.0.40",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2a"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.80.32.40",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.80.64.40",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ],
+    "msk_nodes": [],
+    "opensearch_nodes": [],
+    "ecs_tasks": [],
+    "efs_mount_targets": [
+      {
+        "MountTargetId": "fsmt-0ai00000000000090",
+        "FileSystemId": "fs-0ai0000000000009",
+        "SubnetId": "subnet-ai-app-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZoneName": "ap-northeast-2a",
+        "LifeCycleState": "available",
+        "IpAddress": "10.80.0.200"
+      },
+      {
+        "MountTargetId": "fsmt-0ai00000000000091",
+        "FileSystemId": "fs-0ai0000000000009",
+        "SubnetId": "subnet-ai-app-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZoneName": "ap-northeast-2b",
+        "LifeCycleState": "available",
+        "IpAddress": "10.80.32.200"
+      },
+      {
+        "MountTargetId": "fsmt-0ai00000000000092",
+        "FileSystemId": "fs-0ai0000000000009",
+        "SubnetId": "subnet-ai-app-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60009",
+        "AvailabilityZoneName": "ap-northeast-2c",
+        "LifeCycleState": "available",
+        "IpAddress": "10.80.64.200"
+      }
+    ]
   },
   "graph": {
     "nodes": [
@@ -1968,7 +2017,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.4.14",
+          "PrivateIpAddress": "10.80.0.11",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -2026,7 +2075,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.5.15",
+          "PrivateIpAddress": "10.80.32.11",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
@@ -2084,7 +2133,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.6.16",
+          "PrivateIpAddress": "10.80.64.11",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2c"
           },
@@ -2142,7 +2191,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.1.11",
+          "PrivateIpAddress": "10.80.0.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -2200,7 +2249,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.2.12",
+          "PrivateIpAddress": "10.80.32.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
@@ -2258,7 +2307,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.3.13",
+          "PrivateIpAddress": "10.80.64.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2c"
           },
@@ -2316,7 +2365,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.7.17",
+          "PrivateIpAddress": "10.80.96.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a",
             "GroupName": "ai-train-pg"
@@ -2375,7 +2424,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.8.18",
+          "PrivateIpAddress": "10.80.96.11",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a",
             "GroupName": "ai-train-pg"

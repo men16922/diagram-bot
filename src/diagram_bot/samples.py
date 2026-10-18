@@ -3,32 +3,35 @@
 Each sample uses only fields the collector reads from the AWS APIs, so it renders exactly like a
 collected snapshot would.
 """
+import copy
 import hashlib
 import ipaddress
+from itertools import islice
 
-from .collector import now
+from .collector import OPERATIONS, now
 from .combine import combine_snapshots
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
 # Bumped whenever a sample's architecture changes; the server replaces stored samples of another version.
-SAMPLE_VERSION = 6
+SAMPLE_VERSION = 7
+# Collector listings whose raw collection is replaced by the detail calls behind them (collector phase 2).
+LISTINGS = {"eks_cluster_names": "eks_clusters", "opensearch_domain_names": "opensearch_domains", "ecs_cluster_arns": "ecs_services",
+            "sagemaker_endpoint_names": "sagemaker_endpoints", "sagemaker_cluster_names": "sagemaker_clusters"}
+# Edge, Elastic IP, TGW routing and Direct Connect collections exist only in samples that use them.
+OPTIONAL = {"elastic_ips", "transit_gateway_route_tables", "cloudfront_distributions", "dx_connections", "dx_virtual_interfaces", "dx_gateways"}
+# Phase-2 detail calls the collector makes per resource: (service, operation, raw key).
+DETAILS = (("kafka", "list_nodes", "msk_nodes"), ("opensearch", "describe_domains", "opensearch_domains"),
+           ("opensearch", "describe_domain_nodes", "opensearch_nodes"), ("ecs", "describe_services", "ecs_services"),
+           ("ecs", "describe_tasks", "ecs_tasks"), ("efs", "describe_mount_targets", "efs_mount_targets"))
+RAW_KEYS = list(dict.fromkeys([LISTINGS.get(name, name) for *_, name in OPERATIONS if name not in OPTIONAL]
+                              + ["target_health"] + [key for *_, key in DETAILS]))
 
 
 class Sample:
     def __init__(self, key, title, practices, region=REGION, account=ACCOUNT):
         self.key, self.title, self.practices = key, title, practices
         self.region, self.account = region, account
-        self.raw = {"vpcs": [], "subnets": [], "instances": [], "load_balancers": [], "target_groups": [], "target_health": [],
-                    "internet_gateways": [], "nat_gateways": [], "route_tables": [], "db_instances": [], "auto_scaling_groups": [],
-                    "vpc_endpoints": [], "transit_gateways": [], "transit_gateway_attachments": [],
-                    "db_clusters": [], "cache_clusters": [], "replication_groups": [], "cache_subnet_groups": [],
-                    "msk_clusters": [], "msk_nodes": [], "lambda_functions": [], "eks_clusters": [],
-                    "opensearch_domains": [], "opensearch_nodes": [], "ecs_services": [], "ecs_tasks": [],
-                    "efs_file_systems": [], "efs_mount_targets": [], "redshift_clusters": [], "redshift_subnet_groups": [],
-                    "vpc_peering_connections": [], "vpn_gateways": [], "vpn_connections": [], "customer_gateways": [],
-                    "security_groups": [], "placement_groups": [], "fsx_file_systems": [], "sagemaker_endpoints": [],
-                    "sagemaker_clusters": []}
-        self.counter = 0
+        self.raw = {key: [] for key in RAW_KEYS}
 
     @property
     def arn(self):
@@ -49,10 +52,9 @@ class Sample:
     def instance(self, key, subnet, name, kind="t3.medium", ip=None, sg=None, efa=False, placement=None, lifecycle=None, **tags):
         vpc = next(s["VpcId"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
         az = next(s["AvailabilityZone"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
-        self.counter += 1
         self.raw["instances"].append({
             "InstanceId": key, "VpcId": vpc, "SubnetId": subnet, "InstanceType": kind, "State": {"Name": "running"},
-            "PrivateIpAddress": ip or f"10.0.{self.counter}.{10 + self.counter}",
+            "PrivateIpAddress": ip or self.free_addresses(subnet, 1)[0],
             "Placement": {"AvailabilityZone": az, **({"GroupName": placement} if placement else {})},
             **({"InstanceLifecycle": lifecycle} if lifecycle else {}),
             "MetadataOptions": {"HttpTokens": "required"}, "Tags": self.tags(name, **tags),
@@ -85,6 +87,24 @@ class Sample:
     def address(self, subnet, offset):
         cidr = next(s["CidrBlock"] for s in self.raw["subnets"] if s["SubnetId"] == subnet)
         return str(ipaddress.ip_network(cidr)[offset])
+
+    def used_addresses(self):
+        """Private addresses already taken: instances, ECS task ENIs, EFS mount targets and IP targets."""
+        tasks = (d.get("value") for t in self.raw["ecs_tasks"] for a in t.get("attachments", []) for d in a.get("details", [])
+                 if d.get("name") == "privateIPv4Address")
+        return ({i.get("PrivateIpAddress") for i in self.raw["instances"]} | set(tasks)
+                | {m.get("IpAddress") for m in self.raw["efs_mount_targets"]}
+                | {d["Target"]["Id"] for h in self.raw["target_health"] for d in h["Descriptions"]})
+
+    def free_addresses(self, subnet, count, start=10):
+        """`count` unused addresses in the subnet from offset `start` (AWS reserves the first four and the last)."""
+        network = ipaddress.ip_network(next(s["CidrBlock"] for s in self.raw["subnets"] if s["SubnetId"] == subnet))
+        last, used = network.num_addresses - 1, self.used_addresses()
+        offsets = (*range(min(start, last), last), *range(4, min(start, last)))
+        found = list(islice((ip for ip in map(lambda o: str(network[o]), offsets) if ip not in used), count))
+        if len(found) < count:
+            raise IndexError(f"{subnet} ({network}) has {len(found)} free addresses, {count} needed")
+        return found
 
     def security_group(self, key, vpc, name, ingress, egress=("0.0.0.0/0",)):
         """Rules as (port, source): a CIDR, another group's ID, a prefix list ID or "self"; port None allows all traffic.
@@ -439,61 +459,38 @@ class Sample:
             "virtualInterfaceState": "available", "region": self.region, "ownerAccount": self.account,
             "bgpPeers": [{"bgpPeerId": "dxpeer-" + self.digest(key, "bgp")[:8], "addressFamily": "ipv4", "bgpPeerState": "available", "bgpStatus": "up"}]})
 
-    def network(self, vpc, prefix, azs, public, private, nat_per_az=True):
+    def network(self, vpc, prefix, azs, public, private, nat_per_az=True, nat=True):
         """Internet gateway, NAT in public subnets, and one route table per tier (private per AZ)."""
         igw = self.internet_gateway(f"igw-{prefix}", vpc, f"{prefix}-igw")
         self.route_table(f"rtb-{prefix}-public", vpc, f"{prefix}-public", public, gateway=igw)
         nats = [self.nat_gateway(f"nat-{prefix}-{az}", vpc, public[i], f"{prefix}-nat-{az}") for i, az in enumerate(azs)
-                if nat_per_az or i == 0]
-        for i, az in enumerate(azs):
+                if nat_per_az or i == 0] if nat else []
+        for i, az in enumerate(azs if private else ()):
             self.route_table(f"rtb-{prefix}-private-{az}", vpc, f"{prefix}-private-{az}", [p[i] for p in private],
-                             nat=nats[i] if nat_per_az else nats[0])
+                             nat=(nats[i] if nat_per_az else nats[0]) if nats else None)
         # Subnets without an explicit association (the data tier) use the main table: local route only.
         self.route_table(f"rtb-{prefix}-main", vpc, f"{prefix}-isolated", main=True)
 
     def snapshot(self):
-        timestamp = now()
+        timestamp, raw = now(), copy.deepcopy(self.raw)
         # DescribeSubnets.AvailableIpAddressCount: the CIDR minus the five reserved addresses and the instances in it.
-        for subnet in self.raw["subnets"]:
-            used = sum(i["SubnetId"] == subnet["SubnetId"] for i in self.raw["instances"])
+        # Computed on the copy each time, so instances added after an earlier snapshot still count.
+        for subnet in raw["subnets"]:
+            used = sum(i["SubnetId"] == subnet["SubnetId"] for i in raw["instances"])
             subnet.setdefault("AvailableIpAddressCount", ipaddress.ip_network(subnet["CidrBlock"]).num_addresses - 5 - used)
-        coverage = [{"service": service, "operation": operation, "status": "complete", "pages": 1, "items": len(self.raw[key])}
-                    for service, operation, key in (("ec2", "describe_vpcs", "vpcs"), ("ec2", "describe_subnets", "subnets"),
-                                                    ("ec2", "describe_instances", "instances"),
-                                                    ("elbv2", "describe_load_balancers", "load_balancers"),
-                                                    ("elbv2", "describe_target_groups", "target_groups"),
-                                                    ("ec2", "describe_internet_gateways", "internet_gateways"),
-                                                    ("ec2", "describe_nat_gateways", "nat_gateways"),
-                                                    ("ec2", "describe_route_tables", "route_tables"),
-                                                    ("rds", "describe_db_instances", "db_instances"),
-                                                    ("autoscaling", "describe_auto_scaling_groups", "auto_scaling_groups"),
-                                                    ("ec2", "describe_vpc_endpoints", "vpc_endpoints"),
-                                                    ("ec2", "describe_transit_gateway_vpc_attachments", "transit_gateway_attachments"),
-                                                    ("rds", "describe_db_clusters", "db_clusters"),
-                                                    ("elasticache", "describe_cache_clusters", "cache_clusters"),
-                                                    ("kafka", "list_clusters_v2", "msk_clusters"),
-                                                    ("lambda", "list_functions", "lambda_functions"),
-                                                    ("eks", "list_clusters", "eks_clusters"),
-                                                    ("kafka", "list_nodes", "msk_nodes"),
-                                                    ("opensearch", "describe_domains", "opensearch_domains"),
-                                                    ("opensearch", "describe_domain_nodes", "opensearch_nodes"),
-                                                    ("ecs", "describe_services", "ecs_services"), ("ecs", "describe_tasks", "ecs_tasks"),
-                                                    ("efs", "describe_file_systems", "efs_file_systems"),
-                                                    ("efs", "describe_mount_targets", "efs_mount_targets"),
-                                                    ("redshift", "describe_clusters", "redshift_clusters"),
-                                                    ("ec2", "describe_vpc_peering_connections", "vpc_peering_connections"),
-                                                    ("ec2", "describe_vpn_gateways", "vpn_gateways"),
-                                                    ("ec2", "describe_vpn_connections", "vpn_connections"),
-                                                    ("ec2", "describe_security_groups", "security_groups"),
-                                                    ("ec2", "describe_placement_groups", "placement_groups"),
-                                                    ("fsx", "describe_file_systems", "fsx_file_systems"),
-                                                    ("sagemaker", "list_endpoints", "sagemaker_endpoints"),
-                                                    ("sagemaker", "list_clusters", "sagemaker_clusters"))]
+        # One row per collector listing (in the collector's order), then the detail calls behind them.
+        items = {**{name: len(raw[key]) for name, key in LISTINGS.items()},
+                 "ecs_cluster_arns": len({s["clusterArn"] for s in raw["ecs_services"]})}
+        coverage = [{"service": service, "operation": operation, "status": "complete", "pages": 1,
+                     "items": items[name] if name in LISTINGS else len(raw[name])}
+                    for service, operation, _, name in OPERATIONS if name not in OPTIONAL]
+        coverage += [{"service": service, "operation": operation, "status": "complete", "pages": 1, "items": len(raw[key])}
+                     for service, operation, key in DETAILS]
         coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
-                      "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in self.raw["target_health"]]
+                      "status": "complete", "pages": 1, "items": len(h["Descriptions"])} for h in raw["target_health"]]
         # Edge, Elastic IP, TGW routing and Direct Connect calls appear only in samples that use them.
         coverage += [{"service": service, "operation": operation, "parameters": params, "status": "complete", "pages": 1,
-                      "items": sum(1 for x in self.raw[key] if all(x.get(k) == v for k, v in params.items()))}
+                      "items": sum(1 for x in raw[key] if all(x.get(k) == v for k, v in params.items()))}
                      for service, operation, key, params in (
                          ("ec2", "describe_addresses", "elastic_ips", {}),
                          ("ec2", "describe_transit_gateway_route_tables", "transit_gateway_route_tables", {}),
@@ -504,7 +501,7 @@ class Sample:
                          ("directconnect", "describe_virtual_interfaces", "dx_virtual_interfaces", {}),
                          ("directconnect", "describe_direct_connect_gateways", "dx_gateways", {}),
                          ("directconnect", "describe_direct_connect_gateway_associations", "dx_gateway_associations", {}))
-                     if key in self.raw]
+                     if key in raw]
         return {"schema_version": 1, "metadata": {
             "account_id": self.account, "region": self.region, "partition": "aws", "started_at": timestamp, "finished_at": timestamp,
             "status": "complete", "demo": True, "sample": self.key, "sample_version": SAMPLE_VERSION, "title": self.title, "practices": self.practices,
@@ -515,7 +512,7 @@ class Sample:
             "limitations": ["AWS best practice 패턴을 따른 합성 샘플이며 실제 계정 데이터가 아닙니다.",
                             "리스너 규칙·Route 53·Shield·Network Firewall은 수집 범위 밖이라 그리지 않습니다 (권고는 practices에 문구로).",
                             "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."]},
-            "coverage": coverage, "raw": self.raw}
+            "coverage": coverage, "raw": raw}
 
 
 def three_tier():
@@ -994,6 +991,20 @@ def multi_account():
     return combined
 
 
+# One line per sample for the chat agent's standard designs (designer.STANDARDS); keep in step with each sample's title.
+SUMMARIES = {
+    "three-tier": "3계층 웹 (ALB → 웹 ASG → 내부 ALB → 앱 ASG → RDS Multi-AZ, 3 AZ)",
+    "microservices": "마이크로서비스 (ALB 경로 라우팅, EC2 ASG + ECS Fargate, RDS Multi-AZ, 3 AZ)",
+    "nlb-alb": "고정 IP 진입 (NLB → ALB, 2 AZ)",
+    "environments": "운영·스테이징 VPC 분리 (공용 서비스 VPC, 중앙 egress VPC, Transit Gateway)",
+    "hybrid": "하이브리드 (Transit Gateway + Direct Connect, Site-to-Site VPN 백업)",
+    "eks-platform": "EKS 플랫폼 (EKS 전용 /28 클러스터 서브넷, Aurora 3 AZ, Redis, MSK, Lambda, 엔드포인트)",
+    "data-platform": "데이터 플랫폼 (ECS, OpenSearch, RDS, Redis, EFS, Redshift, DocumentDB, TGW 라우팅 도메인, 이중화 VPN)",
+    "ai-platform": "AI 플랫폼 (사설 EKS GPU 추론 3 AZ·EFA 학습 단일 AZ·배치 그룹, FSx for Lustre, Bedrock 엔드포인트, Aurora pgvector, EFS)",
+    "genai-rag": "생성형 AI RAG 앱 (ECS Fargate 3 AZ, Bedrock 엔드포인트, Aurora pgvector, 시맨틱 캐시, SageMaker 리랭커)",
+    "gpu-training": "GPU 분산 학습 클러스터 (p5 Capacity Block·trn2 배치 그룹, EFA, FSx for Lustre, HyperPod)",
+    "multi-account": "멀티 계정 랜딩 존 (Network 계정 TGW를 RAM 공유, 중앙 egress, 워크로드 계정 VPC)",
+}
 SAMPLES = {"three-tier": three_tier, "microservices": microservices, "nlb-alb": static_ip_front,
            "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform, "data-platform": data_platform,
            "ai-platform": ai_platform, "genai-rag": genai_rag, "gpu-training": gpu_training, "multi-account": multi_account}

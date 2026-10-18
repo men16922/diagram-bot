@@ -31,8 +31,8 @@
     "account_id": "3개 계정",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:34:35.313967+00:00",
-    "finished_at": "2026-10-18T09:34:35.314265+00:00",
+    "started_at": "2026-10-18T14:24:43.728777+00:00",
+    "finished_at": "2026-10-18T14:24:43.729347+00:00",
     "status": "complete",
     "demo": true,
     "title": "멀티 계정 랜딩 존 (Network 계정 TGW 공유 · 중앙 egress · 워크로드 계정)",
@@ -40,19 +40,19 @@
       {
         "account_id": "111111111111",
         "region": "ap-northeast-2",
-        "finished_at": "2026-10-18T09:34:35.313967+00:00",
+        "finished_at": "2026-10-18T14:24:43.728777+00:00",
         "title": "Network 계정"
       },
       {
         "account_id": "222222222222",
         "region": "ap-northeast-2",
-        "finished_at": "2026-10-18T09:34:35.314202+00:00",
+        "finished_at": "2026-10-18T14:24:43.729138+00:00",
         "title": "prod 계정"
       },
       {
         "account_id": "333333333333",
         "region": "ap-northeast-2",
-        "finished_at": "2026-10-18T09:34:35.314265+00:00",
+        "finished_at": "2026-10-18T14:24:43.729347+00:00",
         "title": "staging 계정"
       }
     ],
@@ -92,7 +92,7 @@
       "설정 관계만 표시하며 실제 통신 여부는 확인하지 않습니다."
     ],
     "sample": "multi-account",
-    "sample_version": 6,
+    "sample_version": 7,
     "practices": [
       "워크로드·환경은 계정으로 분리하고 네트워크는 Network 계정이 소유 (Organizing Your AWS Environment, AWS SRA Network account)",
       "Transit Gateway는 Network 계정에 두고 RAM으로 워크로드 계정에 공유, 각 계정은 자기 VPC만 연결",
@@ -204,6 +204,15 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -230,6 +239,24 @@
       "region": "ap-northeast-2"
     },
     {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
       "service": "kafka",
       "operation": "list_clusters_v2",
       "status": "complete",
@@ -249,6 +276,132 @@
     },
     {
       "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "opensearch",
+      "operation": "list_domain_names",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ecs",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_cluster_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 2,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 2,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "111111111111",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "sagemaker",
       "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
@@ -303,97 +456,7 @@
     },
     {
       "service": "efs",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "efs",
       "operation": "describe_mount_targets",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "redshift",
-      "operation": "describe_clusters",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpc_peering_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_gateways",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 2,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_security_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_placement_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "fsx",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_endpoints",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "111111111111",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0,
@@ -501,6 +564,15 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -527,6 +599,24 @@
       "region": "ap-northeast-2"
     },
     {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
       "service": "kafka",
       "operation": "list_clusters_v2",
       "status": "complete",
@@ -546,6 +636,132 @@
     },
     {
       "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "opensearch",
+      "operation": "list_domain_names",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ecs",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_cluster_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "222222222222",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "sagemaker",
       "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
@@ -600,97 +816,7 @@
     },
     {
       "service": "efs",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "efs",
       "operation": "describe_mount_targets",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "redshift",
-      "operation": "describe_clusters",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpc_peering_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_gateways",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_security_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 1,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_placement_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "fsx",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_endpoints",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "222222222222",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0,
@@ -810,6 +936,15 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -836,6 +971,24 @@
       "region": "ap-northeast-2"
     },
     {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
       "service": "kafka",
       "operation": "list_clusters_v2",
       "status": "complete",
@@ -855,6 +1008,132 @@
     },
     {
       "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "opensearch",
+      "operation": "list_domain_names",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ecs",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_cluster_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0,
+      "account_id": "333333333333",
+      "region": "ap-northeast-2"
+    },
+    {
+      "service": "sagemaker",
       "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
@@ -909,97 +1188,7 @@
     },
     {
       "service": "efs",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "efs",
       "operation": "describe_mount_targets",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "redshift",
-      "operation": "describe_clusters",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpc_peering_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_gateways",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_security_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 1,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_placement_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "fsx",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_endpoints",
-      "status": "complete",
-      "pages": 1,
-      "items": 0,
-      "account_id": "333333333333",
-      "region": "ap-northeast-2"
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0,
@@ -1027,12 +1216,12 @@
         "account_id": "111111111111",
         "region": "ap-northeast-2",
         "partition": "aws",
-        "started_at": "2026-10-18T09:34:35.313967+00:00",
-        "finished_at": "2026-10-18T09:34:35.313967+00:00",
+        "started_at": "2026-10-18T14:24:43.728777+00:00",
+        "finished_at": "2026-10-18T14:24:43.728777+00:00",
         "status": "complete",
         "demo": true,
         "sample": "multi-account",
-        "sample_version": 6,
+        "sample_version": 7,
         "title": "Network 계정",
         "practices": [],
         "scope": [
@@ -1151,6 +1340,13 @@
         },
         {
           "service": "ec2",
+          "operation": "describe_transit_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 1
+        },
+        {
+          "service": "ec2",
           "operation": "describe_transit_gateway_vpc_attachments",
           "status": "complete",
           "pages": 1,
@@ -1171,6 +1367,20 @@
           "items": 0
         },
         {
+          "service": "elasticache",
+          "operation": "describe_replication_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "elasticache",
+          "operation": "describe_cache_subnet_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
           "service": "kafka",
           "operation": "list_clusters_v2",
           "status": "complete",
@@ -1186,6 +1396,104 @@
         },
         {
           "service": "eks",
+          "operation": "list_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "opensearch",
+          "operation": "list_domain_names",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ecs",
+          "operation": "list_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "efs",
+          "operation": "describe_file_systems",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "redshift",
+          "operation": "describe_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "redshift",
+          "operation": "describe_cluster_subnet_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpc_peering_connections",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpn_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpn_connections",
+          "status": "complete",
+          "pages": 1,
+          "items": 2
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_customer_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 2
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_security_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_placement_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "fsx",
+          "operation": "describe_file_systems",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "sagemaker",
+          "operation": "list_endpoints",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "sagemaker",
           "operation": "list_clusters",
           "status": "complete",
           "pages": 1,
@@ -1228,77 +1536,7 @@
         },
         {
           "service": "efs",
-          "operation": "describe_file_systems",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "efs",
           "operation": "describe_mount_targets",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "redshift",
-          "operation": "describe_clusters",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpc_peering_connections",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpn_gateways",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpn_connections",
-          "status": "complete",
-          "pages": 1,
-          "items": 2
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_security_groups",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_placement_groups",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "fsx",
-          "operation": "describe_file_systems",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "sagemaker",
-          "operation": "list_endpoints",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "sagemaker",
-          "operation": "list_clusters",
           "status": "complete",
           "pages": 1,
           "items": 0
@@ -1398,7 +1636,6 @@
         "instances": [],
         "load_balancers": [],
         "target_groups": [],
-        "target_health": [],
         "internet_gateways": [
           {
             "InternetGatewayId": "igw-net",
@@ -1601,15 +1838,11 @@
         "replication_groups": [],
         "cache_subnet_groups": [],
         "msk_clusters": [],
-        "msk_nodes": [],
         "lambda_functions": [],
         "eks_clusters": [],
         "opensearch_domains": [],
-        "opensearch_nodes": [],
         "ecs_services": [],
-        "ecs_tasks": [],
         "efs_file_systems": [],
-        "efs_mount_targets": [],
         "redshift_clusters": [],
         "redshift_subnet_groups": [],
         "vpc_peering_connections": [],
@@ -1688,7 +1921,12 @@
         "placement_groups": [],
         "fsx_file_systems": [],
         "sagemaker_endpoints": [],
-        "sagemaker_clusters": []
+        "sagemaker_clusters": [],
+        "target_health": [],
+        "msk_nodes": [],
+        "opensearch_nodes": [],
+        "ecs_tasks": [],
+        "efs_mount_targets": []
       }
     },
     {
@@ -1697,12 +1935,12 @@
         "account_id": "222222222222",
         "region": "ap-northeast-2",
         "partition": "aws",
-        "started_at": "2026-10-18T09:34:35.314202+00:00",
-        "finished_at": "2026-10-18T09:34:35.314202+00:00",
+        "started_at": "2026-10-18T14:24:43.729138+00:00",
+        "finished_at": "2026-10-18T14:24:43.729138+00:00",
         "status": "complete",
         "demo": true,
         "sample": "multi-account",
-        "sample_version": 6,
+        "sample_version": 7,
         "title": "prod 계정",
         "practices": [],
         "scope": [
@@ -1821,6 +2059,13 @@
         },
         {
           "service": "ec2",
+          "operation": "describe_transit_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 1
+        },
+        {
+          "service": "ec2",
           "operation": "describe_transit_gateway_vpc_attachments",
           "status": "complete",
           "pages": 1,
@@ -1841,6 +2086,20 @@
           "items": 0
         },
         {
+          "service": "elasticache",
+          "operation": "describe_replication_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "elasticache",
+          "operation": "describe_cache_subnet_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
           "service": "kafka",
           "operation": "list_clusters_v2",
           "status": "complete",
@@ -1856,6 +2115,104 @@
         },
         {
           "service": "eks",
+          "operation": "list_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "opensearch",
+          "operation": "list_domain_names",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ecs",
+          "operation": "list_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "efs",
+          "operation": "describe_file_systems",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "redshift",
+          "operation": "describe_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "redshift",
+          "operation": "describe_cluster_subnet_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpc_peering_connections",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpn_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpn_connections",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_customer_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_security_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 1
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_placement_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "fsx",
+          "operation": "describe_file_systems",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "sagemaker",
+          "operation": "list_endpoints",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "sagemaker",
           "operation": "list_clusters",
           "status": "complete",
           "pages": 1,
@@ -1898,77 +2255,7 @@
         },
         {
           "service": "efs",
-          "operation": "describe_file_systems",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "efs",
           "operation": "describe_mount_targets",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "redshift",
-          "operation": "describe_clusters",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpc_peering_connections",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpn_gateways",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpn_connections",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_security_groups",
-          "status": "complete",
-          "pages": 1,
-          "items": 1
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_placement_groups",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "fsx",
-          "operation": "describe_file_systems",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "sagemaker",
-          "operation": "list_endpoints",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "sagemaker",
-          "operation": "list_clusters",
           "status": "complete",
           "pages": 1,
           "items": 0
@@ -2120,7 +2407,7 @@
             "State": {
               "Name": "running"
             },
-            "PrivateIpAddress": "10.0.1.11",
+            "PrivateIpAddress": "10.10.0.10",
             "Placement": {
               "AvailabilityZone": "ap-northeast-2a"
             },
@@ -2160,7 +2447,7 @@
             "State": {
               "Name": "running"
             },
-            "PrivateIpAddress": "10.0.2.12",
+            "PrivateIpAddress": "10.10.1.10",
             "Placement": {
               "AvailabilityZone": "ap-northeast-2b"
             },
@@ -2200,7 +2487,7 @@
             "State": {
               "Name": "running"
             },
-            "PrivateIpAddress": "10.0.3.13",
+            "PrivateIpAddress": "10.10.2.10",
             "Placement": {
               "AvailabilityZone": "ap-northeast-2c"
             },
@@ -2270,40 +2557,6 @@
             "HealthCheckPath": "/health",
             "LoadBalancerArns": [
               "arn:aws:elasticloadbalancing:ap-northeast-2:222222222222:loadbalancer/app/prod-internal-alb/0000000000000001"
-            ]
-          }
-        ],
-        "target_health": [
-          {
-            "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:222222222222:targetgroup/prod-app/0000000000000001",
-            "Descriptions": [
-              {
-                "Target": {
-                  "Id": "i-prodappa0000012",
-                  "Port": 443
-                },
-                "TargetHealth": {
-                  "State": "healthy"
-                }
-              },
-              {
-                "Target": {
-                  "Id": "i-prodappb0000012",
-                  "Port": 443
-                },
-                "TargetHealth": {
-                  "State": "healthy"
-                }
-              },
-              {
-                "Target": {
-                  "Id": "i-prodappc0000012",
-                  "Port": 443
-                },
-                "TargetHealth": {
-                  "State": "healthy"
-                }
-              }
             ]
           }
         ],
@@ -2510,15 +2763,11 @@
         "replication_groups": [],
         "cache_subnet_groups": [],
         "msk_clusters": [],
-        "msk_nodes": [],
         "lambda_functions": [],
         "eks_clusters": [],
         "opensearch_domains": [],
-        "opensearch_nodes": [],
         "ecs_services": [],
-        "ecs_tasks": [],
         "efs_file_systems": [],
-        "efs_mount_targets": [],
         "redshift_clusters": [],
         "redshift_subnet_groups": [],
         "vpc_peering_connections": [],
@@ -2557,7 +2806,45 @@
         "placement_groups": [],
         "fsx_file_systems": [],
         "sagemaker_endpoints": [],
-        "sagemaker_clusters": []
+        "sagemaker_clusters": [],
+        "target_health": [
+          {
+            "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:222222222222:targetgroup/prod-app/0000000000000001",
+            "Descriptions": [
+              {
+                "Target": {
+                  "Id": "i-prodappa0000012",
+                  "Port": 443
+                },
+                "TargetHealth": {
+                  "State": "healthy"
+                }
+              },
+              {
+                "Target": {
+                  "Id": "i-prodappb0000012",
+                  "Port": 443
+                },
+                "TargetHealth": {
+                  "State": "healthy"
+                }
+              },
+              {
+                "Target": {
+                  "Id": "i-prodappc0000012",
+                  "Port": 443
+                },
+                "TargetHealth": {
+                  "State": "healthy"
+                }
+              }
+            ]
+          }
+        ],
+        "msk_nodes": [],
+        "opensearch_nodes": [],
+        "ecs_tasks": [],
+        "efs_mount_targets": []
       }
     },
     {
@@ -2566,12 +2853,12 @@
         "account_id": "333333333333",
         "region": "ap-northeast-2",
         "partition": "aws",
-        "started_at": "2026-10-18T09:34:35.314265+00:00",
-        "finished_at": "2026-10-18T09:34:35.314265+00:00",
+        "started_at": "2026-10-18T14:24:43.729347+00:00",
+        "finished_at": "2026-10-18T14:24:43.729347+00:00",
         "status": "complete",
         "demo": true,
         "sample": "multi-account",
-        "sample_version": 6,
+        "sample_version": 7,
         "title": "staging 계정",
         "practices": [],
         "scope": [
@@ -2690,6 +2977,13 @@
         },
         {
           "service": "ec2",
+          "operation": "describe_transit_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 1
+        },
+        {
+          "service": "ec2",
           "operation": "describe_transit_gateway_vpc_attachments",
           "status": "complete",
           "pages": 1,
@@ -2710,6 +3004,20 @@
           "items": 0
         },
         {
+          "service": "elasticache",
+          "operation": "describe_replication_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "elasticache",
+          "operation": "describe_cache_subnet_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
           "service": "kafka",
           "operation": "list_clusters_v2",
           "status": "complete",
@@ -2725,6 +3033,104 @@
         },
         {
           "service": "eks",
+          "operation": "list_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "opensearch",
+          "operation": "list_domain_names",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ecs",
+          "operation": "list_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "efs",
+          "operation": "describe_file_systems",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "redshift",
+          "operation": "describe_clusters",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "redshift",
+          "operation": "describe_cluster_subnet_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpc_peering_connections",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpn_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_vpn_connections",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_customer_gateways",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_security_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 1
+        },
+        {
+          "service": "ec2",
+          "operation": "describe_placement_groups",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "fsx",
+          "operation": "describe_file_systems",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "sagemaker",
+          "operation": "list_endpoints",
+          "status": "complete",
+          "pages": 1,
+          "items": 0
+        },
+        {
+          "service": "sagemaker",
           "operation": "list_clusters",
           "status": "complete",
           "pages": 1,
@@ -2767,77 +3173,7 @@
         },
         {
           "service": "efs",
-          "operation": "describe_file_systems",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "efs",
           "operation": "describe_mount_targets",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "redshift",
-          "operation": "describe_clusters",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpc_peering_connections",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpn_gateways",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_vpn_connections",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_security_groups",
-          "status": "complete",
-          "pages": 1,
-          "items": 1
-        },
-        {
-          "service": "ec2",
-          "operation": "describe_placement_groups",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "fsx",
-          "operation": "describe_file_systems",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "sagemaker",
-          "operation": "list_endpoints",
-          "status": "complete",
-          "pages": 1,
-          "items": 0
-        },
-        {
-          "service": "sagemaker",
-          "operation": "list_clusters",
           "status": "complete",
           "pages": 1,
           "items": 0
@@ -2953,7 +3289,7 @@
             "State": {
               "Name": "running"
             },
-            "PrivateIpAddress": "10.0.1.11",
+            "PrivateIpAddress": "10.20.0.10",
             "Placement": {
               "AvailabilityZone": "ap-northeast-2a"
             },
@@ -2993,7 +3329,7 @@
             "State": {
               "Name": "running"
             },
-            "PrivateIpAddress": "10.0.2.12",
+            "PrivateIpAddress": "10.20.1.10",
             "Placement": {
               "AvailabilityZone": "ap-northeast-2b"
             },
@@ -3059,31 +3395,6 @@
             "HealthCheckPath": "/health",
             "LoadBalancerArns": [
               "arn:aws:elasticloadbalancing:ap-northeast-2:333333333333:loadbalancer/app/staging-internal-alb/0000000000000001"
-            ]
-          }
-        ],
-        "target_health": [
-          {
-            "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:333333333333:targetgroup/staging-app/0000000000000001",
-            "Descriptions": [
-              {
-                "Target": {
-                  "Id": "i-stagingappa000001",
-                  "Port": 443
-                },
-                "TargetHealth": {
-                  "State": "healthy"
-                }
-              },
-              {
-                "Target": {
-                  "Id": "i-stagingappb000001",
-                  "Port": 443
-                },
-                "TargetHealth": {
-                  "State": "healthy"
-                }
-              }
             ]
           }
         ],
@@ -3270,15 +3581,11 @@
         "replication_groups": [],
         "cache_subnet_groups": [],
         "msk_clusters": [],
-        "msk_nodes": [],
         "lambda_functions": [],
         "eks_clusters": [],
         "opensearch_domains": [],
-        "opensearch_nodes": [],
         "ecs_services": [],
-        "ecs_tasks": [],
         "efs_file_systems": [],
-        "efs_mount_targets": [],
         "redshift_clusters": [],
         "redshift_subnet_groups": [],
         "vpc_peering_connections": [],
@@ -3317,7 +3624,36 @@
         "placement_groups": [],
         "fsx_file_systems": [],
         "sagemaker_endpoints": [],
-        "sagemaker_clusters": []
+        "sagemaker_clusters": [],
+        "target_health": [
+          {
+            "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:333333333333:targetgroup/staging-app/0000000000000001",
+            "Descriptions": [
+              {
+                "Target": {
+                  "Id": "i-stagingappa000001",
+                  "Port": 443
+                },
+                "TargetHealth": {
+                  "State": "healthy"
+                }
+              },
+              {
+                "Target": {
+                  "Id": "i-stagingappb000001",
+                  "Port": 443
+                },
+                "TargetHealth": {
+                  "State": "healthy"
+                }
+              }
+            ]
+          }
+        ],
+        "msk_nodes": [],
+        "opensearch_nodes": [],
+        "ecs_tasks": [],
+        "efs_mount_targets": []
       }
     }
   ],
@@ -3908,7 +4244,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.1.11",
+          "PrivateIpAddress": "10.10.0.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -3958,7 +4294,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.2.12",
+          "PrivateIpAddress": "10.10.1.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
@@ -4008,7 +4344,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.3.13",
+          "PrivateIpAddress": "10.10.2.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2c"
           },
@@ -4660,7 +4996,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.1.11",
+          "PrivateIpAddress": "10.20.0.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -4710,7 +5046,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.2.12",
+          "PrivateIpAddress": "10.20.1.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
