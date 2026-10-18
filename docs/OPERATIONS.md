@@ -61,8 +61,10 @@ diagram-bot diff reports/yesterday/snapshot.json reports/today/snapshot.json --f
 | `~/.cache/diagram-bot/drawio/32.4.1` | 편집기 | `XDG_CACHE_HOME`으로 변경 |
 | `~/.local/share/diagram-bot/snapshots` | 수집 스냅샷(JSON) | 원본 수집 데이터. 덮어쓰지 않습니다. |
 | `~/.local/share/diagram-bot/documents` | 보기별 편집본과 최근 20개 이력 | 원본과 분리 |
+| `~/.local/share/diagram-bot/standards` | admin이 기본 규격으로 채택한 사내 표준 | 서버 시작 때 복원 |
+| `~/.local/share/diagram-bot/audit.log` | 감사 로그 (JSON Lines) | 아래 팀 모드 |
 
-`serve --data-dir`로 위치를 바꿀 수 있습니다. 백업은 이 디렉터리를 복사하면 되고, 스냅샷 파일은 다른 환경에서 `스냅샷 JSON 가져오기`로 열 수 있습니다.
+`XDG_DATA_HOME`이나 `serve --data-dir`로 위치를 바꿀 수 있습니다. 백업은 이 디렉터리를 복사하면 되고, 스냅샷 파일은 다른 환경에서 `스냅샷 JSON 가져오기`로 열 수 있습니다.
 스냅샷에는 리소스 ID·IP·태그가 들어 있으므로 회사 데이터 분류 기준에 맞는 저장소에 보관하세요.
 
 ## 공유 환경 (팀 모드)
@@ -79,12 +81,12 @@ diagram-bot serve --host 0.0.0.0 --port 8443 --data-dir /var/lib/diagram-bot \
 ```
 
 - 루프백이 아닌 주소는 사용자 파일, TLS 인증서·키, 허용 호스트 이름이 모두 있어야 열립니다. 하나라도 없으면 시작하지 않습니다.
-- 역할: `viewer` 구성도·검토·비교 보기 / `editor` 편집 저장·자동 재배치·복원·스냅샷 가져오기 / `admin` AWS 수집과 감사 로그 조회까지.
+- 역할: `viewer` 구성도·검토·비교 보기 / `editor` 편집 저장·자동 재배치·복원·스냅샷 가져오기 / `admin` AWS 로그인·수집, 사내 표준 기본 지정·삭제, 감사 로그 조회까지.
 - 비밀번호는 PBKDF2-SHA256(600,000회, 사용자별 salt)로 저장되고 사용자 파일은 `0600` 권한으로 만들어집니다. 사용자 파일을 바꾸면 서버를 다시 시작하세요.
 - 같은 주소에서 한 사용자 이름으로 로그인을 5번 실패하면 그 이름은 15분 동안 막힙니다(인증 프록시 뒤에서도 다른 사용자는 계속 로그인). 한 주소에서 이름에 상관없이 50번 실패하면 그 주소 전체가 막힙니다. 세션은 8시간 뒤 만료되고 서버를 다시 시작하면 모두 다시 로그인합니다.
 - 쿠키는 HttpOnly·Secure·SameSite=Strict이고 HSTS를 보냅니다. Host 헤더는 `--allowed-host`만 허용합니다.
 - **감사 로그:** `<data-dir>/audit.log`(JSON Lines)에 로그인 성공·실패·차단, 로그아웃, 모든 변경 요청(사용자·경로·대상·결과 코드·접속 주소), 수집 결과가 남습니다.
-  admin은 `GET /api/audit?limit=200`으로 최근 항목을 볼 수 있습니다. 회사 로그 수집기로 이 파일을 전송하세요.
+  admin은 프로필 메뉴 `감사 로그`나 `GET /api/audit?limit=200`으로 최근 항목을 봅니다. 회사 로그 수집기로 이 파일을 전송하세요.
 - **SSO (OpenID Connect):** 회사 IdP(Okta, Microsoft Entra ID, Google Workspace, Keycloak, IAM Identity Center의 OIDC 앱 등)에
   웹 애플리케이션을 등록하고 리다이렉트 URI를 `https://<호스트>:<포트>/auth/oidc/callback`으로 지정한 뒤 `--oidc-config oidc.json`으로 실행합니다.
   로컬 계정(`--users`)과 함께 쓸 수도, SSO만 쓸 수도 있습니다.
