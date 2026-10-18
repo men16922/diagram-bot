@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..drawio import carry_annotations, generate_document, validate_document
-from ..drawio_spec import resolve_spec
+from ..drawio_spec import request_spec
 from ..views import view_graph
 from ..xml_align import adopt_company_xml, align_drawio_xml, import_drawio_xml, inspect_drawio_xml
 
@@ -24,7 +24,7 @@ class RestoreRequest(RevisionRequest):
 class XmlAlignRequest(BaseModel):
     xml: str = Field(max_length=10 * 1024 * 1024)
     mode: str = "preserve"
-    spec: str | dict | None = None
+    spec: str | dict | None = Field(default=None, description="preset name or inline spec object; never a path")
     reparent: bool = True
     route_edges: bool = True
     normalize_styles: bool = False
@@ -63,11 +63,7 @@ def describe(document, selection, history):
 
 
 def generate(snapshot, scope, spec=None):
-    try:
-        cfg = resolve_spec(spec)
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(422, str(exc)) from exc
-    return generate_document(snapshot, scope[1], scope[3], scope[0], scope[2], scope[4], spec=cfg)
+    return generate_document(snapshot, scope[1], scope[3], scope[0], scope[2], scope[4], spec=request_spec(spec))
 
 
 def router(context):
@@ -122,7 +118,7 @@ def router(context):
             aligned = align_drawio_xml(
                 payload.xml,
                 mode=payload.mode,
-                spec=payload.spec,
+                spec=request_spec(payload.spec),
                 reparent=payload.reparent,
                 route_edges=payload.route_edges,
                 normalize_styles=payload.normalize_styles,

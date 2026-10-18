@@ -51,8 +51,8 @@ VPC마다 위에서 아래로:
 - 그룹 스타일 `STYLES`는 draw.io `aws4` 라이브러리의 그룹(`group_aws_cloud_alt`, `group_region`, `group_vpc2`, `group_auto_scaling_group`, `group_corporate_data_center`, `group_account`)을 쓴다.
 
 ## drawio.py
-- `generate_document(snapshot, vpc_id, include_references, view, resource, routes, spec=None)`: 보기를 지정하면 한 페이지, 아니면 "전체 구성" + VPC마다 상세 페이지(VPC `resource_id` 정렬, 페이지 이름 = VPC ID). 루트는 `<mxfile host="Diagram Bot" compressed="false">`. `spec`으로 회사 규격(`"clean"`, `"mxcell"`, `DrawioSpec`)을 적용할 수 있다([[drawio-format-and-alignment]]).
-- `page()`: 셀마다 `<object>`(또는 `spec.cell_wrapper="mxcell"`이면 `<mxCell>`)에 `label`과 `resourceId`, `tooltip`, `summary="1"`(카드) 등을 속성으로 단다. 관계 셀은 `relationId`(그래프 관계 ID), `relation`(`RELATIONS`의 한국어 이름, 없으면 원래 이름), `evidence`를 갖고, 스타일에 `exitX/exitY/entryX/entryY` 제약과 `orthogonalEdgeStyle`, 중간점 `Array as="points"`를 넣는다. 보조(SG·ENI·EBS 등) 관계는 회색 점선.
+- `generate_document(snapshot, vpc_id, include_references, view, resource, routes, spec=None)`: 보기를 지정하면 한 페이지, 아니면 "전체 구성" + VPC마다 상세 페이지(VPC `resource_id` 정렬, 페이지 이름 = VPC ID). 루트는 `<mxfile host="{spec.host}" compressed="false">`(기본 `Diagram Bot`). `spec`으로 회사 규격(`"clean"`, `"mxcell"`, `DrawioSpec`)을 적용할 수 있다([[drawio-format-and-alignment]]).
+- `page()`: 셀마다 `<object>`(또는 `spec.cell_wrapper="mxCell"`이면 `<mxCell>`, `"UserObject"`면 `<UserObject>`; 입력은 대소문자 무시로 정규화)에 `label`과 `resourceId`, `tooltip`, `summary="1"`(카드) 등을 속성으로 단다. 관계 셀은 `relationId`(그래프 관계 ID), `relation`(`RELATIONS`의 한국어 이름, 없으면 원래 이름), `evidence`를 갖고, 스타일에 `exitX/exitY/entryX/entryY` 제약과 `orthogonalEdgeStyle`, 중간점 `Array as="points"`를 넣는다. 보조(SG·ENI·EBS 등) 관계는 회색 점선.
 - `validate_document(xml)`: 10 MiB 이하, `defusedxml`로 파싱(외부 엔티티 차단), 루트는 `mxfile` 또는 `mxGraphModel`, `mxfile`이면 `diagram/mxGraphModel`이 있어야 함(압축 문서 거부).
 - `carry_annotations(saved_xml, generated_xml)`: 재배치 때 저장본 첫 페이지에서 사용자가 더한 셀만 새 문서로 옮긴다. 생성 셀(고정 ID, `r-` 접두, `resourceId`·`relationId`·`relationIndex`·`summary` 속성)은 건너뛰고, 부모·끝점이 새 문서에 없는 셀도 건너뛴다. `routes/documents.py`의 재배치가 `DocumentStore.replace(merge=carry_annotations)`로 쓴다([[storage]]).
 

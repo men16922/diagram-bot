@@ -13,10 +13,13 @@ draw.io convention without modifying `layout.py` or `drawio.py`:
 """
 from dataclasses import dataclass, field
 import json
+import math
 import os
 from pathlib import Path
 import re
 from defusedxml.ElementTree import fromstring
+
+from .errors import InputError
 
 DEFAULT_ATTRIBUTE_MAP = {
     "resource": "resourceId",
@@ -100,12 +103,44 @@ def patch_style(style_str, **overrides):
     return format_style(flags, kv)
 
 
+WRAPPERS = {"object": "object", "userobject": "UserObject", "mxcell": "mxCell"}
+# Attributes draw.io itself reads on a cell or its wrapper; a mapped custom attribute must not shadow them.
+RESERVED_ATTRIBUTES = {"id", "parent", "style", "vertex", "edge", "source", "target", "label", "value", "placeholders",
+                       "connectable", "collapsed", "visible", "as"}
+ARROWS = {"none", "classic", "classicThin", "block", "blockThin", "open", "openThin", "oval", "diamond", "diamondThin",
+          "dash", "cross", "async", "openAsync", "circle", "circlePlus", "halfCircle"}
+XML_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9._-]{0,63}$")
+KIND_NAME = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
+COLOR = re.compile(r"^(#[0-9A-Fa-f]{3,8}|none)$")
+FONT = re.compile(r"^[\w .,'-]{1,64}$")
+SPEC_TEXT = re.compile(r"^[^\x00-\x1f;=<>]{0,120}$")
+NUMBERS = {"margin_x": (0, 2000), "margin_y": (0, 2000), "font_size": (4, 96), "grid_size": (1, 100), "icon_size": (8, 256),
+           "slot_w": (40, 1000), "row_h": (40, 1000)}
+
+
+def _check(ok, message):
+    if not ok:
+        raise InputError(f"draw.io 규격(spec) 오류: {message}")
+
+
+def _check_style(value, where):
+    _check(isinstance(value, str) and len(value) <= 65536 and not re.search(r"[\x00-\x1f]", value),
+           f"{where}는 64 KiB 이하의 draw.io 스타일 문자열이어야 합니다.")
+
+
+def _learned(pattern, value, default):
+    """A value read from a template only when it is one the spec accepts (newer draw.io writes e.g. light-dark() colours)."""
+    return value if isinstance(value, str) and pattern.match(value) else default
+
+
 @dataclass(frozen=True)
 class DrawioSpec:
-    """Declarative specification for draw.io XML serialization, container hierarchy, and style normalization."""
+    """Declarative specification for draw.io XML serialization, container hierarchy, and style normalization.
+
+    Every field is validated on construction (InputError): request data reaches XML tag, attribute and style names."""
     name: str = "default"
     host: str = "Diagram Bot"
-    cell_wrapper: str = "object"          # "object" | "UserObject" | "mxCell"
+    cell_wrapper: str = "object"          # "object" | "UserObject" | "mxCell" (case-insensitive on input)
     include_header: bool = True           # False omits top heading/scope banner and shifts diagram to margin_y
     use_cloud_box: bool = True            # False omits outer AWS Cloud container (reparents children upward)
     use_region_box: bool = True           # False omits Region container (reparents VPCs upward)
@@ -123,7 +158,7 @@ class DrawioSpec:
     slot_w: float = 150.0
     row_h: float = 144.0
     edge_style: str = DEFAULT_EDGE_STYLE
-    edge_end_arrow: str = "none"          # "none" | "classic" | "block" | "open"
+    edge_end_arrow: str = "none"          # ARROWS
     edge_end_fill: bool = True
     edge_rounded: bool = True
     attribute_map: dict = field(default_factory=lambda: dict(DEFAULT_ATTRIBUTE_MAP))
@@ -131,6 +166,48 @@ class DrawioSpec:
     resource_styles: dict = field(default_factory=dict)
     resource_icons: dict = field(default_factory=dict)
     service_icons: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        _check(isinstance(self.name, str) and SPEC_TEXT.match(self.name), "name은 120자 이하의 문자열이어야 합니다.")
+        _check(isinstance(self.host, str) and SPEC_TEXT.match(self.host), "host는 120자 이하의 문자열이어야 합니다.")
+        wrapper = WRAPPERS.get(self.cell_wrapper.lower()) if isinstance(self.cell_wrapper, str) else None
+        _check(wrapper, f"cell_wrapper는 {', '.join(WRAPPERS.values())} 중 하나여야 합니다.")
+        object.__setattr__(self, "cell_wrapper", wrapper)
+        for key in ("include_header", "use_cloud_box", "use_region_box", "use_az_box", "isolated_subnet_distinct",
+                    "edge_end_fill", "edge_rounded"):
+            _check(isinstance(getattr(self, key), bool), f"{key}는 true 또는 false여야 합니다.")
+        _check(self.subnet_label_style in ("full", "compact"), "subnet_label_style은 full 또는 compact여야 합니다.")
+        for key, (low, high) in NUMBERS.items():
+            value = getattr(self, key)
+            _check(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and low <= value <= high,
+                   f"{key}는 {low}~{high} 사이의 숫자여야 합니다.")
+        _check(isinstance(self.font_family, str) and FONT.match(self.font_family), "font_family는 글꼴 이름이어야 합니다(; = 금지).")
+        for key in ("font_color", "background"):
+            _check(isinstance(getattr(self, key), str) and COLOR.match(getattr(self, key)), f"{key}는 #RRGGBB 색이어야 합니다.")
+        _check(self.edge_end_arrow in ARROWS, f"edge_end_arrow는 {', '.join(sorted(ARROWS))} 중 하나여야 합니다.")
+        _check_style(self.edge_style, "edge_style")
+        _check(isinstance(self.attribute_map, dict) and len(self.attribute_map) <= 32, "attribute_map은 객체여야 합니다.")
+        for key, name in self.attribute_map.items():
+            _check(key in DEFAULT_ATTRIBUTE_MAP, f"attribute_map 키는 {', '.join(DEFAULT_ATTRIBUTE_MAP)} 중 하나여야 합니다.")
+            _check(isinstance(name, str) and XML_NAME.match(name) and name.lower() not in RESERVED_ATTRIBUTES,
+                   f"attribute_map.{key}={name!r}: XML 속성 이름이어야 하고 draw.io 예약 이름은 쓸 수 없습니다.")
+        _check(isinstance(self.styles, dict) and set(self.styles) <= set(DEFAULT_STYLES),
+               f"styles 키는 {', '.join(DEFAULT_STYLES)} 중 하나여야 합니다.")
+        for key, value in self.styles.items():
+            _check_style(value, f"styles.{key}")
+        for table in ("resource_styles", "resource_icons", "service_icons"):
+            values = getattr(self, table)
+            _check(isinstance(values, dict) and len(values) <= 200, f"{table}는 객체여야 합니다.")
+            for key, value in values.items():
+                _check(isinstance(key, str) and KIND_NAME.match(key), f"{table}의 키 {key!r}는 리소스 종류 이름이어야 합니다.")
+                if table == "resource_styles":
+                    _check_style(value, f"resource_styles.{key}")
+                else:
+                    _check(isinstance(value, (list, tuple)) and len(value) == 2 and isinstance(value[0], str)
+                           and KIND_NAME.match(value[0]) and isinstance(value[1], str) and COLOR.match(value[1]),
+                           f"{table}.{key}는 [aws4 아이콘 이름, #색] 이어야 합니다.")
+            if table != "resource_styles":
+                object.__setattr__(self, table, {k: tuple(v) for k, v in values.items()})
 
     def role_style(self, role):
         base = self.styles.get(role) or DEFAULT_STYLES.get(role, DEFAULT_STYLES["references"])
@@ -149,82 +226,32 @@ class DrawioSpec:
         return style
 
     def to_dict(self):
-        return {
-            "name": self.name,
-            "host": self.host,
-            "cell_wrapper": self.cell_wrapper,
-            "include_header": self.include_header,
-            "use_cloud_box": self.use_cloud_box,
-            "use_region_box": self.use_region_box,
-            "use_az_box": self.use_az_box,
-            "subnet_label_style": self.subnet_label_style,
-            "margin_x": self.margin_x,
-            "margin_y": self.margin_y,
-            "isolated_subnet_distinct": self.isolated_subnet_distinct,
-            "font_family": self.font_family,
-            "font_size": self.font_size,
-            "font_color": self.font_color,
-            "background": self.background,
-            "grid_size": self.grid_size,
-            "icon_size": self.icon_size,
-            "slot_w": self.slot_w,
-            "row_h": self.row_h,
-            "edge_style": self.edge_style,
-            "edge_end_arrow": self.edge_end_arrow,
-            "edge_end_fill": self.edge_end_fill,
-            "edge_rounded": self.edge_rounded,
-            "attribute_map": dict(self.attribute_map),
-            "styles": dict(self.styles),
-            "resource_styles": dict(self.resource_styles),
-            "resource_icons": {k: list(v) for k, v in self.resource_icons.items()},
-            "service_icons": {k: list(v) for k, v in self.service_icons.items()},
-        }
+        data = {name: getattr(self, name) for name in self.__dataclass_fields__}
+        data.update({key: dict(data[key]) for key in ("attribute_map", "styles", "resource_styles")})
+        data.update({key: {k: list(v) for k, v in data[key].items()} for key in ("resource_icons", "service_icons")})
+        return data
 
     @classmethod
     def from_dict(cls, data):
+        """A spec from JSON: unspecified fields come from the `base` preset (default "default"); unknown keys are refused."""
         if isinstance(data, cls):
             return data
-        base_name = (data or {}).get("base", "default")
-        base = PRESETS.get(base_name, DEFAULT_SPEC)
-        merged_styles = {**base.styles, **(data.get("styles") or {})}
-        merged_res_styles = {**base.resource_styles, **(data.get("resource_styles") or {})}
-        merged_attrs = (
-            {**base.attribute_map, **(data.get("attribute_map") or {})}
-            if "attribute_map" not in data or data["attribute_map"] is not None
-            else {}
-        )
-        if data.get("attribute_map") == {}:
-            merged_attrs = {}
-        return cls(
-            name=data.get("name", base.name),
-            host=data.get("host", base.host),
-            cell_wrapper=data.get("cell_wrapper", base.cell_wrapper),
-            include_header=data.get("include_header", base.include_header),
-            use_cloud_box=bool(data.get("use_cloud_box", base.use_cloud_box)),
-            use_region_box=bool(data.get("use_region_box", base.use_region_box)),
-            use_az_box=bool(data.get("use_az_box", base.use_az_box)),
-            subnet_label_style=data.get("subnet_label_style", base.subnet_label_style),
-            margin_x=int(data.get("margin_x", base.margin_x)),
-            margin_y=int(data.get("margin_y", base.margin_y)),
-            isolated_subnet_distinct=bool(data.get("isolated_subnet_distinct", base.isolated_subnet_distinct)),
-            font_family=data.get("font_family", base.font_family),
-            font_size=int(data.get("font_size", base.font_size)),
-            font_color=data.get("font_color", base.font_color),
-            background=data.get("background", base.background),
-            grid_size=int(data.get("grid_size", base.grid_size)),
-            icon_size=int(data.get("icon_size", base.icon_size)),
-            slot_w=float(data.get("slot_w", base.slot_w)),
-            row_h=float(data.get("row_h", base.row_h)),
-            edge_style=data.get("edge_style", base.edge_style),
-            edge_end_arrow=data.get("edge_end_arrow", base.edge_end_arrow),
-            edge_end_fill=bool(data.get("edge_end_fill", base.edge_end_fill)),
-            edge_rounded=bool(data.get("edge_rounded", base.edge_rounded)),
-            attribute_map=merged_attrs,
-            styles=merged_styles,
-            resource_styles=merged_res_styles,
-            resource_icons={k: tuple(v) for k, v in (data.get("resource_icons") or base.resource_icons).items()},
-            service_icons={k: tuple(v) for k, v in (data.get("service_icons") or base.service_icons).items()},
-        )
+        _check(isinstance(data, dict), "spec는 프리셋 이름 또는 JSON 객체여야 합니다.")
+        unknown = set(data) - set(cls.__dataclass_fields__) - {"base"}
+        _check(not unknown, f"알 수 없는 키: {', '.join(sorted(map(str, unknown)))}")
+        base = PRESETS.get(data.get("base", "default"))
+        _check(base is not None, f"base는 {', '.join(PRESETS)} 중 하나여야 합니다.")
+        values = {name: getattr(base, name) for name in cls.__dataclass_fields__}
+        values.update({k: v for k, v in data.items() if k != "base"})
+        for key in ("styles", "resource_styles"):
+            _check(isinstance(data.get(key) or {}, dict), f"{key}는 객체여야 합니다.")
+            values[key] = {**getattr(base, key), **(data.get(key) or {})}
+        if "attribute_map" in data:
+            _check(data["attribute_map"] is None or isinstance(data["attribute_map"], dict), "attribute_map은 객체여야 합니다.")
+            values["attribute_map"] = {**base.attribute_map, **data["attribute_map"]} if data["attribute_map"] else {}
+        for key in ("resource_icons", "service_icons"):
+            values[key] = data.get(key) or getattr(base, key)
+        return cls(**values)
 
 
 DEFAULT_SPEC = DrawioSpec()
@@ -277,7 +304,8 @@ def get_default_spec() -> DrawioSpec:
 
 
 def resolve_spec(spec=None) -> DrawioSpec:
-    """Resolve `None`, a preset name, a `.drawio`/`.json` file path, raw XML text, a `dict`, or a `DrawioSpec`."""
+    """Trusted callers (library, CLI, DIAGRAM_BOT_SPEC): `None`, a preset name, a `.drawio`/`.json` file path, raw XML text,
+    a `dict`, or a `DrawioSpec`. Request data goes through `request_spec`, which never touches the filesystem."""
     if spec is None:
         return get_default_spec()
     if isinstance(spec, DrawioSpec):
@@ -294,12 +322,26 @@ def resolve_spec(spec=None) -> DrawioSpec:
         if path.is_file():
             content = path.read_text(encoding="utf-8")
             if path.suffix.lower() == ".json" or content.lstrip().startswith("{"):
-                return DrawioSpec.from_dict(json.loads(content))
-            return spec_from_xml(content, name=path.stem)
-        raise ValueError(f"알 수 없는 draw.io 규격 프리셋 또는 파일입니다: {spec} (선택: {', '.join(PRESETS)})")
+                try:
+                    return DrawioSpec.from_dict(json.loads(content))
+                except json.JSONDecodeError as exc:
+                    raise InputError(f"규격 JSON을 읽지 못했습니다 ({path.name}): {exc}") from exc
+            return spec_from_xml(content, name=re.sub(r"[^\w.-]+", "-", path.stem)[:60] or "company-extracted")
+        raise InputError(f"알 수 없는 draw.io 규격 프리셋 또는 파일입니다: {spec} (선택: {', '.join(PRESETS)})")
     if isinstance(spec, dict):
         return DrawioSpec.from_dict(spec)
-    raise TypeError(f"지원하지 않는 spec 형식입니다: {type(spec)!r}")
+    raise InputError(f"지원하지 않는 spec 형식입니다: {type(spec).__name__}")
+
+
+def request_spec(spec):
+    """A spec from request data: None, a preset name or an inline JSON object. Anything else (a path, XML) is refused."""
+    if spec is None or isinstance(spec, DrawioSpec):
+        return spec
+    if isinstance(spec, str):
+        if spec.strip() in PRESETS:
+            return PRESETS[spec.strip()]
+        raise InputError(f"spec은 프리셋 이름({', '.join(PRESETS)}) 또는 JSON 객체여야 합니다.")
+    return DrawioSpec.from_dict(spec)
 
 
 def _detect_container_role(label, style_str):
@@ -381,14 +423,15 @@ def _detect_resource_kind(label, style_str):
 def spec_from_xml(xml_text, *, name="company-extracted") -> DrawioSpec:
     """Extract a complete `DrawioSpec` automatically from an existing company `drawio.xml` file."""
     root = fromstring(xml_text)
-    host = root.get("host", "draw.io") if root.tag == "mxfile" else "draw.io"
+    host = _learned(SPEC_TEXT, root.get("host"), "draw.io") if root.tag == "mxfile" else "draw.io"
     model = root.find(".//mxGraphModel") if root.tag == "mxfile" else root
     graph_root = model.find("root") if model is not None else None
     if graph_root is None:
-        raise ValueError("draw.io mxGraphModel/root를 찾을 수 없습니다.")
+        raise InputError("draw.io mxGraphModel/root를 찾을 수 없습니다.")
 
-    background = model.get("background", "#ffffff") or "#ffffff"
-    grid_size = int(model.get("gridSize", "10") or 10)
+    background = _learned(COLOR, model.get("background"), "#ffffff")
+    grid = model.get("gridSize") or ""
+    grid_size = int(grid) if grid.isdigit() and 1 <= int(grid) <= 100 else 10
     wrappers = {el.tag for el in graph_root if el.tag in ("object", "UserObject")}
     cell_wrapper = "UserObject" if "UserObject" in wrappers else ("object" if "object" in wrappers else "mxCell")
 
@@ -411,10 +454,12 @@ def spec_from_xml(xml_text, *, name="company-extracted") -> DrawioSpec:
         if not style_str:
             continue
         _, kv = parse_style(style_str)
-        if kv.get("fontFamily"):
+        if FONT.match(kv.get("fontFamily", "")):
             fonts.append(kv["fontFamily"])
-        if kv.get("fontColor"):
+        if COLOR.match(kv.get("fontColor", "")):
             font_colors.append(kv["fontColor"])
+        if len(style_str) > 65536 or re.search(r"[\x00-\x1f]", style_str):
+            continue
         if inner.get("vertex") == "1":
             role = _detect_container_role(label, style_str)
             if role:
@@ -433,7 +478,7 @@ def spec_from_xml(xml_text, *, name="company-extracted") -> DrawioSpec:
                             icon_sizes.append(w)
         elif inner.get("edge") == "1":
             edge_styles.append(style_str)
-            if "endArrow" in kv:
+            if kv.get("endArrow") in ARROWS:
                 edge_arrows.append(kv["endArrow"])
             if "rounded" in kv:
                 edge_rounded.append(kv["rounded"] != "0")

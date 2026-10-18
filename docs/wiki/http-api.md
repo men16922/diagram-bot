@@ -66,7 +66,7 @@ updated: 2026-10-18
 
 ## documents 라우터 (`routes/documents.py`)
 
-문서 네 엔드포인트 모두 보기 쿼리를 받는다: `view`(`overview`·`detail`·`focus`), `vpc`, `resource`, `references: bool`, `routes`(상세 보기의 로드 밸런서·대상 그룹 노드 ID), `spec`(`default`·`clean`·`enterprise`·`mxcell` 프리셋 이름, [[drawio-format-and-alignment]]). `views.view_graph`가 `ValueError`를 내면 422. 정해진 `(kind, vpc, resource, references, routes)`가 문서 키가 된다.
+문서 네 엔드포인트 모두 보기 쿼리를 받는다: `view`(`overview`·`detail`·`focus`), `vpc`, `resource`, `references: bool`, `routes`(상세 보기의 로드 밸런서·대상 그룹 노드 ID), `spec`(`default`·`clean`·`enterprise`·`enterprise-clean`·`mxcell` 프리셋 이름만; 파일 경로·XML은 422, `drawio_spec.request_spec`, [[drawio-format-and-alignment]]). `views.view_graph`가 `ValueError`를 내면 422. 정해진 `(kind, vpc, resource, references, routes)`가 문서 키가 된다.
 
 | 메서드·경로 | 본문 | 동작 |
 | --- | --- | --- |

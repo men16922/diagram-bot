@@ -84,7 +84,7 @@ def main():
     align_cmd.add_argument("-o", "--output", help="저장할 draw.io XML 경로 (생략하면 표준 출력)")
     align_cmd.add_argument("--mode", choices=("preserve", "rebuild"), default="preserve",
                            help="preserve(기존 셀 ID·구조 유지 정렬) 또는 rebuild(Snapshot 변환 후 전체 재배치)")
-    align_cmd.add_argument("--spec", help="적용할 규격 프리셋(default, clean, mxcell) 또는 규격 JSON 파일 경로")
+    align_cmd.add_argument("--spec", help="적용할 규격 프리셋(default, clean, mxcell), 규격 JSON 또는 회사 draw.io 파일 경로")
     align_cmd.add_argument("--spec-from", help="스타일·규격을 추출할 회사 표준 draw.io XML 샘플 파일 경로")
     align_cmd.add_argument("--normalize-styles", action="store_true", help="컨테이너·화살표 스타일을 규격에 맞게 통일")
     imp_cmd = commands.add_parser("import-xml", help="기존 AWS draw.io XML 파일을 Diagram Bot snapshot.json으로 변환")
@@ -306,14 +306,14 @@ def export_cfn(parser, args):
 
 
 def run_align_xml(args):
-    from .drawio_spec import DrawioSpec, resolve_spec, spec_from_xml
+    from .drawio_spec import resolve_spec, spec_from_xml
     from .xml_align import align_drawio_xml, inspect_drawio_xml
     xml_text = Path(args.input).read_text(encoding="utf-8")
     spec = None
     if args.spec_from:
         spec = spec_from_xml(Path(args.spec_from).read_text(encoding="utf-8"))
     elif args.spec:
-        spec = DrawioSpec.from_dict(json.loads(Path(args.spec).read_text(encoding="utf-8"))) if Path(args.spec).is_file() else resolve_spec(args.spec)
+        spec = resolve_spec(args.spec)
     before = inspect_drawio_xml(xml_text)
     aligned = align_drawio_xml(xml_text, mode=args.mode, spec=spec, normalize_styles=args.normalize_styles or spec is not None)
     after = inspect_drawio_xml(aligned)
