@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 WIKI = ROOT / "docs" / "wiki"
 GROUPS = [
     ("시작", ["architecture", "porting-guide", "glossary"]),
-    ("데이터와 모델", ["snapshot-model", "collection", "graph", "views", "layout-and-drawio", "samples"]),
+    ("데이터와 모델", ["snapshot-model", "collection", "graph", "views", "layout-and-drawio", "drawio-format-and-alignment", "samples"]),
     ("분석과 출력", ["review-rules", "change-review", "multi-account", "cloudformation"]),
     ("AWS 접근과 인증", ["aws-access-and-sso", "browser-egress", "team-mode-security"]),
     ("앱과 API", ["http-api", "web-app", "storage", "chat-agent", "cli"]),
@@ -64,7 +64,8 @@ def render():
             llms.append(f"- [{meta['title']}](docs/wiki/{name}.md): {meta['summary']}")
         index.append("")
         llms.append("")
-    llms += ["## Optional", "", "- [README](README.md): 설치·실행·기능 요약", "- [CHANGELOG](CHANGELOG.md): 변경 이력",
+    llms += ["## Optional", "", "- [HUMAN_GUIDE](docs/HUMAN_GUIDE.md): 사람용 고수준 개요, 코딩 에이전트 지시 프롬프트, 상용 제품 고도화 로드맵",
+             "- [README](README.md): 설치·실행·기능 요약", "- [CHANGELOG](CHANGELOG.md): 변경 이력",
              "- [ARCHITECTURE](docs/ARCHITECTURE.md): 샘플의 AWS 모범 사례 근거", "- [STATUS](docs/STATUS.md): 구현 상태와 검증 근거", ""]
     return "\n".join(index), "\n".join(llms)
 

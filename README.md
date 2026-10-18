@@ -8,10 +8,10 @@ AWS 설정을 읽기 전용으로 수집해 **편집 가능한 인프라 아키�
 
 ![Diagram Bot AWS 워크스페이스](docs/images/workspace.png)
 
-## 문서
+## 문서 (사람용 High-Level 가이드 vs 코딩 에이전트용 위키)
 
-구조·데이터 모델·API·인증·포팅 방법은 **[위키](docs/wiki/index.md)**에 페이지별로 있습니다(한 페이지 한 주제, 코드 근거 포함; LLM 에이전트용 목록은 [`llms.txt`](llms.txt)).
-회사 스택(React + Vite, Identity Center, 브라우저 egress)으로 옮길 때는 [포팅 가이드](docs/wiki/porting-guide.md)부터 보세요.
+- **사람용 (개요·아키텍처·포팅 지시서·상용화 로드맵)**: **[사람용 통합 가이드 (HUMAN_GUIDE.md)](docs/HUMAN_GUIDE.md)** — 전체 개념을 5분 만에 파악하고 회사 코딩 에이전트에게 복사해 줄 프롬프트 5종과 제품 고도화 로드맵을 담고 있습니다.
+- **코딩 에이전트용 (토큰 최적화·코드 근거 위키)**: **[위키 색인](docs/wiki/index.md)** 및 루트 **[`llms.txt`](llms.txt)** — 회사 스택(React + Vite, FastAPI, 브라우저 egress) 단계별 이식은 [포팅 플레이북](docs/wiki/porting-guide.md), 회사 기존 `drawio.xml` 자동 정렬·규격(`DrawioSpec`)·스냅샷 역변환은 [draw.io 규격 및 자동 정렬](docs/wiki/drawio-format-and-alignment.md)을 참고하세요.
 
 ## 바로 실행
 

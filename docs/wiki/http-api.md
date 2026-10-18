@@ -65,14 +65,17 @@ updated: 2026-10-18
 
 ## documents 라우터 (`routes/documents.py`)
 
-네 엔드포인트 모두 보기 쿼리를 받는다: `view`(`overview`·`detail`·`focus`), `vpc`, `resource`, `references: bool`, `routes`(상세 보기의 로드 밸런서·대상 그룹 노드 ID). `views.view_graph`가 `ValueError`를 내면 422. 정해진 `(kind, vpc, resource, references, routes)`가 문서 키가 된다.
+문서 네 엔드포인트 모두 보기 쿼리를 받는다: `view`(`overview`·`detail`·`focus`), `vpc`, `resource`, `references: bool`, `routes`(상세 보기의 로드 밸런서·대상 그룹 노드 ID), `spec`(`default`·`clean`·`enterprise`·`mxcell` 프리셋 이름, [[drawio-format-and-alignment]]). `views.view_graph`가 `ValueError`를 내면 422. 정해진 `(kind, vpc, resource, references, routes)`가 문서 키가 된다.
 
 | 메서드·경로 | 본문 | 동작 |
 | --- | --- | --- |
-| `GET /api/snapshots/{id}/document` | (`reset: bool` 쿼리) | 저장본이 있고 `reset`이 아니면 저장본, 아니면 새로 생성(`revision`은 저장본의 것 또는 0, `saved_at: null`) |
+| `GET /api/snapshots/{id}/document` | (`reset: bool`, `spec: str?` 쿼리) | 저장본이 있고 `reset`·`spec`이 없으면 저장본, 아니면 새로 생성(`revision`은 저장본의 것 또는 0, `saved_at: null`) |
 | `PUT /api/snapshots/{id}/document` | `DocumentRequest{xml: ≤10 MiB, revision: ≥0}` | `drawio.validate_document` 실패 422, 리비전 불일치 409, 같은 XML이면 변경 없음 |
-| `POST /api/snapshots/{id}/document/relayout` | `RevisionRequest{revision}` | 다시 생성하고 `carry_annotations`로 사용자 메모를 옮김, 이전 편집본은 `자동 재배치 전`으로 보관 |
+| `POST /api/snapshots/{id}/document/relayout` | `RevisionRequest{revision}` (`spec: str?` 쿼리) | 다시 생성하고 `carry_annotations`로 사용자 메모를 옮김, 이전 편집본은 `자동 재배치 전`으로 보관 |
 | `POST /api/snapshots/{id}/document/restore` | `RestoreRequest{revision, from_revision}` | 보관된 리비전을 복원(`v<n> 복원 전`으로 현재본 보관), 없으면 404 |
+| `POST /api/xml/align` | `XmlAlignRequest{xml: ≤10 MiB, mode: "preserve"\|"rebuild", spec: str \| dict \| None}` | 기존 `drawio.xml`을 규칙 정렬·직교 배선해 `{xml, before, after}` 반환([[drawio-format-and-alignment]]) |
+| `POST /api/xml/import` | `XmlImportRequest{xml: ≤10 MiB, title?, region="ap-northeast-2", save=True}` | 기존 `drawio.xml`을 `Snapshot`으로 역변환·저장하고 `{id, snapshot}` 반환 |
+| `POST /api/xml/adopt` | `XmlAdoptRequest{xml: ≤10 MiB, name="company-standard", title?, region="ap-northeast-2", set_default=True, save=True}` | 회사 `drawio.xml`에서 `DrawioSpec` 추출·기본값 설정, 인플레이스 정렬, 사내 표준 아키텍처(`Design.apply_standard`) 등록 후 `{id, name, spec, aligned_xml, standardized_xml, before, after}` 반환 |
 
 응답(`describe`)은 `{xml, revision, saved_at, view, counts, visible, routes, history: [{revision, saved_at, reason}]}`. `routes`에서는 `path`를 뺀다. 리비전·이력 규칙은 [[storage]].
 

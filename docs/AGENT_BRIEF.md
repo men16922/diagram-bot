@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: company auth structure done (2026-10-18): `--aws-egress browser` (server signs, browser sends), server split into store/aws_access/routes, `api.py`, frontend ES modules, LLM wiki in docs/wiki (llms.txt). No [auto] backlog.
+> ▶ NEXT SESSION: company porting & draw.io spec/alignment done (2026-10-18): `drawio_spec.py` (custom company XML wrapper/styles + `spec_from_xml`), `xml_align.py` (`align_drawio_xml`, `import_drawio_xml`, `inspect_drawio_xml`), `--aws-egress browser`, modular `api.py`/routers, `docs/HUMAN_GUIDE.md` (human overview) + `docs/wiki/` (`llms.txt` agent wiki). No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 
@@ -6,16 +6,16 @@ Last Updated: 2026-10-18
 
 ## Baseline
 
-Diagram Bot v0.5 (+ unreleased chat agent) is an AWS-only local application. FastAPI and buildless JavaScript embed
+Diagram Bot v0.5 (+ unreleased chat agent & company XML alignment/spec modules) is an AWS-only local application. FastAPI and buildless JavaScript embed
 pinned draw.io 32.4.1; boto3 collects read-only AWS configuration using existing SDK/SSO credentials.
-The demo supports overview/detail/focus views, a deterministic layered layout, properties and
+The demo supports overview/detail/focus views, a deterministic layered layout, custom company draw.io specs (`DrawioSpec`), in-place alignment/routing and snapshot import of existing `drawio.xml` files (`xml_align.py`), properties and
 relation evidence, native editing with revision history, draw.io/PNG exports and JSON/CSV inventory, architecture
 review/diff, team mode, a chat design agent (Strands + Bedrock; tools draw standard or brownfield designs, the model
 never invents resources) and CloudFormation draft export. draw.io internals: docs/DRAWIO.md. Sample best-practice basis: docs/ARCHITECTURE.md. Product scope and future proposals are in docs/PLAN.md.
 
 ## Read Order
 
-0. docs/wiki/index.md — code-grounded wiki (architecture, data model, API, auth, porting); keep it current (docs/wiki/SCHEMA.md).
+0. docs/wiki/index.md (for coding agents) and docs/HUMAN_GUIDE.md (for humans) — code-grounded wiki (architecture, data model, API, auth, porting, draw.io spec/alignment); keep it current (docs/wiki/SCHEMA.md).
 1. docs/STATUS.md — implemented behavior and evidence.
 2. docs/NEXT_PLAN.md — authorized open work only.
 3. docs/PROGRESS_LOG.md — recent changes.

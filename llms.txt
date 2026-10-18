@@ -10,7 +10,7 @@ The wiki (Korean, one topic per page, code paths as sources) is the primary refe
 ## 시작
 
 - [전체 구조](docs/wiki/architecture.md): 수집 → 스냅샷 → 그래프 → 보기 → 배치 → draw.io의 데이터 흐름과, 라이브러리·저장소·AWS 접근·HTTP 라우터·프런트엔드로 나뉜 모듈 지도.
-- [회사 스택으로 옮기기 (React + Vite, FastAPI, 브라우저 egress)](docs/wiki/porting-guide.md): Identity Center device code + 서버 서명 + 브라우저 전송 구조의 회사 서비스에 Diagram Bot을 이식하는 순서 — 백엔드 장착 두 가지 방법, 바꿔 끼울 경계 3곳, React로 옮길 모듈, 확인 목록.
+- [회사 스택으로 옮기기 (React + Vite, FastAPI, 브라우저 egress, 회사 draw.io 규격)](docs/wiki/porting-guide.md): 표준 drawio.xml을 직접 고치던 회사 버전을 인플레이스 자동 정렬(align_xml)·회사 규격(DrawioSpec)·스냅샷 파이프라인으로 이식하는 코딩 에이전트용 토큰 최적화 플레이북(라이브러리 명세, Level 0~4 파일 복사 목록, 계약 치트시트 포함).
 - [용어](docs/wiki/glossary.md): 스냅샷·커버리지·참조 노드·보기·경로 클래스·설계안·브라운필드·브라우저 egress 등 이 저장소에서 쓰는 용어의 정확한 뜻.
 
 ## 데이터와 모델
@@ -20,6 +20,7 @@ The wiki (Korean, one topic per page, code paths as sources) is the primary refe
 - [관계 그래프 (graph)](docs/wiki/graph.md): raw API 데이터에서 노드·관계를 만드는 결정적 조인 규칙 — 노드 종류 45개와 관계 43개, 관계 ID 규칙, 참조 전용 노드, 서브넷 경로 분류, 고가용성 역할, 계정 통합 병합, 옛 그래프 업그레이드.
 - [보기 계약 (views)](docs/wiki/views.md): views.view_graph가 정하는 overview·detail·focus 보기의 노드·관계 선택, references 옵션, 경로 필터(routes=), 개수(visible·collected·references·hidden·filtered), 전체 구성의 네트워크·엣지 연결선, 포함 관계.
 - [배치와 draw.io 문서](docs/wiki/layout-and-drawio.md): layout.py의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
+- [회사 draw.io 규격(DrawioSpec)과 기존 XML 자동 정렬·이식](docs/wiki/drawio-format-and-alignment.md): drawio_spec.py의 회사별 draw.io XML 포맷·컨테이너 계층·리소스 스타일 자동 추출(spec_from_xml, set_default_spec)과 xml_align.py의 회사 표준 템플릿 원클릭 표준화(adopt_company_xml), 인플레이스 정렬(align_drawio_xml), 스냅샷 역변환(import_drawio_xml).
 - [샘플과 데모 스냅샷](docs/wiki/samples.md): samples.Sample 빌더 도우미, 번들 샘플 11개(무엇을 보여 주는지·리전), SAMPLE_VERSION과 서버의 샘플 재생성(SnapshotStore.seed), demo.py, scripts/render_samples.py, examples/samples.
 
 ## 분석과 출력
@@ -56,6 +57,7 @@ The wiki (Korean, one topic per page, code paths as sources) is the primary refe
 
 ## Optional
 
+- [HUMAN_GUIDE](docs/HUMAN_GUIDE.md): 사람용 고수준 개요, 코딩 에이전트 지시 프롬프트, 상용 제품 고도화 로드맵
 - [README](README.md): 설치·실행·기능 요약
 - [CHANGELOG](CHANGELOG.md): 변경 이력
 - [ARCHITECTURE](docs/ARCHITECTURE.md): 샘플의 AWS 모범 사례 근거

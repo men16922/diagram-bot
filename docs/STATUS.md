@@ -4,6 +4,7 @@ Last Updated: 2026-10-18
 
 ## Active Plan
 
+- 2026-10-18 company draw.io spec & XML alignment (`drawio_spec.py`, `xml_align.py`, `tests/test_xml_align.py`, `docs/wiki/drawio-format-and-alignment.md`, `docs/HUMAN_GUIDE.md`): custom company draw.io specs (`DrawioSpec`, `spec_from_xml`, `"clean"`/`"mxcell"` presets), rule-based in-place alignment & orthogonal routing of existing `drawio.xml` (`align_drawio_xml`), and `drawio.xml` → `Snapshot` import (`import_drawio_xml`), exposed via `api.py`, `/api/xml/align`, `/api/xml/import`, and CLI `align-xml`/`import-xml`.
 - 2026-10-18 company auth structure: `--aws-egress browser` (server signs, browser sends from the PC; docs/wiki/browser-egress.md),
   server split into store / aws_access / routes + `api.py` for porting (docs/wiki/porting-guide.md), LLM wiki docs/wiki + llms.txt.
 - 2026-10-18 remaining work finished (PROGRESS_LOG top entry): CI green again (`.[test]`), chat streaming, brownfield designs

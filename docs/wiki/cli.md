@@ -25,6 +25,9 @@ updated: 2026-10-18
 | `diff` | `BEFORE AFTER`, `--format markdown\|json`, `--fail-on-change` | 변경 비교 출력([[change-review]]) |
 | `combine` | `SNAPSHOTS...`(2개 이상), `--output`(필수), `--title` | 계정·리전 스냅샷을 합친 보고서([[multi-account]]) |
 | `export-cfn` | `SNAPSHOT`, `--output` | CloudFormation 초안. 합친 스냅샷은 `--output` 필수([[cloudformation]]) |
+| `align-xml` | `XML`, `--output`(생략 시 stdout), `--mode preserve\|rebuild`, `--spec`, `--spec-from`, `--normalize-styles` | 기존 `drawio.xml` 인플레이스 정렬·직교 배선 및 회사 규격 적용([[drawio-format-and-alignment]]) |
+| `import-xml` | `XML`, `--output`(생략 시 stdout), `--title`, `--region`, `--render`, `--spec` | 기존 `drawio.xml`을 `Snapshot` JSON 및 렌더링된 XML로 변환([[drawio-format-and-alignment]]) |
+| `adopt-template` | `XML`, `-o/--output`(필수), `--name`, `--title`, `--region`, `--save-spec` | 회사 표준 `drawio.xml` 기준으로 포맷 규격(`DrawioSpec`) 추출·원본 정렬(`aligned.drawio`)·사내 표준 아키텍처 보고서 생성([[drawio-format-and-alignment]]) |
 | `setup-editor` | `--archive`(오프라인 설치용 `draw.war`) | 고정 버전 draw.io 설치(`editor.install_editor`, 기본 위치 `$XDG_CACHE_HOME/diagram-bot/drawio/<VERSION>`) |
 | `chat` | `--model`, `--output`(기본 `reports/chat`), `-m/--message`(반복), `--from`, `--env-file` | Strands + Bedrock 채팅 |
 | `serve` | 아래 절 | 로컬 앱(FastAPI + uvicorn) |

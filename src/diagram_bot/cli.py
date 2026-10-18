@@ -79,6 +79,28 @@ def main():
     account.add_argument("--file", required=True, help="사용자 파일 경로")
     account.add_argument("--role", choices=("viewer", "editor", "admin"), default="viewer")
     account.add_argument("--password-stdin", action="store_true", help="비밀번호를 표준 입력 첫 줄에서 읽기 (자동화용)")
+    align_cmd = commands.add_parser("align-xml", help="기존 draw.io XML 파일을 규칙에 맞게 자동 정렬·컨테이너 크기 맞춤·직교 배선")
+    align_cmd.add_argument("input", help="정렬할 draw.io XML 파일 경로")
+    align_cmd.add_argument("-o", "--output", help="저장할 draw.io XML 경로 (생략하면 표준 출력)")
+    align_cmd.add_argument("--mode", choices=("preserve", "rebuild"), default="preserve",
+                           help="preserve(기존 셀 ID·구조 유지 정렬) 또는 rebuild(Snapshot 변환 후 전체 재배치)")
+    align_cmd.add_argument("--spec", help="적용할 규격 프리셋(default, clean, mxcell) 또는 규격 JSON 파일 경로")
+    align_cmd.add_argument("--spec-from", help="스타일·규격을 추출할 회사 표준 draw.io XML 샘플 파일 경로")
+    align_cmd.add_argument("--normalize-styles", action="store_true", help="컨테이너·화살표 스타일을 규격에 맞게 통일")
+    imp_cmd = commands.add_parser("import-xml", help="기존 AWS draw.io XML 파일을 Diagram Bot snapshot.json으로 변환")
+    imp_cmd.add_argument("input", help="변환할 draw.io XML 파일 경로")
+    imp_cmd.add_argument("-o", "--output", help="저장할 snapshot.json 경로 (생략하면 표준 출력)")
+    imp_cmd.add_argument("--title", help="스냅샷 제목")
+    imp_cmd.add_argument("--region", default="ap-northeast-2", help="기본 리전 (기본 ap-northeast-2)")
+    imp_cmd.add_argument("--render", help="변환된 스냅샷을 다시 렌더링해 저장할 draw.io XML 경로")
+    imp_cmd.add_argument("--spec", help="--render 시 적용할 규격 프리셋(default, clean, mxcell)")
+    adopt_cmd = commands.add_parser("adopt-template", help="회사 표준 draw.io XML을 기준으로 포맷 규격(DrawioSpec) 추출·자동 정렬·표준 아키텍처 보고서 생성")
+    adopt_cmd.add_argument("input", help="회사 표준 아키텍처 draw.io XML 파일 경로")
+    adopt_cmd.add_argument("-o", "--output", required=True, help="생성할 보고서 및 표준화된 산출물 디렉터리")
+    adopt_cmd.add_argument("--name", default="company-standard", help="등록할 사내 표준 아키텍처 이름 (기본 company-standard)")
+    adopt_cmd.add_argument("--title", help="아키텍처 제목")
+    adopt_cmd.add_argument("--region", default="ap-northeast-2", help="기본 리전 (기본 ap-northeast-2)")
+    adopt_cmd.add_argument("--save-spec", help="추출한 DrawioSpec JSON을 별도 저장할 경로")
     args = parser.parse_args()
     try:
         if getattr(args, "env_file", None):
@@ -94,6 +116,12 @@ def main():
             return run_server(parser, args)
         if args.command == "user":
             return manage_user(parser, args)
+        if args.command == "align-xml":
+            return run_align_xml(args)
+        if args.command == "import-xml":
+            return run_import_xml(args)
+        if args.command == "adopt-template":
+            return run_adopt_template(args)
         if args.command == "diff":
             load = lambda path: json.loads(Path(path).read_text(encoding="utf-8"))
             result = diff(load(args.before), load(args.after))
@@ -274,6 +302,77 @@ def export_cfn(parser, args):
             where = f"CloudFormation 템플릿 ({label})"
         print(f"{where} · 리소스 {len(template['Resources'])}개 · 매개변수 {len(template.get('Parameters', {}))}개 · "
               f"미지원 {len(meta['Unsupported'])}개 · 가정 {len(meta['Assumptions'])}개 (Metadata.DiagramBot에서 검토)", file=sys.stderr)
+    return 0
+
+
+def run_align_xml(args):
+    from .drawio_spec import DrawioSpec, resolve_spec, spec_from_xml
+    from .xml_align import align_drawio_xml, inspect_drawio_xml
+    xml_text = Path(args.input).read_text(encoding="utf-8")
+    spec = None
+    if args.spec_from:
+        spec = spec_from_xml(Path(args.spec_from).read_text(encoding="utf-8"))
+    elif args.spec:
+        spec = DrawioSpec.from_dict(json.loads(Path(args.spec).read_text(encoding="utf-8"))) if Path(args.spec).is_file() else resolve_spec(args.spec)
+    before = inspect_drawio_xml(xml_text)
+    aligned = align_drawio_xml(xml_text, mode=args.mode, spec=spec, normalize_styles=args.normalize_styles or spec is not None)
+    after = inspect_drawio_xml(aligned)
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(aligned, encoding="utf-8")
+        print(f"정렬된 draw.io XML: {out_path.resolve()} · 겹침 {len(before['overlaps'])}→{len(after['overlaps'])} · "
+              f"범위 이탈 {len(before['out_of_bounds'])}→{len(after['out_of_bounds'])} · "
+              f"미배선 {len(before['unrouted_edges'])}→{len(after['unrouted_edges'])}", file=sys.stderr)
+    else:
+        sys.stdout.write(aligned)
+    return 0
+
+
+def run_import_xml(args):
+    from .drawio import generate_document
+    from .xml_align import import_drawio_xml
+    xml_text = Path(args.input).read_text(encoding="utf-8")
+    snapshot = import_drawio_xml(xml_text, title=args.title, region=args.region)
+    text = json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n"
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(text, encoding="utf-8")
+        print(f"가져온 스냅샷: {out_path.resolve()} · 노드 {len(snapshot['graph']['nodes'])}개 · 관계 {len(snapshot['graph']['edges'])}개", file=sys.stderr)
+    else:
+        sys.stdout.write(text)
+    if args.render:
+        render_path = Path(args.render)
+        render_path.parent.mkdir(parents=True, exist_ok=True)
+        render_path.write_text(generate_document(snapshot, spec=args.spec), encoding="utf-8")
+        print(f"렌더링된 draw.io XML: {render_path.resolve()}", file=sys.stderr)
+    return 0
+
+
+def run_adopt_template(args):
+    from .drawio_spec import set_default_spec
+    from .xml_align import adopt_company_xml
+    out_dir = Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    spec_file = Path(args.save_spec) if args.save_spec else (out_dir / "company-spec.json")
+    try:
+        result = adopt_company_xml(
+            args.input,
+            name=args.name,
+            title=args.title,
+            region=args.region,
+            set_default=True,
+            save_spec=spec_file,
+        )
+        (out_dir / "aligned.drawio").write_text(result["aligned_xml"], encoding="utf-8")
+        path = write_report(result["snapshot"], out_dir)
+        spec = result["spec"]
+        print(f"보고서: {path.resolve()}")
+        print(f"사내 규격(DrawioSpec): {spec_file.resolve()} (래퍼={spec.cell_wrapper}, Cloud상자={spec.use_cloud_box}, "
+              f"Region상자={spec.use_region_box}, AZ상자={spec.use_az_box}, 서브넷라벨={spec.subnet_label_style})")
+    finally:
+        set_default_spec(None)
     return 0
 
 
