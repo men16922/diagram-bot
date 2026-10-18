@@ -101,12 +101,43 @@ def build_graph(snapshot):
         # A duplicated API entry is the same configured relation, not a second one.
         edges.setdefault(edge["id"], edge)
 
+    raw = snapshot["raw"]
+    core_resources(raw, prefix, node, link)
+    target_registrations(raw, node, link)
+    for group in raw.get("security_groups", []):
+        # Collected for its rules (review, inspector); drawn only as a reference when requested.
+        node("security_group", group["GroupId"], group, "DescribeSecurityGroups")
+    endpoints_and_transit(raw, node, link)
+    gateways(raw, node, link)
+    route_tables(raw, node, link)
+    databases(raw, nodes, node, link)
+    scaling_groups(raw, node, link)
+    db_clusters(raw, prefix, nodes, node, link)
+    caches(raw, node, link)
+    kafka(raw, node, link)
+    lambdas(raw, node, link)
+    kubernetes(raw, node, link)
+    search_domains(raw, node, link)
+    file_systems(raw, node, link)
+    warehouses(raw, node, link)
+    connectivity(raw, prefix, nodes, node, link)
+    ai_infrastructure(raw, prefix, nodes, node, link)
+    elastic_ips(raw, nodes, node, link)
+    transit_routing(raw, nodes, node, link, edges)
+    edge_services(raw, nodes, node, link)
+    direct_connect(raw, region, nodes, node, link)
+    classify_subnets(raw, prefix, nodes, link)
+    return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
+            "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
+
+
+def core_resources(raw, prefix, node, link):
+    """VPCs, subnets, instances, load balancers and target groups, then their VPC, subnet, group, interface and volume links."""
     specs = [("vpcs", "vpc", "VpcId", "DescribeVpcs"),
              ("subnets", "subnet", "SubnetId", "DescribeSubnets"),
              ("instances", "ec2", "InstanceId", "DescribeInstances"),
              ("load_balancers", "load_balancer", "LoadBalancerArn", "DescribeLoadBalancers"),
              ("target_groups", "target_group", "TargetGroupArn", "DescribeTargetGroups")]
-    raw = snapshot["raw"]
     # DescribeInstances keeps terminated instances for about an hour; they have no subnet and no longer exist.
     current = lambda collection: [item for item in raw.get(collection, [])
                                   if not (collection == "instances" and (item.get("State") or {}).get("Name") == "terminated")]
@@ -135,6 +166,10 @@ def build_graph(snapshot):
             if kind == "target_group":
                 for lb in item.get("LoadBalancerArns", []):
                     link(key, "load_balancer", lb, "associated_load_balancer", api + ".LoadBalancerArns[]")
+
+
+def target_registrations(raw, node, link):
+    """DescribeTargetHealth: instances, load balancers, ECS tasks and IP targets registered in each target group."""
     groups = {x["TargetGroupArn"]: x for x in raw.get("target_groups", [])}
     tasks = ecs_tasks(raw, node, link)
     for result in raw.get("target_health", []):
@@ -155,27 +190,10 @@ def build_graph(snapshot):
                 place_ip_target(raw, target_key, target, group.get("VpcId"), link)
             link(key, kind, rid, "registered_target", "DescribeTargetHealth.Target.Id", description,
                  {"port": target.get("Port"), "availability_zone": target.get("AvailabilityZone")})
-    for group in raw.get("security_groups", []):
-        # Collected for its rules (review, inspector); drawn only as a reference when requested.
-        node("security_group", group["GroupId"], group, "DescribeSecurityGroups")
-    endpoints_and_transit(raw, node, link)
-    infrastructure(raw, prefix, nodes, node, link)
-    services(raw, prefix, nodes, node, link)
-    more_services(raw, prefix, nodes, node, link)
-    connectivity(raw, prefix, nodes, node, link)
-    ai_infrastructure(raw, prefix, nodes, node, link)
-    elastic_ips(raw, nodes, node, link)
-    transit_routing(raw, nodes, node, link, edges)
-    edge_services(raw, nodes, node, link)
-    direct_connect(raw, region, nodes, node, link)
-    classify_subnets(raw, prefix, nodes, link)
-    return {"nodes": sorted(nodes.values(), key=lambda x: x["id"]),
-            "edges": sorted(edges.values(), key=lambda x: (x["source"], x["relation"], x["target"], x["id"]))}
 
 
-def infrastructure(raw, prefix, nodes, node, link):
-    """Internet path, egress, routing, data tier and scaling groups, joined only on API fields."""
-    subnet_vpc = {s["SubnetId"]: s.get("VpcId") for s in raw.get("subnets", [])}
+def gateways(raw, node, link):
+    """Internet gateways and NAT gateways."""
     for gateway in raw.get("internet_gateways", []):
         key = node("internet_gateway", gateway["InternetGatewayId"], gateway, "DescribeInternetGateways")
         for attachment in gateway.get("Attachments", []):
@@ -184,6 +202,10 @@ def infrastructure(raw, prefix, nodes, node, link):
         key = node("nat_gateway", gateway["NatGatewayId"], gateway, "DescribeNatGateways")
         link(key, "vpc", gateway.get("VpcId"), "in_vpc", "DescribeNatGateways.VpcId")
         link(key, "subnet", gateway.get("SubnetId"), "in_subnet", "DescribeNatGateways.SubnetId")
+
+
+def route_tables(raw, node, link):
+    """Route tables, their subnet associations and the routes with a drawable target."""
     for table in raw.get("route_tables", []):
         key = node("route_table", table["RouteTableId"], table, "DescribeRouteTables")
         link(key, "vpc", table.get("VpcId"), "in_vpc", "DescribeRouteTables.VpcId")
@@ -204,6 +226,10 @@ def infrastructure(raw, prefix, nodes, node, link):
                 continue  # local and other targets carry no drawable relation
             link(key, kind, route[field], "routes_to", f"DescribeRouteTables.Routes[].{field}", {"state": route.get("State")},
                  {"destination": destination})
+
+
+def databases(raw, nodes, node, link):
+    """RDS instances, read replicas and Multi-AZ standbys, placed through the subnet group."""
     for db in raw.get("db_instances", []):
         identifier = db["DBInstanceIdentifier"]
         key = node("db_instance", identifier, db, "DescribeDBInstances")
@@ -233,6 +259,11 @@ def infrastructure(raw, prefix, nodes, node, link):
             link(standby, "subnet", subnet_in(db["SecondaryAvailabilityZone"]), "in_subnet",
                  "DescribeDBInstances.SecondaryAvailabilityZone + DBSubnetGroup.Subnets[]",
                  {"availability_zone": db["SecondaryAvailabilityZone"]})
+
+
+def scaling_groups(raw, node, link):
+    """Auto Scaling groups: VPC from their subnets, members and target groups."""
+    subnet_vpc = {s["SubnetId"]: s.get("VpcId") for s in raw.get("subnets", [])}
     for group in raw.get("auto_scaling_groups", []):
         key = node("auto_scaling_group", group["AutoScalingGroupName"], group, "DescribeAutoScalingGroups")
         vpcs = {subnet_vpc.get(s) for s in (group.get("VPCZoneIdentifier") or "").split(",") if s} - {None}
@@ -267,9 +298,8 @@ def endpoints_and_transit(raw, node, link):
             link(key, "subnet", subnet, "attachment_subnet", "DescribeTransitGatewayVpcAttachments.SubnetIds[]")
 
 
-def services(raw, prefix, nodes, node, link):
-    """EKS, MSK, ElastiCache, Aurora roles and VPC-attached Lambda, joined only on API fields."""
-    subnet_vpc = {s["SubnetId"]: s.get("VpcId") for s in raw.get("subnets", [])}
+def db_clusters(raw, prefix, nodes, node, link):
+    """DB clusters and the writer/reader role of their members."""
     for cluster in raw.get("db_clusters", []):
         key = node("db_cluster", cluster["DBClusterIdentifier"], cluster, "DescribeDBClusters")
         for member in cluster.get("DBClusterMembers", []):
@@ -280,6 +310,10 @@ def services(raw, prefix, nodes, node, link):
                 nodes[instance]["db_role"] = "writer" if member.get("IsClusterWriter") else ("reader" if aurora else "readable standby")
             link(key, "db_instance", member["DBInstanceIdentifier"], "cluster_member", "DescribeDBClusters.DBClusterMembers[]",
                  {"writer": member.get("IsClusterWriter")})
+
+
+def caches(raw, node, link):
+    """ElastiCache replication groups and cache nodes, placed through the subnet group."""
     groups = {g["CacheSubnetGroupName"]: g for g in raw.get("cache_subnet_groups", [])}
     roles = {m.get("CacheClusterId"): m.get("CurrentRole") for g in raw.get("replication_groups", [])
              for ng in g.get("NodeGroups", []) for m in ng.get("NodeGroupMembers", [])}
@@ -298,6 +332,11 @@ def services(raw, prefix, nodes, node, link):
         link(key, "subnet", matches[0] if len(matches) == 1 else None, "in_subnet",
              "DescribeCacheClusters.PreferredAvailabilityZone + DescribeCacheSubnetGroups.Subnets[]", {"availability_zone": zone})
         link(key, "cache_replication_group", cache.get("ReplicationGroupId"), "cache_member_of", "DescribeCacheClusters.ReplicationGroupId")
+
+
+def kafka(raw, node, link):
+    """MSK clusters and one broker node per client subnet."""
+    subnet_vpc = {s["SubnetId"]: s.get("VpcId") for s in raw.get("subnets", [])}
     for cluster in raw.get("msk_clusters", []):
         provisioned = cluster.get("Provisioned") or {}
         brokers = provisioned.get("BrokerNodeGroupInfo") or {}
@@ -323,6 +362,10 @@ def services(raw, prefix, nodes, node, link):
             link(broker, "msk_cluster", cluster["ClusterArn"], "broker_of", "ListClustersV2.ClusterArn")
         if subnets and subnet_vpc.get(subnets[0]):
             link(key, "vpc", subnet_vpc[subnets[0]], "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
+
+
+def lambdas(raw, node, link):
+    """Lambda functions; VPC-attached ones link to their VPC and subnets."""
     for function in raw.get("lambda_functions", []):
         config = function.get("VpcConfig") or {}
         key = node("lambda_function", function["FunctionName"], function, "ListFunctions")
@@ -331,6 +374,10 @@ def services(raw, prefix, nodes, node, link):
         link(key, "vpc", config["VpcId"], "in_vpc", "ListFunctions.VpcConfig.VpcId")
         for subnet in config.get("SubnetIds", []):
             link(key, "subnet", subnet, "lambda_subnet", "ListFunctions.VpcConfig.SubnetIds[]")
+
+
+def kubernetes(raw, node, link):
+    """EKS clusters, their subnets and managed node group Auto Scaling groups."""
     for cluster in raw.get("eks_clusters", []):
         config = cluster.get("resourcesVpcConfig") or {}
         key = node("eks_cluster", cluster["name"], cluster, "DescribeCluster")
@@ -403,8 +450,8 @@ def place_ip_target(raw, key, target, vpc, link):
              {"availability_zone": matches[0].get("AvailabilityZone")}, {"availability_zone": matches[0].get("AvailabilityZone")})
 
 
-def more_services(raw, prefix, nodes, node, link):
-    """OpenSearch, EFS and Redshift, placed per subnet/AZ from their own API fields."""
+def search_domains(raw, node, link):
+    """OpenSearch domains and one node per VPC subnet/AZ."""
     subnets = subnet_index(raw)
     for domain in raw.get("opensearch_domains", []):
         options = domain.get("VPCOptions") or {}
@@ -430,6 +477,11 @@ def more_services(raw, prefix, nodes, node, link):
             link(search, "vpc", options.get("VPCId"), "in_vpc", "DescribeDomains.VPCOptions.VPCId")
             link(search, "subnet", subnet, "in_subnet", "DescribeDomains.VPCOptions.SubnetIds[]", {"availability_zone": zone}, {"availability_zone": zone})
             link(search, "opensearch_domain", domain["ARN"], "node_of", "DescribeDomains.ARN")
+
+
+def file_systems(raw, node, link):
+    """EFS file systems and their mount targets."""
+    subnets = subnet_index(raw)
     systems = {f["FileSystemId"]: f for f in raw.get("efs_file_systems", [])}
     for system in systems.values():
         node("efs_file_system", system["FileSystemId"], system, "DescribeFileSystems")
@@ -444,6 +496,10 @@ def more_services(raw, prefix, nodes, node, link):
         link(key, "subnet", target.get("SubnetId"), "in_subnet", "DescribeMountTargets.SubnetId",
              {"availability_zone": target.get("AvailabilityZoneName")}, {"availability_zone": target.get("AvailabilityZoneName")})
         link(key, "efs_file_system", target.get("FileSystemId"), "mount_target_of", "DescribeMountTargets.FileSystemId")
+
+
+def warehouses(raw, node, link):
+    """Redshift clusters and the Multi-AZ secondary."""
     groups = {g["ClusterSubnetGroupName"]: g for g in raw.get("redshift_subnet_groups", [])}
     for cluster in raw.get("redshift_clusters", []):
         group = groups.get(cluster.get("ClusterSubnetGroupName"), {})
