@@ -249,8 +249,7 @@ def test_cfn_lint_accepts_every_template():
     for key, snapshot in all_snapshots().items():
         for label, result in templates(snapshot):
             config = lint.ManualArgs(regions=[result["Metadata"]["DiagramBot"]["Source"]["region"]])
-            # E3628: cfn-lint's per-region instance-type list (trn2 is not offered in every region); the sample chooses the type.
-            problems = [f"{m.rule.id} {m.message}" for m in lint.lint(json.dumps(result), config=config) if m.rule.id[0] in "EW" and m.rule.id != "E3628"]
+            problems = [f"{m.rule.id} {m.message}" for m in lint.lint(json.dumps(result), config=config) if m.rule.id[0] in "EW"]
             assert not problems, (key, label, problems[:5])
 
 

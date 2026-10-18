@@ -296,6 +296,7 @@ HPCREL01-BP02). 학습의 복구 수단은 다중 AZ 배치가 아니라 체크�
 
 | 요소 | 구성 | 근거 |
 | --- | --- | --- |
+| 리전 | us-east-2(오하이오). p5와 trn2를 함께 제공하는 리전이어야 한다(서울 리전에는 trn2 없음; CloudFormation 내보내기의 cfn-lint 지역별 인스턴스 목록으로 확인, 2026-10-18) | EC2 인스턴스 유형 리전 가용성 |
 | 서브넷 | `compute-a` /20 (AZ a만, 학습 노드·FSx·HyperPod), `head-a/b` /24 (헤드·로그인 노드), 퍼블릭 a/b (NAT) | HyperPod IP 계획, HPCREL01-BP02 |
 | p5 큐 | p5.48xlarge × 4, EFA, **Capacity Block**(UltraCluster 자동 배치, 배치 그룹 없음) | EC2 Capacity Blocks |
 | trn2 큐 | trn2.48xlarge × 2, EFA, **클러스터 배치 그룹** `trn2-pg` + 용량 예약(ODCR) | EC2 placement strategies, MLSUS05-BP02 |

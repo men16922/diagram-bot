@@ -11,7 +11,7 @@ from .combine import combine_snapshots
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
 # Bumped whenever a sample's architecture changes; the server replaces stored samples of another version.
-SAMPLE_VERSION = 5
+SAMPLE_VERSION = 6
 
 
 class Sample:
@@ -911,6 +911,7 @@ def genai_rag():
 
 def gpu_training():
     s = Sample("gpu-training", "GPU 분산 학습 클러스터 (EFA · Capacity Block · FSx for Lustre · HyperPod)", [
+        "리전은 us-east-2(오하이오): p5와 trn2를 같은 VPC에 두려면 두 유형을 모두 제공하는 리전이어야 함 (서울 리전에는 trn2가 없음)",
         "강결합 학습 노드는 한 AZ의 전용 /20 컴퓨트 서브넷에, 모든 EFA 노드가 자기 참조 전체 허용 보안 그룹 공유 (EFA는 AZ·VPC를 넘지 못함, HPCREL01-BP02)",
         "p5 학습 큐는 Capacity Block(UltraCluster 자동 배치), trn2 큐는 클러스터 배치 그룹 + 용량 예약(ODCR): 둘은 함께 쓸 수 없음 (EC2 Capacity Blocks)",
         "학습 데이터·체크포인트는 같은 AZ의 FSx for Lustre PERSISTENT_2 (GENREL06-BP01, HPCREL01-BP01, MLCOST06-BP03)",
@@ -918,7 +919,8 @@ def gpu_training():
         "헤드 노드와 로그인 노드는 프라이빗 서브넷, 관리 접근은 Session Manager 엔드포인트, S3는 게이트웨이 엔드포인트 (MLSEC03-BP02)",
         "학습과 추론은 인스턴스 유형을 분리하고 학습은 Spot을 쓰지 않음 (MLPERF04-BP01, EKS AI/ML Networking)",
         "도형 밖 권고: Lustre를 S3 데이터 리포지토리와 연결하고 IaC로 다른 AZ에서 클러스터를 다시 띄우는 복구 절차 (HPCREL01-BP02)",
-        "도형 밖 권고: 노드 간 통신 암호화·EFA 드라이버·NCCL 설정과 학습 작업 스케줄러(Slurm/Kubernetes) 구성 (MLSEC04-BP02)"])
+        "도형 밖 권고: 노드 간 통신 암호화·EFA 드라이버·NCCL 설정과 학습 작업 스케줄러(Slurm/Kubernetes) 구성 (MLSEC04-BP02)"],
+        region="us-east-2")
     vpc = s.vpc("vpc-0a1b2c3d4e5f60011", "10.120.0.0/16", "gpu-training", Environment="research")
     public = [s.subnet(f"subnet-trn-pub-{az}", vpc, az, f"10.120.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ab")]
     head = [s.subnet(f"subnet-trn-head-{az}", vpc, az, f"10.120.{10 + i}.0/24", f"head-{az}", "app") for i, az in enumerate("ab")]
