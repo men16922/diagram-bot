@@ -439,15 +439,15 @@ class Sample:
             "virtualInterfaceState": "available", "region": self.region, "ownerAccount": self.account,
             "bgpPeers": [{"bgpPeerId": "dxpeer-" + self.digest(key, "bgp")[:8], "addressFamily": "ipv4", "bgpPeerState": "available", "bgpStatus": "up"}]})
 
-    def network(self, vpc, prefix, azs, public, private, nat_per_az=True):
+    def network(self, vpc, prefix, azs, public, private, nat_per_az=True, nat=True):
         """Internet gateway, NAT in public subnets, and one route table per tier (private per AZ)."""
         igw = self.internet_gateway(f"igw-{prefix}", vpc, f"{prefix}-igw")
         self.route_table(f"rtb-{prefix}-public", vpc, f"{prefix}-public", public, gateway=igw)
         nats = [self.nat_gateway(f"nat-{prefix}-{az}", vpc, public[i], f"{prefix}-nat-{az}") for i, az in enumerate(azs)
-                if nat_per_az or i == 0]
-        for i, az in enumerate(azs):
+                if nat_per_az or i == 0] if nat else []
+        for i, az in enumerate(azs if private else ()):
             self.route_table(f"rtb-{prefix}-private-{az}", vpc, f"{prefix}-private-{az}", [p[i] for p in private],
-                             nat=nats[i] if nat_per_az else nats[0])
+                             nat=(nats[i] if nat_per_az else nats[0]) if nats else None)
         # Subnets without an explicit association (the data tier) use the main table: local route only.
         self.route_table(f"rtb-{prefix}-main", vpc, f"{prefix}-isolated", main=True)
 

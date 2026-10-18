@@ -117,18 +117,10 @@ class Design:
                             for az in letters]
         private = [layers[t] for t in ("web", "app") if t in layers]
         if "public" in layers:
-            igw = s.internet_gateway(f"igw-{key}", vpc_id, f"{key}-igw")
-            s.route_table(f"rtb-{key}-public", vpc_id, f"{key}-public", layers["public"], gateway=igw)
-            nats = []
-            if nat != "none":
-                nats = [s.nat_gateway(f"nat-{key}-{az}", vpc_id, layers["public"][i], f"{key}-nat-{az}")
-                        for i, az in enumerate(letters) if nat == "per_az" or i == 0]
-            for i, az in enumerate(letters):
-                if private:
-                    s.route_table(f"rtb-{key}-private-{az}", vpc_id, f"{key}-private-{az}", [p[i] for p in private],
-                                  nat=(nats[i] if nat == "per_az" else nats[0]) if nats else None)
-        # The data tier (and private subnets without NAT) keep the main table: local route only.
-        s.route_table(f"rtb-{key}-main", vpc_id, f"{key}-isolated", main=True)
+            s.network(vpc_id, key, letters, layers["public"], private, nat_per_az=nat == "per_az", nat=nat != "none")
+        else:
+            # The data tier (and private subnets without NAT) keep the main table: local route only.
+            s.route_table(f"rtb-{key}-main", vpc_id, f"{key}-isolated", main=True)
         self.vpcs[key] = {"name": name, "key": key, "id": vpc_id, "cidr": cidr, "azs": letters, "tiers": layers,
                           "private_tables": [f"rtb-{key}-private-{az}" for az in letters] if "public" in layers and private else [],
                           "main_table": f"rtb-{key}-main", "sgs": set()}
