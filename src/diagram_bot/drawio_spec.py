@@ -1,7 +1,7 @@
 """Declarative draw.io document format and visual style specification (`DrawioSpec`).
 
 Allows adapting Diagram Bot's output (or normalizing existing company `drawio.xml` files) to any enterprise
-draw.io convention without modifying `layout.py` or `drawio.py`:
+draw.io convention without modifying `layout/` or `drawio.py`:
 - Cell wrapper element: `<object>`, `<UserObject>`, or plain `<mxCell value="...">`
 - Header/telemetry banner: include `heading`/`scope` text cells or omit them for a clean architecture canvas
 - Container hierarchy: toggle outer `AWS Cloud`, `Region`, or `AZ` containers (`use_cloud_box`, `use_region_box`, `use_az_box`)
@@ -398,7 +398,7 @@ COLOR = re.compile(r"^(#[0-9A-Fa-f]{3,8}|none)$")
 FONT = re.compile(r"^[\w .,'-]{1,64}$")
 SPEC_TEXT = re.compile(r"^[^\x00-\x1f;=<>]{0,120}$")
 NUMBERS = {"margin_x": (0, 2000), "margin_y": (0, 2000), "font_size": (4, 96), "grid_size": (1, 100)}
-# Fields of older spec files that never reached the renderer (icon and slot sizes come from layout.py); ignored on load.
+# Fields of older spec files that never reached the renderer (icon and slot sizes come from layout/); ignored on load.
 LEGACY_KEYS = {"icon_size", "slot_w", "row_h"}
 
 

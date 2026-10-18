@@ -459,3 +459,15 @@ def test_a_missing_tier_takes_free_space_and_the_right_routes():
     assert classes.get("subnet-edge-web-a") is None
     tables = {t["RouteTableId"]: {a.get("SubnetId") for a in t["Associations"]} for t in d.sample.raw["route_tables"]}
     assert "subnet-edge-web-a" in tables["rtb-edge-private-a"] and "subnet-edge-web-b" in tables["rtb-edge-private-b"]
+
+
+def test_company_standards_are_listed_and_applied(monkeypatch):
+    from diagram_bot import designer
+    from diagram_bot.samples import SAMPLES
+    monkeypatch.setattr(designer, "COMPANY_STANDARDS", {})
+    monkeypatch.setattr("diagram_bot.agent.COMPANY_STANDARDS", designer.COMPANY_STANDARDS)
+    key = designer.register_standard("Corp Web", SAMPLES["three-tier"], "사내 웹 표준")
+    tools = {t.tool_spec["name"]: t for t in build_tools(Workspace(lambda s: "x"))}
+    listed = tools["list_standard_architectures"]()
+    assert listed[key] == "사내 웹 표준" and set(STANDARDS) <= set(listed)
+    assert Design().apply_standard(key)["standard"] == key

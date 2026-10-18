@@ -10,7 +10,7 @@ import os
 import threading
 
 from .collector import collect
-from .designer import STANDARDS, Design
+from .designer import COMPANY_STANDARDS, STANDARDS, Design
 from .findings import review, summary
 from .graph import build_graph
 from .sessions import sdk_session
@@ -212,8 +212,8 @@ def build_tools(workspace):
 
     @tool
     def list_standard_architectures() -> dict:
-        """바로 쓸 수 있는 표준 아키텍처 목록(이름과 설명)."""
-        return STANDARDS
+        """바로 쓸 수 있는 표준 아키텍처 목록(이름과 설명). 사내 표준(register_standard)도 함께."""
+        return {**STANDARDS, **{name: description for name, (description, _) in COMPANY_STANDARDS.items()}}
 
     @tool
     def apply_standard_architecture(name: str) -> dict:

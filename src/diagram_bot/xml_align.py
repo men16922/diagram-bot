@@ -233,7 +233,7 @@ def _inspect_page(graph_root):
                 report["out_of_bounds"].append((cid, pid))
 
     # A tier row (the k-th subnet of a tier in each AZ column of a VPC) starts at the same y in every column, as
-    # layout.py draws it; heights may differ (an empty subnet is shorter).
+    # layout/ draws it; heights may differ (an empty subnet is shorter).
     az_by_vpc, subnets_of = {}, {}
     for cid, v in vertices.items():
         if v["role"] == "az":
@@ -389,7 +389,7 @@ def _align_page_in_place(graph_root, *, reparent=True, route_edges=True, grid_si
     for v in vertices.values():
         children_of.setdefault(v["parent"], []).append(v)
 
-    # The renderer's grid (layout.py): slot width, icon size, row pitch and container headers.
+    # The renderer's grid (layout/): slot width, icon size, row pitch and container headers.
     SLOT_W, ROW_H, ICON_SIZE = float(SLOT), float(ROW), float(ICON)
     SUBNET_HDR, AZ_HDR, VPC_HDR, OUTER_HDR = float(SUBNET_HEADER), float(AZ_HEADER), float(VPC_HEADER), 40.0
 

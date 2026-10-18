@@ -14,6 +14,7 @@ from .findings import SEVERITIES, markdown, review, summary
 from .graph import build_graph
 from .samples import SAMPLES
 from .report import write_report
+from .snapshot import load_snapshot
 from .version import app_version
 
 
@@ -147,9 +148,7 @@ def main():
             from .combine import combine_snapshots
             snapshot = combine_snapshots([json.loads(Path(path).read_text(encoding="utf-8")) for path in args.snapshots], args.title)
         else:
-            snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
-            if snapshot.get("schema_version") != 1:
-                raise ValueError("지원하지 않는 snapshot schema_version")
+            snapshot = load_snapshot(args.snapshot)
         path = write_report(snapshot, args.output)
         print(f"보고서: {path.resolve()}")
         print(f"수집 상태: {snapshot['metadata']['status']}")
@@ -283,9 +282,7 @@ def manage_user(parser, args):
 def export_cfn(parser, args):
     """CloudFormation draft per account × region; unsupported items and assumptions are summarized on stderr."""
     from .iac import dumps, templates
-    snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
-    if snapshot.get("schema_version") != 1:
-        raise ValueError("지원하지 않는 snapshot schema_version")
+    snapshot = load_snapshot(args.snapshot)
     results = templates(snapshot)
     if len(results) > 1 and not args.output:
         parser.error("여러 계정·리전을 합친 스냅샷은 --output이 필요합니다 (계정·리전마다 템플릿 파일을 따로 씁니다).")

@@ -39,7 +39,7 @@ updated: 2026-10-19
 - `collect_aws_resources` — 한 리전을 읽기 전용 수집, 종류별 개수·미완료 호출·검토 요약·`snapshot_id`. `allow_collection`이 거짓이면 `PermissionError`.
 - `find_collected_resources` — 마지막 수집에서 `kind`·`search`·`vpc`로 찾기(`limit` 1–100).
 - `review_collected_resources` — 마지막 수집의 검토 결과 상위 20개.
-- `list_standard_architectures` — `STANDARDS` 사전.
+- `list_standard_architectures` — `STANDARDS` 사전과 `designer.register_standard`로 등록한 사내 표준(`COMPANY_STANDARDS`)의 이름·설명.
 - `apply_standard_architecture` — 표준 하나로 설계를 교체.
 - `start_from_current` — 열린 스냅샷 또는 마지막 수집을 설계 출발점으로(기존 설계는 지움).
 - `new_design` — 빈 설계 시작(`Design.reset`).
