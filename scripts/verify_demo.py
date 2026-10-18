@@ -362,6 +362,9 @@ def main():
         for i, part in enumerate(SAMPLES['multi-account']()['parts'][1:]):
             (args.output / f'account-{i}.json').write_text(json.dumps(part), encoding='utf-8')
             page.locator('#import-file').set_input_files(args.output / f'account-{i}.json')
+            # The save button is already enabled while the import posts; wait until the snapshot list has the account.
+            page.wait_for_function('a => window.diagramBot.state.snapshots.some(s => s.metadata.account_id === a && !s.metadata.combined)',
+                                   arg=part['metadata']['account_id'])
             ready()
         page.locator('#combine-button').click()
         page.locator('#combine-rows label', has_text='222222222222').locator('input').check()
