@@ -188,7 +188,7 @@ async function replaceDocument(suffix, body, message) {
   if(state.dirty)await saveDocument(false);
   state.busy=true;setControls();
   try{applyDocument(await api(documentUrl(suffix),{method:'POST',body:JSON.stringify({revision:state.revision,...body})}));}
-  finally{state.busy=false;}
+  finally{state.busy=false;setControls();}
   sendDocument();toast(message);
 }
 function matchingResources() {
@@ -198,7 +198,7 @@ function matchingResources() {
 }
 function renderInventory() {
   const matches=matchingResources();$('inventory-rows').replaceChildren();
-  for(const item of matches){const row=el('tr');row.tabIndex=0;row.append(el('td',item.name),el('td',names[item.kind]),el('td',item.resource_id),el('td',item.reference_only?'참조만 확인':item.source));row.onclick=()=>showResource(item.id);row.onkeydown=e=>{if(e.key==='Enter')showResource(item.id);};$('inventory-rows').append(row);}
+  for(const item of matches){const row=el('tr');row.tabIndex=0;row.append(el('td',item.name),el('td',names[item.kind]||item.kind),el('td',item.resource_id),el('td',item.reference_only?'참조만 확인':item.source));row.onclick=()=>showResource(item.id);row.onkeydown=e=>{if(e.key==='Enter')showResource(item.id);};$('inventory-rows').append(row);}
   $('inventory-empty').hidden=matches.length>0;
   const active=Boolean($('search').value)||$('kind-filter').value!=='all';$('search-results').hidden=!active||state.mode==='inventory';$('search-results').replaceChildren();
   if(active){$('search-results').append(el('span',`${viewNames[state.view]} 범위 · ${matches.length}개`,'search-scope'));for(const item of matches.slice(0,30)){const button=el('button',item.name);button.onclick=()=>showResource(item.id);$('search-results').append(button);}if(!matches.length)$('search-results').append(el('span','검색 결과가 없습니다.'));}
@@ -256,9 +256,10 @@ function showResource(id, select=true) {
   if(item.attributes.Tags?.length){body.append(el('div','TAGS','detail-section'));for(const tag of item.attributes.Tags)body.append(el('p',`${tag.Key} = ${tag.Value}`,'small-note'));}
   body.append(el('div',`API에서 확인한 관계 · ${related.length}개`,'detail-section'));
   for(const edge of relationsOf(id)){
-    const other=node(edge.source===id?edge.target:edge.source);
+    // An endpoint can be missing from the graph (an imported or hand-edited snapshot); show its ID instead of failing.
+    const otherId=edge.source===id?edge.target:edge.source,other=node(otherId);
     const qualifier=[edge.qualifiers?.port&&`:${edge.qualifiers.port}`,edge.qualifiers?.availability_zone,edge.qualifiers?.destination].filter(Boolean).join(' · ');
-    const button=el('button',`${relationNames[edge.relation]||edge.relation} · ${other.name}${qualifier?' · '+qualifier:''}`,'relation-button');button.append(el('small',edge.evidence));
+    const button=el('button',`${relationNames[edge.relation]||edge.relation} · ${other?.name||otherId}${qualifier?' · '+qualifier:''}`,'relation-button');button.append(el('small',edge.evidence));
     button.onclick=()=>{showRelation(edge.id);if(state.ready&&!state.loading)post({action:'diagramBotSelectRelation',relationId:edge.id});};body.append(button);
   }
   const raw=el('details');raw.append(el('summary','원본 속성 보기'),el('pre',JSON.stringify(item.attributes,null,2)));body.append(raw);
@@ -440,16 +441,18 @@ $('route-filter').onchange=async()=>{const previous=state.routes;try{if(state.di
 $('import-file').onchange=async()=>{
   try{const file=$('import-file').files[0];if(!file)return;if(file.size>15*1024*1024)throw new Error('스냅샷은 최대 15 MiB입니다.');const data=JSON.parse(await file.text());const result=await api('/api/snapshots',{method:'POST',body:JSON.stringify(data)});await refreshSnapshots(result.id);await loadSnapshot(result.id);toast('스냅샷을 가져왔습니다.');}catch(error){toast(error.message,true);}finally{$('import-file').value='';}
 };
+let collectionRun=0;
 $('collection-form').onsubmit=async event=>{
-  event.preventDefault();$('start-collection').disabled=true;$('collection-progress').textContent='AWS 인증과 계정을 확인하고 있습니다…';
+  event.preventDefault();const run=++collectionRun;$('start-collection').disabled=true;$('collection-progress').textContent='AWS 인증과 계정을 확인하고 있습니다…';
   try{
     const sso=state.identity?.via==='sso'&&state.sso?.status==='authorized'?{sso_login:state.sso.id,sso_role:state.identity.role}:{};
     if(sso.sso_login&&!sso.sso_role)throw new Error('SSO 역할을 선택하세요. 이 계정에 할당된 역할이 없다면 Identity Center 관리자에게 요청하세요.');
     let job=await api('/api/collections',{method:'POST',body:JSON.stringify({profile:sso.sso_login?null:(state.identity?.via==='profile'?state.identity.profile||null:null),region:$('aws-region').value,expected_account:$('aws-account').value,role_arn:$('aws-role').value||null,external_id:$('aws-external-id').value||null,...sso})});
-    while(['queued','running'].includes(job.status)){$('collection-progress').textContent='AWS 설정을 수집하고 있습니다. 잠시 기다려 주세요.';await new Promise(resolve=>setTimeout(resolve,1500));job=await api(`/api/collections/${job.id}`);}
+    // A newer collection supersedes this poll; its job keeps running on the server and lands in 수집 이력.
+    while(['queued','running'].includes(job.status)){$('collection-progress').textContent='AWS 설정을 수집하고 있습니다. 잠시 기다려 주세요.';await new Promise(resolve=>setTimeout(resolve,1500));if(run!==collectionRun)return;job=await api(`/api/collections/${job.id}`);}
     if(job.status==='failed')throw new Error(job.error);
     await refreshSnapshots(job.snapshot_id);await loadSnapshot(job.snapshot_id);$('collection-dialog').close();toast(job.status==='partial'?'부분 수집을 완료했습니다. 조회 상태를 확인하세요.':'AWS 수집을 완료했습니다.');
-  }catch(error){$('collection-progress').textContent=error.message;}finally{$('start-collection').disabled=false;}
+  }catch(error){if(run===collectionRun)$('collection-progress').textContent=error.message;}finally{if(run===collectionRun)$('start-collection').disabled=false;}
 };
 // Design chat: a Strands agent on Bedrock calls drawing and read-only collection tools; each change is a snapshot.
 // Model replies use a little Markdown; render headings, lists, **bold** and `code` as DOM nodes (never innerHTML).
