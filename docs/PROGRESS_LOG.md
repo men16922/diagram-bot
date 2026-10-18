@@ -17,6 +17,10 @@ Last Updated: 2026-10-19
 - Refactor behind golden hashes (`tests/golden.json`, stable across PYTHONHASHSEED): `layout/`, `iac/`, `samples/` packages; findings,
   graph and collector split into named functions; `app.js` → 10 `js/` modules; shared `snapshot.py`, `sessions.py`, `errors.py`,
   `fileio.py`, `validation.py`, `version.py`, `expiry.py`. Wiki pages, index, `llms.txt`, DECISIONS (XML feature scope) updated.
+- After the push CI went red twice, both test-side races that the local gate could not show: the browser-relay end-to-end test hung on
+  Linux when its page thread's last `/api/relay/next` poll was still open as the TestClient closed (reproduced in python:3.11/3.13
+  containers; fixed by joining the thread, 6/6 full runs green on 3.11-3.13), and `verify_demo.py` opened the combine dialog before the
+  second imported account reached the snapshot list (it now waits on the app state). `ae4cb08`, `03641fe`; CI green.
 - Verified: `make check` equivalent (ruff + 476 pytest + offline smoke), `scripts/verify_demo.py` 35/35 checks with no page errors,
   `scripts/verify_team.py` 11/11. Not run: `verify_browser_egress.py` (live AWS, outside the offline gate).
 
