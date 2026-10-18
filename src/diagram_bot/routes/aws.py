@@ -1,11 +1,12 @@
 """AWS: who the credentials are, read-only collection jobs, Identity Center sign-in and the browser egress relay."""
+import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from ..collector import collect, now
@@ -153,11 +154,21 @@ def router(context, executor=None):
         return {"logged_out": aws.sso.logout(identifier, user(request))}
 
     @api.get("/api/relay/next")
-    def relay_next(request: Request):
-        """Browser egress: AWS requests the server has signed for this user, for the browser to send (long-poll)."""
+    async def relay_next(request: Request, tab: str = Query(default="", max_length=64, pattern=r"^[\w-]*$")):
+        """Browser egress: AWS requests the server has signed for this user, for the tab to send (long-poll). Async, so
+        the open polls of every tab hold no worker thread; an open poll is the tab's heartbeat (egress.BrowserRelay)."""
         if not aws.relay:
             raise HTTPException(404, "브라우저 중계는 --aws-egress browser로 실행할 때만 씁니다.")
-        return {"requests": aws.relay.next(user(request))}
+        # A closed tab's poll ends now, not at the poll's end. Request.is_disconnected() never reports it behind the
+        # app's BaseHTTPMiddleware; waiting on receive() does (as StreamingResponse does).
+        async def leave():
+            while (await request.receive())["type"] == "http.request":
+                pass
+        left = asyncio.ensure_future(leave())
+        try:
+            return {"requests": await aws.relay.wait_next(user(request), tab, gone=left.done)}
+        finally:
+            left.cancel()
 
     @api.post("/api/relay/{identifier}")
     def relay_answer(identifier: str, params: RelayAnswer, request: Request):

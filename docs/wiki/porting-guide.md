@@ -3,7 +3,7 @@ title: 회사 스택으로 옮기기 (React + Vite, FastAPI, 브라우저 egress
 summary: 표준 drawio.xml을 직접 고치던 회사 버전을 인플레이스 자동 정렬(align_xml)·회사 규격(DrawioSpec)·스냅샷 파이프라인으로 이식하는 코딩 에이전트용 토큰 최적화 플레이북(라이브러리 명세, Level 0~4 파일 복사 목록, 계약 치트시트 포함).
 sources: [pyproject.toml, src/diagram_bot/api.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/designer.py, src/diagram_bot/samples/, src/diagram_bot/graph.py, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/routes/__init__.py, src/diagram_bot/server.py, src/diagram_bot/aws_access.py, src/diagram_bot/store.py, src/diagram_bot/egress.py, src/diagram_bot/agent.py, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js]
 related: [architecture, drawio-format-and-alignment, snapshot-model, layout-and-drawio, chat-agent, browser-egress, aws-access-and-sso, storage, http-api, web-app, team-mode-security]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 회사 스택으로 옮기기 (Coding Agent Playbook)
 
@@ -134,7 +134,7 @@ result = api.review_snapshot(snapshot); draft = api.cloudformation(snapshot)
 
 ## 바꿀 때 주의
 - 라우터는 `request.state.user`가 없으면 동작하지 않는다(SSO·중계·채팅이 사용자 단위).
-- 브라우저 egress에서 탭을 닫으면 새 AWS 요청은 30초(`idle`) 뒤부터 즉시 `RelayDisconnected`, 이미 넘긴 요청은 최대 90초(`timeout`) 뒤 실패한다. 수집 작업은 이때 실패로 끝난다.
+- 브라우저 egress에서 탭을 닫으면 그 탭이 가져간 읽기 요청은 다른 열린 탭으로 넘어가고, 그 밖의 요청이나 열린 탭이 없을 때는 1초 안팎에 `RelayDisconnected`로 실패한다(폴 도중 끊김 감지, 아니면 `idle` 15초). 수집 작업은 이때 실패로 끝난다.
 - 새로운 리소스 종류나 관계를 추가할 때는 [[howto-add-collected-service]]의 체크리스트(`labels.js` 한국어 이름 포함)를 따른다.
 
 ## 관련
