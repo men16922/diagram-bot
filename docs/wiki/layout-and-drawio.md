@@ -1,8 +1,8 @@
 ---
 title: 배치와 draw.io 문서
 summary: layout.py의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
-sources: [src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md]
-related: [views, graph, samples, web-app, storage, howto-add-collected-service]
+sources: [src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md]
+related: [drawio-format-and-alignment, views, graph, samples, web-app, storage, howto-add-collected-service]
 updated: 2026-10-18
 ---
 # 배치와 draw.io 문서
@@ -11,7 +11,7 @@ updated: 2026-10-18
 > 직렬화한다. draw.io의 자동 배치·자동 경로는 쓰지 않는다. 같은 입력과 옵션이면 같은 좌표·같은 XML이 나온다.
 
 ## 핵심
-- 진입점: `drawio.layout_document(snapshot, view, vpc_id, resource, include_references, graph, routes)` = `layout_view(snapshot, graph, view_graph(...))`. `generate_document`가 XML을 만든다.
+- 진입점: `drawio.layout_document(snapshot, view, vpc_id, resource, include_references, graph, routes)` = `layout_view(snapshot, graph, view_graph(...))`. `generate_document(..., spec=None)`가 XML을 만든다(회사별 포맷 커스터마이징과 기존 XML 정렬은 [[drawio-format-and-alignment]]).
 - 엔진 표시: `layout.ENGINE, VERSION = "diagram-bot-layered", 2`. 범위 캡션 셀(`id="scope"`)에 `layout="diagram-bot-layered/2"`와 `view`, `vpc`, `focus`, `references`, `routes` 속성이 들어간다.
 - 셀 ID: `layout.cell_id(value) = "r-" + sha256(value)[:24]`. 리소스 셀은 노드 ID, 관계 셀은 `"edge/" + 관계 ID`에서 만든다. 고정 ID 셀은 `0`, `1`, `heading`, `scope`, `cloud`, `region`, `references`, `onprem`(`drawio.GENERATED`).
 - 배치 결과(`layout_view`의 반환): `engine`, `version`, `view`, `counts`, `width`, `height`, `shapes`(역할·부모·상대 좌표), `edges`(`path` 전체 경로, `points` 중간점, `constraints` exit/entry), `absolute`(셀별 절대 좌표), `labels`(라벨 상자).
@@ -26,7 +26,7 @@ VPC마다 위에서 아래로:
 1. **연결 행**: `EDGE_KINDS` 순서(IGW, VGW, 피어링, TGW attachment, VPC 엔드포인트, EKS, 태스크를 수집하지 못한 ECS 서비스, Lambda, SageMaker 엔드포인트). VPC 폭을 넘으면 줄을 바꾼다.
 2. **로드 밸런서 행**: 인터넷용을 왼쪽에. **대상 그룹 행**: 연결 LB 위치의 무게중심 순.
 3. **채널**: 대상 그룹마다 자기 수평 줄, LB 서브넷 배치선의 줄.
-4. **AZ 열**: AZ마다 열 하나, 열 사이와 양쪽 끝에 **거터**. 서브넷은 `tier_rank`(퍼블릭 → web → app → data/격리) 순으로 쌓고, 같은 층은 모든 열에서 같은 높이다. 서브넷 안 리소스는 등록 대상 그룹의 무게중심 순, ASG 멤버끼리 한 줄(`arrange`). 서브넷 색은 `is_public`(경로 분류 우선).
+4. **AZ 열**: AZ마다 열 하나, 열 사이와 양쪽 끝에 **거터**. 서브넷은 `tier_rank`(퍼블릭 → web → app → data/격리) 순으로 쌓고, 같은 층은 모든 열에서 같은 높이다. 서브넷 안 리소스는 등록 대상 그룹의 무게중심 순, ASG 멤버끼리 한 줄(`arrange`). 서브넷 색은 `is_public`(경로 분류 우선)과 `route_class`/`tier`(`spec.isolated_subnet_distinct=True`일 때 격리 서브넷 별도 색상).
 5. **서브넷 미확인 띠**: VPC 소속만 확인된 리소스.
 - ASG·ECS 서비스는 멤버가 한 층에 있을 때 AZ 열을 가로지르는 틀(`asg`, ECS는 `frame="ecs"`)로 그린다. 틀이 다른 리소스를 감싸게 되면 틀을 포기한다. 틀이 있으면 대상 그룹→틀 선 하나가 멤버별 `registered_target` 선을 대신한다(`suppressed`).
 - 거터 폭은 지나가는 경로 수에 맞춘다(`max(28, 16 + 8 * n)`). 행마다 들어오는 경로 수만큼 위 여백(lane)을 둔다.
@@ -51,8 +51,8 @@ VPC마다 위에서 아래로:
 - 그룹 스타일 `STYLES`는 draw.io `aws4` 라이브러리의 그룹(`group_aws_cloud_alt`, `group_region`, `group_vpc2`, `group_auto_scaling_group`, `group_corporate_data_center`, `group_account`)을 쓴다.
 
 ## drawio.py
-- `generate_document(snapshot, vpc_id, include_references, view, resource, routes)`: 보기를 지정하면 한 페이지, 아니면 "전체 구성" + VPC마다 상세 페이지(VPC `resource_id` 정렬, 페이지 이름 = VPC ID). 루트는 `<mxfile host="Diagram Bot" compressed="false">`.
-- `page()`: 셀마다 `<object>`에 `label`과 `resourceId`, `tooltip`, `summary="1"`(카드) 등을 속성으로 단다. 관계 셀은 `relationId`(그래프 관계 ID), `relation`(`RELATIONS`의 한국어 이름, 없으면 원래 이름), `evidence`를 갖고, 스타일에 `exitX/exitY/entryX/entryY` 제약과 `orthogonalEdgeStyle`, 중간점 `Array as="points"`를 넣는다. 보조(SG·ENI·EBS 등) 관계는 회색 점선.
+- `generate_document(snapshot, vpc_id, include_references, view, resource, routes, spec=None)`: 보기를 지정하면 한 페이지, 아니면 "전체 구성" + VPC마다 상세 페이지(VPC `resource_id` 정렬, 페이지 이름 = VPC ID). 루트는 `<mxfile host="Diagram Bot" compressed="false">`. `spec`으로 회사 규격(`"clean"`, `"mxcell"`, `DrawioSpec`)을 적용할 수 있다([[drawio-format-and-alignment]]).
+- `page()`: 셀마다 `<object>`(또는 `spec.cell_wrapper="mxcell"`이면 `<mxCell>`)에 `label`과 `resourceId`, `tooltip`, `summary="1"`(카드) 등을 속성으로 단다. 관계 셀은 `relationId`(그래프 관계 ID), `relation`(`RELATIONS`의 한국어 이름, 없으면 원래 이름), `evidence`를 갖고, 스타일에 `exitX/exitY/entryX/entryY` 제약과 `orthogonalEdgeStyle`, 중간점 `Array as="points"`를 넣는다. 보조(SG·ENI·EBS 등) 관계는 회색 점선.
 - `validate_document(xml)`: 10 MiB 이하, `defusedxml`로 파싱(외부 엔티티 차단), 루트는 `mxfile` 또는 `mxGraphModel`, `mxfile`이면 `diagram/mxGraphModel`이 있어야 함(압축 문서 거부).
 - `carry_annotations(saved_xml, generated_xml)`: 재배치 때 저장본 첫 페이지에서 사용자가 더한 셀만 새 문서로 옮긴다. 생성 셀(고정 ID, `r-` 접두, `resourceId`·`relationId`·`relationIndex`·`summary` 속성)은 건너뛰고, 부모·끝점이 새 문서에 없는 셀도 건너뛴다. `routes/documents.py`의 재배치가 `DocumentStore.replace(merge=carry_annotations)`로 쓴다([[storage]]).
 
@@ -78,6 +78,7 @@ VPC마다 위에서 아래로:
 - 새 종류는 `EDGE_KINDS`·`SUBNET_KINDS`·`outside_vpc`·overview의 `outside` 제외 목록·`SUMMARY`/`GLANCE_KINDS` 중 어디에 속하는지 정해야 한다([[howto-add-collected-service]]).
 
 ## 관련
+- [[drawio-format-and-alignment]] — 회사별 `DrawioSpec`과 기존 `drawio.xml` 인플레이스 정렬·스냅샷 이식.
 - [[views]] — 배치 입력이 되는 보기 결과.
 - [[web-app]] — 편집기 iframe·저장·PNG 내보내기.
 - [[storage]] — 편집 문서 리비전과 재배치 병합.

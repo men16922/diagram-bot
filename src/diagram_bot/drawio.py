@@ -3,6 +3,7 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from defusedxml.ElementTree import fromstring
 
+from .drawio_spec import resolve_spec
 from .graph import build_graph
 from .layout import cell_id, layout_view
 from .views import view_graph
@@ -130,19 +131,28 @@ def validate_document(xml):
     return root
 
 
-def resource_style(shape):
+def resource_style(shape, spec=None):
+    cfg = resolve_spec(spec)
     variant = shape.get("variant")
+    custom = cfg.resource_styles.get(variant) or cfg.resource_styles.get(shape.get("kind"))
+    res_icons = {**RESOURCE_ICONS, **cfg.resource_icons} if cfg.resource_icons else RESOURCE_ICONS
+    svc_icons = {**ICONS, **cfg.service_icons} if cfg.service_icons else ICONS
     # A variant (engine, file system class, IP target) picks its own icon, else the kind's.
-    icon = RESOURCE_ICONS.get(variant) or (None if variant in ICONS else RESOURCE_ICONS.get(shape.get("kind")))
-    shape_name, color = ICONS.get(variant) or ICONS.get(shape.get("kind"), ("", "#687B90"))
-    style = COMMON + "whiteSpace=wrap;"
+    icon = res_icons.get(variant) or (None if variant in svc_icons else res_icons.get(shape.get("kind")))
+    shape_name, color = svc_icons.get(variant) or svc_icons.get(shape.get("kind"), ("", "#687B90"))
+    common = COMMON if cfg.font_family == "Arial" and cfg.font_size == 12 and cfg.font_color == "#232F3E" else (
+        f"html=0;fontFamily={cfg.font_family};fontSize={cfg.font_size};fontColor={cfg.font_color};"
+    )
+    style = common + "whiteSpace=wrap;"
     if shape.get("label_side") == "right":
         style += "labelWidth=170;labelPosition=right;verticalLabelPosition=middle;align=left;verticalAlign=middle;spacingLeft=8;"
     else:
         style += f"labelWidth={shape.get('label_width', 140)};align=center;verticalLabelPosition=bottom;verticalAlign=top;spacingTop=8;"
     if shape.get("font_size"):
         style += f"fontSize={shape['font_size']};"
-    if shape.get("outside_vpc") and not icon and not shape_name:
+    if custom:
+        style += custom if custom.endswith(";") else (custom + ";")
+    elif shape.get("outside_vpc") and not icon and not shape_name:
         # Target registered with AvailabilityZone=all: an address outside the VPC (e.g. on premises).
         style += "shape=mxgraph.aws4.traditional_server;fillColor=#232F3D;strokeColor=none;gradientColor=none;"
     elif icon:
@@ -158,25 +168,73 @@ def resource_style(shape):
     return style
 
 
-def page(file, layout, name):
+def _subnet_role(shape, cfg):
+    if shape.get("public"):
+        return "public_subnet"
+    if cfg.isolated_subnet_distinct and (shape.get("route_class") == "isolated" or shape.get("tier") == 3):
+        return "isolated_subnet"
+    return "private_subnet"
+
+
+def _format_subnet_label(label, cfg):
+    if cfg.subnet_label_style != "compact" or "\n" not in (label or ""):
+        return label
+    lines = [ln.strip() for ln in label.splitlines() if ln.strip()]
+    if len(lines) >= 2:
+        cidr = lines[1].split("·")[0].strip()
+        if cidr and cidr not in lines[0]:
+            return f"{lines[0]} ({cidr})"
+        return lines[0]
+    return label
+
+
+def page(file, layout, name, spec=None):
+    cfg = resolve_spec(spec)
     diagram = SubElement(file, "diagram", {"id": f"{layout['view']['kind']}-{cell_id(name)[2:10]}", "name": name})
-    model = SubElement(diagram, "mxGraphModel", {"dx": "1200", "dy": "800", "grid": "1", "gridSize": "10", "page": "0", "background": "#ffffff"})
+    model = SubElement(diagram, "mxGraphModel", {"dx": "1200", "dy": "800", "grid": "1", "gridSize": str(cfg.grid_size),
+                                                 "page": "0", "background": cfg.background})
     root = SubElement(model, "root")
     SubElement(root, "mxCell", {"id": "0"})
     SubElement(root, "mxCell", {"id": "1", "parent": "0"})
     ids = {"1"}
+
+    by_id = {s["id"]: s for s in layout["shapes"]}
+    omitted = set()
+    if not cfg.include_header:
+        omitted.update(("heading", "scope"))
+    if not cfg.use_cloud_box:
+        omitted.add("cloud")
+    if not cfg.use_region_box:
+        omitted.add("region")
+    if not cfg.use_az_box:
+        omitted.update(s["id"] for s in layout["shapes"] if s["role"] == "az")
+
+    placed = []
     for shape in layout["shapes"]:
-        attrs = {"id": shape["id"], "label": shape["label"]}
-        for key, attr in (("resource", "resourceId"), ("tooltip", "tooltip"), ("layout", "layout"), ("view", "view"),
-                          ("vpc", "vpc"), ("focus", "focus"), ("references", "references"), ("routes", "routes")):
-            if shape.get(key) not in (None, ""):
-                attrs[attr] = str(shape[key])
-        if shape["role"] == "summary":
-            attrs["summary"] = "1"
-        role = ("public_subnet" if shape.get("public") else "private_subnet") if shape["role"] == "subnet" else shape["role"]
-        style = resource_style(shape) if shape["role"] == "resource" else STYLES["ecs_frame" if shape.get("frame") == "ecs" else role]
+        if shape["id"] in omitted:
+            continue
+        cur_p = shape["parent"]
+        off_x, off_y = 0.0, 0.0
+        while cur_p in omitted and cur_p in by_id:
+            p_shape = by_id[cur_p]
+            off_x += p_shape["x"]
+            off_y += p_shape["y"]
+            cur_p = p_shape["parent"]
+        placed.append((shape, cur_p, shape["x"] + off_x, shape["y"] + off_y))
+
+    top_boxes = [(nx, ny) for s, p, nx, ny in placed if p == "1" and s["id"] not in ("heading", "scope")]
+    dx = (cfg.margin_x - min(x for x, _ in top_boxes)) if (not cfg.use_cloud_box and top_boxes) else 0.0
+    dy = (cfg.margin_y - min(y for _, y in top_boxes)) if ((not cfg.include_header or not cfg.use_cloud_box or not cfg.use_region_box) and top_boxes) else 0.0
+    attr_map = cfg.attribute_map
+
+    for shape, parent_id, nx, ny in placed:
+        sx = nx + (dx if parent_id == "1" else 0.0)
+        sy = ny + (dy if parent_id == "1" else 0.0)
+        role = _subnet_role(shape, cfg) if shape["role"] == "subnet" else shape["role"]
+        label = _format_subnet_label(shape["label"], cfg) if shape["role"] == "subnet" else shape["label"]
+        style = resource_style(shape, cfg) if shape["role"] == "resource" else cfg.role_style("ecs_frame" if shape.get("frame") == "ecs" else role)
         if shape["role"] == "summary" and not shape.get("resource"):
-            style = STYLES["references"] + "fontColor=#232F3E;spacingTop=12;spacingLeft=16;"
+            style = cfg.role_style("references") + f"fontColor={cfg.font_color};spacingTop=12;spacingLeft=16;"
         if shape.get("empty"):
             style += "dashed=1;strokeColor=#9AA8BC;fontColor=#62748A;"
         if shape.get("emphasis") and shape["role"] != "resource":
@@ -184,19 +242,41 @@ def page(file, layout, name):
         if shape.get("muted"):
             # Off the route filter's path: kept in place for context, dimmed.
             style += "opacity=30;textOpacity=45;"
-        obj = SubElement(root, "object", attrs)
-        cell = SubElement(obj, "mxCell", {"vertex": "1", "parent": shape["parent"], "style": style})
-        SubElement(cell, "mxGeometry", {"x": f"{shape['x']:g}", "y": f"{shape['y']:g}", "width": f"{shape['w']:g}",
+        extra_attrs = {}
+        for key in ("resource", "tooltip", "layout", "view", "vpc", "focus", "references", "routes"):
+            mapped = attr_map.get(key)
+            if mapped and shape.get(key) not in (None, ""):
+                extra_attrs[mapped] = str(shape[key])
+        if shape["role"] == "summary" and attr_map:
+            extra_attrs["summary"] = "1"
+        if cfg.cell_wrapper == "mxCell":
+            cell = SubElement(root, "mxCell", {"id": shape["id"], "value": label, "vertex": "1",
+                                               "parent": parent_id, "style": style, **extra_attrs})
+        else:
+            obj = SubElement(root, cfg.cell_wrapper, {"id": shape["id"], "label": label, **extra_attrs})
+            cell = SubElement(obj, "mxCell", {"vertex": "1", "parent": parent_id, "style": style})
+        SubElement(cell, "mxGeometry", {"x": f"{sx:g}", "y": f"{sy:g}", "width": f"{shape['w']:g}",
                                         "height": f"{shape['h']:g}", "as": "geometry"})
         ids.add(shape["id"])
+    edge_base = cfg.effective_edge_style()
     for edge in layout["edges"]:
         if edge["source"] not in ids or edge["target"] not in ids:
             continue
-        obj = SubElement(root, "object", {"id": edge["id"], "label": edge["label"], "relationId": edge["relation_id"],
-                                          "relation": RELATIONS.get(edge["relation"], edge["relation"]), "evidence": edge["evidence"]})
-        style = edge["constraints"] + EDGE + ("dashed=1;strokeColor=#A0AEC0;" if edge.get("auxiliary") else "") \
+        edge_attrs = {}
+        for key, val in (("relation_id", edge["relation_id"]),
+                         ("relation", RELATIONS.get(edge["relation"], edge["relation"])),
+                         ("evidence", edge["evidence"])):
+            mapped = attr_map.get(key)
+            if mapped and val not in (None, ""):
+                edge_attrs[mapped] = str(val)
+        style = edge["constraints"] + edge_base + ("dashed=1;strokeColor=#A0AEC0;" if edge.get("auxiliary") else "") \
             + (f"strokeColor={edge['stroke']};" if edge.get("stroke") else "")
-        cell = SubElement(obj, "mxCell", {"edge": "1", "parent": "1", "source": edge["source"], "target": edge["target"], "style": style})
+        if cfg.cell_wrapper == "mxCell":
+            cell = SubElement(root, "mxCell", {"id": edge["id"], "value": edge["label"], "edge": "1", "parent": "1",
+                                               "source": edge["source"], "target": edge["target"], "style": style, **edge_attrs})
+        else:
+            obj = SubElement(root, cfg.cell_wrapper, {"id": edge["id"], "label": edge["label"], **edge_attrs})
+            cell = SubElement(obj, "mxCell", {"edge": "1", "parent": "1", "source": edge["source"], "target": edge["target"], "style": style})
         labelled = edge["label"] and edge.get("label_offset")
         geometry = SubElement(cell, "mxGeometry", {"relative": "1", "as": "geometry", **({"x": "1"} if labelled else {})})
         if labelled:
@@ -204,7 +284,7 @@ def page(file, layout, name):
         if edge["points"]:
             points = SubElement(geometry, "Array", {"as": "points"})
             for x, y in edge["points"]:
-                SubElement(points, "mxPoint", {"x": f"{x:g}", "y": f"{y:g}"})
+                SubElement(points, "mxPoint", {"x": f"{x + dx:g}", "y": f"{y + dy:g}"})
 
 
 def layout_document(snapshot, view=None, vpc_id=None, resource=None, include_references=False, graph=None, routes=None):
@@ -212,21 +292,23 @@ def layout_document(snapshot, view=None, vpc_id=None, resource=None, include_ref
     return layout_view(snapshot, graph, view_graph(graph, view, vpc_id, resource, include_references, routes))
 
 
-def generate_document(snapshot, vpc_id=None, include_references=False, view=None, resource=None, routes=None):
+def generate_document(snapshot, vpc_id=None, include_references=False, view=None, resource=None, routes=None, spec=None):
     """One page for an explicit view; without a view, an overview page plus one detail page per VPC.
 
-    `routes` narrows a detail page to one load balancer's or target group's routes (views.route_filter)."""
+    `routes` narrows a detail page to one load balancer's or target group's routes (views.route_filter).
+    `spec` customizes the draw.io XML envelope, cell wrapper, banner, subnet colors, fonts and edge styles."""
+    cfg = resolve_spec(spec)
     graph = build_graph(snapshot)
-    file = Element("mxfile", {"host": "Diagram Bot", "version": "2", "compressed": "false"})
+    file = Element("mxfile", {"host": cfg.host, "version": "2", "compressed": "false"})
     if view or vpc_id or resource:
         layout = layout_document(snapshot, view, vpc_id, resource, include_references, graph, routes)
         focus = next((n["name"] for n in graph["nodes"] if n["id"] == layout["view"]["resource"]), None)
         name = {"overview": "전체 구성", "detail": vpc_id, "focus": focus}[layout["view"]["kind"]]
-        page(file, layout, name or "AWS")
+        page(file, layout, name or "AWS", spec=cfg)
     else:
-        page(file, layout_document(snapshot, "overview", graph=graph), "전체 구성")
+        page(file, layout_document(snapshot, "overview", graph=graph), "전체 구성", spec=cfg)
         for vpc in sorted(n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc"):
-            page(file, layout_document(snapshot, "detail", vpc, None, include_references, graph), vpc)
+            page(file, layout_document(snapshot, "detail", vpc, None, include_references, graph), vpc, spec=cfg)
     return tostring(file, encoding="unicode")
 
 

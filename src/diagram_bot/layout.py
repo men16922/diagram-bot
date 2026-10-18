@@ -983,7 +983,8 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
                            fit_label(sub["name"], per_row[sub["id"]] * SLOT - 20, 1, 11) + "\n" +
                            fit_label(" · ".join(filter(None, (sub["attributes"].get("CidrBlock", ""), ROUTES.get(sub.get("route_class"))))),
                                      per_row[sub["id"]] * SLOT - 20, 1, 11),
-                           resource=sub["id"], emphasis=sub["id"] == focus, public=is_public(sub))
+                           resource=sub["id"], emphasis=sub["id"] == focus, public=is_public(sub),
+                           route_class=sub.get("route_class"), tier=tier_rank(sub))
                 for n, row, slot in arranged[sub["id"]]:
                     shape = resource(n["id"], sid, 20 + slot * SLOT + (SLOT - ICON) / 2, SUBNET_HEADER + row * pitch + lane_top, "bottom")
                     shape.update(column=index, lane_top=lane_top)

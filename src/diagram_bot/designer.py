@@ -20,6 +20,14 @@ TIERS = ("public", "web", "app", "data")
 ACCELERATED = re.compile(r"^(p|g|trn|inf|dl)\d")
 # Single-account samples double as standard designs; the multi-account sample is a combined collection, not a design.
 STANDARDS = {key: summary for key, summary in SUMMARIES.items() if key != "multi-account"}
+COMPANY_STANDARDS = {}
+
+
+def register_standard(name, builder, description=None):
+    """Register a custom/company standard architecture builder so `Design.apply_standard(name)` can load it."""
+    key = slug(name)
+    COMPANY_STANDARDS[key] = (description or f"사내 표준 아키텍처 ({key})", builder)
+    return key
 
 
 class DesignError(ValueError):
@@ -507,9 +515,14 @@ class Design:
     @atomic
     def apply_standard(self, name):
         # Standards are single-account designs; the multi-account sample is a combined collection, not a design.
-        if name not in STANDARDS:
-            raise DesignError(f"표준 아키텍처가 아닙니다: {name}. 사용 가능: {', '.join(STANDARDS)}")
-        snapshot = SAMPLES[name]()
+        if name in COMPANY_STANDARDS:
+            _, builder = COMPANY_STANDARDS[name]
+            snapshot = builder()
+        elif name in STANDARDS:
+            snapshot = SAMPLES[name]()
+        else:
+            available = list(STANDARDS) + [k for k in COMPANY_STANDARDS if k not in STANDARDS]
+            raise DesignError(f"표준 아키텍처가 아닙니다: {name}. 사용 가능: {', '.join(available)}")
         self.start_from(snapshot)
         self.standard = name
         self.record("apply_standard", name=name)

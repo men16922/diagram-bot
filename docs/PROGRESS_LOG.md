@@ -2,6 +2,17 @@
 
 Last Updated: 2026-10-18
 
+## 2026-10-18 — Company draw.io spec, existing XML auto-alignment & import, two-tier porting docs (goal: 모듈화, 회사 drawio 규격/자동 정렬, 사람용 High-level + 코딩 에이전트용 토큰 최적화 문서)
+
+- Custom draw.io specification (`drawio_spec.py`): `DrawioSpec` dataclass + presets (`DEFAULT_SPEC`, `ENTERPRISE_CLEAN_SPEC` / `"clean"`, `MXCELL_SPEC` / `"mxcell"`) + `spec_from_xml(xml_text)` to auto-extract wrapper tags (`<mxCell>` vs `<object>`), header presence, font family, container styles, distinct isolated/data subnet styles, and edge arrow styles from any sample company `drawio.xml`. Wired through `layout.py`, `drawio.py`, `api.render(..., spec=...)`, and `GET /api/snapshots/{id}/document?spec=...`.
+- Existing `drawio.xml` diagnostics, rule-based alignment, and snapshot import (`xml_align.py`):
+  - `inspect_drawio_xml` (`api.inspect_xml`): reports sibling overlaps, out-of-bounds children, unaligned AZ subnet tiers, unrouted edges, edge-icon collisions, and extracted `DrawioSpec`.
+  - `align_drawio_xml` (`api.align_xml`): `mode="preserve"` keeps all original cell IDs, labels, and wrapper structure while reparenting flat visual children, snapping resources into layered grids, synchronizing subnet tier rows across AZ columns, resizing containers bottom-up, and routing orthogonal edges around obstacles; `mode="rebuild"` imports and re-renders via `generate_document`.
+  - `import_drawio_xml` (`api.import_xml`): parses an existing company `drawio.xml` into a valid Diagram Bot `Snapshot` (`raw` + `graph`) so it can immediately be extended with `Design.start_from_snapshot`, reviewed (`findings.review`), diffed, or exported to CloudFormation (`iac.template`).
+  - Exposed via HTTP (`POST /api/xml/align`, `POST /api/xml/import`) and CLI (`diagram-bot align-xml`, `diagram-bot import-xml`).
+- Two-tier documentation: created `docs/HUMAN_GUIDE.md` (high-level overview, Level 0~4 module map, 5 copy-paste prompts for company coding agents, 3-phase productionization roadmap) and `docs/wiki/drawio-format-and-alignment.md` + updated `docs/wiki/porting-guide.md`, `llms.txt`, and `docs/wiki/index.md` for token-efficient coding-agent execution.
+- Verified: `make check` (ruff + 242 pytest cases + offline CLI round-trip smoke) and `python scripts/wiki_index.py --check`.
+
 ## 2026-10-18 — Company auth structure, porting refactor, LLM wiki (owner: 인증 구조 회사것과 동일하게; 포팅하기 좋게 리팩토링; LLM Wiki)
 
 - Browser egress (`serve --aws-egress browser`): Identity Center device code + GetRoleCredentials on the server; every AWS
