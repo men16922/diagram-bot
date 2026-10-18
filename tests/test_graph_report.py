@@ -186,6 +186,37 @@ def test_msk_brokers_follow_list_nodes():
     assert brokers == [([1], False), ([2], False), ([3], False)]
 
 
+def test_optional_best_practice_items():
+    """docs/ARCHITECTURE.md §4 #7: microservices in 3 AZs, EKS /28 cluster subnets and a third Aurora AZ, central egress VPC."""
+    import ipaddress
+
+    from diagram_bot.samples import SAMPLES
+    zones = lambda raw: {s["SubnetId"]: s["AvailabilityZone"] for s in raw["subnets"]}
+    raw = SAMPLES["microservices"]()["raw"]
+    assert all(len({zones(raw)[s] for s in g["VPCZoneIdentifier"].split(",")}) == 3 for g in raw["auto_scaling_groups"])
+    assert len({t["availabilityZone"] for t in raw["ecs_tasks"]}) == 3 and len(raw["nat_gateways"]) == 3
+    raw = SAMPLES["eks-platform"]()["raw"]
+    cidr = {s["SubnetId"]: s["CidrBlock"] for s in raw["subnets"]}
+    cluster = raw["eks_clusters"][0]["resourcesVpcConfig"]["subnetIds"]
+    assert [ipaddress.ip_network(cidr[s]).prefixlen for s in cluster] == [28] * 3 and len({zones(raw)[s] for s in cluster}) == 3
+    assert not set(cluster) & {s for g in raw["auto_scaling_groups"] for s in g["VPCZoneIdentifier"].split(",")}
+    assert sorted(d["AvailabilityZone"][-1] for d in raw["db_instances"] if d.get("DBClusterIdentifier") == "platform-aurora") == ["a", "b", "c"]
+    snapshot = SAMPLES["environments"]()
+    raw, graph = snapshot["raw"], build_graph(snapshot)
+    names = {v["VpcId"]: next(t["Value"] for t in v["Tags"] if t["Key"] == "Name") for v in raw["vpcs"]}
+    # NAT gateways only in the egress VPC (one per AZ); the environments send 0.0.0.0/0 to the Transit Gateway.
+    assert sorted((names[n["VpcId"]], n["SubnetId"][-1]) for n in raw["nat_gateways"]) == [("egress-vpc", az) for az in "abc"]
+    classes = {}
+    for n in graph["nodes"]:
+        if n["kind"] == "subnet":
+            classes.setdefault(names[n["attributes"]["VpcId"]], set()).add(n.get("route_class"))
+    assert classes == {"prod-vpc": {"public", "tgw"}, "staging-vpc": {"public", "tgw"}, "egress-vpc": {"public", "nat"},
+                       "shared-services": {"isolated"}}
+    returns = next(t for t in raw["route_tables"] if t["RouteTableId"] == "rtb-egress-public")["Routes"]
+    assert {"DestinationCidrBlock": "10.0.0.0/8", "TransitGatewayId": "tgw-corp0000000004", "State": "active"} in returns
+    assert sorted(names[a["VpcId"]] for a in raw["transit_gateway_attachments"]) == ["egress-vpc", "prod-vpc", "shared-services", "staging-vpc"]
+
+
 def test_lambda_outside_vpc_is_inventoried_but_not_drawn(tmp_path):
     # Live account check (2026-10-17): functions without VpcConfig were collected but missing from the inventory.
     from diagram_bot.drawio import layout_document

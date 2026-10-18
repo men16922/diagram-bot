@@ -11,7 +11,7 @@ from .combine import combine_snapshots
 
 ACCOUNT, REGION = "111122223333", "ap-northeast-2"
 # Bumped whenever a sample's architecture changes; the server replaces stored samples of another version.
-SAMPLE_VERSION = 3
+SAMPLE_VERSION = 4
 
 
 class Sample:
@@ -456,28 +456,29 @@ def three_tier():
 
 
 def microservices():
-    s = Sample("microservices", "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4)", [
+    s = Sample("microservices", "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4 · 3 AZ)", [
         "ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)",
         "ECS Fargate 서비스(awsvpc)는 태스크 IP를 대상으로 등록, 배포 회로 차단기로 자동 롤백",
         "서비스마다 전용 포트·헬스 체크 경로",
-        "두 AZ 이상에 각 서비스 대상을 분산하고 서비스별 Auto Scaling 그룹",
+        "세 AZ에 각 서비스 대상(EC2·Fargate 태스크)을 분산하고 서비스별 Auto Scaling 그룹, AZ마다 NAT (REL10-BP01)",
         "서비스 공용 데이터는 격리 서브넷의 RDS Multi-AZ",
         "이미지 풀은 ECR API·Docker 인터페이스와 S3 게이트웨이 엔드포인트, 컨테이너 로그는 CloudWatch Logs 엔드포인트로 사설 경로 사용",
         "도형 밖 권고: 인터넷용 ALB 앞에 AWS WAF·CloudFront (REL02-BP01, 수집 범위 밖)"])
     vpc = s.vpc("vpc-0a1b2c3d4e5f60002", "10.20.0.0/16", "commerce-services", Environment="production")
-    public = [s.subnet(f"subnet-ms-pub-{az}", vpc, az, f"10.20.{i}.0/24", f"public-{az}", "public") for i, az in enumerate("ab")]
-    private = [s.subnet(f"subnet-ms-app-{az}", vpc, az, f"10.20.{8 + 4 * i}.0/22", f"services-{az}", "app") for i, az in enumerate("ab")]
-    data = [s.subnet(f"subnet-ms-data-{az}", vpc, az, f"10.20.{20 + i}.0/24", f"data-{az}", "data") for i, az in enumerate("ab")]
-    catalog = [s.instance(f"i-catalog{az}00000001", private[i], f"catalog-{az}", "c6i.large", sg="sg-services") for i, az in enumerate("ab")]
-    orders = [s.instance(f"i-orders{az}000000001", private[i], f"orders-{az}", "c6i.large", sg="sg-services") for i, az in enumerate("ab")]
-    s.network(vpc, "commerce", "ab", public, [private])
+    azs = "abc"  # the reference diagram for microservices on AWS spans three AZs
+    public = [s.subnet(f"subnet-ms-pub-{az}", vpc, az, f"10.20.{i}.0/24", f"public-{az}", "public") for i, az in enumerate(azs)]
+    private = [s.subnet(f"subnet-ms-app-{az}", vpc, az, f"10.20.{8 + 4 * i}.0/22", f"services-{az}", "app") for i, az in enumerate(azs)]
+    data = [s.subnet(f"subnet-ms-data-{az}", vpc, az, f"10.20.{20 + i}.0/24", f"data-{az}", "data") for i, az in enumerate(azs)]
+    catalog = [s.instance(f"i-catalog{az}00000001", private[i], f"catalog-{az}", "c6i.large", sg="sg-services") for i, az in enumerate(azs)]
+    orders = [s.instance(f"i-orders{az}000000001", private[i], f"orders-{az}", "c6i.large", sg="sg-services") for i, az in enumerate(azs)]
+    s.network(vpc, "commerce", azs, public, [private])
     alb = s.load_balancer("commerce-alb", vpc, public, sg="sg-commerce-alb")
     catalog_tg = s.target_group("catalog-svc", vpc, "HTTP", 8080, catalog, [alb], health="/catalog/health")
     orders_tg = s.target_group("orders-svc", vpc, "HTTP", 8081, orders, [alb], health="/orders/health")
-    s.auto_scaling_group("catalog-asg", catalog, private, [catalog_tg])
-    s.auto_scaling_group("orders-asg", orders, private, [orders_tg])
+    s.auto_scaling_group("catalog-asg", catalog, private, [catalog_tg], 3, 9)
+    s.auto_scaling_group("orders-asg", orders, private, [orders_tg], 3, 9)
     s.database("commerce-db", vpc, data, "a", "postgres", "db.r6g.xlarge", standby="b")
-    s.gateway_endpoint("vpce-commerce-s3", vpc, "s3", [f"rtb-commerce-private-{az}" for az in "ab"])
+    s.gateway_endpoint("vpce-commerce-s3", vpc, "s3", [f"rtb-commerce-private-{az}" for az in azs])
     # Fargate image pulls need both ECR endpoints (plus S3); awslogs needs the logs endpoint.
     for service in ("ecr.api", "ecr.dkr", "logs"):
         s.interface_endpoint(f"vpce-commerce-{service.replace('.', '-')}", vpc, service, private)
@@ -514,38 +515,49 @@ def static_ip_front():
 
 
 def environments():
-    s = Sample("environments", "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스)", [
+    s = Sample("environments", "환경별 VPC 분리 (운영 · 스테이징 · 공용 서비스 · 중앙 egress)", [
         "환경마다 VPC와 CIDR을 분리하고 겹치지 않게 할당 (권장: 계정까지 분리)",
-        "운영은 3 AZ·AZ별 NAT, 스테이징은 비용을 고려한 2 AZ·NAT 1개",
+        "운영은 3 AZ, 스테이징은 비용을 고려한 2 AZ",
+        "인터넷 egress는 egress VPC의 AZ별 NAT로 집중: 운영·스테이징 VPC에는 NAT 없이 0.0.0.0/0 → TGW (Multi-VPC 백서: centralized egress)",
+        "egress VPC는 AZ마다 TGW attachment 전용 /28 서브넷과 같은 AZ의 NAT, 퍼블릭 경로에 10.0.0.0/8 → TGW 복귀 경로",
+        "인터넷 진입(ALB)은 각 환경 VPC의 퍼블릭 서브넷에 그대로 둠 (집중하는 것은 egress)",
         "공용 서비스 VPC에는 내부 도구만 두고 인터넷 경로 없음",
         "VPC 간 연결은 Transit Gateway 허브로 일원화 (VPC 피어링 그물망 대신)",
         "Environment 태그로 소유·비용 구분",
-        "스테이징 NAT 1개는 비운영 환경의 비용 절충 (REL10-BP01은 운영 워크로드 기준)",
-        "도형 밖 권고: 환경별 AWS 계정 분리, Network 계정의 TGW를 RAM으로 공유, 운영·스테이징 TGW 라우팅 테이블 분리 (수집 범위 밖)"])
+        "도형 밖 권고: 환경별 AWS 계정 분리, Network 계정의 TGW를 RAM으로 공유, 운영·스테이징 TGW 라우팅 테이블 분리, egress VPC 앞 검사(Network Firewall) (수집 범위 밖)"])
+    hub = s.transit_gateway("tgw-corp0000000004", "corp-tgw")
     for env, cidr, azs, size in (("prod", "10.40", "abc", "m6i.large"), ("staging", "10.41", "ab", "t3.medium")):
         vpc = s.vpc(f"vpc-{env}0000000000004", f"{cidr}.0.0/16", f"{env}-vpc", Environment=env)
         public = [s.subnet(f"subnet-{env}-pub-{az}", vpc, az, f"{cidr}.{i}.0/24", f"{env}-public-{az}", "public") for i, az in enumerate(azs)]
         app = [s.subnet(f"subnet-{env}-app-{az}", vpc, az, f"{cidr}.{10 + i}.0/24", f"{env}-app-{az}", "app") for i, az in enumerate(azs)]
         nodes = [s.instance(f"i-{env}{az}00000000001", app[i], f"{env}-api-{az}", size, sg=f"sg-{env}-api", Environment=env)
                  for i, az in enumerate(azs)]
-        # Production keeps a NAT per AZ; staging shares one NAT to save cost.
-        s.network(vpc, env, azs, public, [app], nat_per_az=env == "prod")
+        # Ingress stays local (internet gateway for the ALB); outbound traffic leaves through the egress VPC, so no NAT here.
+        igw = s.internet_gateway(f"igw-{env}", vpc, f"{env}-igw")
+        s.route_table(f"rtb-{env}-public", vpc, f"{env}-public", public, gateway=igw)
+        s.route_table(f"rtb-{env}-private", vpc, f"{env}-private", app)
+        s.route(f"rtb-{env}-private", "0.0.0.0/0", TransitGatewayId=hub)
+        s.route_table(f"rtb-{env}-main", vpc, f"{env}-isolated", main=True)
+        s.tgw_attachment(f"tgw-attach-{env}", hub, vpc, app, f"{env}-attachment")
         alb = s.load_balancer(f"{env}-alb", vpc, public, sg=f"sg-{env}-alb")
         group = s.target_group(f"{env}-api", vpc, "HTTPS", 443, nodes, [alb])
         s.auto_scaling_group(f"{env}-api-asg", nodes, app, [group], len(azs), 3 * len(azs))
+    # Central egress: a NAT gateway per AZ next to a dedicated /28 attachment subnet; the public route table returns
+    # traffic for the environments (10.0.0.0/8) to the Transit Gateway.
+    egress = s.vpc("vpc-egress00000000004", "10.43.0.0/16", "egress-vpc", Environment="shared")
+    outside = [s.subnet(f"subnet-egress-pub-{az}", egress, az, f"10.43.{i}.0/24", f"egress-public-{az}", "public") for i, az in enumerate("abc")]
+    attach = [s.subnet(f"subnet-egress-tgw-{az}", egress, az, f"10.43.10.{16 * i}/28", f"egress-tgw-{az}", "app") for i, az in enumerate("abc")]
+    s.network(egress, "egress", "abc", outside, [attach])
+    s.route("rtb-egress-public", "10.0.0.0/8", TransitGatewayId=hub)
+    s.tgw_attachment("tgw-attach-egress", hub, egress, attach, "egress-attachment")
     shared = s.vpc("vpc-shared000000000004", "10.42.0.0/16", "shared-services", Environment="shared")
     tools = [s.subnet(f"subnet-shared-{az}", shared, az, f"10.42.{i}.0/24", f"tools-{az}", "app") for i, az in enumerate("ab")]
-    hub = s.transit_gateway("tgw-corp0000000004", "corp-tgw")
     s.instance("i-ci0000000000000004", tools[0], "ci-runner", "c6i.xlarge", sg="sg-ci", Environment="shared")
     s.instance("i-monitor00000000004", tools[1], "monitoring", "m6i.large", sg="sg-monitoring", Environment="shared")
     s.route_table("rtb-shared-main", shared, "shared-isolated", main=True)
-    # Environments reach shared services only through the Transit Gateway (10.0.0.0/8), never by peering.
+    # Environments reach shared services only through the Transit Gateway (10.0.0.0/8), never by peering; no internet route.
     s.route("rtb-shared-main", "10.0.0.0/8", TransitGatewayId=hub)
     s.tgw_attachment("tgw-attach-shared", hub, shared, tools, "shared-attachment")
-    for env, azs in (("prod", "abc"), ("staging", "ab")):
-        s.tgw_attachment(f"tgw-attach-{env}", hub, f"vpc-{env}0000000000004", [f"subnet-{env}-app-{az}" for az in azs], f"{env}-attachment")
-        for az in azs:
-            s.route(f"rtb-{env}-private-{az}", "10.0.0.0/8", TransitGatewayId=hub)
     return s.snapshot()
 
 
@@ -580,8 +592,9 @@ def hybrid():
 def eks_platform():
     s = Sample("eks-platform", "EKS 플랫폼 (EKS · MSK · ElastiCache · Aurora · Lambda)", [
         "EKS 컨트롤 플레인 엔드포인트는 비공개, 관리형 노드 그룹은 세 AZ 프라이빗 서브넷에 분산",
-        "인그레스는 AWS Load Balancer Controller의 ALB → IP 대상(파드)",
-        "Aurora PostgreSQL writer/reader를 서로 다른 AZ에, ElastiCache Redis는 primary/replica 자동 장애 조치",
+        "클러스터 서브넷(컨트롤 플레인 ENI)은 AZ마다 전용 /28로 노드 서브넷과 분리해 노드·파드 확장이 클러스터 IP를 잠식하지 않음 (EKS 서브넷 모범 사례)",
+        "인그레스는 AWS Load Balancer Controller의 ALB → IP 대상(파드), 서브넷은 kubernetes.io/role/elb·internal-elb 태그로 지정",
+        "Aurora PostgreSQL writer와 다른 두 AZ의 reader (어느 AZ가 장애여도 승격 대상), ElastiCache Redis는 primary/replica 자동 장애 조치",
         "MSK 브로커는 AZ마다 하나, 클라이언트-브로커 TLS",
         "데이터 계층(Aurora·Redis·MSK)은 인터넷 경로 없는 격리 서브넷",
         "ECR API·Docker·STS 인터페이스와 S3 게이트웨이 엔드포인트로 이미지·자격 증명·객체 접근을 사설 경로로",
@@ -591,20 +604,27 @@ def eks_platform():
     public = [s.subnet(f"subnet-pf-pub-{az}", vpc, az, f"10.60.{i}.0/24", f"public-{az}", "public") for i, az in enumerate(azs)]
     nodes = [s.subnet(f"subnet-pf-app-{az}", vpc, az, f"10.60.{16 * (i + 1)}.0/20", f"eks-nodes-{az}", "app") for i, az in enumerate(azs)]
     data = [s.subnet(f"subnet-pf-data-{az}", vpc, az, f"10.60.{100 + i}.0/24", f"data-{az}", "data") for i, az in enumerate(azs)]
-    general = [s.instance(f"i-eksgen{az}00000006", nodes[i], f"general-node-{az}", "m6i.xlarge", sg="sg-eks-nodes",
+    # Dedicated /28 subnets for the control plane's network interfaces; nodes and pods use the /20 node subnets.
+    cluster = [s.subnet(f"subnet-pf-eks-{az}", vpc, az, f"10.60.3.{16 * i}/28", f"eks-cluster-{az}", "app") for i, az in enumerate(azs)]
+    # The AWS Load Balancer Controller discovers its subnets by role tag.
+    for subnet in s.raw["subnets"]:
+        role = "elb" if subnet["SubnetId"] in public else "internal-elb" if subnet["SubnetId"] in nodes else None
+        if role:
+            subnet["Tags"].append({"Key": f"kubernetes.io/role/{role}", "Value": "1"})
+    general =[s.instance(f"i-eksgen{az}00000006", nodes[i], f"general-node-{az}", "m6i.xlarge", sg="sg-eks-nodes",
                           **{"eks:cluster-name": "platform-eks", "eks:nodegroup-name": "general"}) for i, az in enumerate(azs)]
     batch = [s.instance(f"i-eksbat{az}00000006", nodes[i], f"batch-node-{az}", "c6i.2xlarge", sg="sg-eks-nodes",
                         **{"eks:cluster-name": "platform-eks", "eks:nodegroup-name": "batch"}) for i, az in enumerate(azs)]
-    s.network(vpc, "platform", azs, public, [nodes])
+    s.network(vpc, "platform", azs, public, [nodes, cluster])
     s.auto_scaling_group("eks-general-6a1b", general, nodes, minimum=3, maximum=12)
     s.auto_scaling_group("eks-batch-7c2d", batch, nodes, minimum=0, maximum=30)
-    s.eks("platform-eks", vpc, nodes, [("general", "eks-general-6a1b", "m6i.xlarge", {"minSize": 3, "maxSize": 12, "desiredSize": 3}),
+    s.eks("platform-eks", vpc, cluster, [("general", "eks-general-6a1b", "m6i.xlarge", {"minSize": 3, "maxSize": 12, "desiredSize": 3}),
                                        ("batch", "eks-batch-7c2d", "c6i.2xlarge", {"minSize": 0, "maxSize": 30, "desiredSize": 3})])
     alb = s.load_balancer("k8s-platform-ingress", vpc, public, sg="sg-ingress")
     s.target_group("k8s-web-pods", vpc, "HTTP", 8080,
                    [("10.60.17.21", 8080, f"{REGION}a"), ("10.60.33.42", 8080, f"{REGION}b"), ("10.60.49.13", 8080, f"{REGION}c")],
                    [alb], target_type="ip")
-    s.aurora("platform-aurora", vpc, data, "a", ["b"])
+    s.aurora("platform-aurora", vpc, data, "a", ["b", "c"])
     s.redis("platform-redis", vpc, data, "b", ["c"])
     s.kafka("platform-events", data, 3)
     s.function("order-events-consumer", vpc, nodes)

@@ -334,7 +334,7 @@ def test_overview_draws_the_network_between_vpcs(key):
     validate_document(generate_document(snapshot))
     relations = sorted(e["relation"] for e in layout["edges"])
     expected = {
-        "environments": ["attached_transit_gateway"] * 3,
+        "environments": ["attached_transit_gateway"] * 4,
         "hybrid": ["attached_transit_gateway"] + ["vpn_connection"] * 2,
         "data-platform": ["attached_transit_gateway"] * 2 + ["vpn_connection"] * 2,
         "ai-platform": ["attached_transit_gateway"],
