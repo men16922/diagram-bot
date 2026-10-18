@@ -11,7 +11,7 @@ from diagram_bot.server import create_app
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "src/diagram_bot/static"
 MODULES = sorted([STATIC / "app.js", *(STATIC / "js").glob("*.js")])
-IMPORT = re.compile(r"^import\s*\{([^}]*)\}\s*from\s*'([^']+)';", re.M)
+IMPORT = re.compile(r"^import\s*(?:\{([^}]*)\}\s*from\s*)?'([^']+)';", re.M)
 
 
 def object_keys(text, name):
@@ -20,7 +20,7 @@ def object_keys(text, name):
 
 
 def exported(text):
-    names = set(re.findall(r"^export\s+(?:async\s+)?(?:function|const|let|class)\s+(\w+)", text, re.M))
+    names = set(re.findall(r"^export\s+(?:async\s+)?(?:function|const|let|class)\s+([\w$]+)", text, re.M))
     for group in re.findall(r"^export\s+(?:const|let)\s*\{([^}]*)\}\s*=", text, re.M) + re.findall(r"^export\s*\{([^}]*)\}", text, re.M):
         names |= {part.split(":")[-1].split(" as ")[-1].strip() for part in group.split(",") if part.strip()}
     return names
