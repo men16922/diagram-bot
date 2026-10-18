@@ -1,4 +1,5 @@
 """AWS: who the credentials are, read-only collection jobs, Identity Center sign-in and the browser egress relay."""
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
@@ -83,6 +84,7 @@ def router(context, executor=None):
             except (ValueError, RelayError) as exc:
                 jobs[identifier].update(status="failed", error=str(exc))
             except Exception:
+                logging.getLogger(__name__).exception("Collection job %s failed", identifier)
                 jobs[identifier].update(status="failed", error="수집을 완료하지 못했습니다. 마지막 스냅샷은 보존됩니다.")
             jobs[identifier]["finished_at"] = now()
             audit.write(who, "collection", target=f"{params.role_arn or params.expected_account}/{params.region}",

@@ -5,6 +5,8 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
+from .egress import RelayDisconnected
+
 
 def now():
     return datetime.now(UTC).isoformat()
@@ -121,6 +123,8 @@ def query(client, operation, key, params=None):
         coverage["status"] = "partial" if coverage["pages"] else "unavailable"
         coverage["error_code"] = (exc.response["Error"]["Code"]
                                   if isinstance(exc, ClientError) else type(exc).__name__)
+    except RelayDisconnected:
+        raise  # the browser went away: the collection fails instead of saving every remaining service as unavailable
     except Exception as exc:  # noqa: BLE001 - one unexpected SDK/endpoint failure must not discard the other services
         coverage["status"] = "partial" if coverage["pages"] else "unavailable"
         coverage["error_code"] = type(exc).__name__
