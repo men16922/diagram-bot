@@ -192,3 +192,60 @@ def test_adopt_over_http_never_reads_a_server_path(client, tmp_path):
     secret.write_text(MESSY_COMPANY_XML, encoding="utf-8")
     res = client.post("/api/xml/adopt", json={"xml": str(secret), "save": False})
     assert res.status_code == 422
+
+
+# --- b. edge waypoints live in the edge parent's frame --------------------------------------------------------------
+
+def rendered_route(xml, edge_id):
+    """Page coordinates of an edge as draw.io draws it: exit port, waypoints offset by the edge parent's origin, entry port."""
+    cells = {}
+    for el in fromstring(xml).iter():
+        inner = el if el.tag == "mxCell" else el.find("mxCell")
+        if el.tag in ("mxCell", "object", "UserObject") and inner is not None and el.get("id"):
+            cells[el.get("id")] = inner
+
+    def origin(cid):
+        x = y = 0.0
+        while cid in cells and cid not in ("0", "1"):
+            geo = cells[cid].find("mxGeometry")
+            x, y, cid = x + float(geo.get("x", 0)), y + float(geo.get("y", 0)), cells[cid].get("parent")
+        return x, y
+
+    def box(cid):
+        x, y = origin(cid)
+        geo = cells[cid].find("mxGeometry")
+        return x, y, float(geo.get("width")), float(geo.get("height"))
+
+    edge = cells[edge_id]
+    style = dict(part.split("=", 1) for part in edge.get("style").split(";") if "=" in part)
+    sx, sy, sw, sh = box(edge.get("source"))
+    tx, ty, tw, th = box(edge.get("target"))
+    ox, oy = origin(edge.get("parent"))
+    points = [(float(p.get("x")) + ox, float(p.get("y")) + oy) for p in edge.find("mxGeometry/Array")]
+    return [(sx + float(style["exitX"]) * sw, sy + float(style["exitY"]) * sh), *points,
+            (tx + float(style["entryX"]) * tw, ty + float(style["entryY"]) * th)]
+
+
+def test_edge_inside_a_group_is_routed_in_its_parent_frame():
+    cells = [v("vpc", "vpc-a (10.0.0.0/16)", VPC, 200, 300, 600, 400),
+             v("az", "ap-northeast-2a", AZ, 20, 50, 400, 330, "vpc"),
+             v("pub", "public-subnet", PUB, 10, 30, 300, 120, "az"), v("app", "app-subnet", PRIV, 10, 170, 300, 140, "az"),
+             v("alb", "alb", ALB, 40, 40, 52, 52, "pub"), v("ec2", "web-1", EC2, 40, 40, 52, 52, "app"),
+             e("edge", "alb", "ec2", parent="vpc"), e("flat", "alb", "ec2")]
+    out = api.align_xml(mx(cells))
+    for edge_id in ("edge", "flat"):
+        route = rendered_route(out, edge_id)
+        assert all(abs(a[0] - b[0]) < 0.5 or abs(a[1] - b[1]) < 0.5 for a, b in zip(route, route[1:])), (edge_id, route)
+    assert api.inspect_xml(out)["unrouted_edges"] == []
+
+
+def test_inspect_reads_nested_edge_points_in_the_parent_frame():
+    cells = [v("vpc", "vpc-a", VPC, 200, 300, 600, 400), v("a", "web-1", EC2, 40, 40, 52, 52, "vpc"),
+             v("b", "web-2", EC2, 40, 240, 52, 52, "vpc")]
+    route = ('<mxCell id="x" style="edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="{p}" '
+             'source="a" target="b"><mxGeometry relative="1" as="geometry"><Array as="points">'
+             '<mxPoint x="{x}" y="{y1}"/><mxPoint x="{x}" y="{y2}"/></Array></mxGeometry></mxCell>')
+    relative = mx(cells + [route.format(p="vpc", x=66, y1=150, y2=200)])  # page x = 266, the icons' centre line
+    absolute_in_group = mx(cells + [route.format(p="vpc", x=266, y1=450, y2=500)])  # page coordinates under a group: wrong
+    assert api.inspect_xml(relative)["unrouted_edges"] == []
+    assert api.inspect_xml(absolute_in_group)["unrouted_edges"] == ["x"]

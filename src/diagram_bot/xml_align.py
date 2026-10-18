@@ -217,7 +217,7 @@ def _parse_page_model(graph_root):
                 "id": cid, "wrapper": wrapper, "cell": inner, "geo": geo,
                 "label": label, "style": style_str,
                 "source": inner.get("source") or "", "target": inner.get("target") or "",
-                "points": pts,
+                "parent": inner.get("parent") or "1", "points": pts,  # points are relative to the parent's origin
             })
     return vertices, edges
 
@@ -332,7 +332,8 @@ def inspect_drawio_xml(xml_text) -> dict:
         sv, dv = vertices[src], vertices[dst]
         p_start = (sx + ports[0] * sv["w"], sy + ports[1] * sv["h"])
         p_end = (dx + ports[2] * dv["w"], dy + ports[3] * dv["h"])
-        path = [p_start, *e["points"], p_end]
+        ox, oy = abs_pos.get(e["parent"], (0.0, 0.0))
+        path = [p_start, *((x + ox, y + oy) for x, y in e["points"]), p_end]
         if len(path) == 2 and abs(p_start[0] - p_end[0]) > 1 and abs(p_start[1] - p_end[1]) > 1:
             unrouted_edges.append(e["id"])
             continue
@@ -770,7 +771,8 @@ def _route_edges_orthogonally(vertices, edges):
                 break
             waypoints = [(chosen_x, p_start[1]), (chosen_x, p_end[1])]
 
-        e["points"] = waypoints
+        ox, oy = abs_pos.get(e["parent"], (0.0, 0.0))  # draw.io offsets an edge's points by its parent's origin
+        e["points"] = [(round(px - ox, 1), round(py - oy, 1)) for px, py in waypoints]
         e["style"] = patch_style(
             e["style"] or "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;",
             edgeStyle="orthogonalEdgeStyle",
@@ -784,7 +786,7 @@ def _route_edges_orthogonally(vertices, edges):
         if arr is not None:
             e["geo"].remove(arr)
         arr = SubElement(e["geo"], "Array", {"as": "points"})
-        for px, py in waypoints:
+        for px, py in e["points"]:
             SubElement(arr, "mxPoint", {"x": f"{px:g}", "y": f"{py:g}"})
 
 
@@ -803,7 +805,7 @@ def _apply_spec_to_page(graph_root, vertices, edges, cfg):
                     v["y"] = round(v["y"] + dy, 1)
                     v["geo"].set("y", f"{v['y']:g}")
             for e in edges:
-                if e["geo"] is not None:
+                if e["geo"] is not None and e["parent"] == "1":  # nested edges move with their parent
                     arr = e["geo"].find("Array[@as='points']")
                     if arr is not None:
                         for pt in arr.findall("mxPoint"):
