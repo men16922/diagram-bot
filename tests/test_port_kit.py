@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -118,3 +119,66 @@ def test_a_copy_missing_a_closure_file_fails(tmp_path):
     result = subprocess.run([sys.executable, "-I", "-c", ISOLATED, str(tmp_path), "3"], capture_output=True, text=True, timeout=120,
                             env={k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, cwd=tmp_path)
     assert result.returncode == 1 and "FAIL" in result.stdout and "routes.standards" in result.stdout
+
+
+CARDS = sorted((ROOT / "docs" / "porting").glob("T[0-9]-*.md"))
+SECTIONS = ("담당·예산", "목표", "읽을 것", "하지 말 것", "단계", "완료 조건", "멈춤 조건", "보고")
+
+
+def section(text, name):
+    match = re.search(rf"^## {re.escape(name)}\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    assert match, name
+    return match.group(1)
+
+
+def test_cards_have_every_section_and_stay_short():
+    assert [c.name.split("-")[0] for c in CARDS] == [f"T{i}" for i in range(7)]
+    for card in CARDS:
+        text = card.read_text()
+        for name in SECTIONS:
+            section(text, name)
+        assert "150K" in section(text, "담당·예산"), card.name
+        assert len(text) / 3 <= 1200, card.name  # hard cap, chars/3 estimate
+    assert len((ROOT / "docs/porting/RULES.md").read_text()) / 3 <= 700
+    assert len((ROOT / "docs/porting/ORCHESTRATOR.md").read_text()) / 3 <= 800
+
+
+def test_card_reading_lists_name_existing_files_or_company_placeholders():
+    for card in CARDS:
+        listed = re.sub(r"```.*?```", "", section(card.read_text(), "읽을 것"), flags=re.S)  # the cheat sheet is not a reading list
+        for token in re.findall(r"`([^`\n]+)`", listed):
+            if re.fullmatch(r"[\w./-]+\.(md|py|js|json|html)", token):
+                assert (ROOT / token).is_file(), f"{card.name}: {token}"
+            elif "/" in token and not token.startswith("--"):
+                assert token.startswith("<"), f"{card.name}: {token}"
+
+
+def test_done_commands_use_existing_port_check_levels():
+    for card in CARDS:
+        levels = re.findall(r"port_check --level (\S+?)`", section(card.read_text(), "완료 조건"))
+        assert levels, card.name
+        assert all(lv == "<N>" or int(lv) in port_check.LEVELS for lv in levels), (card.name, levels)
+
+
+def test_readme_and_orchestrator_list_every_card_with_only_luna_and_sol():
+    readme, orchestrator = (ROOT / "docs/porting/README.md").read_text(), (ROOT / "docs/porting/ORCHESTRATOR.md").read_text()
+    rows = {line.split("|")[1].strip(): line for line in readme.splitlines() if line.startswith("| ")}
+    for card in CARDS:
+        card_id = card.name.split("-")[0]
+        assert card_id in rows and f"({card.name})" in readme and card_id in orchestrator, card.name
+        owner = rows[card_id].split("|")[3].strip()
+        assert owner in ("GPT-6 Luna", "GPT-6.1 Sol", "셸(ORCH)"), (card_id, owner)
+        assert owner == "셸(ORCH)" or owner in card.read_text(), card.name
+    assert rows["ORCH"].split("|")[3].strip() == "GPT-6.1 Sol"
+    caps = [int(row.split("|")[5].split()[0]) for key, row in rows.items() if key not in ("카드", "---")]
+    assert sum(caps) == 100, caps
+    assert not any("Sonnet" in p.read_text() for p in (ROOT / "docs" / "porting").glob("*.md"))
+
+
+def test_card_section_references_exist():
+    """`page.md` §A, §B: each name starts a `## ` heading of that page (RULES.md reads it with sed '/^## A/,/^## /p')."""
+    for card in CARDS:
+        for path, rest in re.findall(r"^- `([\w./-]+\.md)` (§.*)$", section(card.read_text(), "읽을 것"), re.M):
+            headings = [h[3:] for h in (ROOT / path).read_text().splitlines() if h.startswith("## ")]
+            for ref in re.findall(r"§(.+?)(?=, §| \(~|$)", rest):
+                assert any(h.startswith(ref) for h in headings), f"{card.name}: {path} §{ref}"
