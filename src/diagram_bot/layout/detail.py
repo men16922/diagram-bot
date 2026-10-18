@@ -89,8 +89,9 @@ def detail(canvas, snapshot, graph, selection, nodes, vpc_of, subnet_of):
     vpcs = sorted((nodes[k] for k in d.visible if nodes[k]["kind"] == "vpc"), key=lambda n: (n["name"], n["id"]))
     meta = snapshot["metadata"]
     if meta.get("combined"):
-        # One VPC (or resource) of a combined snapshot: its own account and region frame the drawing.
-        subject = next((nodes[k] for k in d.visible if nodes[k]["kind"] == "vpc"), None) or nodes.get(d.focus)
+        # One VPC (or resource) of a combined snapshot: its own account and region frame the drawing. The focused
+        # resource decides when there is one (a TGW focus shows VPCs of several accounts), else the first VPC by name.
+        subject = nodes.get(d.focus) or (vpcs[0] if vpcs else None)
         if subject:
             meta = {**meta, "combined": False, "account_id": subject["account"], "region": subject["region"]}
     distributions = sorted((nodes[k] for k in d.visible if nodes[k]["kind"] == "cloudfront_distribution"), key=lambda n: (n["name"], n["id"]))

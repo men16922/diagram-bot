@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import time
 from xml.etree import ElementTree as ET
 
@@ -585,3 +588,15 @@ def test_overview_cards_differ_per_sample_and_hide_drawn_groups(key):
     labels = [s["label"] for s in layout["shapes"]]
     assert not any(label.startswith("VPC 외 · 배치 미확인") for label in labels), key
     assert sum(1 for s in layout["shapes"] if s["role"] == "resource" and s.get("label_width")) >= 2  # counted service icons
+
+
+
+def test_combined_focus_frame_names_the_focused_resources_account():
+    # A TGW focus in the multi-account sample shows VPCs of several accounts; the frame must not depend on set order.
+    script = ("from diagram_bot.samples import SAMPLES\nfrom diagram_bot.graph import build_graph\nfrom diagram_bot.drawio import generate_document\n"
+              "s = SAMPLES['multi-account']()\n"
+              "tgw = next(n for n in build_graph(s)['nodes'] if n['kind'] == 'transit_gateway')\n"
+              "print(tgw['account'], '계정 ' + tgw['account'] in generate_document(s, None, True, 'focus', tgw['id']))")
+    outputs = {subprocess.run([sys.executable, "-c", script], env={**os.environ, "PYTHONHASHSEED": seed}, capture_output=True, text=True,
+                              check=True).stdout for seed in ("0", "1", "7", "99")}
+    assert len(outputs) == 1 and outputs.pop().split()[1] == "True"
