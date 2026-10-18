@@ -3,7 +3,7 @@ import {createClient} from './js/http.js';
 import {startRelay} from './js/relay.js';
 const $ = id => document.getElementById(id);
 const state = {token:null,snapshot:null,snapshotId:null,view:'overview',vpc:null,focus:null,references:false,routes:null,revision:0,xml:null,history:[],visible:null,counts:null,ready:false,loading:true,dirty:false,busy:false,mode:'diagram',selected:null};
-const {api, streamApi} = createClient(() => state.token);
+const {api, request, streamApi} = createClient(() => state.token);
 window.diagramBot = {state};  // for browser checks (scripts/verify_demo.py) and debugging
 const pending = new Map();
 let editorTimer, toastTimer, pngWaiter = null;
@@ -294,9 +294,8 @@ function downloadCsv(){const fields=['account','region','kind','resource_id','na
 async function downloadCloudFormation(){
   const parts=state.snapshot.metadata.parts||[null];let unsupported=0;
   for(const [index,part] of parts.entries()){
-    const response=await fetch(`/api/snapshots/${state.snapshotId}/cloudformation${part?`?part=${index}`:''}`,{headers:{'X-Diagram-Bot':state.token}});
+    const response=await request(`/api/snapshots/${state.snapshotId}/cloudformation${part?`?part=${index}`:''}`);
     const text=await response.text();
-    if(!response.ok)throw new Error(JSON.parse(text).detail||'템플릿을 만들지 못했습니다.');
     unsupported+=JSON.parse(text).Metadata.DiagramBot.Unsupported.length;
     download(response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||'cloudformation.json',text,'application/json');
   }
