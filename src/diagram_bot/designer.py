@@ -5,9 +5,11 @@ graph, layout, review and export pipeline renders it exactly like a collected sn
 calls AWS; a design is a proposal, never a description of a real account.
 """
 import copy
+import functools
 import hashlib
 import ipaddress
 import re
+from collections import Counter
 
 from .findings import review, summary
 from .graph import build_graph
@@ -41,6 +43,22 @@ def slug(text):
     return value[:40]
 
 
+def atomic(step):
+    """A step either applies completely or leaves the design as it was; capacity errors become DesignError."""
+    @functools.wraps(step)
+    def run(self, *args, **kwargs):
+        saved = copy.deepcopy(self.__dict__)
+        try:
+            return step(self, *args, **kwargs)
+        except Exception as exc:
+            self.__dict__.clear()
+            self.__dict__.update(saved)
+            if isinstance(exc, (StopIteration, IndexError, KeyError, ValueError)) and not isinstance(exc, DesignError):
+                raise DesignError(f"{step.__name__} 단계를 적용할 수 없습니다 (설계는 바뀌지 않았습니다): {exc}") from exc
+            raise
+    return run
+
+
 class Design:
     def __init__(self, title="표준 아키텍처 설계", region="ap-northeast-2"):
         self.reset(title, region)
@@ -53,6 +71,7 @@ class Design:
         self.vpcs, self.steps, self.standard = {}, [], None
         self.target_groups, self.load_balancers = {}, {}
         self.base = None  # the collected snapshot a brownfield design started from
+        self.adopted = set()  # instance IDs that were in that snapshot
 
     # --- state ---------------------------------------------------------------------------------
     def vpc(self, name):
@@ -88,7 +107,13 @@ class Design:
             raise DesignError(f"이미 있는 이름입니다: {name}")
         return key
 
+    def absent(self, name, collection, field, *values):
+        """Reject a step whose resource IDs or names already exist (duplicates would merge graph nodes and IaC IDs)."""
+        if {item.get(field) for item in self.sample.raw.get(collection, [])} & set(values):
+            raise DesignError(f"이미 있는 이름입니다: {name}")
+
     # --- network -------------------------------------------------------------------------------
+    @atomic
     def add_vpc(self, name, cidr="10.0.0.0/16", azs=3, tiers=("public", "app", "data"), nat="per_az"):
         key = slug(name)
         if key in self.vpcs:
@@ -108,6 +133,10 @@ class Design:
             raise DesignError(f"계층은 {', '.join(TIERS)} 중에서 고르세요.")
         if nat not in ("per_az", "single", "none"):
             raise DesignError("nat은 per_az, single, none 중 하나입니다.")
+        needed, room = len(tiers) * int(azs), 2 ** (24 - network.prefixlen)
+        if needed > room:
+            raise DesignError(f"{cidr}에는 /24 서브넷이 {room}개뿐이라 {len(tiers)}계층 × AZ {int(azs)}개 = {needed}개를 만들 수 없습니다. "
+                              "더 큰 CIDR을 쓰거나 계층·AZ 수를 줄이세요.")
         s, letters = self.sample, AZ_LETTERS[:int(azs)]
         blocks = network.subnets(new_prefix=24)
         vpc_id = s.vpc(f"vpc-{key}", cidr, name, Environment="design")
@@ -128,6 +157,7 @@ class Design:
         return {"vpc": name, "subnets": {t: len(v) for t, v in layers.items()}, "azs": [f"{self.region}{a}" for a in letters],
                 "nat_gateways": 0 if nat == "none" or "public" not in layers else (len(letters) if nat == "per_az" else 1)}
 
+    @atomic
     def add_subnet_tier(self, vpc, tier):
         """A missing tier, one /24 per AZ in free CIDR space (mostly for designs started from a collected VPC).
         public routes to the VPC's internet gateway, web/app join the NAT route table of their AZ, data stays isolated."""
@@ -170,6 +200,7 @@ class Design:
             vpc["sgs"].add(key)
         return key
 
+    @atomic
     def add_load_balancer(self, vpc, name, kind="application", scheme="internet-facing"):
         v = self.vpc(vpc)
         key = self.unique("lb", name)
@@ -193,6 +224,7 @@ class Design:
             raise DesignError(f"VPC '{v['name']}'에 로드 밸런서 '{name}'가 없습니다. 먼저 add_load_balancer로 만드세요.")
         return lb
 
+    @atomic
     def add_ec2_service(self, vpc, name, tier="app", instance_type="m6i.large", per_az=1, load_balancer=None, port=8080,
                         autoscaling=True):
         v = self.vpc(vpc)
@@ -201,13 +233,16 @@ class Design:
         lb = self.balancer(v, load_balancer)
         if not 1 <= int(per_az) <= 10:
             raise DesignError("AZ당 인스턴스 수는 1~10입니다.")
+        ids = [f"i-{key}-{self.sample.az_of(subnet)[-1]}{n + 1}" for subnet in subnets for n in range(int(per_az))]
+        self.absent(name, "instances", "InstanceId", *ids)
+        self.absent(name, "auto_scaling_groups", "AutoScalingGroupName", f"{key}-asg")
+        self.capacity(subnets, int(per_az))
         sg = self.security_group(v, key, [(int(port), lb["sg"] or v["cidr"]) if lb else (int(port), v["cidr"])])
         instances = []
         for subnet in subnets:
             for n in range(int(per_az)):
                 az = self.sample.az_of(subnet)[-1]
-                instances.append(self.sample.instance(f"i-{key}-{az}{n + 1}", subnet, f"{key}-{az}{n + 1}",
-                                                      instance_type, ip=self.sample.address(subnet, 10 + len(instances)), sg=sg))
+                instances.append(self.sample.instance(f"i-{key}-{az}{n + 1}", subnet, f"{key}-{az}{n + 1}", instance_type, sg=sg))
         groups = []
         if lb:
             groups.append(self.sample.target_group(key, v["id"], "HTTP", int(port), instances, [lb["arn"]]))
@@ -218,26 +253,37 @@ class Design:
                     load_balancer=load_balancer, port=int(port), autoscaling=autoscaling)
         return {"service": key, "instances": len(instances), "auto_scaling": bool(autoscaling), "load_balancer": load_balancer}
 
+    @atomic
     def add_ecs_service(self, vpc, name, tasks_per_az=1, load_balancer=None, port=8080, tier="app", cluster=None):
         v = self.vpc(vpc)
         key = self.unique("tg", name)
         subnets = self.tier(v, tier)
         lb = self.balancer(v, load_balancer)
-        tasks = [(subnet, self.sample.address(subnet, 100 + n * len(subnets) + i + 7 * len(self.sample.raw["ecs_tasks"])))
-                 for n in range(int(tasks_per_az)) for i, subnet in enumerate(subnets)]
+        if not 1 <= int(tasks_per_az) <= 100:
+            raise DesignError("AZ당 태스크 수는 1~100입니다.")
+        cluster = slug(cluster or f"{v['key']}-cluster")
+        self.absent(name, "ecs_services", "serviceArn", f"arn:aws:ecs:{self.region}:{self.sample.account}:service/{cluster}/{key}")
+        ips = self.capacity(subnets, int(tasks_per_az), start=100)
+        tasks = [(subnet, ips[subnet][n]) for n in range(int(tasks_per_az)) for subnet in subnets]
         group = None
         if lb:
             group = self.sample.target_group(key, v["id"], "HTTP", int(port), [(ip, int(port), self.sample.az_of(s)) for s, ip in tasks],
                                              [lb["arn"]], target_type="ip")
             self.target_groups[key] = group
-        self.sample.ecs_service(slug(cluster or f"{v['key']}-cluster"), key, v["id"], tasks, group, int(port))
+        self.sample.ecs_service(cluster, key, v["id"], tasks, group, int(port))
         self.record("add_ecs_service", vpc=vpc, name=name, tasks_per_az=int(tasks_per_az), load_balancer=load_balancer, port=int(port))
         return {"service": key, "tasks": len(tasks), "launch": "FARGATE", "load_balancer": load_balancer}
 
+    @atomic
     def add_eks_cluster(self, vpc, name, node_type="m6i.xlarge", nodes_per_az=1, tier="app"):
         v = self.vpc(vpc)
         key = slug(name)
         subnets = self.tier(v, tier)
+        self.absent(name, "eks_clusters", "name", key)
+        self.absent(name, "auto_scaling_groups", "AutoScalingGroupName", f"eks-{key}-general")
+        self.absent(name, "instances", "InstanceId", *[f"i-{key}-node-{self.sample.az_of(subnet)[-1]}{n + 1}"
+                                                      for subnet in subnets for n in range(int(nodes_per_az))])
+        self.capacity(subnets, int(nodes_per_az))
         sg = self.security_group(v, f"{key}-nodes", [(443, v["cidr"])])
         nodes = [self.sample.instance(f"i-{key}-node-{self.sample.az_of(subnet)[-1]}{n + 1}", subnet,
                                       f"{key}-node-{self.sample.az_of(subnet)[-1]}{n + 1}", node_type, sg=sg,
@@ -266,6 +312,7 @@ class Design:
                 table["Associations"].append({"RouteTableAssociationId": f"rtbassoc-{key[7:]}", "SubnetId": key})
         return key
 
+    @atomic
     def add_gpu_node_group(self, vpc, cluster, name, instance_type, per_az=1, training=False, minimum=None, maximum=None):
         """GPU/accelerator node group on an existing EKS cluster: inference spreads over the cluster's AZs,
         EFA training stays in one AZ with a self-referencing security group (EFA cannot cross AZs)."""
@@ -279,7 +326,11 @@ class Design:
         group = slug(name)
         if any(n["nodegroupName"] == group for n in eks["nodegroups"]):
             raise DesignError(f"이미 있는 노드 그룹입니다: {name}")
+        self.absent(name, "auto_scaling_groups", "AutoScalingGroupName", f"eks-{key}-{group}")
         subnets = [self.training_subnet(v, eks["resourcesVpcConfig"]["subnetIds"][0])] if training else eks["resourcesVpcConfig"]["subnetIds"]
+        self.absent(name, "instances", "InstanceId", *[f"i-{key}-{group}-{self.sample.az_of(subnet)[-1]}{n + 1}"
+                                                      for subnet in subnets for n in range(int(per_az))])
+        self.capacity(subnets, int(per_az))
         sg = self.security_group(v, f"{key}-{group}-efa", [(None, "self"), (443, v["cidr"])], egress=("self", v["cidr"])) if training \
             else self.security_group(v, f"{key}-nodes", [(443, v["cidr"])])
         # Training nodes: EFA interfaces in one cluster placement group (EC2 placement strategies).
@@ -299,6 +350,7 @@ class Design:
                     training=bool(training), minimum=minimum, maximum=maximum)
         return {"node_group": group, "nodes": len(nodes), "azs": sorted({self.sample.az_of(s) for s in subnets}), "efa": bool(training)}
 
+    @atomic
     def add_fsx_lustre(self, vpc, name, deployment="PERSISTENT_2", capacity_tib=4.8, throughput=250):
         """FSx for Lustre beside the training nodes (their dedicated subnet), else in the first app subnet."""
         v = self.vpc(vpc)
@@ -307,10 +359,12 @@ class Design:
         train = sorted(s["SubnetId"] for s in self.sample.raw["subnets"] if s["SubnetId"].startswith(f"subnet-{v['key']}-train-"))
         subnet = train[0] if train else self.tier(v, "app" if "app" in v["tiers"] else next(iter(v["tiers"])))[0]
         key = f"fs-{hashlib.sha256((v['key'] + name).encode()).hexdigest()[:17]}"
+        self.absent(name, "fsx_file_systems", "FileSystemId", key)
         self.sample.fsx_lustre(key, slug(name), v["id"], subnet, deployment, int(float(capacity_tib) * 1024), int(throughput))
         self.record("add_fsx_lustre", vpc=vpc, name=name, deployment=deployment, capacity_tib=float(capacity_tib))
         return {"file_system": slug(name), "subnet": subnet, "az": self.sample.az_of(subnet), "next_to_training": bool(train)}
 
+    @atomic
     def add_sagemaker_endpoint(self, vpc, name, instance_type="ml.g5.xlarge", count=2, tier="app"):
         """SageMaker real-time endpoint in the VPC: the model's VpcConfig uses the tier's subnets in every AZ."""
         v = self.vpc(vpc)
@@ -319,11 +373,13 @@ class Design:
         if int(count) < 1:
             raise DesignError("인스턴스 수는 1 이상입니다 (AZ 장애 대비 2 이상 권장).")
         subnets = self.tier(v, tier)
+        self.absent(name, "sagemaker_endpoints", "EndpointName", slug(name))
         sg = self.security_group(v, f"{slug(name)}-endpoint", [(443, v["cidr"])])
         self.sample.sagemaker_endpoint(slug(name), instance_type, int(count), subnets, sg)
         self.record("add_sagemaker_endpoint", vpc=vpc, name=name, instance_type=instance_type, count=int(count), tier=tier)
         return {"endpoint": slug(name), "instances": int(count), "azs": len({self.sample.az_of(s) for s in subnets})}
 
+    @atomic
     def add_database(self, vpc, name, engine="postgres", multi_az=True, read_replica=False, instance_class="db.r6g.large"):
         v = self.vpc(vpc)
         subnets = self.tier(v, "data")
@@ -332,6 +388,7 @@ class Design:
             raise DesignError("Multi-AZ에는 AZ가 2개 이상 필요합니다.")
         if read_replica and len(azs) < (3 if multi_az else 2):
             raise DesignError("읽기 전용 복제본을 별도 AZ에 두려면 AZ가 더 필요합니다.")
+        self.absent(name, "db_instances", "DBInstanceIdentifier", slug(name), f"{slug(name)}-ro")
         port = 3306 if "mysql" in engine or "maria" in engine else 5432
         self.security_group(v, f"{slug(name)}-db", [(port, v["cidr"])])
         self.sample.database(slug(name), v["id"], subnets, azs[0], engine, instance_class,
@@ -339,48 +396,61 @@ class Design:
         self.record("add_database", vpc=vpc, name=name, engine=engine, multi_az=multi_az, read_replica=read_replica)
         return {"database": slug(name), "engine": engine, "multi_az": bool(multi_az), "read_replica": bool(read_replica)}
 
+    @atomic
     def add_aurora(self, vpc, name, engine="aurora-postgresql", readers=1, instance_class="db.r6g.large"):
         v = self.vpc(vpc)
         azs = v["azs"]
         readers = int(readers)
         if not 0 <= readers <= 15:
             raise DesignError("Aurora 리더는 0~15개입니다.")
+        self.absent(name, "db_clusters", "DBClusterIdentifier", slug(name))
+        self.absent(name, "db_instances", "DBInstanceIdentifier", *[f"{slug(name)}-{i + 1}" for i in range(readers + 1)])
         self.sample.aurora(slug(name), v["id"], self.tier(v, "data"), azs[0], [azs[(i + 1) % len(azs)] for i in range(readers)],
                            engine, instance_class)
         self.record("add_aurora", vpc=vpc, name=name, engine=engine, readers=readers)
         return {"cluster": slug(name), "writer": 1, "readers": readers}
 
+    @atomic
     def add_cache(self, vpc, name, replicas=1, node_type="cache.r7g.large"):
         v = self.vpc(vpc)
         azs = v["azs"]
+        self.absent(name, "replication_groups", "ReplicationGroupId", slug(name))
         self.sample.redis(slug(name), v["id"], self.tier(v, "data"), azs[0], [azs[(i + 1) % len(azs)] for i in range(int(replicas))],
                           node_type)
         self.record("add_cache", vpc=vpc, name=name, replicas=int(replicas))
         return {"cache": slug(name), "engine": "redis", "primary": 1, "replicas": int(replicas)}
 
+    @atomic
     def add_kafka(self, vpc, name, brokers_per_az=1, broker_type="kafka.m7g.large"):
         v = self.vpc(vpc)
         subnets = self.tier(v, "data")
+        self.absent(name, "msk_clusters", "ClusterName", slug(name))
         self.sample.kafka(slug(name), subnets, len(subnets) * int(brokers_per_az), broker_type)
         self.record("add_kafka", vpc=vpc, name=name, brokers_per_az=int(brokers_per_az))
         return {"cluster": slug(name), "brokers": len(subnets) * int(brokers_per_az)}
 
+    @atomic
     def add_opensearch(self, vpc, name, data_per_az=1, standby=False):
         v = self.vpc(vpc)
         subnets = self.tier(v, "data")
         if standby and len(subnets) != 3:
             raise DesignError("Multi-AZ with Standby는 AZ 3개가 필요합니다.")
+        self.absent(name, "opensearch_domains", "DomainName", slug(name))
         self.sample.opensearch(slug(name), v["id"], subnets, int(data_per_az), 1, standby=v["azs"][-1] if standby else None)
         self.record("add_opensearch", vpc=vpc, name=name, data_per_az=int(data_per_az), standby=standby)
         return {"domain": slug(name), "data_nodes": len(subnets) * int(data_per_az), "standby": bool(standby)}
 
+    @atomic
     def add_file_system(self, vpc, name, tier="app"):
         v = self.vpc(vpc)
+        self.absent(name, "efs_file_systems", "FileSystemId", f"fs-{slug(name)}")
         self.sample.efs(f"fs-{slug(name)}", name, v["id"], self.tier(v, tier))
         self.record("add_file_system", vpc=vpc, name=name, tier=tier)
         return {"file_system": slug(name), "mount_targets": len(v["azs"])}
 
+    @atomic
     def add_lambda(self, name, vpc=None, tier="app", runtime="python3.12"):
+        self.absent(name, "lambda_functions", "FunctionName", slug(name))
         if vpc:
             v = self.vpc(vpc)
             self.sample.function(slug(name), v["id"], self.tier(v, tier), runtime)
@@ -389,9 +459,13 @@ class Design:
         self.record("add_lambda", name=name, vpc=vpc, runtime=runtime)
         return {"function": slug(name), "vpc": vpc or "VPC 미연결"}
 
+    @atomic
     def add_vpc_endpoints(self, vpc, services=("s3", "ssm")):
         v = self.vpc(vpc)
-        services = [str(service).lower() for service in services]
+        services = list(dict.fromkeys(str(service).lower() for service in services))
+        # A service that already has an endpoint in this VPC keeps it (one endpoint per service and VPC).
+        have = {str(e.get("ServiceName", "")).split(".", 3)[-1] for e in self.sample.raw["vpc_endpoints"] if e.get("VpcId") == v["id"]}
+        existing, services = [s for s in services if s in have], [s for s in services if s not in have]
         # Without NAT the private subnets keep the main table, which then carries the endpoint route.
         tables = self.routing_tables(v) if {"s3", "dynamodb"} & set(services) else None  # checked before anything is added
         added = []
@@ -403,12 +477,18 @@ class Design:
                 self.sample.interface_endpoint(f"vpce-{v['key']}-{slug(service)}", v["id"], service, self.tier(v, tier))
             added.append(service)
         self.record("add_vpc_endpoints", vpc=vpc, services=added)
-        return {"endpoints": added}
+        return {"endpoints": added, **({"existing": existing} if existing else {})}
 
+    @atomic
     def connect_vpcs(self, a, b):
         va, vb = self.vpc(a), self.vpc(b)
         self.routing_tables(va), self.routing_tables(vb)
         key = f"pcx-{va['key']}-{vb['key']}"
+        if va["id"] == vb["id"]:
+            raise DesignError("같은 VPC끼리는 피어링할 수 없습니다.")
+        if any({(p.get("RequesterVpcInfo") or {}).get("VpcId"), (p.get("AccepterVpcInfo") or {}).get("VpcId")} == {va["id"], vb["id"]}
+               for p in self.sample.raw["vpc_peering_connections"]):
+            raise DesignError(f"이미 피어링된 VPC입니다: {a} ↔ {b}")
         self.sample.peering(key, va["id"], vb["id"], f"{va['key']}-to-{vb['key']}")
         for this, other in ((va, vb), (vb, va)):
             for table in self.routing_tables(this):
@@ -416,6 +496,7 @@ class Design:
         self.record("connect_vpcs", a=a, b=b)
         return {"peering": key}
 
+    @atomic
     def add_vpn(self, vpc, customer_ip="203.0.113.10", name="on-premises"):
         v = self.vpc(vpc)
         try:
@@ -423,6 +504,7 @@ class Design:
         except ValueError as exc:
             raise DesignError(f"고객 게이트웨이 IP 형식이 아닙니다: {customer_ip}") from exc
         tables = self.routing_tables(v)
+        self.absent(name, "vpn_connections", "VpnConnectionId", f"vpn-{v['key']}-{slug(name)}")
         vgw = f"vgw-{v['key']}"
         self.sample.vpn(f"vpn-{v['key']}-{slug(name)}", f"cgw-{slug(name)}", customer_ip, slug(name), vgw=vgw, vpc=v["id"],
                         vgw_name=f"{v['key']}-vgw")
@@ -432,6 +514,7 @@ class Design:
         return {"vpn": f"vpn-{v['key']}-{slug(name)}", "tunnels": 2}
 
     # --- standards, review and output ------------------------------------------------------------
+    @atomic
     def apply_standard(self, name):
         # Standards are single-account designs; the multi-account sample is a combined collection, not a design.
         if name not in STANDARDS:
@@ -443,6 +526,7 @@ class Design:
         return {"standard": name, "title": self.title, "practices": self.sample.practices, "vpcs": self.vpc_summary(),
                 "note": "표준 아키텍처를 불러왔습니다. 위 VPC 이름으로 add_* 단계를 이어서 쓸 수 있습니다."}
 
+    @atomic
     def start_from_snapshot(self, snapshot, title=None):
         """Brownfield: the design starts as a copy of a collected (or saved) snapshot; add_* steps extend its VPCs.
         The account's own data is never changed: the result is a new design snapshot."""
@@ -463,6 +547,7 @@ class Design:
         raw = copy.deepcopy(snapshot["raw"])
         self.sample.raw = {**{key: [] for key in self.sample.raw}, **raw}
         self.sample.practices = metadata.get("practices", [])
+        self.adopted = {i.get("InstanceId") for i in raw.get("instances", [])}
         self.adopt()
 
     def adopt(self):
@@ -489,7 +574,8 @@ class Design:
             name = tag(vpc, "Name") or vpc["VpcId"]
             key = slug(name) if re.search(r"[A-Za-z0-9]", name) else slug(vpc["VpcId"])  # e.g. a Korean Name tag
             if key in self.vpcs:
-                key = slug(f"{name}-{vpc['VpcId'][-6:]}")
+                # Keep the disambiguator: slug() truncates, so append the ID suffix after shortening the name.
+                key = f"{key[:33]}-{slug(vpc['VpcId'][-6:])}"
             subnets = sorted((s for s in raw["subnets"] if s["VpcId"] == vpc["VpcId"]), key=lambda s: (s["AvailabilityZone"], s["SubnetId"]))
             letters = "".join(sorted({s["AvailabilityZone"][-1] for s in subnets}))
             layers = {}
@@ -539,8 +625,21 @@ class Design:
                 "vpcs": [{"name": v["name"], "cidr": v["cidr"], "azs": len(v["azs"]), "tiers": list(v["tiers"])}
                          for v in self.vpcs.values()], "resources": kinds, "steps": len(self.steps)}
 
+    def capacity(self, subnets, per_subnet, start=10):
+        """Free private addresses for `per_subnet` new resources in each subnet, checked before anything is added."""
+        try:
+            return {subnet: self.sample.free_addresses(subnet, per_subnet, start) for subnet in subnets}
+        except IndexError as exc:
+            raise DesignError(f"서브넷 주소가 부족합니다: {exc}. 수를 줄이거나 더 큰 서브넷의 계층을 쓰세요.") from exc
+
     def snapshot(self):
         snapshot = self.sample.snapshot()
+        # Collected subnets keep AWS's count; the design's own instances in them still take addresses.
+        added = Counter(i["SubnetId"] for i in self.sample.raw["instances"] if i["InstanceId"] not in self.adopted)
+        collected = {s["SubnetId"] for s in self.sample.raw["subnets"] if "AvailableIpAddressCount" in s}
+        for subnet in snapshot["raw"]["subnets"]:
+            if subnet["SubnetId"] in collected and added[subnet["SubnetId"]]:
+                subnet["AvailableIpAddressCount"] = max(0, subnet["AvailableIpAddressCount"] - added[subnet["SubnetId"]])
         snapshot["metadata"].update(
             design=True, sample=self.standard or "design", title=self.title, steps=list(self.steps),
             practices=self.sample.practices, **({"based_on": dict(self.base)} if self.base else {}),
