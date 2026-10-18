@@ -18,6 +18,7 @@ updated: 2026-10-18
 ## Template 클래스
 - 상태: `resources`, `parameters`, `outputs`, `ids`(물리 ID·ARN·이름 → 논리 ID), `unsupported`, `assumptions`, `attachments`(게이트웨이 → VPC attachment 논리 ID, 경로의 `DependsOn`에 씀), `listeners`, `default_vpcs`.
 - `logical(prefix, *labels)`: 접두사 + 읽을 수 있는 첫 레이블의 CamelCase, 200자 제한, 충돌하면 숫자 접미사. 예: `SecurityGroupProdDb`, `DbProdOrdersDb`.
+- `unique(base)`: 파생 ID(`…Attachment`, `…Eip`, `…LaunchTemplate`, `…TaskDefinition`, `…Association`, `…Image` 파라미터)는 이름을 이어 붙인 뒤 이 함수를 거친다. 리소스·파라미터가 이미 그 ID를 쓰면 `base2`, `base3`… 이름이 `edge`와 `edge-attachment`인 IGW 두 개가 서로를 덮어쓰지 않는다.
 - `add(logical, kind, props, physical=None, depends=None)`: `None`·`[]`·`{}` 속성을 빼고(`clean()`이 모든 깊이에서 `None` 제거) 등록, `physical`을 `ids`에 기록.
 - `ref(physical)`: 템플릿이 만든 것만 `{"Ref": logical}`, 아니면 `None`. 호출부는 `None`이면 `skip()`으로 미지원 처리한다. 서브넷 목록은 `subnet_refs()`가 하나라도 없으면 `None`.
 - 합성 물리 키: 배치 그룹 `placement:<이름>`, ASG `asg:<이름>`, DB 클러스터 `cluster:<id>`, 캐시 `cache:<id>`, EKS `eks:<이름>`, 서브넷 그룹 `<family>-subnets:<이름>`.

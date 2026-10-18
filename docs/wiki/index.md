@@ -44,7 +44,7 @@ updated: 2026-10-18
 ## 앱과 API
 
 - [[http-api]] (http-api.md) — **HTTP API 레퍼런스**: create_app이 조립하는 모든 HTTP 엔드포인트(페이지·정적 파일·session·snapshots·documents·agent·aws 라우터)의 요청 모델, 응답, 상태 코드, 역할, 감사 기록.
-- [[web-app]] (web-app.md) — **웹 앱 (프런트엔드)**: 빌드 없는 ES 모듈 프런트엔드(app.html, app.js, js/http.js·relay.js·labels.js)의 화면 구조, state 객체와 주요 흐름, draw.io 임베드 메시지 규약, React로 옮길 때 그대로 쓸 모듈과 다시 짤 부분.
+- [[web-app]] (web-app.md) — **웹 앱 (프런트엔드)**: 빌드 없는 ES 모듈 프런트엔드(app.html, 진입 app.js, js/ 화면 모듈 10개와 http.js·relay.js·labels.js)의 화면 구조, state 객체와 주요 흐름, draw.io 임베드 메시지 규약, React로 옮길 때 그대로 쓸 모듈과 다시 짤 부분.
 - [[storage]] (storage.md) — **저장소 (스냅샷·편집본)**: store.py의 SnapshotStore(검증·그래프 재생성·캐시·목록·샘플 시드)와 DocumentStore(보기 범위 키, 리비전 낙관적 잠금, 20개 이력, replace 의미), 데이터 디렉터리 위치, DB·S3로 바꿀 때 구현할 메서드.
 - [[chat-agent]] (chat-agent.md) — **채팅 설계 에이전트**: agent.py(모델 목록·대체, SYSTEM_PROMPT, Workspace, 도구 29개, Chat.ask와 진행 이벤트)와 designer.py(Design 상태, 표준 아키텍처, 기존 구성에서 시작하는 brownfield 설계, 스냅샷 메타데이터), CLI chat.
 - [[cli]] (cli.md) — **CLI와 검증 스크립트**: diagram-bot CLI(cli.py)의 모든 하위 명령·옵션·종료 코드, --env-file 동작, Makefile 게이트(check·lint·test·smoke-local)와 scripts/의 검증·렌더링 스크립트.

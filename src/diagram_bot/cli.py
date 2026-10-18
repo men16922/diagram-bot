@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-from importlib import metadata
 import sys
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from .findings import SEVERITIES, markdown, review, summary
 from .graph import build_graph
 from .samples import SAMPLES
 from .report import write_report
+from .version import app_version
 
 
 def main():
@@ -375,12 +375,6 @@ def run_adopt_template(args):
         set_default_spec(None)
     return 0
 
-
-def app_version():
-    try:
-        return metadata.version("diagram-bot")
-    except metadata.PackageNotFoundError:
-        return "dev"
 
 
 def collect_all(parser, args):

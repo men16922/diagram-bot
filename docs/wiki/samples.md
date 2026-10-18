@@ -1,7 +1,7 @@
 ---
 title: 샘플과 데모 스냅샷
 summary: samples.Sample 빌더 도우미, 번들 샘플 11개(무엇을 보여 주는지·리전), SAMPLE_VERSION과 서버의 샘플 재생성(SnapshotStore.seed), demo.py, scripts/render_samples.py, examples/samples.
-sources: [src/diagram_bot/samples.py, src/diagram_bot/demo.py, src/diagram_bot/store.py, src/diagram_bot/server.py, src/diagram_bot/designer.py, src/diagram_bot/cli.py, scripts/render_samples.py, examples/samples/README.md, tests/test_drawio.py, tests/test_server.py]
+sources: [src/diagram_bot/samples/, src/diagram_bot/demo.py, src/diagram_bot/store.py, src/diagram_bot/server.py, src/diagram_bot/designer.py, src/diagram_bot/cli.py, scripts/render_samples.py, examples/samples/README.md, tests/test_drawio.py, tests/test_server.py]
 related: [snapshot-model, layout-and-drawio, chat-agent, storage, howto-add-collected-service, cli]
 updated: 2026-10-18
 ---
@@ -11,15 +11,18 @@ updated: 2026-10-18
 > 똑같이 그려지고, 검토·CloudFormation 내보내기·채팅 설계의 출발점(표준 아키텍처)으로도 쓰인다.
 
 ## 핵심
+- 패키지: `samples/builder.py`(`Sample` 빌더, `SAMPLE_VERSION`, `RAW_KEYS`), `samples/catalog.py`(샘플 함수 11개, `SUMMARIES`, `SAMPLES`). `samples/__init__.py`가 공개 이름을 그대로 다시 내보내므로 `from diagram_bot.samples import ...`는 바뀌지 않는다.
 - 레지스트리: `samples.SAMPLES`(키 → 빌더 함수) 11개. 기본 계정 `111122223333`, 기본 리전 `ap-northeast-2`(`ACCOUNT`, `REGION`).
-- `SAMPLE_VERSION = 6`. 샘플 구성을 바꾸면 올린다. 서버는 저장된 샘플의 `metadata.sample_version`이 다르면 다시 만든다.
+- `SAMPLE_VERSION = 7`(7: 인스턴스 IP를 자기 서브넷 CIDR 안의 빈 주소로 배정, coverage 행을 `collector.OPERATIONS`에서 도출). 샘플 구성을 바꾸면 올린다. 서버는 저장된 샘플의 `metadata.sample_version`이 다르면 다시 만든다.
 - 샘플 metadata: `demo: True`, `sample`, `sample_version`, `title`, `practices`, 공통 `limitations`(합성 샘플, 리스너 규칙·Route 53·Shield·Network Firewall은 범위 밖, 설정 관계). 필드 정의는 [[snapshot-model]].
-- `designer.STANDARDS`에 있는 10개(`multi-account` 제외)는 채팅 설계의 `apply_standard`로 불러올 수 있다([[chat-agent]]).
+- 샘플별 요약은 `samples.SUMMARIES` 한 곳에 있고 `designer.STANDARDS`는 여기서 `multi-account`를 뺀 10개다. 이 10개는 채팅 설계의 `apply_standard`로 불러올 수 있다([[chat-agent]]).
 
 ## Sample 빌더
 `Sample(key, title, practices, region=REGION, account=ACCOUNT)`가 `raw`를 채우고 `snapshot()`이 스냅샷을 돌려준다. ID는 결정적이다(`digest`, `uuid`는 SHA-256 기반).
 - 네트워크: `vpc`, `subnet(key, vpc, az, cidr, name, tier)`(`MapPublicIpOnLaunch`는 tier가 public일 때), `internet_gateway`, `nat_gateway`, `route_table(key, vpc, name, subnets, gateway, nat, main)`, `route(table, destination, **target)`, `network(vpc, prefix, azs, public, private, nat_per_az)`(IGW + AZ별 NAT + 층별 라우팅 테이블 + 격리용 주 테이블), `gateway_endpoint`, `interface_endpoint`, `security_group(key, vpc, name, ingress, egress)`.
-- 컴퓨팅·로드 밸런싱: `instance(key, subnet, name, kind, ip, sg, efa, placement, lifecycle, **tags)`, `load_balancer`, `target_group(name, vpc, protocol, port, targets, lbs, target_type, health)`, `auto_scaling_group`, `address(subnet, offset)`, `az_of(subnet)`.
+- 컴퓨팅·로드 밸런싱: `instance(key, subnet, name, kind, ip, sg, efa, placement, lifecycle, **tags)`, `load_balancer`, `target_group(name, vpc, protocol, port, targets, lbs, target_type, health)`, `auto_scaling_group`, `address(subnet, offset)`, `free_addresses(subnet, count, start)`(서브넷 안에서 아직 안 쓴 주소; AWS 예약 주소 제외), `az_of(subnet)`.
+- `raw` 키 목록(`RAW_KEYS`)과 coverage 행은 `collector.OPERATIONS`에서 도출한다(`LISTINGS`·`DETAILS`·`OPTIONAL` 대응표). 수집 호출을 추가하면 샘플 쪽도 자동으로 따라온다(`tests/test_sample_invariants.py`).
+- `snapshot()`은 `raw`의 깊은 복사본을 돌려주고 서브넷 `AvailableIpAddressCount`를 매번 다시 계산한다.
 - 데이터: `database(identifier, vpc, subnets, primary, engine, size, standby, replica)`, `aurora`(DocumentDB도 `engine="docdb"`), `redis`, `redis_cluster`, `kafka`, `opensearch`, `efs`, `redshift`.
 - 컨테이너·서버리스: `eks`, `ecs_service`, `function`.
 - 연결: `transit_gateway(key, name, owner)`, `tgw_attachment`, `peering`, `vpn(key, customer, ip, name, vgw, tgw, vpc, tunnels_up, vgw_name)`.

@@ -13,7 +13,8 @@ updated: 2026-10-18
 - 공통 규칙은 `server.create_app`의 `protect_mutations` 미들웨어에 있다(자세한 보안 의미는 [[team-mode-security]]).
   - **변경 요청**(`POST`/`PUT`/`DELETE`/`PATCH`)은 `X-Diagram-Bot` 헤더에 페이지 토큰이 있어야 한다. 토큰은 프로세스마다 `secrets.token_urlsafe(32)`로 한 번 만들고 `GET /api/bootstrap`이 돌려준다. 틀리면 403 `앱 세션이 만료되었습니다. 새로고침하세요.` 예외는 `POST /api/login`뿐.
   - `Origin` 헤더가 있고 그 netloc이 `Host`와 다르면 403 `허용되지 않은 요청 출처`.
-  - 변경 요청 본문이 15 MiB(`15 * 1024 * 1024`)를 넘으면 413 `파일은 최대 15 MiB입니다.`
+  - 변경 요청 본문이 15 MiB(`server.MAX_BODY`)를 넘으면 413 `파일은 최대 15 MiB입니다.` `Content-Length`로 먼저 거부하고, 없으면 상한까지만 읽는다.
+  - `errors.InputError`(사용자가 고칠 입력: 스냅샷 형식, 통합할 수 없는 스냅샷 조합)는 `install_error_handlers`가 422로 바꾼다.
   - 팀 모드(`context.auth`가 있음)에서 `PUBLIC`(`/login`, `/api/login`, `/auth/oidc/start`, `/auth/oidc/callback`) 밖의 경로는 세션 쿠키가 필요하다. 없으면 `/api/*`는 401, 그 밖(페이지·`/static`·`/editor` 포함)은 303 → `/login`.
   - 역할 검사는 `auth.allowed(role, method, path)`: `GET`/`HEAD`와 `/api/logout`은 모두 허용, `/api/collections`·`/api/sso`로 시작하는 변경은 `admin`만, 나머지 변경은 `editor`·`admin`. 거부는 403과 감사 기록(`result="denied"`).
 - 로컬 모드(팀 모드 아님)에서는 `request.state.user = "local"`이고 `routes.role()`은 `admin`을 돌려준다.

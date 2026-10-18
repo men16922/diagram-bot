@@ -30,7 +30,7 @@ updated: 2026-10-18
   botocore는 HTTP 전송을 건너뛴다(`botocore.endpoint`의 `before-send` 처리).
 - `outgoing()`은 `https://*.amazonaws.com(.cn)`만 허용하고, **서명에 포함된 헤더 + Authorization**만 보낸다(Host·Content-Length는 브라우저가 설정).
   User-Agent·`amz-sdk-*` 같은 서명 밖 헤더를 빼서 CORS preflight를 좁힌다.
-- 브라우저가 앱을 열고 있지 않으면(`idle` 30초 동안 `next` 호출 없음) 즉시 `RelayError("브라우저 중계가 연결되어 있지 않습니다…")`.
+- 브라우저가 앱을 열고 있지 않으면(`idle` 30초 동안 `next` 호출 없음) 즉시 `RelayDisconnected("브라우저 중계가 연결되어 있지 않습니다…")`. 시간 안에 응답이 오지 않아도 `RelayDisconnected`다. `RelayDisconnected`는 `RelayError`의 하위 클래스이고, 수집기는 이것만 다시 던져 수집 작업 전체를 실패시킨다(남은 서비스를 모두 `조회 불가`로 채운 가짜 partial 스냅샷을 저장하지 않는다). 요청 하나가 막힌 경우(CORS·프록시, status 0)는 일반 `RelayError`로 그 서비스만 `조회 불가`가 된다.
   요청 하나의 왕복 제한 `timeout` 90초, fetch 실패(status 0)는 `RelayError`(네트워크·CORS·프록시). `RelayError`는 botocore 재시도 대상이 아니라 바로 실패한다.
 - 요청·응답은 사용자(`owner`)에 묶인다: 다른 사용자는 가져가거나 답할 수 없다.
 

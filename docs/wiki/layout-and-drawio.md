@@ -75,7 +75,7 @@ VPC마다 위에서 아래로:
 
 ## 바꿀 때 주의
 - 배치 규칙을 바꾸면 `VERSION`과 `docs/DRAWIO.md`를 함께 고치고, 샘플 그림을 다시 만든다([[samples]]).
-- 새 종류는 `EDGE_KINDS`·`SUBNET_KINDS`·`outside_vpc`·overview의 `outside` 제외 목록·`SUMMARY`/`GLANCE_KINDS` 중 어디에 속하는지 정해야 한다([[howto-add-collected-service]]).
+- 새 종류는 `EDGE_KINDS`·`SUBNET_KINDS`·`outside_vpc`·overview의 `outside` 제외 목록·`GLANCE_KINDS` 중 어디에 속하는지 정해야 한다([[howto-add-collected-service]]).
 
 ## 관련
 - [[drawio-format-and-alignment]] — 회사별 `DrawioSpec`과 기존 `drawio.xml` 인플레이스 정렬·스냅샷 이식.

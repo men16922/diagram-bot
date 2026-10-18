@@ -73,7 +73,7 @@ updated: 2026-10-18
 | SEC-TRANSIT | low | security | ElastiCache `TransitEncryptionEnabled` false, MSK `ClientBroker`가 PLAINTEXT/TLS_PLAINTEXT |
 | SEC-IMDSV1 | medium | security | EC2 `MetadataOptions.HttpTokens == "optional"` |
 | SEC-EC2-PUBLIC-IP | low | security | 가속 유형이 아닌 EC2에 `PublicIpAddress` |
-| SEC-SG-OPEN | high | security | SG 인바운드가 `WORLD`에서 프로토콜 `-1`(모든 포트) 또는 `ADMIN_PORTS`·`DATA_PORTS` 범위 허용. 포트마다 하나 |
+| SEC-SG-OPEN | high | security | SG 인바운드가 `WORLD`에서 프로토콜 `-1`(모든 포트) 또는 TCP(`tcp`·`6`) 규칙의 `ADMIN_PORTS`·`DATA_PORTS` 범위 허용. UDP·ICMP·ESP 규칙은 이 서비스들을 열지 않으므로 제외. 포트마다 하나 |
 | SEC-AI-PORT-OPEN | high | ai | SG 인바운드가 `WORLD`에서 `AI_PORTS` 중 하나를 포함하는 범위 허용 (프로토콜 `-1` 규칙에는 적용 안 됨) |
 | SEC-EFA-SG | medium | ai | EFA 노드의 SG(모두 수집된 경우만)에 같은 그룹 자기 참조 `IpProtocol -1` 규칙 없음. ASG당 하나 |
 | SEC-EKS-PUBLIC | medium | security | `endpointPublicAccess`이고 `publicAccessCidrs`에 `0.0.0.0/0` |

@@ -1,7 +1,7 @@
 ---
 title: 회사 스택으로 옮기기 (React + Vite, FastAPI, 브라우저 egress, 회사 draw.io 규격)
 summary: 표준 drawio.xml을 직접 고치던 회사 버전을 인플레이스 자동 정렬(align_xml)·회사 규격(DrawioSpec)·스냅샷 파이프라인으로 이식하는 코딩 에이전트용 토큰 최적화 플레이북(라이브러리 명세, Level 0~4 파일 복사 목록, 계약 치트시트 포함).
-sources: [pyproject.toml, src/diagram_bot/api.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/designer.py, src/diagram_bot/samples.py, src/diagram_bot/graph.py, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/server.py, src/diagram_bot/aws_access.py, src/diagram_bot/store.py, src/diagram_bot/egress.py, src/diagram_bot/agent.py, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js]
+sources: [pyproject.toml, src/diagram_bot/api.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/designer.py, src/diagram_bot/samples/, src/diagram_bot/graph.py, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/server.py, src/diagram_bot/aws_access.py, src/diagram_bot/store.py, src/diagram_bot/egress.py, src/diagram_bot/agent.py, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js]
 related: [architecture, drawio-format-and-alignment, snapshot-model, layout-and-drawio, chat-agent, browser-egress, aws-access-and-sso, storage, http-api, web-app, team-mode-security]
 updated: 2026-10-18
 ---
@@ -38,7 +38,7 @@ updated: 2026-10-18
 
 | 단계 | 목적 | 복사할 파일 (`src/diagram_bot/` 기준) | 필요한 pip 패키지 | 진입점 함수 / 클래스 |
 | --- | --- | --- | --- | --- |
-| **Level 0. 기존 `drawio.xml` 자동 정렬 + 회사 규격(`DrawioSpec`)** | 회사 기존 XML 생성기는 그대로 두고, 결과 XML의 겹침·컨테이너 크기·AZ 서브넷 정렬·직교 배선만 자동 교정하거나 회사 XML 포맷 추출 | `drawio_spec.py`, `xml_align.py`, `drawio.py`, `layout.py`, `views.py`, `graph.py`, `samples.py` (`collector.py`는 `OPERATIONS` 상수만 쓰거나 함께 복사) | `defusedxml` (1개) | `xml_align.align_drawio_xml`, `xml_align.inspect_drawio_xml`, `xml_align.import_drawio_xml`, `drawio_spec.spec_from_xml` |
+| **Level 0. 기존 `drawio.xml` 자동 정렬 + 회사 규격(`DrawioSpec`)** | 회사 기존 XML 생성기는 그대로 두고, 결과 XML의 겹침·컨테이너 크기·AZ 서브넷 정렬·직교 배선만 자동 교정하거나 회사 XML 포맷 추출 | `drawio_spec.py`, `xml_align.py`, `drawio.py`, `layout.py`, `views.py`, `graph.py`, `samples/` (`collector.py`는 `OPERATIONS` 상수만 쓰거나 함께 복사) | `defusedxml` (1개) | `xml_align.align_drawio_xml`, `xml_align.inspect_drawio_xml`, `xml_align.import_drawio_xml`, `drawio_spec.spec_from_xml` |
 | **Level 1. 다이어그램·설계·검토·CFN 코어 엔진** | 표준 아키텍처 생성 + 코드/도구 기반 설계(`Design`) + 회사 규격 XML 출력 + 주석 보존 + 47개 검토 규칙 + CloudFormation 내보내기 | Level 0 + `designer.py`, `findings.py`, `iac.py`, `diff.py`, `combine.py` | `defusedxml` (1개) | `designer.Design`, `drawio.generate_document(..., spec=...)`, `drawio.carry_annotations`, `findings.review`, `iac.template` |
 | **Level 2. AWS 수집 + 브라우저 Egress + 통합 퍼사드** | Level 1 + 실제 계정 읽기 전용 수집 + 서버 서명·브라우저 전송(`--aws-egress browser`) + `api.py` 단일 진입점 | Level 1 + `collector.py`, `egress.py`, `aws_access.py`, `sso.py`, `store.py`, `api.py` + 프런트 `static/js/relay.js` | `defusedxml`, `boto3` | `api.collect_snapshot`, `api.render`, `api.align_xml`, `api.import_xml`, `egress.BrowserRelay`, 프런트 `startRelay(api)` |
 | **Level 3. FastAPI 라우터 장착** | Level 2 + 회사 FastAPI 앱에 `/diagram/*` 엔드포인트(`/api/xml/align`, `/api/xml/import` 포함)와 리비전 저장소 장착 | Level 2 + `auth.py`, `routes/__init__.py`, `routes/snapshots.py`, `routes/documents.py`, `routes/aws.py` | + `fastapi`, `pydantic` | `routes.Context`, `snapshots.router(ctx)`, `documents.router(ctx)`, `aws.router(ctx)` |
@@ -134,7 +134,7 @@ result = api.review_snapshot(snapshot); draft = api.cloudformation(snapshot)
 
 ## 바꿀 때 주의
 - 라우터는 `request.state.user`가 없으면 동작하지 않는다(SSO·중계·채팅이 사용자 단위).
-- 브라우저 egress에서 탭을 닫으면 새 AWS 요청은 30초(`idle`) 뒤부터 즉시 `RelayError`, 이미 넘긴 요청은 최대 90초(`timeout`) 뒤 실패한다.
+- 브라우저 egress에서 탭을 닫으면 새 AWS 요청은 30초(`idle`) 뒤부터 즉시 `RelayDisconnected`, 이미 넘긴 요청은 최대 90초(`timeout`) 뒤 실패한다. 수집 작업은 이때 실패로 끝난다.
 - 새로운 리소스 종류나 관계를 추가할 때는 [[howto-add-collected-service]]의 체크리스트(`labels.js` 한국어 이름 포함)를 따른다.
 
 ## 관련

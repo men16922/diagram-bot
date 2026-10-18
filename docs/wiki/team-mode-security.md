@@ -51,7 +51,7 @@ updated: 2026-10-18
 1. **TrustedHostMiddleware** — 허용 호스트는 `LOOPBACK`(`localhost`, `127.0.0.1`, `[::1]`, `testserver`)과 `--allowed-host`. 마지막에 등록해 가장 먼저 실행되므로 모르는 `Host`는 세션·리다이렉트 처리 전에 거부된다(DNS 리바인딩 방어).
 2. **`protect_mutations`** (`@app.middleware("http")`):
    - 팀 모드 세션 확인(401 또는 303 → `/login`), `allowed()` 역할 확인(403 + 감사 `denied`).
-   - 변경 요청: `Origin`이 있으면 netloc이 `Host`와 같아야 함(403), `/api/login` 외에는 `X-Diagram-Bot` 페이지 토큰 일치(403), 본문 15 MiB 이하(413).
+   - 변경 요청: `Origin`이 있으면 netloc이 `Host`와 같아야 함(403), `/api/login` 외에는 `X-Diagram-Bot` 페이지 토큰 일치(403), 본문 15 MiB 이하(413). `Content-Length`가 넘으면 읽기 전에 거부하고, 길이가 없는(chunked) 본문은 15 MiB까지만 읽는다(`server.read_capped`). 인증 전인 `/api/login`도 메모리를 채울 수 없다.
    - 응답 후: 감사 기록, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `secure`면 `Strict-Transport-Security: max-age=31536000`, `/api/*`와 `/`에 `Cache-Control: no-store`, `/`에 `X-Frame-Options: DENY`.
    - 미들웨어가 먼저 돌려준 401·403·413 응답에는 위 보안 헤더가 붙지 않는다(`call_next` 뒤에서 붙이므로).
 - 페이지 토큰은 프로세스당 하나(`secrets.token_urlsafe(32)`)로 사용자별이 아니다. CSRF 방어 수단이고, 인증은 세션 쿠키가 맡는다. 토큰은 `GET /api/bootstrap`이 주며 팀 모드에서는 이 요청에도 세션이 필요하다.
@@ -61,7 +61,7 @@ updated: 2026-10-18
 - 위치: `<data-dir>/audit.log`(`create_app`이 `directory / "audit.log"`로 만든다, [[storage]]). 추가 전용 JSON Lines, 스레드 잠금.
 - 한 줄: `{"time": UTC ISO 8601, "user", "action", "target", "result", "client", ...extra}`. 예: 미들웨어 항목은 `action="POST /api/snapshots"`, `result=201`; 수집은 `action="collection"`, `result="complete"`, `snapshot`, `via`(`sdk`, `sso:<역할>`, 브라우저 egress면 `/browser` 접미사).
 - 제외: `/api/login`·`/api/logout`(핸들러가 `login`·`logout`으로 기록), `/api/relay/*`. 비밀번호는 기록하지 않는다. OIDC 실패 이유는 200자로 자른다.
-- `tail(limit)`은 최신 항목부터 돌려주고 `GET /api/audit`이 쓴다. 로컬 모드에서도 기록된다(사용자 `local`, `test_local_mode_is_unchanged_and_audited`).
+- `tail(limit)`은 파일 끝에서부터 읽어 최신 항목부터 돌려주고, 쓰다 끊긴(해석할 수 없는) 줄은 건너뛴다. `GET /api/audit`이 쓴다. 로컬 모드에서도 기록된다(사용자 `local`, `test_local_mode_is_unchanged_and_audited`).
 
 ## 저장하지 않는 것
 - AWS 키·세션 토큰: 수집은 SDK 인증 체인이나 Identity Center 역할 자격 증명(서버 메모리)으로 하고 앱 데이터에 쓰지 않는다. SSO의 client secret·device code·액세스 토큰도 서버 메모리에만 둔다(`SECURITY.md` 보안 모델 표).

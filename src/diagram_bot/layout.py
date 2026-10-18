@@ -351,13 +351,6 @@ def layout_view(snapshot, graph, selection):
             "shapes": canvas.shapes, "edges": canvas.edges, "absolute": dict(canvas.abs), "labels": labels}
 
 
-SUMMARY = [("Subnet", "subnet"), ("EC2", "ec2"), ("LB", "load_balancer"), ("TG", "target_group"), ("NAT", "nat_gateway"),
-           ("DB", "db_instance"), ("Cache", "cache_node"), ("MSK", "msk_cluster"), ("OpenSearch", "opensearch_domain"),
-           ("EKS", "eks_cluster"), ("ECS", "ecs_service"), ("EFS", "efs_mount_target"), ("Redshift", "redshift_cluster"),
-           ("Lambda", "lambda_function"), ("Endpoint", "vpc_endpoint"), ("VPN", "vpn_gateway"), ("Peering", "vpc_peering"),
-           ("FSx", "fsx_file_system"), ("SageMaker", "sagemaker_endpoint"), ("HyperPod", "sagemaker_cluster")]
-
-
 def cloud_label(meta):
     if meta.get("combined"):
         return f"AWS Cloud · 계정 {len(meta['accounts'])}개 (계정·리전별 수집 통합)"

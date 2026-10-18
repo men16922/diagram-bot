@@ -27,6 +27,7 @@ updated: 2026-10-18
 | 6. 수집·채팅 | `sso.get_role_credentials` → 역할 세션(요청 때마다 새로 받음) | `POST /api/collections` {sso_login, sso_role, …} |
 | 7. 로그아웃 | `sso.logout(accessToken)` | `POST /api/sso/login/{id}/logout` |
 
+- `SsoLogins.lock` 안에서는 AWS를 부르지 않는다. `poll`은 잠금 안에서 flow 상태를 복사하고, 잠금 밖에서 CreateToken·ListAccounts를 부른 뒤, 다시 잠금 안에서 결과를 반영한다(동시에 온 두 번째 poll은 교환을 반복하거나 되돌리지 않는다). Identity Center 응답 하나가 느려도 다른 사용자의 poll·역할 조회·세션이 멈추지 않는다.
 - flow는 시작한 앱 사용자(`owner`)에게 묶인다. 다른 사용자는 조회·사용할 수 없다(`SsoLogins.flow`).
 - 시작 URL 기본값: `serve --sso-start-url/--sso-region`(회사 설정) → `~/.aws/config`의 sso-session·프로파일 → 서버 자격 증명으로 `sso-admin.list_instances` 발견
   (브라우저 egress에서는 발견 생략). `AwsAccess.start_urls`, `GET /api/sso/defaults`.

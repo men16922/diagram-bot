@@ -1,7 +1,7 @@
 ---
 title: 채팅 도구 추가하기
 summary: 설계 단계(Design 메서드)와 그 단계를 부르는 Strands 도구를 추가하는 절차. add_fsx_lustre·add_subnet_tier를 본보기로 DesignError 메시지, record(), @tool docstring, 도구 수 단언, SYSTEM_PROMPT, CloudFormation 범위, 테스트를 다룬다.
-sources: [src/diagram_bot/designer.py, src/diagram_bot/agent.py, src/diagram_bot/samples.py, src/diagram_bot/iac.py, src/diagram_bot/graph.py, tests/test_agent.py, tests/test_iac.py]
+sources: [src/diagram_bot/designer.py, src/diagram_bot/agent.py, src/diagram_bot/samples/, src/diagram_bot/iac.py, src/diagram_bot/graph.py, tests/test_agent.py, tests/test_iac.py]
 related: [chat-agent, http-api, storage, cloudformation, graph, snapshot-model, views]
 updated: 2026-10-18
 ---
@@ -11,14 +11,15 @@ updated: 2026-10-18
 
 ## 핵심
 - 본보기: `Design.add_fsx_lustre`(새 리소스 하나를 기존 서브넷에 두는 단계)와 `Design.add_subnet_tier`(네트워크 구조를 바꾸는 단계), 대응 도구 `add_fsx_lustre`·`add_subnet_tier`.
-- 바꿀 파일: `designer.py`, `agent.py`(도구와 `SYSTEM_PROMPT`), `tests/test_agent.py`(도구 수 29 → 30), 필요하면 `samples.py`·`iac.py`와 `tests/test_iac.py`.
+- 바꿀 파일: `designer.py`, `agent.py`(도구와 `SYSTEM_PROMPT`), `tests/test_agent.py`(도구 수 29 → 30), 필요하면 `samples/`·`iac.py`와 `tests/test_iac.py`.
 - 실제 AWS는 호출하지 않는다. 설계는 제안이고 `Sample` 헬퍼로 `raw`만 쓴다.
 
 ## 1. Design 메서드
 `designer.Design`에 메서드를 추가한다. 규칙:
 - 입력 VPC는 `self.vpc(name)`으로 찾는다. 없으면 `VPC '<name>'가 설계에 없습니다. 먼저 add_vpc로 만드세요. (현재: …)`라는 `DesignError`가 이미 나온다.
 - 서브넷은 `self.tier(v, "app")`처럼 계층으로 고른다. 계층이 없으면 `add_subnet_tier`를 안내하는 `DesignError`가 나온다.
-- 이름은 `slug(name)`으로 정규화한다. 로드 밸런서·대상 그룹처럼 중복을 막아야 하면 `self.unique("lb"|"tg", name)`을 쓴다.
+- 이름은 `slug(name)`으로 정규화한다. 로드 밸런서·대상 그룹처럼 중복을 막아야 하면 `self.unique("lb"|"tg", name)`, 그 밖의 이름·ID 중복은 `self.absent(name, collection, field, *values)`를 쓴다.
+- 단계 메서드에는 `@atomic`을 붙인다. 실패하면 설계 상태 전체를 되돌리고 StopIteration·IndexError·KeyError·ValueError를 `DesignError`로 바꾼다. 주소가 필요하면 무엇이든 바꾸기 전에 `self.capacity(subnets, per_subnet)`로 빈 주소를 먼저 확보한다.
 - 라우트를 쓰는 단계는 `self.routing_tables(v)`를 **아무것도 추가하기 전에** 부른다. 라우트 테이블이 수집되지 않은 brownfield VPC면 여기서 거부된다(`add_vpc_endpoints`가 이 순서를 지킨다).
 - 보안 그룹은 `self.security_group(v, name, [(port, source)])`, 리소스는 `self.sample.<helper>(...)`(`samples.Sample`)로 만든다. `add_fsx_lustre`는 `self.sample.fsx_lustre(key, slug(name), v["id"], subnet, deployment, capacity, throughput)`을 부른다.
 - 입력 검사는 리소스를 만들기 전에 끝낸다. 실패하면 부분 변경이 남지 않는다.

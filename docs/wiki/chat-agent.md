@@ -28,7 +28,7 @@ updated: 2026-10-18
 
 ## Workspace (대화 하나의 상태)
 - `Workspace(save, session_factory=None, region=None, allow_collection=True, default_account=None, load=None)`.
-- 필드: `design`(`Design`), `collected`(마지막 수집 스냅샷), `current_snapshot`(앱에서 열린 스냅샷 ID, 매 턴 라우터가 설정), `changes`(이번 턴에 저장한 스냅샷 ID), `on_publish`(스트리밍 중 저장 알림), `model_session`(브라우저 egress용), `lock`.
+- 필드: `design`(`Design`), `collected`(마지막 수집 스냅샷), `current_snapshot`(앱에서 열린 스냅샷 ID, 매 턴 라우터가 설정), `changes`(이번 턴에 저장한 스냅샷 ID), `on_publish`(스트리밍 중 저장 알림), `model_session`(브라우저 egress용: `aws.model_session(user, "us-east-1")`가 만드는, 처음 쓸 때 가져오고 만료 전에 갱신하는 자격 증명 세션. 사용자가 고른 역할을 따르고 채팅을 만들 때는 AWS를 부르지 않는다), `lock`.
 - 리전 기본값: `AWS_REGION` → `AWS_DEFAULT_REGION` → `us-east-1`. 수집 예상 계정: `default_account()`(서버에서는 사용자가 고른 SSO 계정 또는 `AWS_ACCOUNT_ID`).
 - `publish(snapshot)`은 `save` 후 ID를 `changes`에 넣고 `on_publish`를 부른다. `publish_design(result)`는 `design.snapshot()`을 저장하고 결과에 `snapshot_id`를 붙인다.
 - `context_note()`: 열린 스냅샷(없으면 마지막 수집)을 `\n\n[현재 화면] 설계안|수집한 구성 '<이름>' (<리전>, VPC n개)`로 요약한다. 진행 중인 설계가 그 스냅샷에서 시작했으면 `· 진행 중인 설계가 이 스냅샷에서 시작함`을 덧붙인다.
@@ -77,6 +77,7 @@ updated: 2026-10-18
 
 ## 서버에서의 생성 (`routes.agent`)
 - 대화는 사용자별(`context.chats`), 모델이 바뀌면 새로 만든다. `Workspace`의 `save`는 스냅샷을 저장하고 `agent snapshot` 감사 항목을 남긴다. `session_factory`는 `AwsAccess.session(user, region)`(고른 Identity Center 역할, 없으면 SDK 체인), `load`는 `SnapshotStore.get`.
+- SSO 로그인이 만료되면 채팅 생성·턴 모두 409와 다시 로그인하라는 메시지다(채팅은 유지된다).
 - `default_chat(workspace, model)`: 브라우저 egress면(`aws.relay`가 있어 `workspace.model_session`이 설정됨) `bedrock_model(..., session=사용자 세션(us-east-1), streaming=False)`로 만든다. 중계는 응답 전체를 나르므로 Bedrock 응답 스트리밍은 끄지만, 도구 진행 이벤트는 그대로 스트리밍된다. 아니면 `Chat(workspace, model)`.
 - SSO 역할을 새로 고르면(`POST /api/sso/login/{id}/use`) 그 사용자의 대화가 버려진다. 스트림 형식은 [[http-api]], 화면 처리는 [[web-app]].
 
@@ -90,7 +91,8 @@ updated: 2026-10-18
 - `add_subnet_tier(vpc, tier)`: VPC CIDR의 빈 /24를 AZ마다 하나. public은 기존 IGW(없으면 새로) 테이블, web·app은 같은 AZ의 NAT 테이블에 연결, data는 자체 테이블(격리).
 
 ## 표준과 brownfield
-- `STANDARDS` 10개: `three-tier`, `microservices`, `nlb-alb`, `environments`, `hybrid`, `eks-platform`, `data-platform`, `ai-platform`, `genai-rag`, `gpu-training`. `apply_standard(name)`은 `SAMPLES[name]()`을 `start_from`으로 불러오고 `standard`를 기록한다.
+- `STANDARDS` 10개: `three-tier`, `microservices`, `nlb-alb`, `environments`, `hybrid`, `eks-platform`, `data-platform`, `ai-platform`, `genai-rag`, `gpu-training`. `apply_standard(name)`은 `SAMPLES[name]()`(또는 `register_standard`로 등록한 사내 표준 빌더)을 `start_from`으로 불러오고 `standard`를 기록한다. `STANDARDS`는 `samples.SUMMARIES`에서 도출한다.
+- 모든 단계는 `@atomic`이라 실패한 단계는 설계를 바꾸지 않는다. 같은 이름의 ASG·EKS·DB·캐시·MSK 등은 `DesignError`로 거부한다.
 - `Workspace.start_from_snapshot(snapshot_id)`: 인자 → `current_snapshot` → `collected` 순으로 고르고 없으면 `ValueError`.
 - `Design.start_from_snapshot(snapshot)`: 합친 스냅샷(`metadata.accounts`)은 거부, `raw`를 깊은 복사, `base = {account_id, region, collected_at, title}`, 제목 `<원래 제목·계정> 기반 설계`. 원본 스냅샷은 바뀌지 않는다.
 - `adopt()`: `raw`에서 단계 상태를 다시 만든다. 서브넷 계층은 route class `public` → `Tier` 태그 → 이름에 `web` → 이름에 data/db/rds/database/cache/isolated 또는 route class `isolated`이면 `data` → 나머지 `app`. AZ마다 계층별 서브넷 하나. VPC 키는 `Name` 태그 slug(영숫자가 없으면 VPC ID, 겹치면 `-<VPC ID 끝 6자>`). NAT 라우트가 있는 web·app 테이블이 `private_tables`.

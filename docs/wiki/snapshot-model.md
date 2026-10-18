@@ -1,7 +1,7 @@
 ---
 title: 스냅샷 데이터 모델
 summary: 스냅샷 JSON 계약 — schema_version, metadata(수집·샘플·설계·통합별 필드), coverage 행, raw 키 전체, 그래프 노드·관계 필드와 검증 규칙.
-sources: [src/diagram_bot/collector.py, src/diagram_bot/samples.py, src/diagram_bot/designer.py, src/diagram_bot/combine.py, src/diagram_bot/store.py, src/diagram_bot/graph.py, src/diagram_bot/report.py, src/diagram_bot/demo.py]
+sources: [src/diagram_bot/collector.py, src/diagram_bot/samples/, src/diagram_bot/designer.py, src/diagram_bot/combine.py, src/diagram_bot/store.py, src/diagram_bot/graph.py, src/diagram_bot/report.py, src/diagram_bot/demo.py]
 related: [collection, graph, views, samples, storage, architecture]
 updated: 2026-10-18
 ---

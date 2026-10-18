@@ -1,7 +1,7 @@
 ---
 title: 검토 규칙 추가하기
 summary: findings.py에 새 검토 규칙을 넣는 순서 — 위치, 규칙 ID·심각도·영역 관례, 근거·권장 조치 문구, ARCHITECTURE.md 카탈로그, tests/test_findings.py 패턴, 샘플이 review --fail-on medium을 통과해야 하는 조건.
-sources: [src/diagram_bot/findings.py, tests/test_findings.py, tests/fixtures.py, src/diagram_bot/samples.py, docs/ARCHITECTURE.md]
+sources: [src/diagram_bot/findings.py, tests/test_findings.py, tests/fixtures.py, src/diagram_bot/samples/, docs/ARCHITECTURE.md]
 related: [review-rules, cloudformation, cli]
 updated: 2026-10-18
 ---
@@ -63,7 +63,7 @@ for address in collected("elastic_ip"):
 
 ## 7. 샘플이 깨끗해야 한다
 - `test_reference_samples_have_no_high_or_medium_findings`는 `SAMPLES`의 모든 샘플에서 결과 심각도가 `low`뿐이어야 한다. CLI로는 `diagram-bot demo --sample <키> --output DIR` 후 `diagram-bot review DIR/snapshot.json --fail-on medium`이 종료 코드 0이어야 한다는 뜻이다.
-- 새 규칙이 샘플에 medium 이상으로 걸리면 규칙이 틀렸는지(입력 해석), 샘플이 모범 사례를 어겼는지 판단한다. 샘플을 고치면 `samples.py`의 `SAMPLE_VERSION`과 샘플 산출물 재생성(`scripts/render_samples.py`)이 따라온다.
+- 새 규칙이 샘플에 medium 이상으로 걸리면 규칙이 틀렸는지(입력 해석), 샘플이 모범 사례를 어겼는지 판단한다. 샘플을 고치면 `samples/builder.py`의 `SAMPLE_VERSION`과 샘플 산출물 재생성(`scripts/render_samples.py`)이 따라온다.
 
 ## 8. 마무리 확인
 - `make check`(ruff, pytest, 오프라인 스모크)를 통과시킨다.

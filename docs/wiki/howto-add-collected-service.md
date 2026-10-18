@@ -1,7 +1,7 @@
 ---
 title: 수집 서비스 추가 방법
 summary: 새 AWS 읽기 호출을 수집기부터 정책·그래프·라벨·보기·배치·검토·CloudFormation·샘플·테스트·문서까지 잇는 순서. Direct Connect와 Elastic IP를 추가한 방식을 기준으로 한다.
-sources: [src/diagram_bot/collector.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac.py, src/diagram_bot/diff.py, src/diagram_bot/samples.py, tests/test_collector.py, tests/test_aws_emulator.py, tests/test_graph_report.py, tests/test_drawio.py, tests/test_findings.py, tests/test_iac.py, tests/fixtures.py]
+sources: [src/diagram_bot/collector.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac.py, src/diagram_bot/diff.py, src/diagram_bot/samples/, tests/test_collector.py, tests/test_aws_emulator.py, tests/test_graph_report.py, tests/test_drawio.py, tests/test_findings.py, tests/test_iac.py, tests/fixtures.py]
 related: [collection, graph, views, layout-and-drawio, samples, snapshot-model]
 updated: 2026-10-18
 ---
@@ -45,7 +45,7 @@ updated: 2026-10-18
 
 ## 6. 배치·아이콘 (`layout.py`, `drawio.py`)
 - `layout.resource_label`에 종류별 라벨(이름 → 유형 → 핵심 사실). DX: `dx_gateway`(ASN), `dx_connection`(대역폭·위치·VIF 수, 참조면 "(참조)"). EIP: NAT·EC2·LB 라벨에 `EIP …`.
-- 위치: VPC 연결 행이면 `EDGE_KINDS`, 데이터 센터 상자면 `outside_vpc`(SITE_KINDS로 자동), 전체 구성에서 VPC 밖이 정상인 종류는 `overview`의 `outside` 제외 목록(빠지면 "VPC 외 · 배치 미확인" 카드가 생겨 `test_overview_cards_differ_per_sample_and_hide_drawn_groups`가 실패). 요약 카드 아이콘은 `SUMMARY`/`GLANCE_KINDS`.
+- 위치: VPC 연결 행이면 `EDGE_KINDS`, 데이터 센터 상자면 `outside_vpc`(SITE_KINDS로 자동), 전체 구성에서 VPC 밖이 정상인 종류는 `overview`의 `outside` 제외 목록(빠지면 "VPC 외 · 배치 미확인" 카드가 생겨 `test_overview_cards_differ_per_sample_and_hide_drawn_groups`가 실패). 요약 카드 아이콘은 `GLANCE_KINDS`.
 - 아이콘: `drawio.RESOURCE_ICONS`(리소스 수준) 또는 `ICONS`(서비스 타일, DX는 `direct_connect`). 변형이 필요하면 `layout.icon_variant`.
 
 ## 7. 검토 규칙 (`findings.py`, 있으면)
@@ -58,7 +58,7 @@ updated: 2026-10-18
 - 표현할 수 없으면 `not_expressible`에서 `self.skip(Type, Id, 이유, 이름)`으로 `Metadata.DiagramBot.Unsupported`에 남긴다(DX 연결·VIF·게이트웨이, CloudFront, WAF). 지어내지 않는다.
 - 테스트: `tests/test_iac.py::test_routing_domains_edge_and_dedicated_links_are_drafted_or_listed`, cfn-lint 테스트, 모든 샘플 내보내기 테스트.
 
-## 9. 샘플 (`samples.py`)
+## 9. 샘플 (`samples/catalog.py`)
 1. `Sample`에 도우미를 만든다. 새 키는 `self.raw.setdefault(키, [])`로 만들어 쓰지 않는 샘플에 영향이 없게 한다(`dx_gateway`, `direct_connect`, `elastic_ip`).
 2. `Sample.snapshot`의 선택 coverage 목록에 `(service, operation, raw 키, params)`를 넣는다(`if key in self.raw`로 걸러짐). `scope` 목록에도 유형 이름.
 3. 알맞은 샘플에 넣는다(DX → `hybrid`, EIP → `three-tier`·`nlb-alb`). `SAMPLE_VERSION`을 올린다.

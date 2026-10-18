@@ -12,7 +12,8 @@ updated: 2026-10-18
 ## 핵심
 - 위치: `store.data_path()` = `$XDG_DATA_HOME/diagram-bot`, 없으면 `~/.local/share/diagram-bot`. `serve --data-dir`가 `create_app(directory=...)`로 바꾼다.
 - 그 아래 `snapshots/<id>.json`, `documents/<sha256>.json`과 `documents/<sha256>.history.json`, 그리고 `audit.log`(`create_app`이 `AuditLog(directory / "audit.log")`로 만든다, [[team-mode-security]]).
-- 쓰기는 `atomic_json(path, value)`: 확장자를 `.tmp`로 바꾼 파일(`path.with_suffix(".tmp")`)에 쓰고 `replace`한다(`ensure_ascii=False`, `default=str`).
+- 쓰기는 `atomic_json(path, value)` → `fileio.atomic_write`: 같은 디렉터리에 쓰는 사람마다 따로 만든 임시 파일(`tempfile.mkstemp`)에 쓰고 `os.replace`한다(`ensure_ascii=False`, `default=str`). 동시에 같은 파일을 써도 섞이지 않고, 파일은 소유자 전용(0600)으로 만들어진다. 팀 모드 사용자 파일도 같은 함수를 쓴다.
+- `SnapshotStore.list()`는 읽을 수 없는 `*.json` 하나를 건너뛰고 로그로 남긴다(목록 전체가 500이 되지 않는다). 지워진 파일의 요약 캐시도 버린다. `get()`은 캐시에서 한 번 읽은 값을 돌려준다.
 - 오류 타입 두 개가 HTTP로 이어진다: `NotFound(LookupError)` → 404, `Conflict(RuntimeError)` → 409(`routes.install_error_handlers`). 메시지는 사용자에게 그대로 보인다.
 
 ## SnapshotStore
