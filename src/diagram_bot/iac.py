@@ -48,7 +48,10 @@ class Template:
     def logical(self, prefix, *labels):
         """Readable, unique, alphanumeric logical ID: the prefix plus the first label with enough ASCII to read."""
         label = next((camel(text) for text in labels if text and len(camel(text)) >= 2), camel(labels[-1] if labels else "") or "Resource")
-        base = (prefix + label)[:200]
+        return self.unique((prefix + label)[:200])
+
+    def unique(self, base):
+        """`base`, or base2, base3, ... when a resource or parameter already has it (they share one namespace)."""
         candidate, n = base, 2
         while candidate in self.resources or candidate in self.parameters:
             candidate, n = f"{base}{n}", n + 1
@@ -209,7 +212,7 @@ class Template:
             logical = self.add(self.logical("InternetGateway", name_of(gateway), gid), "AWS::EC2::InternetGateway", {"Tags": self.tags(gateway)}, physical=gid)
             for attachment in gateway.get("Attachments", []):
                 if attachment.get("VpcId") in self.ids:
-                    self.attachments[gid] = self.add(f"{logical}Attachment", "AWS::EC2::VPCGatewayAttachment",
+                    self.attachments[gid] = self.add(self.unique(f"{logical}Attachment"), "AWS::EC2::VPCGatewayAttachment",
                                                      {"VpcId": self.ref(attachment["VpcId"]), "InternetGatewayId": {"Ref": logical}})
         for gateway in self.raw.get("vpn_gateways", []):
             gid = gateway["VpnGatewayId"]
@@ -220,7 +223,7 @@ class Template:
                                physical=gid)
             for attachment in gateway.get("VpcAttachments", []):
                 if attachment.get("State") == "attached" and attachment.get("VpcId") in self.ids:
-                    self.attachments[gid] = self.add(f"{logical}Attachment", "AWS::EC2::VPCGatewayAttachment",
+                    self.attachments[gid] = self.add(self.unique(f"{logical}Attachment"), "AWS::EC2::VPCGatewayAttachment",
                                                      {"VpcId": self.ref(attachment["VpcId"]), "VpnGatewayId": {"Ref": logical}})
         for gateway in self.raw.get("transit_gateways", []):
             gid = gateway["TransitGatewayId"]
@@ -277,7 +280,7 @@ class Template:
             if gateway.get("ConnectivityType", "public") == "public":
                 igw = next((self.attachments[g["InternetGatewayId"]] for g in self.raw.get("internet_gateways", [])
                             if g["InternetGatewayId"] in self.attachments and any(a.get("VpcId") == gateway.get("VpcId") for a in g.get("Attachments", []))), None)
-                eip = self.add(f"{logical}Eip", "AWS::EC2::EIP", {"Domain": "vpc", "Tags": [{"Key": "Name", "Value": f"{name_of(gateway, gid)}-eip"}]},
+                eip = self.add(self.unique(f"{logical}Eip"), "AWS::EC2::EIP", {"Domain": "vpc", "Tags": [{"Key": "Name", "Value": f"{name_of(gateway, gid)}-eip"}]},
                                depends=[igw] if igw else None)
                 props["AllocationId"] = {"Fn::GetAtt": [eip, "AllocationId"]}
                 self.assume("퍼블릭 NAT 게이트웨이마다 새 Elastic IP를 할당합니다 (수집된 공인 IP는 이어받지 않음).")
@@ -614,7 +617,7 @@ class Template:
             if placement and "placement:" + placement in self.ids:
                 data["Placement"] = {"GroupName": self.ref("placement:" + placement)}
             logical = self.logical("Asg", name)
-            template = self.add(f"{logical}LaunchTemplate", "AWS::EC2::LaunchTemplate", {"LaunchTemplateData": data})
+            template = self.add(self.unique(f"{logical}LaunchTemplate"), "AWS::EC2::LaunchTemplate", {"LaunchTemplateData": data})
             self.add(logical, "AWS::AutoScaling::AutoScalingGroup", {
                 "MinSize": str(group.get("MinSize", 0)), "MaxSize": str(group.get("MaxSize", 0)), "DesiredCapacity": str(group.get("DesiredCapacity", len(members))),
                 "VPCZoneIdentifier": subnets, "HealthCheckType": group.get("HealthCheckType"), "HealthCheckGracePeriod": group.get("HealthCheckGracePeriod"),
@@ -661,7 +664,7 @@ class Template:
                         "CapacityReservation" + camel(instance["CapacityReservationId"]), "String", "온디맨드 용량 예약 ID (템플릿 밖에서 구매한 예약)",
                         Default=instance["CapacityReservationId"])}}
                 settings["NetworkInterfaces"] = [{k: v for k, v in n.items() if v is not None} for n in settings["NetworkInterfaces"]]
-                template = self.add(f"{logical}LaunchTemplate", "AWS::EC2::LaunchTemplate", {"LaunchTemplateData": settings})
+                template = self.add(self.unique(f"{logical}LaunchTemplate"), "AWS::EC2::LaunchTemplate", {"LaunchTemplateData": settings})
                 props = {"LaunchTemplate": {"LaunchTemplateId": {"Ref": template}, "Version": {"Fn::GetAtt": [template, "LatestVersionNumber"]}}}
             else:
                 props = {**settings, "SubnetId": self.ref(instance["SubnetId"]), "PlacementGroupName": placement}
@@ -782,13 +785,15 @@ class Template:
                      "SecurityGroupIds": self.security_groups([g.get("SecurityGroupId") for g in node.get("SecurityGroups", [])],
                                                               groups[node["CacheSubnetGroupName"]].get("VpcId")),
                      "Tags": [{"Key": "Name", "Value": gid}]}
-            if group.get("ClusterEnabled"):
+            if group.get("ClusterEnabled") and shards:  # without NodeGroups (not reported) CloudFormation's defaults apply
                 props.update(NumNodeGroups=len(shards), ReplicasPerNodeGroup=max(len(s.get("NodeGroupMembers", [])) for s in shards) - 1,
                              NodeGroupConfiguration=[{"NodeGroupId": s.get("NodeGroupId"),
-                                                      "PrimaryAvailabilityZone": next((zone(m) for m in s["NodeGroupMembers"] if m.get("CurrentRole") == "primary"), None),
-                                                      "ReplicaAvailabilityZones": [zone(m) for m in s["NodeGroupMembers"] if m.get("CurrentRole") != "primary"]}
+                                                      "PrimaryAvailabilityZone": next((zone(m) for m in s.get("NodeGroupMembers", [])
+                                                                                       if m.get("CurrentRole") == "primary"), None),
+                                                      "ReplicaAvailabilityZones": [zone(m) for m in s.get("NodeGroupMembers", [])
+                                                                                   if m.get("CurrentRole") != "primary"]}
                                                      for s in shards])
-            else:
+            elif not group.get("ClusterEnabled"):
                 ordered = sorted((m for s in shards for m in s.get("NodeGroupMembers", [])), key=lambda m: m.get("CurrentRole") != "primary")
                 props.update(NumCacheClusters=len(ordered) or len(members), PreferredCacheClusterAZs=[zone(m) for m in ordered if zone(m)])
             self.add(self.logical("Cache", gid), "AWS::ElastiCache::ReplicationGroup", props, physical="cache:" + gid)
@@ -824,7 +829,7 @@ class Template:
                                         **({"StorageInfo": {"EBSStorageInfo": {"VolumeSize": storage}}} if storage else {})},
                 "EncryptionInfo": {"EncryptionInTransit": {k: v for k, v in transit.items() if k in ("ClientBroker", "InCluster")}} if transit else None},
                 physical=cluster.get("ClusterArn"))
-            if (info.get("CurrentBrokerSoftwareInfo") or {}).get("KafkaVersion", "").endswith(".x"):
+            if ((info.get("CurrentBrokerSoftwareInfo") or {}).get("KafkaVersion") or "").endswith(".x"):
                 self.assume(f"MSK {name}: Kafka 버전 {(info.get('CurrentBrokerSoftwareInfo') or {}).get('KafkaVersion')}를 그대로 씁니다 (.x는 MSK가 패치 버전을 관리).")
 
     def search(self):
@@ -993,8 +998,8 @@ class Template:
             logical = self.logical("EcsService", name)
             container = balancers[0].get("containerName") if balancers else name
             port = balancers[0].get("containerPort") if balancers else None
-            image = self.param(f"{logical}Image", "String", f"ECS 서비스 {name}의 컨테이너 이미지 URI (작업 정의는 수집하지 않음)")
-            definition = self.add(f"{logical}TaskDefinition", "AWS::ECS::TaskDefinition", {
+            image = self.param(self.unique(f"{logical}Image"), "String", f"ECS 서비스 {name}의 컨테이너 이미지 URI (작업 정의는 수집하지 않음)")
+            definition = self.add(self.unique(f"{logical}TaskDefinition"), "AWS::ECS::TaskDefinition", {
                 "RequiresCompatibilities": ["FARGATE"], "NetworkMode": "awsvpc", "Cpu": str(task.get("cpu", "256")), "Memory": str(task.get("memory", "512")),
                 "ExecutionRoleArn": self.param("EcsTaskExecutionRoleArn", "String", "ECS 태스크 실행 IAM 역할 ARN (ECR 이미지 풀·로그; IAM은 수집 범위 밖)",
                                                AllowedPattern=ROLE_PATTERN),
@@ -1104,7 +1109,7 @@ class Template:
             if instance and instance in self.ids:
                 logical = self.add(self.logical("Eip", name_of(address, ""), instance), "AWS::EC2::EIP",
                                    {"Domain": "vpc", "Tags": self.tags(address)}, physical=allocation)
-                self.add(f"{logical}Association", "AWS::EC2::EIPAssociation",
+                self.add(self.unique(f"{logical}Association"), "AWS::EC2::EIPAssociation",
                          {"AllocationId": {"Fn::GetAtt": [logical, "AllocationId"]}, "InstanceId": self.ref(instance)})
                 self.assume("인스턴스의 Elastic IP는 새로 할당합니다 (수집된 공인 IP 주소는 이어받지 않음; 같은 주소가 필요하면 기존 할당을 연결하세요).")
             elif not (address.get("AssociationId") or address.get("NetworkInterfaceId")):
