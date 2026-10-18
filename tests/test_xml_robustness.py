@@ -332,3 +332,18 @@ def test_spec_preview_is_not_saveable(client):
     assert res.status_code == 422
     current = client.get(f"/api/snapshots/{sid}/document").json()
     assert current["revision"] == saved["revision"] and "keep me" in current["xml"]
+
+
+# --- g. carry_annotations with cells that have no id ---------------------------------------------------------------
+
+def test_relayout_keeps_notes_and_skips_id_less_cells(client):
+    sid = first_snapshot(client)
+    doc = client.get(f"/api/snapshots/{sid}/document").json()
+    edited = doc["xml"].replace("</root>", '<mxCell value="no id" vertex="1" parent="1"><mxGeometry width="9" height="9" as="geometry"/>'
+                                           '</mxCell><UserObject label="note"><mxCell id="n1" vertex="1" parent="1"><mxGeometry '
+                                           'width="9" height="9" as="geometry"/></mxCell></UserObject></root>', 1)
+    saved = client.put(f"/api/snapshots/{sid}/document", json={"xml": edited, "revision": doc["revision"]}).json()
+    res = client.post(f"/api/snapshots/{sid}/document/relayout", json={"revision": saved["revision"]})
+    assert res.status_code == 200, res.text
+    assert "no id" not in res.json()["xml"] and 'label="note"' in res.json()["xml"]
+    assert fromstring(api.carry_annotations(edited, doc["xml"])).find(".//UserObject[@id='n1']/mxCell") is not None

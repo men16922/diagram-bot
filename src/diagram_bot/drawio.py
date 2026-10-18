@@ -1,7 +1,7 @@
 """Serialize a computed layout into native, editable draw.io XML."""
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-from .drawio_spec import read_document, resolve_spec
+from .drawio_spec import iter_cells, read_document, resolve_spec
 from .graph import build_graph
 from .layout import cell_id, layout_view
 from .views import view_graph
@@ -314,15 +314,16 @@ def carry_annotations(saved_xml, generated_xml):
     source = saved.find("diagram/mxGraphModel/root") if saved.tag == "mxfile" else saved.find("root")
     if source is None or target is None:
         return generated_xml
-    present = {c.get("id") for c in target}
-    for cell in source:
-        inner = cell if cell.tag == "mxCell" else cell.find("mxCell")
-        key = cell.get("id")
-        if inner is None or key in present or key in GENERATED or key.startswith("r-") \
+    present = {key for _, _, key, _ in iter_cells(target)}
+    for cell, inner, key, _ in list(iter_cells(source)):
+        # A cell without an id cannot be matched or referenced; draw.io assigns one when it saves, so skip it.
+        if not key or key in present or key in GENERATED or key.startswith("r-") \
                 or any(cell.get(a) is not None for a in ("resourceId", "relationId", "relationIndex", "summary")):
             continue
         if any(inner.get(a) is not None and inner.get(a) not in present for a in ("parent", "source", "target")):
             continue
+        if cell is not inner and cell.get("id") is None:  # draw.io reads a wrapped cell's id from the wrapper
+            cell.set("id", inner.attrib.pop("id"))
         target.append(cell)
         present.add(key)
     return tostring(generated, encoding="unicode")
