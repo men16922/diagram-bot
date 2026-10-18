@@ -21,9 +21,9 @@ import re
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 from .designer import STANDARDS, register_standard, slug
-from .drawio import ICONS, RESOURCE_ICONS, generate_document
-from .drawio_spec import (format_style, iter_cells, parse_style, patch_style, read_document, resolve_spec, set_default_spec,
-                          spec_from_xml)
+from .drawio import generate_document
+from .drawio_spec import (classify_cell, format_style, iter_cells, parse_style, patch_style, read_document, resolve_spec,
+                          set_default_spec, spec_from_xml)
 from .errors import InputError
 from .graph import build_graph
 from .samples import Sample
@@ -31,20 +31,6 @@ from .samples import Sample
 __all__ = ["adopt_company_xml", "align_drawio_xml", "align_report", "import_drawio_xml", "inspect_drawio_xml"]
 # Attributes draw.io reads on an <mxCell>; anything else on a bare mxCell moves to the wrapper when one is added.
 MXCELL_ATTRIBUTES = {"id", "value", "style", "vertex", "edge", "parent", "source", "target", "connectable", "collapsed", "visible"}
-
-# Reverse lookup from draw.io aws4 icon names to Diagram Bot (kind, variant).
-_ICON_TO_KIND = {}
-for _k, (_icon_name, _) in ICONS.items():
-    _ICON_TO_KIND.setdefault(_icon_name, _k)
-for _k, (_icon_name, _) in RESOURCE_ICONS.items():
-    _ICON_TO_KIND[_icon_name] = _k
-
-_SUBNET_TIER_WORDS = (
-    (0, ("public", "퍼블릭", "pub", "dmz", "ingress")),
-    (1, ("web", "front", "웹")),
-    (3, ("isolated", "data", "db", "rds", "database", "cache", "격리", "데이터")),
-    (2, ("app", "private", "service", "was", "eks", "ecs", "프라이빗", "앱")),
-)
 
 _BAND_ORDER = {
     "internet_gateway": 0, "vpn_gateway": 0, "vpc_peering": 0, "tgw_attachment": 0,
@@ -68,129 +54,14 @@ def _number(geo, key, default, cid):
     return value
 
 
-def _classify_vertex(cid, label, style_str, w, h, wrapper_el):
-    """Return `(role, kind, subnet_tier)` for a vertex cell."""
-    flags, kv = parse_style(style_str)
-    gr = kv.get("grIcon", "").replace("mxgraph.aws4.", "")
-    shape = kv.get("shape", "").replace("mxgraph.aws4.", "")
-    res_icon = kv.get("resIcon", "").replace("mxgraph.aws4.", "")
-    text = (label or "").lower()
-    res_attr = wrapper_el.get("resourceId") or wrapper_el.get("resource") or ""
-
-    if cid == "heading" or ("text" in flags and kv.get("fontSize") in ("18", "19", "20", "22")):
-        return "title", "title", None
-    if cid == "scope" or ("text" in flags and kv.get("strokeColor") == "none" and kv.get("fillColor") == "none"):
-        return "caption", "caption", None
-    if res_icon == "waf" and w <= 28 and h <= 28:
-        return "badge", "waf_web_acl", None
-    if wrapper_el.get("summary") == "1":
-        return "summary", "vpc", None
-
-    if "group_aws_cloud" in gr or "aws cloud" in text:
-        return "cloud", "cloud", None
-    if "group_region" in gr or (kv.get("container") == "1" and re.search(r"\b(ap|us|eu|sa|ca|me|af)-[a-z]+-\d\b", text) and not re.search(r"\d[a-f]\b", text)):
-        return "region", "region", None
-    if "group_account" in gr or (kv.get("container") in ("0", "1") and ("account" in text or "계정" in text) and "group" in shape):
-        return "account", "account", None
-    if "group_vpc" in gr or "/vpc/" in res_attr or (kv.get("container") == "1" and "vpc" in text and "subnet" not in text and "엔드포인트" not in text):
-        return "vpc", "vpc", None
-    if "group_auto_scaling_group" in gr or ("auto scaling" in text and ("group" in shape or kv.get("dashed") == "1")):
-        return "asg", "auto_scaling_group", None
-    if "group_corporate_data_center" in gr or "corporate data center" in text or "on-prem" in text or "데이터 센터" in text:
-        return "onprem", "onprem", None
-    if cid == "references" or "vpc 외" in text or "배치 미확인" in text:
-        return "references", "references", None
-    if "서브넷 미확인" in text:
-        return "unplaced", "unplaced", None
-
-    is_subnet = (
-        "group_security_group" in gr
-        or "/subnet/" in res_attr
-        or (kv.get("container") == "1" and any(w in text for w in ("subnet", "서브넷", "public-", "private-", "isolated-", "app-", "db-", "web-", "data-")))
-    )
-    if is_subnet:
-        fill = kv.get("fillColor", "").upper()
-        stroke = kv.get("strokeColor", "").upper()
-        tier = 2
-        if fill in ("#F2F6E8", "#E8F5E9") or stroke == "#7AA116" or "0.0.0.0/0 → igw" in text:
-            tier = 0
-        elif fill in ("#ECEFF8", "#EDE7F6") or "인터넷 경로 없음" in text:
-            tier = 3
-        else:
-            for rank, words in _SUBNET_TIER_WORDS:
-                if any(word in text for word in words):
-                    tier = rank
-                    break
-        return "subnet", "subnet", tier
-
-    if kv.get("container") == "1" and (re.search(r"\b[a-z]{2}-[a-z0-9]+-\d[a-f]\b", text) or re.search(r"\baz[-_\s]?[a-f1-4]\b", text) or "가용 영역" in text):
-        return "az", "az", None
-
-    if kv.get("container") == "0" and kv.get("dashed") == "1" and kv.get("strokeColor", "").upper() == "#ED7100":
-        return "ecs_frame", "ecs_service", None
-
-    # Resource detection
-    icon_key = res_icon or shape
-    kind = _ICON_TO_KIND.get(icon_key)
-    if not kind:
-        if "/load_balancer/" in res_attr or "alb" in text or "nlb" in text or "load balancer" in text:
-            kind = "network" if "nlb" in text else "application"
-        elif "/target_group/" in res_attr or "target group" in text or "대상 그룹" in text or text.startswith("tg-"):
-            kind = "target_group"
-        elif "/ec2/" in res_attr or "ec2" in text or "instance" in text:
-            kind = "ec2"
-        elif "/db_instance/" in res_attr or "rds" in text or "postgres" in text or "mysql" in text:
-            kind = "db_instance"
-        elif "/db_cluster/" in res_attr or "aurora" in text:
-            kind = "aurora"
-        elif "redis" in text or "elasticache" in text or "valkey" in text:
-            kind = "redis"
-        elif "nat" in text:
-            kind = "nat_gateway"
-        elif "igw" in text or "internet gateway" in text:
-            kind = "internet_gateway"
-        elif "tgw" in text or "transit gateway" in text:
-            kind = "tgw_attachment" if "attach" in text else "transit_gateway"
-        elif "eks" in text:
-            kind = "eks_cluster"
-        elif "ecs" in text or "fargate" in text:
-            kind = "ecs_task" if "task" in text else "ecs_service"
-        elif "lambda" in text:
-            kind = "lambda_function"
-        elif "opensearch" in text:
-            kind = "search_node"
-        elif "msk" in text or "kafka" in text:
-            kind = "msk_broker"
-        elif "efs" in text:
-            kind = "efs_standard"
-        elif "fsx" in text or "lustre" in text:
-            kind = "fsx_lustre"
-        elif "sagemaker" in text:
-            kind = "sagemaker_endpoint"
-        elif "bedrock" in text:
-            kind = "bedrock"
-        elif "endpoint" in text or "vpce" in text:
-            kind = "vpc_endpoint"
-        elif "cloudfront" in text:
-            kind = "cloudfront_distribution"
-        elif "waf" in text:
-            kind = "waf_web_acl"
-        elif "direct connect" in text or "dx" in text:
-            kind = "dx_connection"
-        elif "vpn" in text:
-            kind = "vpn_gateway"
-        elif "cgw" in text or "customer gateway" in text:
-            kind = "customer_gateway"
-        else:
-            kind = "ec2"
-    return "resource", kind, None
-
-
 def _parse_page_model(graph_root):
     """Parse vertices and edges from a single `<root>` element into structured dicts."""
     vertices = {}
     edges = []
-    for wrapper, inner, cid, label in iter_cells(graph_root):
+    cells = [cell for cell in iter_cells(graph_root) if cell[2] not in ("0", "1", "", None)]
+    edge_ids = {cid for _, inner, cid, _ in cells if inner.get("edge") == "1"}
+    parents = {inner.get("parent") for _, inner, _, _ in cells}
+    for wrapper, inner, cid, label in cells:
         if cid in ("0", "1", "", None):
             continue
         style_str = inner.get("style") or ""
@@ -201,7 +72,11 @@ def _parse_page_model(graph_root):
             w = _number(geo, "width", 52.0, cid)
             h = _number(geo, "height", 52.0, cid)
             parent = inner.get("parent") or "1"
-            role, kind, tier = _classify_vertex(cid, label, style_str, w, h, wrapper)
+            if parent in edge_ids or geo.get("relative") == "1":
+                role, kind, tier = "label", "label", None  # an edge's label cell moves with its edge
+            else:
+                role, kind, tier = classify_cell(label, style_str, wrapper.attrib, cell_id=cid, container=cid in parents,
+                                                 small=w <= 28 and h <= 28)
             vertices[cid] = {
                 "id": cid, "wrapper": wrapper, "cell": inner, "geo": geo,
                 "label": label, "style": style_str, "parent": parent,
@@ -311,7 +186,8 @@ def _segment_hits(p1, p2, box):
 
 
 ISSUES = ("overlaps", "out_of_bounds", "unaligned_tiers", "unrouted_edges", "edge_collisions")
-OVERLAY_ROLES = ("asg", "account", "ecs_frame", "badge", "title", "caption", "annotation", "label")
+FREE_ROLES = ("annotation", "label", "group")  # cells align and import leave where they are
+OVERLAY_ROLES = ("asg", "account", "ecs_frame", "badge", "title", "caption") + FREE_ROLES
 CONTAINER_ROLES = {"cloud", "region", "account", "vpc", "az", "subnet", "onprem", "references", "unplaced", "summary"}
 
 
@@ -341,7 +217,8 @@ def _inspect_page(graph_root):
             if v["x"] < -1 or v["y"] < -1 or (v["x"] + v["w"]) > (p["w"] + 1) or (v["y"] + v["h"]) > (p["h"] + 1):
                 report["out_of_bounds"].append((cid, pid))
 
-    # Subnets of the same tier across sibling AZ columns in each VPC share their y and height.
+    # A tier row (the k-th subnet of a tier in each AZ column of a VPC) starts at the same y in every column, as
+    # layout.py draws it; heights may differ (an empty subnet is shorter).
     az_by_vpc, subnets_of = {}, {}
     for cid, v in vertices.items():
         if v["role"] == "az":
@@ -349,13 +226,15 @@ def _inspect_page(graph_root):
         elif v["role"] == "subnet":
             subnets_of.setdefault(v["parent"], []).append(v)
     for az_ids in az_by_vpc.values():
-        tier_subnets = {}
+        rows = {}
         for az_id in az_ids:
-            for s in subnets_of.get(az_id, ()):
-                tier_subnets.setdefault(s["tier"], []).append(s)
-        for subs in tier_subnets.values():
+            seen = {}
+            for s in sorted(subnets_of.get(az_id, ()), key=lambda s: (s["y"], s["id"])):
+                seen[s["tier"]] = seen.get(s["tier"], -1) + 1
+                rows.setdefault((s["tier"], seen[s["tier"]]), []).append(s)
+        for subs in rows.values():
             for other in subs[1:]:
-                if abs(other["y"] - subs[0]["y"]) > 1 or abs(other["h"] - subs[0]["h"]) > 1:
+                if abs(other["y"] - subs[0]["y"]) > 1:
                     report["unaligned_tiers"].append((subs[0]["id"], other["id"]))
 
     resource_boxes = {
@@ -437,7 +316,7 @@ def _reparent_visual_children(vertices):
     containers.sort(key=lambda item: (container_order.index(item[1]["role"]), (item[4] - item[2]) * (item[5] - item[3])))
 
     for cid, v in vertices.items():
-        if v["parent"] != "1" or v["role"] in ("title", "caption", "cloud", "account", "asg", "ecs_frame"):
+        if v["parent"] != "1" or v["role"] in ("title", "caption", "cloud", "account", "asg", "ecs_frame", *FREE_ROLES):
             continue
         ax, ay = abs_pos[cid]
         cx, cy = ax + v["w"] / 2, ay + v["h"] / 2
@@ -491,7 +370,7 @@ def _align_page_in_place(graph_root, *, reparent=True, route_edges=True, grid_si
         kids = children_of.get(cont["id"], [])
         res_kids = [k for k in kids if k["role"] == "resource"]
         cap_kids = [k for k in kids if k["role"] == "caption"]
-        sub_conts = [k for k in kids if k["role"] not in ("resource", "caption", "badge", "title")]
+        sub_conts = [k for k in kids if k["role"] in CONTAINER_ROLES or k["role"] == "group"]
         if sub_conts:
             return
         res_kids.sort(key=lambda r: (round(r["y"] / 40.0), r["x"], r["id"]))
@@ -635,7 +514,7 @@ def _align_page_in_place(graph_root, *, reparent=True, route_edges=True, grid_si
     # 3. Bottom-up auto-fit for outer containers (region -> cloud -> root "1")
     for outer_role in ("region", "cloud"):
         for cont in [v for v in vertices.values() if v["role"] == outer_role]:
-            kids = [k for k in children_of.get(cont["id"], []) if k["role"] not in ("badge", "asg", "ecs_frame", "account")]
+            kids = [k for k in children_of.get(cont["id"], []) if k["role"] not in ("badge", "asg", "ecs_frame", "account", *FREE_ROLES)]
             if not kids:
                 continue
             # Ensure children inside region/cloud have at least minimum top/left padding and don't overlap horizontally
@@ -664,7 +543,7 @@ def _align_page_in_place(graph_root, *, reparent=True, route_edges=True, grid_si
 
     # Also ensure top-level containers on parent=="1" (e.g., cloud and onprem) don't overlap
     top_conts = sorted(
-        [v for v in vertices.values() if v["parent"] == "1" and v["role"] not in ("title", "caption", "asg", "ecs_frame", "account", "badge")],
+        [v for v in vertices.values() if v["parent"] == "1" and v["role"] not in OVERLAY_ROLES],
         key=lambda v: (0 if v["role"] == "cloud" else 1, v["x"], v["id"]),
     )
     for i, a in enumerate(top_conts):

@@ -1,12 +1,12 @@
 """Serialize a computed layout into native, editable draw.io XML."""
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-from .drawio_spec import iter_cells, read_document, resolve_spec
+from .drawio_spec import ICONS, RESOURCE_ICONS, iter_cells, read_document, resolve_spec
 from .graph import build_graph
 from .layout import cell_id, layout_view
 from .views import view_graph
 
-__all__ = ["carry_annotations", "cell_id", "generate_document", "layout_document", "validate_document"]
+__all__ = ["ICONS", "RESOURCE_ICONS", "carry_annotations", "cell_id", "generate_document", "layout_document", "validate_document"]
 GENERATED = {"0", "1", "heading", "scope", "cloud", "region", "references", "onprem"}
 
 RELATIONS = {
@@ -17,70 +17,6 @@ RELATIONS = {
     "ecs_target_group": "ECS 서비스 대상 그룹", "vpn_connection": "Site-to-Site VPN",
     "dx_virtual_interface": "Direct Connect 가상 인터페이스", "dx_gateway_association": "Direct Connect 게이트웨이 연결",
     "cloudfront_origin": "CloudFront 오리진",
-}
-# Resource-level icons from the AWS Architecture Icons set (draw.io aws4 library).
-RESOURCE_ICONS = {
-    "ec2": ("instance2", "#ED7100"),
-    "application": ("application_load_balancer", "#8C4FFF"),
-    "network": ("network_load_balancer", "#8C4FFF"),
-    "gateway": ("gateway_load_balancer", "#8C4FFF"),
-    "network_interface": ("elastic_network_interface", "#8C4FFF"),
-    "volume": ("volume", "#7AA116"),
-    "internet_gateway": ("internet_gateway", "#8C4FFF"),
-    "nat_gateway": ("nat_gateway", "#8C4FFF"),
-    "db_instance": ("rds_instance", "#C925D1"),
-    "db_standby": ("rds_instance_alt", "#C925D1"),
-    "vpc_endpoint": ("endpoints", "#8C4FFF"),
-    "lambda_function": ("lambda_function", "#ED7100"),
-    "aurora": ("aurora_instance", "#C925D1"),
-    "redis": ("elasticache_for_redis", "#C925D1"),
-    "valkey": ("elasticache_for_valkey", "#C925D1"),
-    "memcached": ("elasticache_for_memcached", "#C925D1"),
-    "tgw_attachment": ("transit_gateway_attachment", "#8C4FFF"),
-    "vpn_gateway": ("vpn_gateway", "#8C4FFF"),
-    "customer_gateway": ("customer_gateway", "#8C4FFF"),
-    "vpc_peering": ("peering", "#8C4FFF"),
-    "ip_target": ("elastic_network_interface", "#8C4FFF"),
-    "ecs_task": ("ecs_task", "#ED7100"),
-    "ecs_service": ("ecs_service", "#ED7100"),
-    "search_node": ("opensearch_service_data_node", "#8C4FFF"),
-    "efs_standard": ("elastic_file_system_standard", "#7AA116"),
-    "efs_one_zone": ("elastic_file_system_one_zone", "#7AA116"),
-    "redshift_cluster": ("redshift_ra3", "#8C4FFF"),
-    "p3": ("p3_instance", "#ED7100"),
-    "p4d": ("p4d_instance", "#ED7100"),
-    "p4de": ("ec2_p4de_instance", "#ED7100"),
-    "g4dn": ("g4dn", "#ED7100"),
-    "g4ad": ("g4ad_instance", "#ED7100"),
-    "trainium": ("trainium_instance", "#ED7100"),
-    "inferentia": ("inferentia", "#ED7100"),
-    "dl1": ("ec2_dl1_instance", "#ED7100"),
-    "elastic_ip": ("elastic_ip_address", "#8C4FFF"),
-}
-# Square resource-icon tiles for things without a resource-level icon.
-ICONS = {
-    "load_balancer": ("elastic_load_balancing", "#8C4FFF"),
-    "target_group": ("elastic_load_balancing", "#6D5DB3"),
-    "security_group": ("group_security_group", "#DD344C"),
-    "transit_gateway": ("transit_gateway", "#8C4FFF"),
-    "eks_cluster": ("eks", "#ED7100"),
-    "msk_broker": ("managed_streaming_for_kafka", "#8C4FFF"),
-    "documentdb": ("documentdb_with_mongodb_compatibility", "#C925D1"),
-    "neptune": ("neptune", "#C925D1"),
-    "bedrock": ("bedrock", "#01A88D"),
-    "sagemaker": ("sagemaker", "#01A88D"),
-    "sagemaker_endpoint": ("sagemaker", "#01A88D"),
-    "sagemaker_cluster": ("sagemaker", "#01A88D"),
-    "fsx_file_system": ("fsx", "#7AA116"),
-    "fsx_lustre": ("fsx_for_lustre", "#7AA116"),
-    "fsx_ontap": ("fsx_for_netapp_ontap", "#7AA116"),
-    "fsx_openzfs": ("fsx_for_openzfs", "#7AA116"),
-    "fsx_windows": ("fsx_for_windows_file_server", "#7AA116"),
-    # Edge and dedicated connectivity: service icons, as AWS has no resource-level icon for them.
-    "cloudfront_distribution": ("cloudfront", "#8C4FFF"),
-    "waf_web_acl": ("waf", "#DD344C"),
-    "dx_gateway": ("direct_connect", "#8C4FFF"),
-    "dx_connection": ("direct_connect", "#8C4FFF"),
 }
 COMMON = "html=0;fontFamily=Arial;fontSize=12;fontColor=#232F3E;"
 # Group styles of the AWS Architecture Icons (2023+) as shipped in draw.io's aws4 library.

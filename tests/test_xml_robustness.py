@@ -11,7 +11,7 @@ from defusedxml.ElementTree import fromstring
 from fastapi.testclient import TestClient
 
 from diagram_bot import api
-from diagram_bot.drawio_spec import DrawioSpec, request_spec
+from diagram_bot.drawio_spec import DrawioSpec, classify_cell, pages, read_document, request_spec
 from diagram_bot.errors import InputError
 from diagram_bot.server import create_app
 from test_xml_align import MESSY_COMPANY_XML
@@ -373,8 +373,7 @@ def test_align_on_own_output_is_a_no_op_or_an_improvement(name):
     result = api.align_report(xml)
     for page in result["pages"]:
         assert all(page["after"][key] <= page["before"][key] for key in page["before"]), page
-    if all(page["status"] == "clean" for page in result["pages"]):
-        assert result["xml"] == xml
+    assert all(page["status"] == "clean" for page in result["pages"]) and result["xml"] == xml  # no-op on own output
     assert api.align_xml(result["xml"]) == api.align_xml(api.align_xml(result["xml"]))
 
 
@@ -411,3 +410,70 @@ def test_preserve_keeps_custom_attributes_when_rewrapping():
     assert wrapped.find(".//object[@id='t1']").get("owner") == "ops"
     assert wrapped.find(".//object[@id='t1']/mxCell").get("owner") is None
     assert wrapped.find(".//object[@id='u1']").get("placeholders") == "1"
+
+
+# --- j. one classification table: shape first, label words as whole words, unknown shapes are annotations ----------
+
+@pytest.mark.parametrize("label", ["Legend", "Weekly batch job", "International users", "Albert's laptop", "Index service",
+                                   "Was migrated 2024", "Corporate office", "web-was-a1"])
+def test_unknown_shapes_are_annotations_not_ec2(label):
+    assert classify_cell(label, "rounded=1;whiteSpace=wrap;")[0] == "annotation"
+
+
+@pytest.mark.parametrize("label, style, expected", [
+    ("corp-ext-alb", "rounded=1;", ("resource", "application")), ("web server (EC2)", "rounded=1;", ("resource", "ec2")),
+    ("tg-web", "rounded=1;", ("resource", "target_group")), ("corp-nat-a", "rounded=1;", ("resource", "nat_gateway")),
+    ("anything", "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_load_balancing;fillColor=#6D5DB3;",
+     ("resource", "target_group")),
+    ("anything", "shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_load_balancing;fillColor=#8C4FFF;",
+     ("resource", "load_balancer")),
+    ("Legend", "shape=mxgraph.aws4.instance2;", ("resource", "ec2")), ("x", "shape=mxgraph.aws4.s3;", ("resource", None)),
+    ("app-subnet for accounting", "container=1;", ("subnet", "subnet")), ("Finance account", "container=1;", ("account", "account")),
+    ("VPC 밖 리전 리소스 · 배치 미확인", "container=1;", ("references", "references")),
+    ("Corporate data center · VPC", "container=1;", ("onprem", "onprem")), ("가용 영역 Zone A", "container=1;", ("az", "az")),
+    ("ap-northeast-2a", "container=1;", ("az", "az")), ("Region ap-northeast-2", "container=1;", ("region", "region")),
+    ("prod-vpc · ap-northeast-2", "container=1;", ("vpc", "vpc")), ("Team boundary", "container=1;", ("group", "group")),
+])
+def test_classification_signals(label, style, expected):
+    assert classify_cell(label, style)[:2] == expected
+
+
+def test_subnet_tiers_match_layout_tier_rank_on_own_output():
+    from diagram_bot.layout import tier_rank
+    from diagram_bot.xml_align import _parse_page_model
+    checked = 0
+    for name in ("three-tier", "microservices", "eks-platform", "hybrid", "data-platform"):
+        snapshot = api.SAMPLES[name]()
+        nodes = {n["id"]: n for n in api.build_graph(snapshot)["nodes"]}
+        for _, page in pages(read_document(api.render(snapshot))):
+            for cell in _parse_page_model(page)[0].values():
+                node = nodes.get(cell["wrapper"].get("resourceId"))
+                if node and node["kind"] == "subnet":
+                    assert cell["role"] == "subnet" and cell["tier"] == tier_rank(node), (name, cell["label"])
+                    checked += 1
+    assert checked > 30
+
+
+def test_own_hybrid_page_classifies_like_the_graph():
+    from diagram_bot.xml_align import _parse_page_model
+    snapshot = api.SAMPLES["hybrid"]()
+    graph = api.build_graph(snapshot)
+    vpc = next(n["resource_id"] for n in graph["nodes"] if n["kind"] == "vpc")
+    cells = _parse_page_model(fromstring(api.render(snapshot, view="detail", vpc=vpc)).find("diagram/mxGraphModel/root"))[0]
+    roles = [c["role"] for c in cells.values()]
+    assert roles.count("vpc") == 1 and roles.count("references") == 1 and roles.count("onprem") == 1
+    kinds = {c["wrapper"].get("resourceId"): c["kind"] for c in cells.values() if c["role"] == "resource"}
+    truth = {n["id"]: n["kind"] for n in graph["nodes"]}
+    assert all(kind == "target_group" for rid, kind in kinds.items() if truth.get(rid) == "target_group")
+
+
+def test_spec_extraction_learns_only_what_the_template_shows():
+    template = mx([v("vpc", "vpc-a (10.0.0.0/16)", VPC, 0, 0, 600, 400), v("p", "public-a (10.0.1.0/24)", PUB, 20, 40, 200, 120, "vpc"),
+                   v("q", "app-subnet for accounting (10.0.2.0/24)", PRIV, 240, 40, 200, 120, "vpc")])
+    spec = api.spec_from_xml(template)
+    assert spec.isolated_subnet_distinct is False and spec.styles["private_subnet"] == PRIV and spec.styles["account"] != PRIV
+    isolated = "shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;container=1;strokeColor=#3F51B5;fillColor=#ECEFF8;"
+    two_pages = mx(pages=[("cover", [v("t", "Cover", "text;", 0, 0, 100, 20)]),
+                          ("arch", [v("vpc", "vpc-a", VPC, 0, 0, 600, 400), v("d", "data-a", isolated, 20, 40, 200, 120, "vpc")])])
+    spec = api.spec_from_xml(two_pages)
+    assert spec.isolated_subnet_distinct is True and spec.styles["vpc"] == VPC
