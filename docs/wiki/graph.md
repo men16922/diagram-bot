@@ -1,7 +1,7 @@
 ---
 title: 관계 그래프 (graph)
 summary: raw API 데이터에서 노드·관계를 만드는 결정적 조인 규칙 — 노드 종류 45개와 관계 43개, 관계 ID 규칙, 참조 전용 노드, 서브넷 경로 분류, 고가용성 역할, 계정 통합 병합, 옛 그래프 업그레이드.
-sources: [src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, tests/test_graph_report.py]
+sources: [src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/js/inspector.js, src/diagram_bot/static/js/review.js, tests/test_graph_report.py]
 related: [snapshot-model, collection, views, layout-and-drawio, howto-add-collected-service]
 updated: 2026-10-19
 ---
@@ -39,7 +39,7 @@ updated: 2026-10-19
 
 ## 관계 이름
 
-`labels.js`의 `relationNames`에 43개 관계의 표시 이름이 모두 있다(없으면 `app.js`가 `relationNames[r]||r`로 원래 키를 보여 준다). `tests/test_labels_and_wiki.py`가 샘플·데모·설계 그래프의 모든 종류·관계에 표시 이름이 있는지 확인한다.
+`labels.js`의 `relationNames`에 43개 관계의 표시 이름이 모두 있다(없으면 `js/inspector.js`·`js/review.js`가 `relationNames[r]||r`로 원래 키를 보여 준다). `tests/test_labels_and_wiki.py`가 샘플·데모·설계 그래프의 모든 종류·관계에 표시 이름이 있는지 확인한다.
 
 - 배치·소속: `in_vpc`, `in_subnet`, `lambda_subnet`, `eks_subnet`, `service_subnet`, `endpoint_subnet`, `attachment_subnet`, `sagemaker_subnet`, `hyperpod_subnet`(HyperPod 두 번째 이후 서브넷), `in_placement_group`.
 - 로드 밸런싱: `associated_load_balancer`(대상 그룹→LB), `registered_target`(대상 그룹→대상, `port`·`availability_zone` 한정자), `asg_target_group`, `ecs_target_group`.

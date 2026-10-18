@@ -46,7 +46,7 @@ The plugin may use its own read-only reviewer on a future authorized run.
 
 - docs/AGENT_BRIEF.md → STATUS.md → NEXT_PLAN.md → PROGRESS_LOG.md.
 - Brief ≤60 lines; status/plan/log ≤120; lessons ≤40. Archive under docs/archive if needed.
-- Product proposal: docs/PLAN.md. Demo instructions: docs/DEMO.md. Neither substitutes for
+- Open product proposals: docs/PLAN.md (original plan archived). Demo instructions: docs/DEMO.md. Neither substitutes for
   explicit [auto] work authorization in the rolling plan.
 - docs/LESSONS.md starts empty for facts learned during actual loop work.
 
@@ -54,4 +54,4 @@ The plugin may use its own read-only reviewer on a future authorized run.
 
 - Runtime coding prompt and default critic: installed plugin templates/scripts/overnight/.
 - No repo-local PROMPT.md override is needed for initialization.
-- Diagram generation is ordinary deterministic code; the product does not call an LLM.
+- Diagram generation is ordinary deterministic code and calls no LLM; the optional chat agent only picks tools.

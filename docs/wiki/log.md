@@ -9,6 +9,8 @@ updated: 2026-10-19
 
 > 페이지 단위의 변경만 한 줄씩 남긴다. 형식: `날짜 — 무엇을 (왜)`.
 
+- 2026-10-19 — 옛 구조 문구 정리: [[chat-agent]]·[[graph]]·[[howto-add-collected-service]]·[[porting-guide]](`static/app.js` 하나 → `js/` 모듈, `DocumentStore`는 `read`·`replace`, `StandardStore` 추가) (문서 정리).
+- 2026-10-19 — `docs/DRAWIO.md` 흡수 후 삭제: [[layout-and-drawio]](사용 라이브러리, ELK 미채택 이유, 거터·lane 간격과 포트 라벨, `text_width`·`fit_name` 규칙, 한계), [[web-app]](편집기 외부 요청 0건과 그 검증) (주제마다 한 곳: 위키가 코드 근거 문서).
 - 2026-10-19 — draw.io XML 기능을 화면으로: [[web-app]](draw.io XML·감사 로그 대화상자, 다운로드 `규격` 선택, `js/xml.js`), [[http-api]](standards 라우터, bootstrap `presets`, `?spec=` 사내 표준 이름), [[drawio-format-and-alignment]](채택 표준 저장·삭제, 화면 진입점), [[team-mode-security]](`/api/standards` admin, 화면의 역할 규칙·감사 로그 메뉴), [[storage]](`StandardStore`, `standards/<이름>.json`) (사용자 요청: API·CLI에만 있던 기능을 화면에).
 - 2026-10-19 — [[drawio-format-and-alignment]]을 SCHEMA 형식(핵심·바꿀 때 주의)으로 다시 씀(입력 관문 `read_document`, 검증된 `DrawioSpec`, 공용 분류표 `classify_cell`, 품질 보호 정렬 `align_report`, 여러 페이지 가져오기와 셀 맵). [[porting-guide]]·[[http-api]]·[[cli]]·[[layout-and-drawio]]·[[team-mode-security]]를 코드에 맞춤(adopt의 admin `make_default`, Level 0 실제 의존성, `inspect` 키 이름, 종료 코드 2) (6622915 검토 결과 반영).
 - 2026-10-19 — 백엔드 점검 마무리: [[browser-egress]]·[[web-app]]·[[http-api]]·[[porting-guide]](탭 id·열린 폴 심장 박동, 닫힌 탭의 읽기 재전송·나머지 즉시 실패, 비동기 롱 폴), [[team-mode-security]](로그인 차단을 (주소, 이름)별로, 주소별 상한은 느슨하게), [[aws-access-and-sso]]·[[collection]]·[[chat-agent]]·[[architecture]]·[[porting-guide]](세션은 `sessions.py`에서만, `AwsAccess.profile_session`), [[snapshot-model]](봉투는 `snapshot.make_snapshot`, `load_snapshot`), 만료된 앱 세션·로그인 실패·SSO flow를 `expiry.Purge`로 정리, [[graph]](`group_subnet`·`tag_map` 한 곳).

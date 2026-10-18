@@ -3,11 +3,11 @@
 Last Updated: 2026-10-19
 
 - Product name is Diagram Bot; initial provider scope is AWS only.
-- Current refinement scope is docs/TOPOLOGY_PLAN.md: direct SSO/service APIs, no Resource
-  Explorer or DevOps Agent dependency. Public DevOps Agent views are a UI reference only.
+- Collection uses direct SSO/service APIs, no Resource Explorer or DevOps Agent dependency (topology plan, finished and
+  archived: docs/archive/TOPOLOGY_PLAN.md). Public DevOps Agent views are a UI reference only.
 - Reuse FastAPI/buildless JavaScript/local storage; evaluate ELK without requiring Node at
   runtime. Keep existing CLI behavior and record which layout engine produced each document.
-- Demo completeness is the current quality target; docs/PLAN.md contains deferred product work.
+- Demo completeness is the current quality target; docs/PLAN.md lists the open product proposals.
 - Graph relationships come from AWS IDs/ARNs and explicit API fields, not LLM inference.
 - Chat design agent (2026-10-17, user request): Strands Agents on Bedrock Converse; the model only picks tools,
   `designer.py` decides CIDRs, AZ spread, routes, SGs and HA placement. Default Nova 2 Lite (owner's decision 2026-10-17
@@ -74,7 +74,7 @@ Last Updated: 2026-10-19
   app edits keep the `object` wrapper and `resourceId`/`relationId` whatever the default exports (`for_editor`).
 - Alignment never returns a page with more overlaps, out-of-bounds cells or edge-icon collisions than its input (the
   page is kept and reported `reverted`); a page without issues is untouched, so Diagram Bot's own output is a no-op.
-  The aligner uses layout.py's grid and tier rank; draw.io XML output stays uncompressed (compressed input is decoded).
+  The aligner uses the `layout/` package's grid and tier rank; draw.io XML output stays uncompressed (compressed input is decoded).
 - Import is label inference, not API evidence: snapshots carry `metadata.imported` and `metadata.import` (cell → resource
   map, unmapped cells, synthesized items). One classification table (`classify_cell`) serves spec extraction, inspect,
   align and import: shapes first, whole-word labels second; unknown shapes are annotations, never guessed EC2s, and no

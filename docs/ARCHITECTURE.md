@@ -2,7 +2,7 @@
 
 Last Updated: 2026-10-18
 
-샘플 11종(`src/diagram_bot/samples.py`)은 데모 데이터이자 채팅 에이전트의 표준 설계(`designer.py` `STANDARDS`)다.
+샘플 11종(`src/diagram_bot/samples/` 패키지)은 데모 데이터이자 채팅 에이전트의 표준 설계(`designer.py` `STANDARDS`)다.
 이 문서는 각 사례가 따라야 할 AWS 공식 권고를 출처와 함께 정리하고, 현재 샘플과의 차이와 변경안을 기록한다.
 변경안은 2026-10-18 소유자 지시로 반영했다(4절·5.9절의 반영 현황).
 
@@ -40,7 +40,7 @@ Last Updated: 2026-10-18
 | C8 | 워크로드·환경은 계정으로 분리, 네트워크는 Network 계정의 TGW를 RAM으로 공유 | REC | Organizing Your AWS Environment, SRA |
 | C9 | 다이어그램 표기: 그룹 구조(Cloud > Region > VPC > AZ > Subnet) 먼저, ASG처럼 여러 그룹을 가로지르는 그룹 허용, 아이콘 크기 고정, 라벨 12pt Arial, 이름은 단어 중간에서 끊지 않음, 직각 화살표 | 지침 | AWS Architecture Icons (release 24) |
 
-현재 레이아웃은 C9를 따른다(DRAWIO.md). C6·C8은 수집 범위 밖이라 도형으로는 표현할 수 없다(1절).
+현재 레이아웃은 C9를 따른다([wiki layout-and-drawio](wiki/layout-and-drawio.md)). C6·C8은 수집 범위 밖이라 도형으로는 표현할 수 없다(1절).
 
 ## 3. 사례별 판정
 
@@ -148,7 +148,7 @@ Multi-VPC 백서(VPC peering, VPN).
 
 ## 4. 변경안
 
-**반영 현황 (2026-10-18):** 1–7 완료. 7(OPT)은 같은 날 후속으로 반영(`SAMPLE_VERSION` 4, 세 사례 모두 `review --fail-on medium` 종료 코드 0). 구현 기록: [docs/plans/2026-10-18-best-practice-samples.md](plans/2026-10-18-best-practice-samples.md).
+**반영 현황 (2026-10-18):** 1–7 완료. 7(OPT)은 같은 날 후속으로 반영(당시 `SAMPLE_VERSION` 4, 세 사례 모두 `review --fail-on medium` 종료 코드 0). 구현 기록(보관): [docs/archive/2026-10-18-best-practice-samples.md](archive/2026-10-18-best-practice-samples.md).
 
 샘플 빌더가 이미 지원하는 요소만으로 반영할 수 있는 항목부터 정리한다. 각 항목의 완료 기준은
 `make check` 통과(가독성·경로 테스트 포함)와 `review`에서 새 high 발견이 없는 것.

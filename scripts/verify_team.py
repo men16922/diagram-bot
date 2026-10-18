@@ -23,7 +23,7 @@ from playwright.sync_api import expect, sync_playwright
 PASSWORD = "team-mode-check-1"
 
 
-def fake_idp(port, app_port):
+def fake_idp(port):
     """A minimal OpenID provider on loopback: signs in a fixed user from the cloud-architects group."""
     issuer = f"http://localhost:{port}"
     grants = {}
@@ -79,7 +79,7 @@ def main():
         run("diagram-bot", "user", "add", name, "--role", role, "--file", str(users), "--password-stdin", stdin=PASSWORD + "\n")
     run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=localhost",
         "-keyout", str(work / "key.pem"), "-out", str(work / "cert.pem"))
-    issuer, idp = fake_idp(args.port + 1, args.port)
+    issuer, idp = fake_idp(args.port + 1)
     (work / "oidc.json").write_text(json.dumps({"issuer": issuer, "client_id": "diagram-bot", "client_secret": "s3cret",
                                                 "redirect_uri": f"https://localhost:{args.port}/auth/oidc/callback",
                                                 "role_claim": "groups", "role_map": {"cloud-architects": "admin"}}))

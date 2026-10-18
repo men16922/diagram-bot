@@ -11,7 +11,7 @@ pinned draw.io 32.4.1; boto3 collects read-only AWS configuration using existing
 The demo supports overview/detail/focus views, a deterministic layered layout, custom company draw.io specs (`DrawioSpec`), in-place alignment/routing and snapshot import of existing `drawio.xml` files (`xml_align.py`), properties and
 relation evidence, native editing with revision history, draw.io/PNG exports and JSON/CSV inventory, architecture
 review/diff, team mode, a chat design agent (Strands + Bedrock; tools draw standard or brownfield designs, the model
-never invents resources) and CloudFormation draft export. draw.io internals: docs/DRAWIO.md. Sample best-practice basis: docs/ARCHITECTURE.md. Product scope and future proposals are in docs/PLAN.md.
+never invents resources) and CloudFormation draft export. draw.io internals: docs/wiki/layout-and-drawio.md. Sample best-practice basis: docs/ARCHITECTURE.md. Open product proposals: docs/PLAN.md (original plan archived).
 
 ## Read Order
 

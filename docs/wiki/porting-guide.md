@@ -118,12 +118,12 @@ result = api.review_snapshot(snapshot); draft = api.cloudformation(snapshot)
 
 **교체할 경계 3곳 (인터페이스 계약)**
 1. **AWS 인증·경로 (`aws_access.AwsAccess`)**: 사내 Identity Center 로그인 토큰이 이미 있으면 `session(user, region)`이 그 자격 증명으로 `boto3.Session`을 만들고 `self.relay.attach(session, user)`만 거치게 바꾼다([[aws-access-and-sso]], [[browser-egress]]).
-2. **저장소 (`store.SnapshotStore`, `DocumentStore`)**: JSON 파일 대신 사내 DB·S3에 저장하려면 `SnapshotStore`(`save`, `get`, `list`, `seed`)와 `DocumentStore`(`get`, `save`, `replace`, `history`, `restore`)의 메서드 시그니처만 그대로 구현한다([[storage]]).
+2. **저장소 (`store.SnapshotStore`, `DocumentStore`)**: JSON 파일 대신 사내 DB·S3에 저장하려면 `SnapshotStore`(`save`, `get`, `list`, `seed`), `DocumentStore`(`read`, `replace`), `StandardStore`(`save`, `list`, `delete`)의 메서드 시그니처만 그대로 구현한다([[storage]]).
 3. **프런트엔드 (React + Vite)**:
    - **그대로 복사할 파일**: `static/js/http.js`(`createClient`), `static/js/relay.js`(`startRelay`), `static/js/labels.js`(한국어 표시 이름 사전), `static/editor-bridge.js`(draw.io iframe `postMessage` 브리지).
    - **React 최상단 훅 한 줄**: `useEffect(() => { if (boot.egress === 'browser') startRelay(api); }, [boot.egress]);`
    - **Vite 프록시**: `server: { proxy: { '/api': 'http://127.0.0.1:8765', '/editor': 'http://127.0.0.1:8765' } }`
-   - **React로 새로 짤 화면**: `static/app.js`의 상태·컴포넌트([[web-app]]).
+   - **React로 새로 짤 화면**: `static/app.js`와 `static/js/` 화면 모듈의 상태·컴포넌트([[web-app]]).
 
 ## 5. 하위 모델(GPT-6 Luna / Claude 5.5 Haiku) 코딩 에이전트 실행 규칙
 

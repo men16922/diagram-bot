@@ -1,5 +1,7 @@
 # 구현 계획: 사례 AWS Best Practice 정렬 + AI/GPU 사례
 
+> 보관 문서 (2026-10-19, 원래 위치 `docs/plans/`): 완료된 구현 계획이다. 현재 샘플은 [wiki samples](../wiki/samples.md)와 [ARCHITECTURE.md](../ARCHITECTURE.md).
+
 Created: 2026-10-18 · 근거: [docs/ARCHITECTURE.md](../ARCHITECTURE.md) §4(기존 사례 변경안 1–7), §5.6(AI/GPU 변경안 A1–A3)
 상태: **완료** (2026-10-18) — 0절 결정은 권장안 채택. 계획과 달라진 점: GPU 아이콘은 정확한 계열에만(아이콘에 계열명이 찍혀 있음), 엔드포인트를 줄이는 대신 VPC 연결 행 줄바꿈을 구현(위험 1의 대응을 레이아웃 소폭 수정으로 변경), `scripts/render_samples.py` 추가.
 

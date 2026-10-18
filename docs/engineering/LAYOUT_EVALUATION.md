@@ -32,7 +32,7 @@ Findings that ruled it out for this scope:
 
 ## Chosen layout
 
-`src/diagram_bot/layout.py` produces geometry only; `drawio.py` serializes it.
+The `src/diagram_bot/layout/` package (`layout.py` at the time) produces geometry only; `drawio.py` serializes it.
 
 - Bands inside a VPC: load balancers (VPC level, once even when multi-subnet), target groups
   (logical, never inside a subnet), an edge channel, AZ columns with subnets and instances,
@@ -49,7 +49,7 @@ Findings that ruled it out for this scope:
   SG/ENI/EBS reference routes leave from the icon's left side; ALB/NLB subnet placement routes
   (focus view) go over the load balancer row, down the left margin and into the subnet header.
   Registrations of one instance on several ports get separate lanes and port labels at the entry.
-- Labels are truncated to three wrapped lines (full name in the tooltip and inspector).
+- Labels are truncated to four wrapped lines below an icon, three beside it (full name in the tooltip and inspector).
 
 Verified by `tests/test_drawio.py`: no sibling overlap (icons plus estimated label boxes), no
 child outside its container, no routed segment through another icon or its label, orthogonal

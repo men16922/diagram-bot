@@ -1,6 +1,6 @@
 # AWS DevOps Agent 벤치마킹과 채팅 설계 에이전트
 
-조사일: 2026-10-17. 목적은 AWS DevOps Agent의 기능을 정리하고, Diagram Bot이 무엇을 가져올지 정하는 것입니다.
+조사일: 2026-10-17(그날의 기록). 현재 도구·규칙 수는 [wiki chat-agent](../wiki/chat-agent.md)·[review-rules](../wiki/review-rules.md). 목적은 AWS DevOps Agent의 기능을 정리하고, Diagram Bot이 무엇을 가져올지 정하는 것입니다.
 대상은 Strands Agents와 Amazon Bedrock 기반의 "채팅으로 표준 인프라 아키텍처 그리기"입니다.
 
 ## AWS DevOps Agent 요약
@@ -74,8 +74,8 @@
   그래서 실제 응답은 Nova 2 Lite가 했습니다(대체 표시). AWS 신규 계정 확인이 끝난 뒤에도 모든 리전에서 같은 오류여서, 기다린다고 풀리지 않습니다. AWS 영업 또는 지원팀에 OpenAI 모델 사용을 요청해야 합니다. 풀리면 코드 변경 없이 GPT-6 Luna가 답합니다.
 - Nova 2 Lite는 비용 조언에서 설계에 없는 S3 스토리지 항목을 지어낸 적이 있습니다. 시스템 프롬프트에 "설계에 없는 서비스·수치는 말하지 말 것"을 추가했습니다. 구성도와 검토 결과는 코드가 만들기 때문에 이 문제의 영향을 받지 않습니다.
 
-## 다음 후보 (승인 전)
+## 다음 후보 (2026-10-17 기준)
 
-- 설계안 → IaC(CloudFormation/CDK) 출력. DevOps Agent의 mitigation 스펙에 해당합니다.
-- 수집한 현행 구성을 설계의 출발점으로 불러와 개선안을 그리기(brownfield).
-- 대화 기록 저장과 재개, 응답 스트리밍.
+- 설계안 → IaC(CloudFormation/CDK) 출력. DevOps Agent의 mitigation 스펙에 해당합니다. — 2026-10-18 반영(CloudFormation, `export-cfn`).
+- 수집한 현행 구성을 설계의 출발점으로 불러와 개선안을 그리기(brownfield). — 2026-10-18 반영(`start_from_current`).
+- 응답 스트리밍 — 2026-10-18 반영. 대화 기록 저장과 재개 — 미구현([PLAN.md](../PLAN.md)).

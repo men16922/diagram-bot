@@ -31,7 +31,7 @@ diagram-bot serve
 
 `setup-editor`는 최초 한 번 공식 draw.io **32.4.1** 배포물(약 48 MB)을 다운로드하고 고정 SHA-256을 확인합니다. 이후 구성도 편집과 PNG 생성은 로컬에서 수행합니다. 오프라인 설치에는 동일 버전의 공식 `draw.war`를 준비해 `diagram-bot setup-editor --archive /path/to/draw.war`를 사용합니다. [배포물 출처와 라이선스](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
-[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 11종](examples/samples/README.md) · [사례 아키텍처 기준](docs/ARCHITECTURE.md) · [개발 계획과 구현 범위](docs/PLAN.md) · [GitHub 개발 안내](GITHUB.md)
+[5분 시연 순서](docs/DEMO.md) · [AWS best practice 샘플 11종](examples/samples/README.md) · [사례 아키텍처 기준](docs/ARCHITECTURE.md) · [열린 제품 제안](docs/PLAN.md) · [개발 안내](CONTRIBUTING.md)
 
 ## 시연 버전에서 할 수 있는 것
 
@@ -166,7 +166,7 @@ diagram-bot chat --env-file .env -m "서울 리전에 3 AZ 3계층 웹 서비스
 - 응답은 스트리밍됩니다(`POST /api/agent/chat/stream`, NDJSON). 도구가 도는 동안 진행 상황이 보이고, 설계 단계마다 저장된 구성도가 바로 캔버스에 열립니다.
   한 번에 결과만 받으려면 `POST /api/agent/chat`을 씁니다.
 - 설계안은 스냅샷으로 저장되어 구성도, 검토, `.drawio`/PNG 다운로드, 변경 비교에 그대로 쓰입니다. 화면에는 `설계안`으로 표시되며 실제 계정 데이터가 아닙니다.
-- 벤치마킹(AWS DevOps Agent)과 설계 근거는 [docs/engineering/DEVOPS_AGENT_BENCHMARK.md](docs/engineering/DEVOPS_AGENT_BENCHMARK.md), draw.io 연동과 자동 배치는 [docs/DRAWIO.md](docs/DRAWIO.md)에 있습니다.
+- 벤치마킹(AWS DevOps Agent)과 설계 근거는 [docs/engineering/DEVOPS_AGENT_BENCHMARK.md](docs/engineering/DEVOPS_AGENT_BENCHMARK.md), draw.io 연동과 자동 배치는 위키 [배치와 draw.io 문서](docs/wiki/layout-and-drawio.md)에 있습니다.
 
 ## 설계 → CloudFormation 내보내기 (IaC 초안)
 
@@ -194,13 +194,13 @@ diagram-bot export-cfn reports/org/snapshot.json --output cfn/landing.json      
 
 ## 로컬 데이터와 CLI 보고서
 
-편집기는 기본적으로 `~/.cache/diagram-bot/drawio/32.4.1`, 스냅샷과 편집본은 `~/.local/share/diagram-bot`에 저장합니다. `XDG_CACHE_HOME`·`XDG_DATA_HOME` 또는 `serve --data-dir reports/workspace`로 위치를 바꿀 수 있습니다. 서버는 `127.0.0.1`에만 바인딩합니다.
+편집기는 기본적으로 `~/.cache/diagram-bot/drawio/32.4.1`, 스냅샷과 편집본은 `~/.local/share/diagram-bot`에 저장합니다. `XDG_CACHE_HOME`·`XDG_DATA_HOME` 또는 `serve --data-dir reports/workspace`로 위치를 바꿀 수 있습니다. 서버는 기본으로 `127.0.0.1`에만 바인딩하고, 다른 주소는 팀 모드에서만 엽니다([운영 안내](docs/OPERATIONS.md)).
 
 기존 단독 HTML 보고서도 생성할 수 있습니다.
 
 ```bash
 diagram-bot demo --output reports/demo
-diagram-bot demo --sample three-tier --output reports/three-tier   # three-tier | microservices | nlb-alb | environments | hybrid | eks-platform | data-platform
+diagram-bot demo --sample three-tier --output reports/three-tier   # 샘플 11종: diagram-bot demo --help
 diagram-bot collect --profile my-sso-profile --region ap-northeast-2 \
   --expected-account 123456789012 --output reports/current
 diagram-bot render reports/current/snapshot.json --output reports/rerendered
@@ -233,9 +233,11 @@ python -m playwright install chromium
 python scripts/verify_demo.py
 ```
 
-자동 테스트 **90개**(AWS API 에뮬레이터 통합 테스트·팀 모드·SSO 포함)와 Chromium 시연 검증을 통과했습니다. 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증은 보기 전환, 관계 근거·강조, 키보드 이동과 메모 편집, 저장/재열기, 편집본이 반영된 `.drawio`·PNG(1×/2×/3×)·JSON·CSV, 자동 재배치·복원, JSON 가져오기를 확인합니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
+커밋 게이트(`make check`), 브랜치·PR 절차, CI 범위와 overnight harness는 [개발 안내](CONTRIBUTING.md)에 있습니다.
 
-SAML 직접 연동(인증 프록시로 연결), 동시 편집 병합, 수집 작업의 재시작 복구, 내장 예약 수집(cron·CI에서 `collect`·`review`·`diff` 종료 코드 사용), 리스너 규칙·NACL·실제 트래픽 분석은 포함하지 않습니다. CloudFront·WAF·Direct Connect·Elastic IP·TGW 라우팅 테이블 수집은 모의 응답(Stubber)·에뮬레이터로만 검증했습니다. 실제 AWS 계정 수집은 한 계정·리전(IAM 사용자 키)에서 CLI와 웹 앱으로 검증했고, SSO 프로파일·교차 계정 역할·실제 워크로드가 있는 계정은 아직 검증하지 않았습니다. 수집 로직은 API별 모의 응답 테스트와 AWS API 에뮬레이터(moto)에 구성한 환경 전체를 수집하는 통합 테스트로 검증했습니다.
+자동 테스트(AWS API 에뮬레이터 통합 테스트·팀 모드·SSO 포함)와 Chromium 시연 검증을 통과합니다(현재 개수: [STATUS](docs/STATUS.md)). 테스트는 관계 ID 안정성, 보기별 범위, 도형 겹침·컨테이너 밖 잘림·도형을 가로지르는 연결선이 없는지, 100개 리소스 배치 시간(약 0.02초, 합성 데이터)을 확인합니다. 브라우저 검증 항목은 [시연 가이드](docs/DEMO.md#재현-가능한-브라우저-검증)에 있습니다. 화면·PNG·검증 JSON은 `artifacts/browser/`에 생성됩니다. CI에서도 Python 3.11/3.12/3.13 패키지 테스트와 Chromium 검증을 실행합니다.
+
+SAML 직접 연동(인증 프록시로 연결), 동시 편집 병합, 수집 작업의 재시작 복구, 내장 예약 수집(cron·CI에서 `collect`·`review`·`diff` 종료 코드 사용), 리스너 규칙·NACL·실제 트래픽 분석은 포함하지 않습니다. CloudFront·WAF·Direct Connect·Elastic IP·TGW 라우팅 테이블 수집은 모의 응답(Stubber)·에뮬레이터로만 검증했습니다. 실제 AWS 계정 수집은 한 계정에서 IAM 사용자 키·앱 SSO·교차 계정 역할·임시 워크로드 스택(VPC·ALB·ASG·RDS)으로 CLI와 웹 앱에서 검증했습니다(2026-10-17). 수집 로직은 API별 모의 응답 테스트와 AWS API 에뮬레이터(moto)에 구성한 환경 전체를 수집하는 통합 테스트로 검증했습니다.
 
 ## 라이선스
 
