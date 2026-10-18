@@ -54,4 +54,4 @@ The plugin may use its own read-only reviewer on a future authorized run.
 
 - Runtime coding prompt and default critic: installed plugin templates/scripts/overnight/.
 - No repo-local PROMPT.md override is needed for initialization.
-- Diagram generation is ordinary deterministic code; the product does not call an LLM.
+- Diagram generation is ordinary deterministic code and calls no LLM; the optional chat agent only picks tools.

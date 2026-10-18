@@ -1,7 +1,7 @@
 ---
 title: 채팅 설계 에이전트
 summary: agent.py(모델 목록·대체, SYSTEM_PROMPT, Workspace, 도구 29개, Chat.ask와 진행 이벤트)와 designer.py(Design 상태, 표준 아키텍처, 기존 구성에서 시작하는 brownfield 설계, 스냅샷 메타데이터), CLI chat.
-sources: [src/diagram_bot/agent.py, src/diagram_bot/designer.py, src/diagram_bot/routes/agent.py, src/diagram_bot/cli.py, tests/test_agent.py]
+sources: [src/diagram_bot/agent.py, src/diagram_bot/designer.py, src/diagram_bot/routes/agent.py, src/diagram_bot/cli.py, src/diagram_bot/static/js/chat.js, tests/test_agent.py]
 related: [http-api, howto-add-chat-tool, web-app, storage, team-mode-security, browser-egress, aws-access-and-sso, snapshot-model, cli]
 updated: 2026-10-19
 ---
@@ -107,7 +107,7 @@ updated: 2026-10-19
 
 ## 바꿀 때 주의
 - 도구를 더하거나 빼면 `build_tools`의 반환 목록, `len(tools) == 29` 단언, `SYSTEM_PROMPT`를 함께 본다. 절차는 [[howto-add-chat-tool]].
-- 결과 사전 키를 바꾸면 `routes/agent.py`, `static/app.js`, `tests/test_agent.py`의 스트림 테스트를 고친다.
+- 결과 사전 키를 바꾸면 `routes/agent.py`, `static/js/chat.js`, `tests/test_agent.py`의 스트림 테스트를 고친다.
 - 팀 모드 수집 제한(`allow_collection`)과 보안 설명은 [[team-mode-security]], `SECURITY.md`의 채팅 에이전트 행.
 
 ## 관련

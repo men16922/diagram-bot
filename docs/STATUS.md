@@ -5,6 +5,7 @@ Last Updated: 2026-10-19
 ## Active Plan
 
 - 2026-10-19 screen: draw.io XML dialog (import, align, adopt), stored company standards, spec export, admin audit log (PROGRESS_LOG top).
+  483 tests, verify_demo 40/40, verify_team 13/13.
 - 2026-10-19 review + hardening: the company draw.io XML feature (`drawio_spec.py`, `xml_align.py`, `/api/xml/*`,
   CLI `align-xml`/`import-xml`/`adopt-template`; wiki drawio-format-and-alignment) fixed and raised; audit fixes; `layout/`·`iac/`·`samples/`
   packages and `js/` modules behind golden hashes. 476 tests, verify_demo 35/35, verify_team 11/11, CI green on 03641fe.
@@ -12,7 +13,7 @@ Last Updated: 2026-10-19
 - 2026-10-18 remaining work finished: CI green again (`.[test]`), chat streaming, brownfield designs
   (`start_from_current`, `add_subnet_tier`; 29 chat tools), CloudFormation export (`export-cfn`), collection of Elastic IPs,
   TGW route tables, CloudFront, WAFv2 and Direct Connect (4 new low rules), route filter for dense views, optional sample
-  items; SAMPLE_VERSION 6, gpu-training in us-east-2.
+  items; gpu-training in us-east-2.
 - 2026-10-18 earlier: 11 samples aligned with AWS best practice (docs/ARCHITECTURE.md) incl. three AI/GPU; AI/ML collection and review
   pillar; multi-account combine; console-style UI. Live (owner's account, us-east-1): 34/34 calls; SSO collected 47 resources.
 - 2026-10-17: chat agent (Strands + Bedrock), team mode (v0.5.0), review/diff gates (v0.4.0); docs/engineering/DEVOPS_AGENT_BENCHMARK.md.
@@ -35,7 +36,7 @@ Last Updated: 2026-10-19
   (one resource, direct relations, required boundaries). Each reports visible / collected /
   reference / hidden counts. SG/ENI/EBS references are an option; registered targets and
   unqueried references always appear in the detail view.
-- Layout (`layout.py`, `diagram-bot-layered/2`): deterministic bands and AZ columns with explicit
+- Layout (`layout/` package, `diagram-bot-layered/2`): deterministic bands and AZ columns with explicit
   channel/gutter routes; `drawio.py` only serializes. Engine recorded in each document.
   ELK layered evaluated and not adopted: docs/engineering/LAYOUT_EVALUATION.md.
 - Documents: one per snapshot/view/VPC/resource/reference option; detail views keep the old
@@ -95,8 +96,7 @@ Last Updated: 2026-10-19
 ## Verification (2026-10-17, cloud container)
 
 - Gate, team-mode Chromium run, layout tests, 27 browser checks and evidence files: docs/archive/STATUS-verification-2026-10.md.
-  Current gate: `make check` = ruff + 238 pytest cases + CLI round trip; `verify_demo.py` 35 checks (incl. streamed chat, route
-  filter, CloudFormation download, edge/DX samples); `verify_team.py` ok (2026-10-18). CI (GitHub Actions) green from 077c6ee.
+  Gate: `make check` = ruff + pytest + CLI round trip; browser `verify_demo.py`/`verify_team.py` (counts: Active Plan); CI green from 077c6ee.
 
 ## Harness
 
@@ -112,7 +112,7 @@ Last Updated: 2026-10-19
   every other service only on stubs/moto.
 - 100-resource views are structurally correct but dense; no large-environment claim.
 - Team mode provides local accounts and OIDC SSO, roles, TLS and audit; SAML only via an auth proxy; no built-in scheduler (use cron/CI with `review`/`diff` exit codes),
-  listener rules, NACLs or Direct Connect. Licensed Apache-2.0; NOTICE holder "men16922 and Diagram Bot contributors" (both owner decisions, 2026-10-17).
+  listener rules or NACLs. Licensed Apache-2.0; NOTICE holder "men16922 and Diagram Bot contributors" (both owner decisions, 2026-10-17).
   EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN/FSx/SageMaker/HyperPod/placement-group and the new CloudFront/WAF/
   Direct Connect calls are verified on stubs only (Elastic IPs and TGW route tables also on moto);
   ElastiCache Serverless, MSK Serverless, EKS Fargate profiles and Aurora Global Database are not drawn.
