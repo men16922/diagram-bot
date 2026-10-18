@@ -49,6 +49,9 @@ def main():
     merge.add_argument("snapshots", nargs="+", help="collect가 만든 snapshot.json (2개 이상)")
     merge.add_argument("--output", required=True)
     merge.add_argument("--title", help="통합 보기 이름")
+    cfn = commands.add_parser("export-cfn", help="snapshot.json(설계·샘플·수집)을 CloudFormation 템플릿 초안(JSON)으로 내보내기")
+    cfn.add_argument("snapshot")
+    cfn.add_argument("--output", help="템플릿 파일 경로 (생략하면 표준 출력; 여러 계정을 합친 스냅샷은 <이름>-<계정>-<리전>.json으로 나눠 저장)")
     setup = commands.add_parser("setup-editor", help="고정 버전 draw.io 편집기 설치 (최초 한 번)")
     setup.add_argument("--archive", help="오프라인 설치용 공식 draw.war 경로")
     talk = commands.add_parser("chat", parents=[env], help="채팅으로 표준 아키텍처 설계·AWS 읽기 전용 조회 (Strands + Bedrock)")
@@ -91,6 +94,8 @@ def main():
             result = diff(load(args.before), load(args.after))
             print(json.dumps(result, ensure_ascii=False, indent=2) if args.format == "json" else diff_markdown(result))
             return 4 if args.fail_on_change and any(result["summary"].values()) else 0
+        if args.command == "export-cfn":
+            return export_cfn(parser, args)
         if args.command == "review":
             snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
             findings = review(build_graph(snapshot), snapshot.get("coverage", []))
@@ -237,6 +242,32 @@ def manage_user(parser, args):
         parser.error("비밀번호는 12자 이상이어야 합니다.")
     save_user(args.file, args.name, args.role, password)
     print(f"저장: {args.name} ({args.role}) · 역할: {', '.join(ROLES)}")
+    return 0
+
+
+def export_cfn(parser, args):
+    """CloudFormation draft per account × region; unsupported items and assumptions are summarized on stderr."""
+    from .iac import dumps, templates
+    snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
+    if snapshot.get("schema_version") != 1:
+        raise ValueError("지원하지 않는 snapshot schema_version")
+    results = templates(snapshot)
+    if len(results) > 1 and not args.output:
+        parser.error("여러 계정·리전을 합친 스냅샷은 --output이 필요합니다 (계정·리전마다 템플릿 파일을 따로 씁니다).")
+    for label, template in results:
+        meta = template["Metadata"]["DiagramBot"]
+        if args.output:
+            path = Path(args.output)
+            if len(results) > 1:
+                path = path.with_name(f"{path.stem}-{label}{path.suffix or '.json'}")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(dumps(template), encoding="utf-8")
+            where = f"CloudFormation 템플릿: {path.resolve()}"
+        else:
+            sys.stdout.write(dumps(template))
+            where = f"CloudFormation 템플릿 ({label})"
+        print(f"{where} · 리소스 {len(template['Resources'])}개 · 매개변수 {len(template.get('Parameters', {}))}개 · "
+              f"미지원 {len(meta['Unsupported'])}개 · 가정 {len(meta['Assumptions'])}개 (Metadata.DiagramBot에서 검토)", file=sys.stderr)
     return 0
 
 

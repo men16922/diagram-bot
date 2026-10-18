@@ -130,6 +130,30 @@ diagram-bot chat --env-file .env -m "서울 리전에 3 AZ 3계층 웹 서비스
 - 설계안은 스냅샷으로 저장되어 구성도, 검토, `.drawio`/PNG 다운로드, 변경 비교에 그대로 쓰입니다. 화면에는 `설계안`으로 표시되며 실제 계정 데이터가 아닙니다.
 - 벤치마킹(AWS DevOps Agent)과 설계 근거는 [docs/engineering/DEVOPS_AGENT_BENCHMARK.md](docs/engineering/DEVOPS_AGENT_BENCHMARK.md), draw.io 연동과 자동 배치는 [docs/DRAWIO.md](docs/DRAWIO.md)에 있습니다.
 
+## 설계 → CloudFormation 내보내기 (IaC 초안)
+
+채팅 설계안·샘플·수집 스냅샷을 같은 구성을 다시 만드는 **CloudFormation 템플릿 초안(JSON)**으로 내보냅니다. 앱에서는 `다운로드` → `IaC 초안 · CloudFormation`,
+CLI에서는 `export-cfn`, API는 `GET /api/snapshots/{id}/cloudformation`입니다. 템플릿을 배포하지는 않습니다(검토용 초안).
+
+```bash
+diagram-bot export-cfn reports/current/snapshot.json --output reports/current/template.json
+diagram-bot export-cfn reports/chat/01-design/snapshot.json > design.cfn.json   # --output이 없으면 표준 출력
+diagram-bot export-cfn reports/org/snapshot.json --output cfn/landing.json      # 여러 계정 통합본은 계정·리전마다 landing-<계정>-<리전>.json
+```
+
+- 템플릿이 만드는 리소스끼리는 `Ref`/`Fn::GetAtt`로 잇고, 수집된 물리 ID(vpc-…, subnet-…, sg-…, ARN)를 본문에 쓰지 않습니다. AZ 이름은 스냅샷 값을 기본으로 한 매개변수입니다.
+- 지원: VPC(보조 CIDR)·서브넷·IGW·NAT(+EIP)·라우팅 테이블·경로·연결(기본 테이블은 명시 연결로)·VGW 전파, 보안 그룹·규칙, VPC 엔드포인트,
+  Transit Gateway·VPC 연결(공유 TGW는 ID 매개변수), 피어링(양쪽 VPC가 있을 때), VPN·고객 게이트웨이, ALB/NLB·대상 그룹·리스너, Auto Scaling 그룹·시작 템플릿,
+  독립 EC2(EFA·배치 그룹·용량 예약), RDS(Multi-AZ·읽기 복제본)·Aurora·DocumentDB·Multi-AZ DB 클러스터, ElastiCache(클러스터 모드 포함), MSK(프로비저닝),
+  OpenSearch, EFS·마운트 타깃, FSx for Lustre, Redshift, EKS 클러스터·관리형 노드 그룹(EFA·배치 그룹 시작 템플릿), ECS Fargate 클러스터·서비스·작업 정의 골격.
+- 조회하지 않는 값은 추측하지 않고 **매개변수**로 둡니다: AMI(아키텍처별), ACM 인증서, EKS·ECS IAM 역할, 컨테이너 이미지, 경로 조건(리스너 규칙은 수집 범위 밖).
+  DB 비밀번호는 템플릿에 없고 Secrets Manager가 관리합니다(`ManageMasterUserPassword`). 데이터 리소스에는 스냅샷·보존 삭제 정책을 둡니다.
+- 표현할 수 없는 것은 만들지 않고 `Metadata.DiagramBot.Unsupported`에 ID와 이유를 남기며, 추정한 값은 `Metadata.DiagramBot.Assumptions`에 적습니다.
+  예: Lambda(코드 패키지), SageMaker 엔드포인트·HyperPod, Capacity Block·Spot·Karpenter 인스턴스, VPC 안 IP 대상(EKS 파드 등), 다른 계정과의 피어링, 기본 VPC,
+  Gateway Load Balancer, FSx Windows·ONTAP·OpenZFS, Neptune, MSK Serverless.
+- 리스너 포트·프로토콜은 대상 그룹과 로드 밸런서 보안 그룹 포트에서 추정하고, 규칙이 수집되지 않은 보안 그룹은 인바운드 규칙 없는 그룹으로 만듭니다(둘 다 Assumptions에 기록).
+  배포 전에 매개변수·Unsupported·Assumptions를 검토하세요.
+
 ## 로컬 데이터와 CLI 보고서
 
 편집기는 기본적으로 `~/.cache/diagram-bot/drawio/32.4.1`, 스냅샷과 편집본은 `~/.local/share/diagram-bot`에 저장합니다. `XDG_CACHE_HOME`·`XDG_DATA_HOME` 또는 `serve --data-dir reports/workspace`로 위치를 바꿀 수 있습니다. 서버는 `127.0.0.1`에만 바인딩합니다.

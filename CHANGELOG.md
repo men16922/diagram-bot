@@ -11,6 +11,11 @@
   실시간 Nova 2 Lite: three-tier에서 시작해 Redis 추가·검토(도구 3회, 기존 리소스 유지).
 - **채팅 응답 스트리밍:** `POST /api/agent/chat/stream`(NDJSON: `text`·`tool`·`model`·`snapshot`, 마지막 줄 `done` 또는 `error`).
   AI 어시스턴트가 도구 진행을 보여 주고 설계 단계마다 저장된 구성도를 바로 엽니다. 실시간 Nova 2 Lite 턴(도구 8회, 11초)에서 단계별 수신 확인.
+- **설계 → CloudFormation 내보내기:** `diagram-bot export-cfn <snapshot.json> [--output]`, `GET /api/snapshots/{id}/cloudformation`(통합본은 `?part=`),
+  앱 `다운로드` 대화상자의 `IaC 초안 · CloudFormation`. 설계안·샘플·수집 스냅샷을 템플릿 초안(JSON)으로 만들며 리소스 사이는 `Ref`/`GetAtt`,
+  AMI·인증서·IAM 역할·컨테이너 이미지는 매개변수, DB 비밀번호는 Secrets Manager 관리. 표현할 수 없는 항목은 `Metadata.DiagramBot.Unsupported`,
+  추정은 `Assumptions`에 기록. 테스트: 샘플 11종·설계 도구 전체·에뮬레이터 수집본의 참조 무결성과 물리 ID 미포함, cfn-lint, moto CloudFormation 스택 생성
+  (`[test]`에 `moto[cloudformation,acm]` 추가).
 - **채팅으로 아키텍처 설계:** Strands Agents + Amazon Bedrock(Converse) 에이전트. 웹 앱 `채팅으로 설계` 패널, `diagram-bot chat`, `POST /api/agent/chat`.
   도구 24개(표준 아키텍처 7종, VPC·LB·EC2·ECS·EKS·RDS·Aurora·Redis·MSK·OpenSearch·EFS·Lambda·엔드포인트·피어링·VPN, 검토)와
   boto3 읽기 전용 수집 도구(STS, 리전 수집, 리소스 찾기, 검토). 기본 Amazon Nova 2 Lite(GPT-6 Luna·Claude Sonnet 4.5 선택 가능, 실패 시 Nova로 자동 전환)이며 실제 답한 모델을 표시.

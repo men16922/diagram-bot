@@ -184,6 +184,13 @@ def main():
         event.value.save_as(args.output / 'findings.csv')
         findings_csv = (args.output / 'findings.csv').read_text(encoding='utf-8-sig')
         assert findings_csv.startswith('"severity",') and '높음' in findings_csv and 'SEC-SG-OPEN' in findings_csv
+        with page.expect_download() as event:
+            page.locator('#download-cfn').click()
+        assert event.value.suggested_filename == 'diagram-bot-cfn-111122223333-ap-northeast-2.json', event.value.suggested_filename
+        event.value.save_as(args.output / 'cloudformation.json')
+        cfn = json.loads((args.output / 'cloudformation.json').read_text(encoding='utf-8'))
+        assert cfn['Resources'] and cfn['Metadata']['DiagramBot']['Unsupported'] and 'i-demo-a' not in json.dumps(cfn['Resources'])
+        expect(page.locator('#toast')).to_contain_text('CloudFormation 템플릿 초안 1개')
         page.locator('#export-dialog [aria-label="닫기"]').click()
         shot('workspace-edited.png')
 
@@ -502,7 +509,7 @@ def main():
                          'coverage + IAM permission', 'reference-only target', 'inventory search/type', 'VPC switch',
                          'SG/ENI/EBS references', 'native keyboard move', 'native note edit', 'save/reload',
                          'drawio XML download with moved geometry', 'PNG 2x white', 'PNG 1x transparent', 'PNG 3x',
-                         'JSON/CSV/review CSV exports', 'relayout keeps note + archives edit', 'restore archived edit',
+                         'JSON/CSV/review CSV exports', 'CloudFormation draft download', 'relayout keeps note + archives edit', 'restore archived edit',
                          'single-VPC sample opens in detail; infrastructure sample: ASG frame, RDS standby, route-classified subnet',
                          'EKS sample: node group frame, Aurora writer, MSK brokers',
                          'route filter: detail narrowed to one target group (hidden + counted, off-path dimmed), inspector back to all routes and to one route',

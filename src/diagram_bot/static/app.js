@@ -298,6 +298,18 @@ async function downloadPng() {
 }
 function csvCell(value){let text=typeof value==='object'?JSON.stringify(value):String(value??'');if(/^\s*[=+\-@]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';}
 function downloadCsv(){const fields=['account','region','kind','resource_id','name','reference_only','source','attributes'];const rows=[fields,...state.snapshot.graph.nodes.map(n=>fields.map(f=>n[f]))];download('inventory.csv','﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
+// CloudFormation draft from the stored snapshot (not the edited diagram); a combined snapshot gives one template per account × region.
+async function downloadCloudFormation(){
+  const parts=state.snapshot.metadata.parts||[null];let unsupported=0;
+  for(const [index,part] of parts.entries()){
+    const response=await fetch(`/api/snapshots/${state.snapshotId}/cloudformation${part?`?part=${index}`:''}`,{headers:{'X-Diagram-Bot':state.token}});
+    const text=await response.text();
+    if(!response.ok)throw new Error(JSON.parse(text).detail||'템플릿을 만들지 못했습니다.');
+    unsupported+=JSON.parse(text).Metadata.DiagramBot.Unsupported.length;
+    download(response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||'cloudformation.json',text,'application/json');
+  }
+  toast(`CloudFormation 템플릿 초안 ${parts.length}개를 다운로드했습니다. 매개변수와 Metadata.DiagramBot(미지원 ${unsupported}개·가정)을 검토하세요.`);
+}
 function bind(id, handler) {$(id).onclick=()=>Promise.resolve().then(handler).catch(error=>toast(error.message,true));}
 bind('all-environments',()=>switchView('overview'));
 bind('view-overview',()=>switchView('overview'));
@@ -390,7 +402,7 @@ bind('note-button',()=>post({action:'diagramBotNote'}));
 bind('reset-button',()=>replaceDocument('/relayout',{},'자동 배치를 다시 실행했습니다. 이전 편집본은 보관되고 메모는 유지됩니다.'));
 bind('restore-button',()=>{const last=state.history.at(-1);return replaceDocument('/restore',{from_revision:last.revision},`보관된 v${last.revision} 편집본을 복원했습니다.`);});
 bind('download-drawio',downloadDiagram);bind('download-png',downloadPng);
-bind('download-json',()=>download('snapshot.json',JSON.stringify(state.snapshot,null,2),'application/json'));bind('download-csv',downloadCsv);
+bind('download-json',()=>download('snapshot.json',JSON.stringify(state.snapshot,null,2),'application/json'));bind('download-csv',downloadCsv);bind('download-cfn',downloadCloudFormation);
 bind('download-findings',()=>{const fields=['severity','pillar','rule','resource_name','resource','title','evidence','recommendation'];const rows=[fields,...(state.review?.findings||[]).map(f=>fields.map(k=>k==='severity'?severityNames[f[k]]:k==='pillar'?pillarNames[f[k]]:f[k]))];download(`diagram-bot-review-${state.snapshot.metadata.account_id}-${state.snapshot.metadata.region}.csv`,'\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n'),'text/csv;charset=utf-8');});
 bind('import-button',()=>$('import-file').click());
 const modes=['diagram','inventory','review','changes'];

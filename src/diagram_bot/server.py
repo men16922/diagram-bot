@@ -384,6 +384,20 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         findings = review(snapshot["graph"], snapshot["coverage"])
         return {"summary": summary(findings), "findings": findings}
 
+    @app.get("/api/snapshots/{identifier}/cloudformation")
+    def export_cloudformation(identifier: str, part: int | None = None):
+        """CloudFormation draft of one account × region; a combined snapshot names its part by index."""
+        from .iac import dumps, template
+        snapshot = get_snapshot(identifier)
+        parts = snapshot.get("parts") or []
+        if parts and (part is None or not 0 <= part < len(parts)):
+            raise HTTPException(422, f"여러 계정을 합친 스냅샷입니다. part=0~{len(parts) - 1}로 계정·리전을 고르세요.")
+        source = parts[part] if parts else snapshot
+        meta = source["metadata"]
+        label = "-".join(["diagram-bot-cfn", *([meta["sample"]] if meta.get("sample") else []), meta["account_id"], meta["region"]])
+        name = re.sub(r"[^A-Za-z0-9._-]", "-", label) + ".json"
+        return Response(dumps(template(source)), media_type="application/json", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
     @app.get("/api/snapshots/{identifier}/diff/{other}")
     def compare_snapshots(identifier: str, other: str):
         """Changes from `other` (before) to `identifier` (after)."""
