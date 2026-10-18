@@ -1,9 +1,7 @@
 """Serialize a computed layout into native, editable draw.io XML."""
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-from defusedxml.ElementTree import fromstring
-
-from .drawio_spec import resolve_spec
+from .drawio_spec import read_document, resolve_spec
 from .graph import build_graph
 from .layout import cell_id, layout_view
 from .views import view_graph
@@ -120,15 +118,8 @@ EDGE = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;fontFamily=Arial;fontSize
 
 
 def validate_document(xml):
-    if len(xml.encode()) > 10 * 1024 * 1024:
-        raise ValueError("문서는 최대 10 MiB입니다.")
-    root = fromstring(xml)
-    if root.tag not in {"mxfile", "mxGraphModel"}:
-        raise ValueError("draw.io XML 문서가 아닙니다.")
-    # Keep an inspectable XML document, not compressed/unbounded input.
-    if root.tag == "mxfile" and not root.findall("diagram/mxGraphModel"):
-        raise ValueError("압축하지 않은 draw.io XML이 필요합니다.")
-    return root
+    """A document the app stores: the input gate without decompression (stored documents stay uncompressed)."""
+    return read_document(xml, decode=False)
 
 
 def resource_style(shape, spec=None):

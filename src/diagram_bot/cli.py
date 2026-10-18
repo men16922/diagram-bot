@@ -9,6 +9,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from .collector import collect
 from .demo import demo_snapshot
 from .diff import diff, markdown as diff_markdown
+from .errors import InputError
 from .findings import SEVERITIES, markdown, review, summary
 from .graph import build_graph
 from .samples import SAMPLES
@@ -116,12 +117,12 @@ def main():
             return run_server(parser, args)
         if args.command == "user":
             return manage_user(parser, args)
-        if args.command == "align-xml":
-            return run_align_xml(args)
-        if args.command == "import-xml":
-            return run_import_xml(args)
-        if args.command == "adopt-template":
-            return run_adopt_template(args)
+        if args.command in XML_COMMANDS:
+            try:
+                return XML_COMMANDS[args.command](args)
+            except InputError as exc:
+                print(f"입력 오류: {exc}", file=sys.stderr)
+                return 2
         if args.command == "diff":
             load = lambda path: json.loads(Path(path).read_text(encoding="utf-8"))
             result = diff(load(args.before), load(args.after))
@@ -375,6 +376,8 @@ def run_adopt_template(args):
         set_default_spec(None)
     return 0
 
+
+XML_COMMANDS = {"align-xml": run_align_xml, "import-xml": run_import_xml, "adopt-template": run_adopt_template}
 
 
 def collect_all(parser, args):

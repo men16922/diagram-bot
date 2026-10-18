@@ -11,12 +11,19 @@ draw.io convention without modifying `layout.py` or `drawio.py`:
 - Auto-extraction: `spec_from_xml(company_xml)` learns a complete `DrawioSpec` directly from a sample company `drawio.xml`
 - Process-wide default: `set_default_spec(spec)` or `DIAGRAM_BOT_SPEC=<preset_or_xml_or_json_path>`.
 """
+import base64
+import binascii
 from dataclasses import dataclass, field
 import json
 import math
 import os
 from pathlib import Path
 import re
+from urllib.parse import unquote
+from xml.etree.ElementTree import ParseError
+import zlib
+
+from defusedxml import DefusedXmlException
 from defusedxml.ElementTree import fromstring
 
 from .errors import InputError
@@ -69,6 +76,86 @@ DEFAULT_EDGE_STYLE = (
     "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;fontFamily=Arial;fontSize=9;"
     "fontColor=#536A82;strokeColor=#7C91A8;strokeWidth=1.5;endArrow=none;labelBackgroundColor=#FFFFFF;"
 )
+
+
+MAX_BYTES = 10 * 1024 * 1024  # the whole document, and again for all decompressed pages together
+MAX_CELLS = 10_000
+
+
+def _parse(text, what="draw.io XML"):
+    try:
+        return fromstring(text)
+    except (ParseError, DefusedXmlException) as exc:
+        raise InputError(f"{what}을(를) 읽지 못했습니다: {exc}") from exc
+
+
+def _inflate(diagram, budget):
+    """A compressed page as draw.io writes it: base64, raw deflate, then URL-encoding; at most `budget` bytes inflated."""
+    try:
+        inflater = zlib.decompressobj(-15)
+        raw = inflater.decompress(base64.b64decode((diagram.text or "").strip(), validate=True), budget + 1)
+    except (binascii.Error, zlib.error, ValueError) as exc:
+        raise InputError(f"압축된 페이지 {diagram.get('name') or ''}를 풀지 못했습니다: {exc}") from exc
+    if len(raw) > budget or inflater.unconsumed_tail:
+        raise InputError("압축을 푼 문서가 10 MiB를 넘습니다.")
+    text = raw.decode("utf-8", "replace")
+    model = _parse(text if text.lstrip().startswith("<") else unquote(text), "압축된 페이지")
+    if model.tag != "mxGraphModel":
+        raise InputError("압축된 페이지에 mxGraphModel이 없습니다.")
+    diagram.text = None
+    diagram.append(model)
+    return len(raw)
+
+
+def read_document(xml, *, decode=True):
+    """The one input gate for draw.io XML (align, inspect, import, adopt, spec extraction, saved documents).
+
+    Size limit, defusedxml parse, root tag, compressed pages decoded in place (or refused with decode=False, for documents
+    the app stores uncompressed) and a cell limit. Every failure is an InputError (HTTP 422, CLI exit 2)."""
+    if not isinstance(xml, str):
+        raise InputError("draw.io XML 문자열이 필요합니다.")
+    if len(xml.encode()) > MAX_BYTES:
+        raise InputError("문서는 최대 10 MiB입니다.")
+    root = _parse(xml)
+    if root.tag not in {"mxfile", "mxGraphModel"}:
+        raise InputError("draw.io XML 문서가 아닙니다.")
+    if root.tag == "mxfile":
+        budget = MAX_BYTES
+        for diagram in root.findall("diagram"):
+            if diagram.find("mxGraphModel") is None and (diagram.text or "").strip():
+                if not decode:
+                    raise InputError("압축하지 않은 draw.io XML이 필요합니다.")
+                budget -= _inflate(diagram, budget)
+        if root.get("compressed") == "true":
+            root.set("compressed", "false")
+        if not root.findall("diagram/mxGraphModel/root"):
+            raise InputError("draw.io mxGraphModel/root를 찾을 수 없습니다.")
+    elif root.find("root") is None:
+        raise InputError("draw.io mxGraphModel/root를 찾을 수 없습니다.")
+    if sum(len(page) for _, page in pages(root)) > MAX_CELLS:
+        raise InputError(f"셀이 {MAX_CELLS:,}개를 넘는 문서는 처리하지 않습니다.")
+    return root
+
+
+def pages(root):
+    """[(page name, <root> element)] of every uncompressed page of an mxfile, or the one page of an mxGraphModel."""
+    if root.tag == "mxGraphModel":
+        return [("", root.find("root"))] if root.find("root") is not None else []
+    return [(d.get("name") or d.get("id") or f"page-{i + 1}", d.find("mxGraphModel/root"))
+            for i, d in enumerate(root.findall("diagram")) if d.find("mxGraphModel/root") is not None]
+
+
+def iter_cells(graph_root):
+    """(wrapper, mxCell, id, label) for each cell of a page: a bare <mxCell>, or <object>/<UserObject> around one.
+
+    The id and label live on the wrapper when there is one (draw.io's convention), else on the mxCell."""
+    for el in graph_root:
+        if el.tag == "mxCell":
+            yield el, el, el.get("id"), el.get("value") or ""
+        elif el.tag in ("object", "UserObject"):
+            inner = el.find("mxCell")
+            if inner is not None:
+                yield el, inner, el.get("id") or inner.get("id"), el.get("label") or el.get("value") or inner.get("value") or ""
 
 
 def parse_style(style_str):
@@ -422,12 +509,10 @@ def _detect_resource_kind(label, style_str):
 
 def spec_from_xml(xml_text, *, name="company-extracted") -> DrawioSpec:
     """Extract a complete `DrawioSpec` automatically from an existing company `drawio.xml` file."""
-    root = fromstring(xml_text)
+    root = read_document(xml_text)
     host = _learned(SPEC_TEXT, root.get("host"), "draw.io") if root.tag == "mxfile" else "draw.io"
-    model = root.find(".//mxGraphModel") if root.tag == "mxfile" else root
-    graph_root = model.find("root") if model is not None else None
-    if graph_root is None:
-        raise InputError("draw.io mxGraphModel/root를 찾을 수 없습니다.")
+    model = root.find("diagram/mxGraphModel") if root.tag == "mxfile" else root
+    graph_root = model.find("root")
 
     background = _learned(COLOR, model.get("background"), "#ffffff")
     grid = model.get("gridSize") or ""
@@ -472,10 +557,9 @@ def spec_from_xml(xml_text, *, name="company-extracted") -> DrawioSpec:
                 if rkind:
                     resource_styles.setdefault(rkind, style_str)
                     geo = inner.find("mxGeometry")
-                    if geo is not None and geo.get("width"):
-                        w = int(float(geo.get("width")))
-                        if 28 < w <= 96:
-                            icon_sizes.append(w)
+                    width = (geo.get("width") or "") if geo is not None else ""
+                    if re.fullmatch(r"\d{2}(\.\d+)?", width) and 28 < float(width) <= 96:
+                        icon_sizes.append(int(float(width)))
         elif inner.get("edge") == "1":
             edge_styles.append(style_str)
             if kv.get("endArrow") in ARROWS:

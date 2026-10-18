@@ -21,8 +21,10 @@ import re
 from xml.etree.ElementTree import Element, SubElement, tostring
 
 from .designer import register_standard
-from .drawio import ICONS, RESOURCE_ICONS, generate_document, validate_document
-from .drawio_spec import format_style, parse_style, patch_style, resolve_spec, set_default_spec, spec_from_xml
+from .drawio import ICONS, RESOURCE_ICONS, generate_document
+from .drawio_spec import (format_style, iter_cells, parse_style, patch_style, read_document, resolve_spec, set_default_spec,
+                          spec_from_xml)
+from .errors import InputError
 from .graph import build_graph
 from .samples import Sample
 
@@ -50,23 +52,18 @@ _BAND_ORDER = {
 }
 
 
-def _clean_text(text):
-    return (text or "").strip()
+MAX_COORDINATE, MAX_DEPTH = 1e7, 64
 
 
-def _cell_elements(graph_root):
-    """Yield `(wrapper_el, mxcell_el, cell_id, label)` for every cell in `graph_root`."""
-    for el in graph_root:
-        if el.tag == "mxCell":
-            cid = el.get("id") or ""
-            label = el.get("value") or ""
-            yield el, el, cid, label
-        elif el.tag in ("object", "UserObject"):
-            inner = el.find("mxCell")
-            if inner is not None:
-                cid = el.get("id") or inner.get("id") or ""
-                label = el.get("label") or el.get("value") or inner.get("value") or ""
-                yield el, inner, cid, label
+def _number(geo, key, default, cid):
+    raw = geo.get(key)
+    try:
+        value = float(raw) if raw not in (None, "") else default
+    except ValueError:
+        raise InputError(f"셀 {cid}의 {key} 값이 숫자가 아닙니다: {raw[:20]}") from None
+    if not math.isfinite(value) or abs(value) > MAX_COORDINATE or (key in ("width", "height") and value < 0):
+        raise InputError(f"셀 {cid}의 {key} 값이 범위를 벗어났습니다: {raw[:20]}")
+    return value
 
 
 def _classify_vertex(cid, label, style_str, w, h, wrapper_el):
@@ -191,16 +188,16 @@ def _parse_page_model(graph_root):
     """Parse vertices and edges from a single `<root>` element into structured dicts."""
     vertices = {}
     edges = []
-    for wrapper, inner, cid, label in _cell_elements(graph_root):
-        if cid in ("0", "1", ""):
+    for wrapper, inner, cid, label in iter_cells(graph_root):
+        if cid in ("0", "1", "", None):
             continue
         style_str = inner.get("style") or ""
         geo = inner.find("mxGeometry")
         if inner.get("vertex") == "1" and geo is not None:
-            x = float(geo.get("x") or 0)
-            y = float(geo.get("y") or 0)
-            w = float(geo.get("width") or 52)
-            h = float(geo.get("height") or 52)
+            x = _number(geo, "x", 0.0, cid)
+            y = _number(geo, "y", 0.0, cid)
+            w = _number(geo, "width", 52.0, cid)
+            h = _number(geo, "height", 52.0, cid)
             parent = inner.get("parent") or "1"
             role, kind, tier = _classify_vertex(cid, label, style_str, w, h, wrapper)
             vertices[cid] = {
@@ -215,7 +212,7 @@ def _parse_page_model(graph_root):
                 arr = geo.find("Array[@as='points']")
                 if arr is not None:
                     for pt in arr.findall("mxPoint"):
-                        pts.append((float(pt.get("x") or 0), float(pt.get("y") or 0)))
+                        pts.append((_number(pt, "x", 0.0, cid), _number(pt, "y", 0.0, cid)))
             edges.append({
                 "id": cid, "wrapper": wrapper, "cell": inner, "geo": geo,
                 "label": label, "style": style_str,
@@ -226,26 +223,31 @@ def _parse_page_model(graph_root):
 
 
 def _compute_abs(vertices):
-    """Compute `(abs_x, abs_y)` for every vertex in `vertices`."""
+    """Page coordinates `(abs_x, abs_y)` of every vertex; iterative, so a hostile parent chain cannot exhaust the stack.
+
+    A parent cycle or nesting deeper than MAX_DEPTH is an InputError; a parent that is not a vertex counts as the page."""
     abs_pos = {"0": (0.0, 0.0), "1": (0.0, 0.0)}
-
-    def resolve(cid, visited=None):
-        if cid in abs_pos:
-            return abs_pos[cid]
-        if cid not in vertices:
-            return (0.0, 0.0)
-        visited = visited or set()
-        if cid in visited:
-            return (vertices[cid]["x"], vertices[cid]["y"])
-        visited.add(cid)
-        v = vertices[cid]
-        px, py = resolve(v["parent"], visited)
-        abs_pos[cid] = (px + v["x"], py + v["y"])
-        return abs_pos[cid]
-
-    for cid in vertices:
-        resolve(cid)
+    for start in vertices:
+        chain, cid = [], start
+        while cid not in abs_pos and cid in vertices:
+            if len(chain) >= MAX_DEPTH or cid in chain:
+                raise InputError(f"셀 {start}의 부모 관계가 순환하거나 {MAX_DEPTH}단계보다 깊습니다.")
+            chain.append(cid)
+            cid = vertices[cid]["parent"]
+        x, y = abs_pos.get(cid, (0.0, 0.0))
+        for cid in reversed(chain):
+            x, y = x + vertices[cid]["x"], y + vertices[cid]["y"]
+            abs_pos[cid] = (x, y)
     return abs_pos
+
+
+def _fraction(value):
+    """An exit/entry port fraction from a style, or None when absent or not a finite number."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _boxes_overlap(a, b, pad=0.0):
@@ -254,7 +256,7 @@ def _boxes_overlap(a, b, pad=0.0):
 
 def inspect_drawio_xml(xml_text) -> dict:
     """Inspect a `drawio.xml` string and return layout/routing diagnostics and its extracted `DrawioSpec`."""
-    root = validate_document(xml_text)
+    root = read_document(xml_text)
     graph_root = root.find("diagram/mxGraphModel/root") if root.tag == "mxfile" else root.find("root")
     vertices, edges = _parse_page_model(graph_root)
     abs_pos = _compute_abs(vertices)
@@ -321,15 +323,15 @@ def inspect_drawio_xml(xml_text) -> dict:
         if src not in vertices or dst not in vertices:
             continue
         _, kv = parse_style(e["style"])
-        has_ports = all(k in kv for k in ("exitX", "exitY", "entryX", "entryY"))
-        if not has_ports or kv.get("edgeStyle") != "orthogonalEdgeStyle":
+        ports = [_fraction(kv.get(k)) for k in ("exitX", "exitY", "entryX", "entryY")]
+        if None in ports or kv.get("edgeStyle") != "orthogonalEdgeStyle":
             unrouted_edges.append(e["id"])
             continue
         sx, sy = abs_pos[src]
         dx, dy = abs_pos[dst]
         sv, dv = vertices[src], vertices[dst]
-        p_start = (sx + float(kv["exitX"]) * sv["w"], sy + float(kv["exitY"]) * sv["h"])
-        p_end = (dx + float(kv["entryX"]) * dv["w"], dy + float(kv["entryY"]) * dv["h"])
+        p_start = (sx + ports[0] * sv["w"], sy + ports[1] * sv["h"])
+        p_end = (dx + ports[2] * dv["w"], dy + ports[3] * dv["h"])
         path = [p_start, *e["points"], p_end]
         if len(path) == 2 and abs(p_start[0] - p_end[0]) > 1 and abs(p_start[1] - p_end[1]) > 1:
             unrouted_edges.append(e["id"])
@@ -805,7 +807,7 @@ def _apply_spec_to_page(graph_root, vertices, edges, cfg):
                     arr = e["geo"].find("Array[@as='points']")
                     if arr is not None:
                         for pt in arr.findall("mxPoint"):
-                            pt.set("y", f"{float(pt.get('y') or 0) + dy:g}")
+                            pt.set("y", f"{_number(pt, 'y', 0.0, e['id']) + dy:g}")
 
     for v in vertices.values():
         role = v["role"]
@@ -880,6 +882,7 @@ def align_drawio_xml(
     - `mode="rebuild"`: imports the XML into a Diagram Bot `Snapshot` and renders it through `generate_document`.
     """
     if mode == "rebuild":
+        read_document(xml_text)
         snapshot = import_drawio_xml(xml_text)
         target_spec = resolve_spec(spec) if spec is not None else spec_from_xml(xml_text)
         vpcs = [n["resource_id"] for n in snapshot["graph"]["nodes"] if n["kind"] == "vpc"]
@@ -887,9 +890,9 @@ def align_drawio_xml(
         vpc_id = vpcs[0] if len(vpcs) == 1 else None
         return generate_document(snapshot, vpc_id=vpc_id, view=view, spec=target_spec)
     if mode != "preserve":
-        raise ValueError(f"알 수 없는 정렬 모드입니다: {mode} ('preserve' 또는 'rebuild')")
+        raise InputError(f"알 수 없는 정렬 모드입니다: {mode} ('preserve' 또는 'rebuild')")
 
-    root = validate_document(xml_text)
+    root = read_document(xml_text)
     cfg = resolve_spec(spec) if spec is not None else None
     if cfg is not None and root.tag == "mxfile":
         root.set("host", cfg.host)
@@ -914,7 +917,7 @@ def align_drawio_xml(
 
 def import_drawio_xml(xml_text, *, title=None, region="ap-northeast-2", account="000000000000") -> dict:
     """Convert an existing AWS `drawio.xml` diagram into a valid Diagram Bot `Snapshot` (`raw` + `graph`)."""
-    root = validate_document(xml_text)
+    root = read_document(xml_text)
     graph_root = root.find("diagram/mxGraphModel/root") if root.tag == "mxfile" else root.find("root")
     vertices, edges = _parse_page_model(graph_root)
     _reparent_visual_children(vertices)
@@ -1142,6 +1145,7 @@ def adopt_company_xml(
     account="000000000000",
     set_default=False,
     save_spec=None,
+    allow_path=True,
 ) -> dict:
     """Adopt a company standard architecture `drawio.xml` file or string as both a `DrawioSpec` and a `Design` standard.
 
@@ -1153,6 +1157,8 @@ def adopt_company_xml(
     4. Renders a standardized `drawio.xml` from the imported snapshot using the extracted company `DrawioSpec`.
     5. Optionally sets the extracted `DrawioSpec` as the process-wide default (`set_default=True`) and/or saves it as JSON (`save_spec`).
     """
+    if not allow_path and not (isinstance(xml_or_path, str) and xml_or_path.lstrip().startswith("<")):
+        raise InputError("draw.io XML 본문이 필요합니다 (파일 경로는 CLI·라이브러리에서만).")
     if isinstance(xml_or_path, Path) or (isinstance(xml_or_path, str) and not xml_or_path.lstrip().startswith("<") and Path(xml_or_path).is_file()):
         path = Path(xml_or_path)
         xml_text = path.read_text(encoding="utf-8")
@@ -1161,8 +1167,8 @@ def adopt_company_xml(
     else:
         xml_text = str(xml_or_path)
 
-    spec = spec_from_xml(xml_text, name=name)
     before = inspect_drawio_xml(xml_text)
+    spec = spec_from_xml(xml_text, name=name)
     aligned_xml = align_drawio_xml(xml_text, spec=spec, mode="preserve")
     after = inspect_drawio_xml(aligned_xml)
     snapshot = import_drawio_xml(aligned_xml, title=title or f"사내 표준 ({name})", region=region, account=account)

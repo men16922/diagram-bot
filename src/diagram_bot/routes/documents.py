@@ -85,10 +85,7 @@ def router(context):
                       resource: str | None = None, references: bool = False, routes: str | None = None):
         snapshot = snapshots.get(identifier)
         scope, selection = view_scope(snapshot, view, vpc, resource, references, routes)
-        try:
-            validate_document(document.xml)
-        except Exception as exc:
-            raise HTTPException(422, "유효한 압축 해제 draw.io XML이 아닙니다.") from exc
+        validate_document(document.xml)  # InputError: 422
         saved, history = documents.replace(identifier, scope, document.revision, document.xml)
         return describe(saved, selection, history)
 
@@ -112,29 +109,17 @@ def router(context):
 
     @api.post("/api/xml/align")
     def align_xml_endpoint(payload: XmlAlignRequest):
-        """Auto-align, resize containers, and orthogonally route an arbitrary draw.io XML document."""
-        try:
-            before = inspect_drawio_xml(payload.xml)
-            aligned = align_drawio_xml(
-                payload.xml,
-                mode=payload.mode,
-                spec=request_spec(payload.spec),
-                reparent=payload.reparent,
-                route_edges=payload.route_edges,
-                normalize_styles=payload.normalize_styles,
-            )
-            after = inspect_drawio_xml(aligned)
-        except (ValueError, TypeError) as exc:
-            raise HTTPException(422, str(exc)) from exc
+        """Auto-align, resize containers, and orthogonally route an arbitrary draw.io XML document (InputError: 422)."""
+        before = inspect_drawio_xml(payload.xml)
+        aligned = align_drawio_xml(payload.xml, mode=payload.mode, spec=request_spec(payload.spec), reparent=payload.reparent,
+                                   route_edges=payload.route_edges, normalize_styles=payload.normalize_styles)
+        after = inspect_drawio_xml(aligned)
         return {"xml": aligned, "before": before, "after": after}
 
     @api.post("/api/xml/import")
     def import_xml_endpoint(payload: XmlImportRequest, request: Request):
         """Import an arbitrary AWS draw.io XML document as a Diagram Bot Snapshot."""
-        try:
-            snapshot = import_drawio_xml(payload.xml, title=payload.title, region=payload.region)
-        except (ValueError, TypeError) as exc:
-            raise HTTPException(422, str(exc)) from exc
+        snapshot = import_drawio_xml(payload.xml, title=payload.title, region=payload.region)
         identifier = snapshots.save(snapshot) if payload.save else None
         if identifier and context.audit:
             context.audit.write(getattr(request.state, "user", "local"), "xml import", target=identifier)
@@ -143,16 +128,8 @@ def router(context):
     @api.post("/api/xml/adopt")
     def adopt_xml_endpoint(payload: XmlAdoptRequest, request: Request):
         """Adopt a company draw.io XML template as both the default DrawioSpec and a registered Design standard."""
-        try:
-            result = adopt_company_xml(
-                payload.xml,
-                name=payload.name,
-                title=payload.title,
-                region=payload.region,
-                set_default=payload.set_default,
-            )
-        except (ValueError, TypeError) as exc:
-            raise HTTPException(422, str(exc)) from exc
+        result = adopt_company_xml(payload.xml, name=payload.name, title=payload.title, region=payload.region,
+                                   set_default=payload.set_default, allow_path=False)
         identifier = snapshots.save(result["snapshot"]) if payload.save else None
         if identifier and context.audit:
             context.audit.write(getattr(request.state, "user", "local"), "xml adopt", target=identifier, standard=result["name"])

@@ -1,6 +1,9 @@
 """Regression tests for the company draw.io XML feature: hostile input, spec validation, coordinate frames, roles."""
+import base64
 import subprocess
 import sys
+import urllib.parse
+import zlib
 
 import pytest
 from defusedxml.ElementTree import fromstring
@@ -105,3 +108,87 @@ def test_cli_spec_accepts_a_company_drawio_file(tmp_path):
                          capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     assert fromstring(out.read_text(encoding="utf-8")).get("host") == "Company-Arch-Tool"
+
+
+# --- c. one input gate: 422 / exit 2 for bad documents, compressed pages decoded --------------------------------------
+
+def compress(model_xml):
+    deflater = zlib.compressobj(9, zlib.DEFLATED, -15)
+    return base64.b64encode(deflater.compress(urllib.parse.quote(model_xml).encode()) + deflater.flush()).decode()
+
+
+ARCH = [v("vpc", "prod-vpc (10.2.0.0/16)", VPC, 0, 0, 500, 300), v("s", "app-subnet (10.2.1.0/24)", PRIV, 20, 50, 300, 200, "vpc"),
+        v("i", "web-1", EC2, 40, 60, 52, 52, "s")]
+BAD_DOCUMENTS = {
+    "malformed": "<mxfile><diagram><mxGraphModel><root><mxCell id='0'/>",
+    "billion-laughs": '<?xml version="1.0"?><!DOCTYPE l [<!ENTITY a "x"><!ENTITY b "&a;&a;">]><mxfile><diagram><mxGraphModel>'
+                      '<root><mxCell id="0" value="&b;"/></root></mxGraphModel></diagram></mxfile>',
+    "xxe": '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><mxfile><diagram><mxGraphModel><root>'
+           '<mxCell id="0" value="&e;"/></root></mxGraphModel></diagram></mxfile>',
+    "not drawio": "<html/>",
+    "no root": '<mxfile><diagram name="x"/></mxfile>',
+    "bad compressed page": '<mxfile><diagram name="z">not base64 !!</diagram></mxfile>',
+    "width=inf": mx([v("vpc", "vpc-x", VPC, 0, 0, 400, 300), v("sub", "app-subnet", PRIV, 10, 40, "inf", 100, "vpc")]),
+    "width=nan": mx([v("i", "ec2", EC2, 0, 0, "nan", 52)]),
+    "x=1e308": mx([v("i", "ec2", EC2, "1e308", "1e308", 52, 52)]),
+    "x=abc": mx([v("a", "ec2", EC2, "abc", 0, 52, 52)]),
+    "negative width": mx([v("a", "ec2", EC2, 0, 0, -52, 52)]),
+    "waypoint=inf": mx(ARCH + [e("x", "i", "vpc").replace('as="geometry"/>', 'as="geometry"><Array as="points"><mxPoint x="inf" y="1"/>'
+                                                                         '</Array></mxGeometry>')]),
+    "1500-deep chain": mx([v(f"c{i}", "box", "container=1;", 1, 1, 100, 100, f"c{i - 1}") for i in range(1500, 0, -1)]
+                          + [v("c0", "box", "container=1;", 0, 0, 100, 100)]),
+    "parent cycle": mx([v("a", "box", "container=1;", 0, 0, 100, 100, "b"), v("b", "box", "container=1;", 0, 0, 100, 100, "a")]),
+}
+
+
+@pytest.mark.parametrize("name", list(BAD_DOCUMENTS))
+def test_bad_documents_are_input_errors_everywhere(client, name):
+    xml = BAD_DOCUMENTS[name]
+    for call in (api.inspect_xml, api.align_xml, api.import_xml, lambda x: api.align_xml(x, mode="rebuild")):
+        with pytest.raises(InputError):
+            call(xml)
+    for path, body in (("/api/xml/align", {"xml": xml}), ("/api/xml/import", {"xml": xml, "save": False}),
+                       ("/api/xml/adopt", {"xml": xml, "save": False})):
+        res = client.post(path, json=body)
+        assert res.status_code == 422, (path, res.status_code, res.text[:200])
+
+
+def test_cli_reports_bad_xml_without_a_traceback(tmp_path):
+    bad = tmp_path / "bad.drawio"
+    bad.write_text("<mxfile><diagram><mxGraphModel><root>", encoding="utf-8")
+    for args in (["align-xml", str(bad), "-o", str(tmp_path / "o.drawio")], ["import-xml", str(bad)],
+                 ["adopt-template", str(bad), "-o", str(tmp_path / "rep")]):
+        run = subprocess.run([sys.executable, "-m", "diagram_bot.cli", *args], capture_output=True, text=True)
+        assert run.returncode == 2, (args, run.stderr)
+        assert "Traceback" not in run.stderr and "입력 오류" in run.stderr
+
+
+def test_compressed_pages_are_decoded_and_written_uncompressed(client):
+    model = mx(ARCH).split("<mxGraphModel>", 1)[1].rsplit("</mxGraphModel>", 1)[0]
+    blob = compress(f"<mxGraphModel>{model}</mxGraphModel>")
+    compressed = f'<mxfile host="app.diagrams.net" compressed="true"><diagram id="z" name="arch">{blob}</diagram></mxfile>'
+    assert api.inspect_xml(compressed)["node_count"] == 1
+    out = api.align_xml(compressed)
+    root = fromstring(out)
+    assert root.get("compressed") == "false" and blob not in out and root.find("diagram/mxGraphModel/root") is not None
+    assert {i["Tags"][0]["Value"] for i in api.import_xml(compressed)["raw"]["instances"]} == {"web-1"}
+    assert client.post("/api/xml/align", json={"xml": compressed}).status_code == 200
+    # Stored documents stay uncompressed: the save path refuses compressed pages.
+    sid = first_snapshot(client)
+    revision = client.get(f"/api/snapshots/{sid}/document").json()["revision"]
+    assert client.put(f"/api/snapshots/{sid}/document", json={"xml": compressed, "revision": revision}).status_code == 422
+
+
+def test_zip_bombs_and_oversized_documents_are_refused():
+    bomb = compress("<mxGraphModel><root>" + " " * (11 * 1024 * 1024) + "</root></mxGraphModel>")
+    with pytest.raises(InputError, match="10 MiB"):
+        api.inspect_xml(f'<mxfile><diagram name="b">{bomb}</diagram></mxfile>')
+    with pytest.raises(InputError, match="10,000"):
+        api.inspect_xml(mx([v(f"n{i}", "", "", 0, 0, 1, 1) for i in range(10_001)]))
+
+
+def test_adopt_over_http_never_reads_a_server_path(client, tmp_path):
+    secret = tmp_path / "company.drawio"
+    secret.write_text(MESSY_COMPANY_XML, encoding="utf-8")
+    res = client.post("/api/xml/adopt", json={"xml": str(secret), "save": False})
+    assert res.status_code == 422
