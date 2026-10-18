@@ -1,101 +1,116 @@
 ---
-title: 회사 draw.io 규격(DrawioSpec)과 기존 XML 자동 정렬·이식
-summary: drawio_spec.py의 회사별 draw.io XML 포맷·컨테이너 계층·리소스 스타일 자동 추출(spec_from_xml, set_default_spec)과 xml_align.py의 회사 표준 템플릿 원클릭 표준화(adopt_company_xml), 인플레이스 정렬(align_drawio_xml), 스냅샷 역변환(import_drawio_xml).
-sources: [src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/drawio.py, src/diagram_bot/layout.py, src/diagram_bot/designer.py, src/diagram_bot/api.py, src/diagram_bot/routes/documents.py, src/diagram_bot/cli.py, tests/test_xml_align.py]
-related: [porting-guide, layout-and-drawio, snapshot-model, http-api, cli]
-updated: 2026-10-18
+title: 회사 draw.io 규격(DrawioSpec)과 기존 XML 진단·정렬·가져오기
+summary: drawio_spec.py의 검증된 회사 규격(DrawioSpec, spec_from_xml, request_spec)·입력 관문(read_document)·공용 분류표(classify_cell)와 xml_align.py의 진단(inspect), 품질 보호 정렬(align_report), 여러 페이지 가져오기(import), 템플릿 채택(adopt)과 그 HTTP·CLI 진입점.
+sources: [src/diagram_bot/drawio_spec.py, src/diagram_bot/xml_align.py, src/diagram_bot/drawio.py, src/diagram_bot/layout.py, src/diagram_bot/designer.py, src/diagram_bot/api.py, src/diagram_bot/routes/documents.py, src/diagram_bot/cli.py, tests/test_xml_align.py, tests/test_xml_robustness.py]
+related: [porting-guide, layout-and-drawio, snapshot-model, http-api, cli, team-mode-security]
+updated: 2026-10-19
 ---
-# 회사 draw.io 규격(`DrawioSpec`)과 기존 XML 자동 정렬·이식
+# 회사 draw.io 규격(`DrawioSpec`)과 기존 XML 진단·정렬·가져오기
 
-> 회사마다 원하는 표준 아키텍처 템플릿(`drawio.xml`)의 포맷이 다르다:
-> - `<mxCell value="…">` vs `<object label="…">` 래퍼
-> - 외곽 `AWS Cloud`·`Region`·`AZ` 컨테이너 상자 유무 (`use_cloud_box`, `use_region_box`, `use_az_box`)
-> - 서브넷 라벨 표기법(한 줄 `public-a (10.20.1.0/24)` vs 여러 줄 라우팅 설명)
-> - 리소스 종류별 아이콘·색상·폰트(`resource_styles`), 격리(Data) 서브넷 구분색, 화살표 모양(`endArrow`)
->
-> `adopt_company_xml`(`api.adopt_xml` / CLI `adopt-template` / HTTP `POST /api/xml/adopt`)에 회사 표준 `drawio.xml` 파일 하나만 넘기면 **회사 포맷 규격 추출 + 전역 렌더러 표준화 + 기존 XML 자동 정렬 + 사내 표준 아키텍처(`Design.apply_standard`) 등록**이 한 번에 끝난다.
+> 회사가 이미 가진 `drawio.xml`을 진단(`inspect_drawio_xml`)하고, 더 나빠지지 않는 범위에서 정렬하고(`align_report`/`align_drawio_xml`),
+> 여러 페이지를 `Snapshot`으로 가져오고(`import_drawio_xml`), 회사 템플릿의 포맷을 `DrawioSpec`으로 뽑아 쓴다(`spec_from_xml`, `adopt_company_xml`).
+> 라벨에서 읽은 내용은 추론이다. API 근거가 아니므로 가져온 스냅샷에는 `metadata.imported = true`가 붙는다.
 
-## 1. 원클릭 회사 템플릿 표준화 (`adopt_company_xml` / `api.adopt_xml`)
+## 핵심
+- 입력은 모두 `drawio_spec.read_document` 한 곳을 지난다. 이 함수는 10 MiB 제한, defusedxml 파싱, 루트 태그 확인, 압축 페이지 해제, 셀 10,000개 제한을 맡는다. 실패는 `errors.InputError`이고, HTTP는 422(`routes.install_error_handlers`), CLI는 종료 코드 2와 한 줄 메시지(트레이스백 없음)로 답한다.
+- 좌표가 `inf`·`nan`이거나 숫자가 아니면 `InputError`다. 절댓값이 `1e7`을 넘거나 너비·높이가 음수여도, 부모가 순환하거나 64단계보다 깊어도 마찬가지다(`xml_align._number`, `_compute_abs`는 반복문).
+- 압축된 `<diagram>`(base64 → raw deflate → URL 인코딩)은 풀어서 읽는다. 해제 총량도 10 MiB로 제한한다. 출력은 항상 비압축이고 `compressed="false"`다. 저장하는 편집본(`drawio.validate_document`)만 압축 페이지를 거부한다.
+- HTTP의 `spec`에는 프리셋 이름이나 인라인 JSON 객체만 넣을 수 있다(`request_spec`). 파일 경로와 XML은 CLI·라이브러리(`resolve_spec`)만 받는다. 요청 데이터로 서버 파일을 읽지 않는다.
+- `DrawioSpec`은 생성할 때 모든 필드를 검증한다(`__post_init__`).
+  - `cell_wrapper`는 `object`·`UserObject`·`mxCell` 중 하나이고, 대소문자를 구분하지 않고 정규화한다.
+  - `attribute_map` 값은 XML 이름이어야 하고 draw.io 예약 이름(`id`, `parent`, `style`, `vertex`, `edge`, `source`, `target`, `label`, `value` 등)은 쓸 수 없다.
+  - 숫자는 유한한 범위 값이다. 색·글꼴에는 `;`·`=`를 넣을 수 없다(스타일 키 주입 차단).
+  - 모르는 키는 거부한다. 예전 파일의 `icon_size`·`slot_w`·`row_h`는 무시한다(렌더러가 읽은 적이 없다).
+- 셀 분류표는 `drawio_spec.classify_cell` 하나다. 규격 추출, 진단, 정렬, 가져오기가 모두 이 표를 쓴다.
+- 정렬은 입력보다 나쁜 결과를 내지 않는다. 문제가 없는 페이지는 그대로 두고, 겹침·범위 이탈·선-아이콘 충돌 중 하나라도 늘면 원래 배치를 돌려준다.
 
-회사에서 기존에 쓰던 표준 아키텍처 `drawio.xml` 파일을 받아 그 파일 기준으로 전체 엔진의 포맷·레이아웃·표준 템플릿을 개편하는 가장 빠른 방법이다.
+## 셀 분류 (`classify_cell`)
+신호가 강한 것부터 본다.
+1. Diagram Bot 고정 ID(`heading`, `scope`, `cloud`, `region`, `references`, `onprem`), `edgeLabel`·`text` 셀, WAF 표식, 요약 카드(`summary="1"`).
+2. AWS 그룹 아이콘(`grIcon`, `GROUP_ROLES`)과 `resourceId`의 그래프 종류(`vpc`, `subnet`, `auto_scaling_group`).
+3. aws4 `shape`/`resIcon`(`SHAPE_COLOR_KINDS`, `SHAPE_KINDS`, `SHAPE_ALIASES`). 대상 그룹과 로드 밸런서는 같은 타일이라 채움 색으로 가른다. 표에 없는 aws4 아이콘은 `kind=None` 리소스다.
+4. 컨테이너(`container=1`, 자식이 있음, `swimlane`/`group`)의 라벨 단어(`CONTAINER_WORDS`, AZ·리전 코드). 맞는 것이 없으면 `group`이다.
+5. 일반 도형의 라벨 단어(`LABEL_KINDS`). 단어 단위로만 맞추므로 "International"에서 `nat`, "Albert"에서 `alb`를 찾지 않는다. 맞는 것이 없으면 `annotation`이다. EC2로 추정하는 기본값은 없다.
+
+- 서브넷 계층은 `subnet_tier`가 정한다. 퍼블릭·격리 색과 봇의 경로 문구를 먼저 보고, 그다음 첫 줄 이름을 `layout.tier_rank`로 판정한다(한국어 웹·앱·데이터는 영어로 바꿔서). 그래서 렌더러와 같은 순위가 나온다.
+- 엣지의 부모가 엣지이거나 `relative="1"`인 꼭짓점은 `label`이다. 정렬·가져오기에서 건드리지 않는다.
+
+## 진단 (`inspect_drawio_xml` / `api.inspect_xml`)
+- 모든 페이지를 본다. `overlaps`, `out_of_bounds`, `unaligned_tiers`, `unrouted_edges`, `edge_collisions`는 셀 ID 쌍 또는 ID 목록이다(개수가 아니다). `clean`, `node_count`, `container_count`, `edge_count`, `roles`, `wrapper`, `spec`도 돌려준다.
+- `pages`에는 페이지마다 `name`, `aws`(AWS 셀이 있는지; 표지·범례는 `false`), `node_count`, 문제 개수, `clean`이 들어 있다.
+- 계층 행은 각 AZ 열에서 같은 계층의 k번째 서브넷이 같은 `y`에서 시작하면 정렬된 것으로 본다. `layout.py`처럼 높이는 달라도 된다(빈 서브넷은 더 낮다).
+- 엣지 중간점은 엣지 부모의 원점에 대한 상대 좌표다(draw.io 규칙). `orthogonalEdgeStyle`에 포트가 있으면 그 경로를 잰다. 직선 엣지는 중심에서 중심까지 그어 잰다(`_segment_hits`, 대각선도 정확). 경로를 draw.io가 정하는 엣지(직교, 포트·중간점 없음)는 충돌을 재지 않는다.
+- 겹침·충돌 검사는 격자 색인(`xml_align._Grid`)을 쓴다. 도형 3,200개도 1초 안팎이다(예전에는 13.7초). 도형 하나당 상자 검사 횟수 상한을 테스트가 지킨다.
+
+## 정렬 (`align_report` / `align_drawio_xml` / `api.align_xml`)
+- `mode="preserve"`(기본): 페이지마다 아래 순서로 처리한다.
+  1. 진단해서 `clean`이면 기하를 건드리지 않는다(`status: "clean"`).
+  2. 아니면 사본을 만들고 `_align_page_in_place`를 실행한다. 이 함수는 평평한 셀을 감싸는 컨테이너로 옮기고, 리소스를 `layout.SLOT`/`ROW`/`ICON` 격자에 놓는다. AZ 열의 계층 행을 맞추고, 컨테이너를 아래에서 위로 키우고, 포트를 나눈 직교 경로를 만든다.
+  3. 다시 진단해서 `GUARDED`(`overlaps`, `out_of_bounds`, `edge_collisions`) 중 하나라도 늘었으면 원래 페이지로 되돌린다(`status: "reverted"`). 아니면 `"aligned"`다.
+  4. 규격(`spec` 또는 `normalize_styles`)은 그다음에 모든 페이지에 적용한다.
+  - 결과: `align_report` → `{"xml", "pages": [{name, status, before, after, kept_wrappers}]}`. `align_drawio_xml`은 그중 `xml`이다.
+- 중간점은 엣지 부모의 좌표계로 쓴다. 상단 배너를 지울 때(`include_header=False`)는 최상위(`parent="1"`) 엣지의 중간점만 옮긴다.
+- `annotation`·`label`·`group`은 옮기지도 않고, 부모를 바꾸지도 않고, 측정하지도 않는다.
+- 래퍼를 바꿀 때 사용자 속성은 지운다. `tooltip`, `link`, `placeholders`, `resourceId` 같은 속성이 있는 `object`/`UserObject`는 규격이 `mxCell`이어도 그대로 두고 `kept_wrappers`로 센다. 맨 `mxCell`의 사용자 속성은 새 래퍼로 옮긴다.
+- Diagram Bot 자신의 출력(모든 샘플, 모든 페이지)에서는 아무것도 바꾸지 않는다.
+- `mode="rebuild"`: 가져오기 → `generate_document`(규격이 없으면 입력에서 추출한 규격).
+
+## 가져오기 (`import_drawio_xml` / `api.import_xml`)
+- 모든 페이지를 읽는다. AWS 셀이 없는 페이지(표지, 범례)는 건너뛴다. 전체 구성 카드 안의 개수·아이콘(`glance`)은 리소스로 보지 않는다.
+- 여러 페이지에 그려진 리소스는 한 번만 만든다.
+  - 봇 셀은 `resourceId`로 맞추고, `vpc-`·`subnet-`·`i-`·`nat-`·`igw-`·`vpce-`·`fs-` ID를 그대로 쓴다.
+  - 그 밖의 셀은 (종류, 이름, VPC)로 맞춘다. VPC는 CIDR, 서브넷은 (VPC, CIDR)로 맞춘다.
+- AZ는 라벨이 그 리전의 실제 AZ를 가리킬 때만 라벨에서 읽는다(`ap-northeast-2a`, `AZ a`, `Zone B`, `AZ 2`, `REGION_AZS`). 아니면 리전의 AZ 목록을 열 순서대로 쓴다.
+- 서브넷 CIDR은 라벨의 CIDR이 VPC 안에 있고 비어 있을 때만 쓰고, 아니면 VPC의 다음 빈 블록을 쓴다(`_Cidrs`). VPC 밖 CIDR은 만들지 않는다.
+- `metadata.import`에는 다음이 들어 있다.
+  - `cells`: draw.io 셀 ID → 스냅샷 리소스 ID(VPC·서브넷·인스턴스 ID, LB·TG ARN, DB 식별자 등).
+  - `pages`: 페이지별 가져옴 여부.
+  - `unmapped`: 만들 수 없는 종류(TGW, VPN, 고객 게이트웨이, OpenSearch 등)의 셀과 `kind=None` 아이콘. 추측하지 않고 보고만 한다.
+  - `synthesized`: 그림에 없는데 만든 것. 기본 VPC, 서브넷 없는 그림의 기본 서브넷, 퍼블릭 서브넷용 IGW, 대상 그룹이 없을 때의 `tg-imported`.
+- NAT 게이트웨이는 만들어 넣지 않는다. 프라이빗 서브넷은 그려진 NAT가 있을 때만 NAT 경로를 받는다.
+- 왕복(봇 출력 → 가져오기): 모든 샘플에서 VPC·서브넷·EC2·LB·TG·NAT·IGW 개수와 VPC·서브넷·인스턴스 ID가 같다. 여러 노드로 그려지는 데이터 저장소(Aurora 멤버, ElastiCache 노드, EFS 탑재 대상)는 그려진 노드마다 하나씩 생긴다.
+
+## 규격 추출과 템플릿 채택
+- `spec_from_xml(xml)`이 모든 페이지에서 처음 본 값을 배우는 항목은 다음과 같다.
+  - 래퍼, 배너(`heading`·`scope`), Cloud/Region/AZ 상자 유무, 서브넷 라벨 표기(`compact`/`full`).
+  - 역할별 컨테이너 스타일, 종류별 리소스 스타일, 글꼴·색, 화살표.
+  - `isolated_subnet_distinct`는 템플릿에 격리 서브넷이 따로 칠해져 있을 때만 참이다. 규격이 받지 않는 값(예: 새 draw.io의 `light-dark()` 색)은 배우지 않는다.
+- `adopt_company_xml(xml_or_path, name=..., set_default=False, register=True, allow_path=True, save_spec=None)`은 진단 → 규격 추출 → 정렬 → 가져오기 → 표준 등록(`register`) → 회사 규격 렌더링(`standardized_xml`) 순서로 처리한다. 기본 표준 이름(`three-tier` 등)과 겹치면 `InputError`다.
+- HTTP `POST /api/xml/adopt`는 요청마다 결과만 돌려준다(editor). `make_default: true`는 admin만 쓸 수 있고, 프로세스 기본 규격 설정과 `Design` 표준 등록을 함께 한다. 이 설정은 메모리에만 있어 재시작하면 사라진다.
+- 앱이 저장·편집하는 문서는 기본 규격이 `mxCell`이거나 속성 이름을 바꿔도 `object` 래퍼와 `resourceId`/`relationId`를 유지한다(`DrawioSpec.for_editor`). 편집기 브리지가 이 속성으로 선택하기 때문이다. `GET document?spec=`은 저장할 수 없는 내보내기 미리보기다(`revision: null`, `preview: true`).
 
 ```python
 from diagram_bot import api
 
-# 1) 회사 표준 drawio.xml 파일(또는 XML 문자열) 하나로 전체 포맷 개편 + 사내 표준 아키텍처 등록
-result = api.adopt_xml(
-    "company_standard_3tier.drawio",   # 파일 경로 또는 XML 문자열
-    name="company-3tier",              # Design.apply_standard("company-3tier")로 부를 이름
-    set_default=True,                  # 이후 모든 api.render / generate_document 호출이 회사 포맷으로 출력됨!
-    save_spec="config/company_spec.json",
-)
-# result["aligned_xml"]      : 원본 셀 ID·라벨을 유지한 채 겹침·컨테이너·AZ 계층·직교 배선만 교정한 XML
-# result["standardized_xml"] : 추출한 회사 규격(DrawioSpec)으로 새로 렌더링한 표준 XML
-# result["spec"]             : 추출된 DrawioSpec 인스턴스
-# result["snapshot"]         : 변환된 Snapshot (raw + graph)
-
-# 2) 등록된 회사 표준 템플릿을 불러와 코드/AI 도구로 리소스 추가 -> 결과도 자동으로 회사 포맷!
-d = api.Design()
-d.apply_standard("company-3tier")
-d.add_subnet_tier(vpc="corp-prod-vpc", tier="data")
-d.add_cache(vpc="corp-prod-vpc", name="corp-redis")
-new_company_xml = api.render(d.snapshot(), view="detail", vpc="vpc-corp-prod-vpc")
+report = api.inspect_xml(company_xml)                 # report["overlaps"]: [(id_a, id_b), ...], report["clean"]
+result = api.align_report(company_xml, spec="clean")  # result["pages"][0]["status"]: "clean" | "aligned" | "reverted"
+snapshot = api.import_xml(company_xml)                # snapshot["metadata"]["import"]["cells"]: {cell_id: resource_id}
+spec = api.spec_from_xml(company_xml)
+xml = api.render(snapshot, spec=spec)
 ```
 
-환경 변수 `DIAGRAM_BOT_SPEC=/path/to/company_standard.drawio` (또는 저장된 `company_spec.json`)를 설정하면 코드 수정 없이 서버·CLI·채팅 전체가 해당 파일의 규격을 기본값으로 사용한다.
+## 진입점
+- Python(`api.py`): `inspect_xml`, `align_xml`, `align_report`, `import_xml`, `adopt_xml`, `spec_from_xml`, `resolve_spec`, `set_default_spec`, `DrawioSpec`.
+- HTTP(`routes/documents.py`, [[http-api]]):
+  - `POST /api/xml/align` → `{xml, before, after, pages}`.
+  - `POST /api/xml/import` → `{id, snapshot}`.
+  - `POST /api/xml/adopt` → `{id, name, default, spec, aligned_xml, standardized_xml, before, after}`.
+  - 세 엔드포인트 모두 editor 이상이고, `make_default`는 admin이다.
+- CLI(`cli.py`, [[cli]]): `align-xml`(`--spec`은 프리셋·JSON·회사 `.drawio`; 되돌린 페이지와 남긴 래퍼를 표준 오류에 출력), `import-xml`, `adopt-template`. XML 입력 오류는 종료 코드 2다.
 
-## 2. `drawio_spec.py` — 회사 맞춤형 draw.io 포맷·스타일 규격
-
-### 프리셋 3종 (`PRESETS`, `resolve_spec`)
-| 프리셋 이름 (`spec=`) | 상수 | 특징 |
-| --- | --- | --- |
-| `"default"` (또는 `None`) | `DEFAULT_SPEC` | Diagram Bot 기본값: `<object label="…"><mxCell/></object>` 래퍼, 상단 제목(`heading`)·범위(`scope`) 배너 표시, `Arial`, 프라이빗·격리 서브넷 동일 청록색 |
-| `"clean"` / `"enterprise"` | `ENTERPRISE_CLEAN_SPEC` | 사내 문서·발표용: 상단 `heading`·`scope` 배너 생략(다이어그램이 `y=24`에서 바로 시작), 격리(Data) 서브넷 별도 색상(`#ECEFF8` / `#3F51B5`), `endArrow=block` |
-| `"mxcell"` | `MXCELL_SPEC` | 순수 `<mxCell id="…" value="…">` 래퍼(외부 `<object>` 미사용) + 배너 생략 + 격리 서브넷 구분. `<mxCell>`만 파싱하는 사내 기존 코드와 100% 호환 |
-
-### `spec_from_xml(xml_text)`이 회사 XML에서 자동 학습하는 항목
-- **래퍼 및 배너**: `cell_wrapper` (`"mxCell"` \| `"object"` \| `"UserObject"`), `include_header` (`heading`/`scope` 유무), `host`, `background`, `grid_size`
-- **컨테이너 계층 구조**:
-  - `use_cloud_box`: 회사 XML에 `AWS Cloud` 상자가 없으면 `False` (렌더링 시 생략하고 자식 좌표를 좌상단 여백 `24px`로 자동 이동)
-  - `use_region_box`: 회사 XML에 `Region` 상자가 없으면 `False` (`VPC`를 상위 컨테이너로 자동 승격)
-  - `use_az_box`: 회사 XML에 `AZ` 점선 상자가 없으면 `False` (서브넷을 `VPC` 바로 아래에 배치)
-- **서브넷 라벨 표기**: `subnet_label_style` — 회사 XML의 서브넷 라벨이 한 줄(`public-subnet-a (10.20.1.0/24)`)이면 `"compact"`, 라우팅 설명을 포함한 여러 줄이면 `"full"`
-- **컨테이너·서브넷·리소스별 스타일**:
-  - `styles`: 컨테이너 역할별(`vpc`, `az`, `public_subnet`, `private_subnet`, `isolated_subnet` 등) 스타일 문자열
-  - `resource_styles`: 리소스 종류별(`application`, `ec2`, `db_instance`, `nat_gateway` 등) 회사 아이콘·색상 스타일 문자열
-  - `font_family`, `font_color`, `icon_size`, `edge_style`, `edge_end_arrow`, `edge_rounded`
-
-## 3. `xml_align.py` — 기존 회사 `drawio.xml` 진단·자동 정렬·스냅샷 변환
-
-### A. 진단 (`inspect_drawio_xml` / `api.inspect_xml`)
-기존 `drawio.xml`의 레이아웃·배선 문제를 정량 진단한다:
-- `overlaps`: 같은 부모 안에서 겹치는 도형 쌍
-- `out_of_bounds`: 부모 컨테이너 영역 밖으로 삐져나온 자식 셀
-- `unaligned_tiers`: 같은 VPC 내 AZ 열 사이에서 같은 계층(Public/Web/App/Data) 서브넷의 `y`·`height`가 어긋난 경우
-- `unrouted_edges`: `orthogonalEdgeStyle` 또는 `exitX`/`entryX`가 없는 연결선
-- `edge_collisions`: 연결선 선분이 끝점이 아닌 리소스 아이콘을 관통하는 경우
-- `clean`: 위 5가지 문제가 모두 `[]`이면 `True`
-
-### B. 규칙 기반 자동 정렬 (`align_drawio_xml` / `api.align_xml`)
-- **`mode="preserve"` (기본, 인플레이스 정렬)**:
-  1. `parent="1"`로 평평하게 놓인 셀의 중심점이 컨테이너(VPC·AZ·서브넷) 안에 있으면 가장 안쪽 컨테이너의 자식으로 편입하고 상대 좌표로 변환
-  2. 서브넷·컨테이너 내부 리소스를 계층 순서(`_BAND_ORDER`: 게이트웨이/엔드포인트 → LB → 대상 그룹 → 컴퓨트/DB)와 격자로 겹침 없이 정렬
-  3. 같은 VPC 안의 AZ 열들을 좌우 나란히 맞추고, 같은 계층 서브넷의 `y` 시작점과 `height`를 모든 AZ 열에서 동일하게 동기화
-  4. 모든 컨테이너(서브넷 → AZ → VPC → Region → Cloud)를 자식 크기에 맞춰 아래에서 위로(`bottom-up`) 자동 리사이즈
-  5. 모든 연결선에 포트 분산 `exitX`/`exitY`/`entryX`/`entryY`와 장애물(아이콘) 회피 직교 중간점(`Array as="points"`)을 부여
-- **`mode="rebuild"`**: `import_drawio_xml`로 스냅샷을 만든 뒤 추출된 회사 `DrawioSpec`과 `generate_document`로 재배치한다.
-
-## 4. HTTP API 및 CLI 진입점
-
-| 진입점 | 사용법 |
-| --- | --- |
-| Python (`api.py`) | `api.adopt_xml(xml_or_path, name=..., set_default=True)`, `api.set_default_spec(spec)`, `api.spec_from_xml(xml)`, `api.align_xml(xml, mode="preserve"\|"rebuild")`, `api.import_xml(xml)`, `api.inspect_xml(xml)` |
-| HTTP (`routes/documents.py`) | `POST /api/xml/adopt` (`{xml, name, set_default}` → `{id, name, spec, aligned_xml, standardized_xml, before, after}`), `POST /api/xml/align`, `POST /api/xml/import`, `GET /api/snapshots/{id}/document?spec=...` |
-| CLI (`cli.py`) | `diagram-bot adopt-template company.drawio -o reports/company [--name corp-std] [--save-spec spec.json]`<br>`diagram-bot align-xml input.drawio -o aligned.drawio [--mode preserve\|rebuild] [--spec ...]`<br>`diagram-bot import-xml input.drawio -o snapshot.json [--render out.drawio]` |
+## 바꿀 때 주의
+- 새 입력 경로는 반드시 `read_document`를 지나게 한다. `fromstring`을 직접 부르면 크기·압축·셀 제한과 422 매핑이 빠진다.
+- 요청 데이터를 `resolve_spec`에 넘기지 않는다. 라우트는 `request_spec`만 쓴다. `adopt_company_xml`에는 `allow_path=False`를 넘긴다.
+- 분류 규칙은 `classify_cell` 한 곳에서만 바꾼다. 서브넷 계층 단어는 `layout.tier_rank`에 있다. `test_subnet_tiers_match_layout_tier_rank_on_own_output`와 `test_align_on_own_output_is_a_no_op_or_an_improvement`가 렌더러와의 일치를 지킨다.
+- 엣지 중간점을 읽거나 쓰는 코드는 엣지 부모의 원점을 더하거나 뺀다(`test_edge_inside_a_group_is_routed_in_its_parent_frame`).
+- 정렬기 격자는 `layout.SLOT`, `ROW`, `ICON`, `LANE_TOP`, `SUBNET_HEADER`, `AZ_HEADER`, `VPC_HEADER`를 쓴다. 값을 따로 두지 않는다.
+- 성능 테스트(`test_align_and_inspect_do_linear_work`)는 시간이 아니라 상자 검사 횟수를 센다. 새 쌍별 검사는 `_Grid`로 한다.
+- `drawio.py`의 렌더러 출력은 바이트 단위로 고정되어 있다(golden). 스타일·아이콘 표는 `drawio_spec`에만 있다.
 
 ## 관련
-- [[porting-guide]] — 회사 스택 단계별 이식 가이드.
-- [[layout-and-drawio]] — `layout.py`와 `drawio.py`의 기본 배치·렌더링 원리.
-- [[snapshot-model]] — `import_drawio_xml`이 만드는 `Snapshot` 구조.
-- [[http-api]] — `/api/xml/adopt`, `/api/xml/align`, `/api/xml/import`, 문서 `spec` 쿼리 레퍼런스.
-- [[cli]] — `adopt-template`, `align-xml`, `import-xml` 명령 옵션.
+- [[porting-guide]] — 회사 저장소로 옮길 때의 단계별 파일 목록.
+- [[layout-and-drawio]] — 렌더러의 격자·계층·경로 규칙(정렬기가 따르는 기준).
+- [[snapshot-model]] — 가져오기가 만드는 `Snapshot` 구조.
+- [[http-api]] — `/api/xml/*`와 문서 `spec` 미리보기 계약.
+- [[cli]] — `align-xml`, `import-xml`, `adopt-template` 옵션과 종료 코드.
+- [[team-mode-security]] — 역할(viewer·editor·admin)과 감사 로그.

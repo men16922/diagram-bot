@@ -25,7 +25,7 @@ updated: 2026-10-18
 - [[graph]] (graph.md) — **관계 그래프 (graph)**: raw API 데이터에서 노드·관계를 만드는 결정적 조인 규칙 — 노드 종류 45개와 관계 43개, 관계 ID 규칙, 참조 전용 노드, 서브넷 경로 분류, 고가용성 역할, 계정 통합 병합, 옛 그래프 업그레이드.
 - [[views]] (views.md) — **보기 계약 (views)**: views.view_graph가 정하는 overview·detail·focus 보기의 노드·관계 선택, references 옵션, 경로 필터(routes=), 개수(visible·collected·references·hidden·filtered), 전체 구성의 네트워크·엣지 연결선, 포함 관계.
 - [[layout-and-drawio]] (layout-and-drawio.md) — **배치와 draw.io 문서**: layout.py의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
-- [[drawio-format-and-alignment]] (drawio-format-and-alignment.md) — **회사 draw.io 규격(DrawioSpec)과 기존 XML 자동 정렬·이식**: drawio_spec.py의 회사별 draw.io XML 포맷·컨테이너 계층·리소스 스타일 자동 추출(spec_from_xml, set_default_spec)과 xml_align.py의 회사 표준 템플릿 원클릭 표준화(adopt_company_xml), 인플레이스 정렬(align_drawio_xml), 스냅샷 역변환(import_drawio_xml).
+- [[drawio-format-and-alignment]] (drawio-format-and-alignment.md) — **회사 draw.io 규격(DrawioSpec)과 기존 XML 진단·정렬·가져오기**: drawio_spec.py의 검증된 회사 규격(DrawioSpec, spec_from_xml, request_spec)·입력 관문(read_document)·공용 분류표(classify_cell)와 xml_align.py의 진단(inspect), 품질 보호 정렬(align_report), 여러 페이지 가져오기(import), 템플릿 채택(adopt)과 그 HTTP·CLI 진입점.
 - [[samples]] (samples.md) — **샘플과 데모 스냅샷**: samples.Sample 빌더 도우미, 번들 샘플 11개(무엇을 보여 주는지·리전), SAMPLE_VERSION과 서버의 샘플 재생성(SnapshotStore.seed), demo.py, scripts/render_samples.py, examples/samples.
 
 ## 분석과 출력

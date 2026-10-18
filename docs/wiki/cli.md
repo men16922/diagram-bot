@@ -3,7 +3,7 @@ title: CLI와 검증 스크립트
 summary: diagram-bot CLI(cli.py)의 모든 하위 명령·옵션·종료 코드, --env-file 동작, Makefile 게이트(check·lint·test·smoke-local)와 scripts/의 검증·렌더링 스크립트.
 sources: [src/diagram_bot/cli.py, pyproject.toml, Makefile, scripts/verify_offline.py, scripts/verify_demo.py, scripts/verify_team.py, scripts/verify_browser_egress.py, scripts/render_samples.py, src/diagram_bot/store.py, src/diagram_bot/editor.py, src/diagram_bot/agent.py]
 related: [review-rules, change-review, multi-account, cloudformation, browser-egress, collection, chat-agent, team-mode-security, http-api]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # CLI와 검증 스크립트
 
@@ -13,7 +13,7 @@ updated: 2026-10-18
 - 전역 옵션: `--version`(`diagram-bot <패키지 버전>`, 설치 안 됐으면 `dev`).
 - `--env-file`은 `collect`, `chat`, `serve`에만 있다(공용 부모 파서 `env`).
 - 보고서를 쓰는 명령(`demo`, `render`, `combine`, `collect`)은 `report.write_report`로 `index.html`, `snapshot.json`, `topology.drawio`, `inventory.csv`, `review.md`를 만든다.
-- 예외 처리: `BotoCoreError`·`ClientError`는 "인증 또는 AWS 조회 시작 실패" 메시지와 종료 코드 1, `OSError`·`ValueError`·`KeyError`·`TypeError`는 `실패: ...`와 1.
+- 예외 처리: `BotoCoreError`·`ClientError`는 "인증 또는 AWS 조회 시작 실패" 메시지와 종료 코드 1, `OSError`·`ValueError`·`KeyError`·`TypeError`는 `실패: ...`와 1. `align-xml`·`import-xml`·`adopt-template`의 입력 오류(`errors.InputError`: 깨진 XML, 압축 해제 실패, 잘못된 좌표·규격)는 `입력 오류: ...`와 종료 코드 2(트레이스백 없음, `XML_COMMANDS`).
 
 ## 하위 명령
 | 명령 | 인자·옵션 | 동작 |
@@ -25,8 +25,8 @@ updated: 2026-10-18
 | `diff` | `BEFORE AFTER`, `--format markdown\|json`, `--fail-on-change` | 변경 비교 출력([[change-review]]) |
 | `combine` | `SNAPSHOTS...`(2개 이상), `--output`(필수), `--title` | 계정·리전 스냅샷을 합친 보고서([[multi-account]]) |
 | `export-cfn` | `SNAPSHOT`, `--output` | CloudFormation 초안. 합친 스냅샷은 `--output` 필수([[cloudformation]]) |
-| `align-xml` | `XML`, `--output`(생략 시 stdout), `--mode preserve\|rebuild`, `--spec`, `--spec-from`, `--normalize-styles` | 기존 `drawio.xml` 인플레이스 정렬·직교 배선 및 회사 규격 적용([[drawio-format-and-alignment]]) |
-| `import-xml` | `XML`, `--output`(생략 시 stdout), `--title`, `--region`, `--render`, `--spec` | 기존 `drawio.xml`을 `Snapshot` JSON 및 렌더링된 XML로 변환([[drawio-format-and-alignment]]) |
+| `align-xml` | `XML`, `--output`(생략 시 stdout), `--mode preserve\|rebuild`, `--spec`(프리셋, 규격 JSON 또는 회사 `.drawio`; `resolve_spec`), `--spec-from`, `--normalize-styles` | `align_report`로 모든 페이지 정렬·직교 배선·회사 규격 적용. `--output`이면 겹침·범위 이탈·미배선·선 충돌 전후 개수, 되돌린 페이지, `<mxCell>`로 바꾸지 않은 래퍼 수를 표준 오류에 출력([[drawio-format-and-alignment]]) |
+| `import-xml` | `XML`, `--output`(생략 시 stdout), `--title`, `--region`, `--render`, `--spec` | 기존 `drawio.xml`(모든 페이지)을 `Snapshot` JSON 및 렌더링된 XML로 변환([[drawio-format-and-alignment]]) |
 | `adopt-template` | `XML`, `-o/--output`(필수), `--name`, `--title`, `--region`, `--save-spec` | 회사 표준 `drawio.xml` 기준으로 포맷 규격(`DrawioSpec`) 추출·원본 정렬(`aligned.drawio`)·사내 표준 아키텍처 보고서 생성([[drawio-format-and-alignment]]) |
 | `setup-editor` | `--archive`(오프라인 설치용 `draw.war`) | 고정 버전 draw.io 설치(`editor.install_editor`, 기본 위치 `$XDG_CACHE_HOME/diagram-bot/drawio/<VERSION>`) |
 | `chat` | `--model`, `--output`(기본 `reports/chat`), `-m/--message`(반복), `--from`, `--env-file` | Strands + Bedrock 채팅 |

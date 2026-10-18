@@ -3,7 +3,7 @@ title: 팀 모드와 보안 경계
 summary: 앱 로그인(로컬 계정·OpenID Connect), 세션·역할, create_app 미들웨어(TrustedHost, 페이지 토큰, Origin, 본문 제한, 보안 헤더), 감사 로그, 비루프백 TLS 요구와 저장하지 않는 비밀.
 sources: [src/diagram_bot/auth.py, src/diagram_bot/oidc.py, src/diagram_bot/server.py, src/diagram_bot/routes/session.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/cli.py, SECURITY.md, docs/OPERATIONS.md, tests/test_team.py, tests/test_oidc.py, tests/test_server.py]
 related: [http-api, storage, web-app, chat-agent, browser-egress, aws-access-and-sso, cli]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 팀 모드와 보안 경계
 
@@ -30,8 +30,8 @@ updated: 2026-10-18
 ## 역할 (`auth.allowed`)
 - `GET`·`HEAD`와 `/api/logout`은 모든 역할 허용.
 - `/api/collections`·`/api/sso`로 시작하는 변경 요청은 `admin`만.
-- 그 밖의 변경 요청(문서 저장·재배치·복원, 스냅샷 가져오기·통합, 채팅, `/api/relay/*` 응답)은 `editor`·`admin`.
-- 핸들러 안의 추가 검사: `GET /api/identity`와 `GET /api/audit`은 팀 모드에서 `admin`만, 채팅의 AWS 수집 도구도 `admin`만(`Workspace.allow_collection`).
+- 그 밖의 변경 요청(문서 저장·재배치·복원, 스냅샷 가져오기·통합, `/api/xml/align`·`/api/xml/import`·`/api/xml/adopt`, 채팅, `/api/relay/*` 응답)은 `editor`·`admin`. 문서 `?spec=` 미리보기는 GET이라 `viewer`도 되지만 저장할 수 없다(`revision: null`).
+- 핸들러 안의 추가 검사: `GET /api/identity`와 `GET /api/audit`은 팀 모드에서 `admin`만, 채팅의 AWS 수집 도구도 `admin`만(`Workspace.allow_collection`), `POST /api/xml/adopt`의 `make_default=true`(서버 전체 기본 규격·표준 등록)도 `admin`만(`routes.documents`, 수집과 같은 등급).
 
 ## OpenID Connect (`oidc.py`)
 - 설정(`load_config`): `issuer`, `client_id`, `redirect_uri`, `role_claim`, `role_map` 필수. `client_secret` 대신 `client_secret_env`(환경 변수 이름)를 쓸 수 있다. `issuer`·`redirect_uri`는 https(루프백 `localhost`·`127.0.0.1`만 http 허용, `secure_url`). `role_map` 값과 `default_role`은 `viewer`·`editor`·`admin` 중 하나.
