@@ -166,7 +166,7 @@ diagram-bot chat --env-file .env -m "서울 리전에 3 AZ 3계층 웹 서비스
 - 응답은 스트리밍됩니다(`POST /api/agent/chat/stream`, NDJSON). 도구가 도는 동안 진행 상황이 보이고, 설계 단계마다 저장된 구성도가 바로 캔버스에 열립니다.
   한 번에 결과만 받으려면 `POST /api/agent/chat`을 씁니다.
 - 설계안은 스냅샷으로 저장되어 구성도, 검토, `.drawio`/PNG 다운로드, 변경 비교에 그대로 쓰입니다. 화면에는 `설계안`으로 표시되며 실제 계정 데이터가 아닙니다.
-- 벤치마킹(AWS DevOps Agent)과 설계 근거는 [docs/engineering/DEVOPS_AGENT_BENCHMARK.md](docs/engineering/DEVOPS_AGENT_BENCHMARK.md), draw.io 연동과 자동 배치는 [docs/DRAWIO.md](docs/DRAWIO.md)에 있습니다.
+- 벤치마킹(AWS DevOps Agent)과 설계 근거는 [docs/engineering/DEVOPS_AGENT_BENCHMARK.md](docs/engineering/DEVOPS_AGENT_BENCHMARK.md), draw.io 연동과 자동 배치는 위키 [배치와 draw.io 문서](docs/wiki/layout-and-drawio.md)에 있습니다.
 
 ## 설계 → CloudFormation 내보내기 (IaC 초안)
 

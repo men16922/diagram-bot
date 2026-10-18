@@ -40,7 +40,7 @@ Last Updated: 2026-10-18
 | C8 | 워크로드·환경은 계정으로 분리, 네트워크는 Network 계정의 TGW를 RAM으로 공유 | REC | Organizing Your AWS Environment, SRA |
 | C9 | 다이어그램 표기: 그룹 구조(Cloud > Region > VPC > AZ > Subnet) 먼저, ASG처럼 여러 그룹을 가로지르는 그룹 허용, 아이콘 크기 고정, 라벨 12pt Arial, 이름은 단어 중간에서 끊지 않음, 직각 화살표 | 지침 | AWS Architecture Icons (release 24) |
 
-현재 레이아웃은 C9를 따른다(DRAWIO.md). C6·C8은 수집 범위 밖이라 도형으로는 표현할 수 없다(1절).
+현재 레이아웃은 C9를 따른다([wiki layout-and-drawio](wiki/layout-and-drawio.md)). C6·C8은 수집 범위 밖이라 도형으로는 표현할 수 없다(1절).
 
 ## 3. 사례별 판정
 

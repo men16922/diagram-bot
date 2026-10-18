@@ -1,7 +1,7 @@
 ---
 title: 웹 앱 (프런트엔드)
 summary: 빌드 없는 ES 모듈 프런트엔드(app.html, 진입 app.js, js/ 화면 모듈 11개와 http.js·relay.js·labels.js)의 화면 구조, state 객체와 주요 흐름, draw.io 임베드 메시지 규약, React로 옮길 때 그대로 쓸 모듈과 다시 짤 부분.
-sources: [src/diagram_bot/static/app.html, src/diagram_bot/static/app.js, src/diagram_bot/static/js/state.js, src/diagram_bot/static/js/ui.js, src/diagram_bot/static/js/editor.js, src/diagram_bot/static/js/document.js, src/diagram_bot/static/js/workspace.js, src/diagram_bot/static/js/inspector.js, src/diagram_bot/static/js/review.js, src/diagram_bot/static/js/exports.js, src/diagram_bot/static/js/signin.js, src/diagram_bot/static/js/chat.js, src/diagram_bot/static/js/xml.js, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js, src/diagram_bot/editor.py, src/diagram_bot/server.py]
+sources: [src/diagram_bot/static/app.html, src/diagram_bot/static/app.js, src/diagram_bot/static/js/state.js, src/diagram_bot/static/js/ui.js, src/diagram_bot/static/js/editor.js, src/diagram_bot/static/js/document.js, src/diagram_bot/static/js/workspace.js, src/diagram_bot/static/js/inspector.js, src/diagram_bot/static/js/review.js, src/diagram_bot/static/js/exports.js, src/diagram_bot/static/js/signin.js, src/diagram_bot/static/js/chat.js, src/diagram_bot/static/js/xml.js, src/diagram_bot/static/js/http.js, src/diagram_bot/static/js/relay.js, src/diagram_bot/static/js/labels.js, src/diagram_bot/static/editor-bridge.js, src/diagram_bot/editor.py, src/diagram_bot/server.py, scripts/verify_demo.py]
 related: [http-api, storage, chat-agent, team-mode-security, browser-egress, views, porting-guide]
 updated: 2026-10-19
 ---
@@ -69,6 +69,7 @@ updated: 2026-10-19
 
 ## draw.io 임베드 규약
 - 편집기는 `editor.py`가 `setup-editor`로 설치한 draw.io `VERSION = "32.4.1"`(SHA-256 고정, `~/.cache/diagram-bot/drawio/<버전>`)이다. 서버가 `/editor`로 내보내고, `/editor/js/app.min.js`에 `editor-bridge.js`를 이어 붙여 원본을 고치지 않고 플러그인을 넣는다([[http-api]]).
+- iframe 쿼리의 `offline=1`·`stealth=1` 때문에 편집기는 외부로 요청을 보내지 않는다. `scripts/verify_demo.py`가 앱 주소가 아닌 호스트로 간 요청이 하나도 없는지 확인한다.
 - 양쪽 모두 `event.origin === location.origin`과 보낸 창(`parent` 또는 iframe의 `contentWindow`)을 확인하고, 메시지는 JSON 문자열이다.
 - 앱 → 편집기 (draw.io 표준): `configure`(기본 글꼴, 비압축), `load`(`xml`, `autosave: 1`, `fit`, `border: 24` 등), `export`(`format: 'png'`, `scale`, `transparent`, `background`).
 - 앱 → 편집기 (브리지): `diagramBotOverview`(사이드바·서식 창을 숨기고 읽기 쉬운 배율로 맞춤, 최소 0.6), `diagramBotDocument`(`requestId`), `diagramBotSelect`(`resourceId`, 선택적 `relations`), `diagramBotSelectRelation`(`relationId` 또는 `relationIndex`), `diagramBotNote`(노란 메모 도형 추가).

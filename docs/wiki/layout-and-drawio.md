@@ -1,7 +1,7 @@
 ---
 title: 배치와 draw.io 문서
 summary: layout/ 패키지의 결정적 계층 배치(diagram-bot-layered/2 — 띠, AZ 열, 거터·채널, 전체 구성 카드, CloudFront 엣지 열, 데이터 센터 상자)와 drawio.py의 XML 생성·검증·주석 보존, editor.py의 고정 draw.io 설치, 테스트가 지키는 불변식.
-sources: [src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/DRAWIO.md, tests/test_golden.py, tests/test_layout_package.py]
+sources: [src/diagram_bot/layout/, src/diagram_bot/drawio.py, src/diagram_bot/drawio_spec.py, src/diagram_bot/editor.py, src/diagram_bot/views.py, tests/test_drawio.py, tests/test_graph_report.py, docs/engineering/LAYOUT_EVALUATION.md, tests/test_golden.py, tests/test_layout_package.py]
 related: [drawio-format-and-alignment, views, graph, samples, web-app, storage, howto-add-collected-service]
 updated: 2026-10-19
 ---
@@ -15,6 +15,8 @@ updated: 2026-10-19
 - 엔진 표시: `layout.ENGINE, VERSION = "diagram-bot-layered", 2`. 범위 캡션 셀(`id="scope"`)에 `layout="diagram-bot-layered/2"`와 `view`, `vpc`, `focus`, `references`, `routes` 속성이 들어간다.
 - 셀 ID: `layout.cell_id(value) = "r-" + sha256(value)[:24]`. 리소스 셀은 노드 ID, 관계 셀은 `"edge/" + 관계 ID`에서 만든다. 고정 ID 셀은 `0`, `1`, `heading`, `scope`, `cloud`, `region`, `references`, `onprem`(`drawio.GENERATED`).
 - 모듈(`src/diagram_bot/layout/`): `base.py`(크기 상수 `ICON`·`SLOT`·`ROW`·`SUBNET_HEADER` 등, `cell_id`, `is_public`·`tier_rank`·`outside_vpc`), `text.py`(`text_width`·`fit_label`·`fit_name`·`label_lines`, 종류별 라벨 함수 표 `LABELERS`와 `resource_label`, `icon_variant`, `icon_label`, `group_title`), `overview.py`(요약 카드·허브 띠), `detail.py`(VPC 띠·AZ 열·틀·참조/데이터 센터 상자), `routing.py`(`route`, `edge_entry`·`edge_between`), `edge_column.py`(CloudFront 엣지 열), `__init__.py`(`Canvas`, `layout_view`). 예전 `layout.py`의 모듈 수준 이름은 모두 `__all__`로 `diagram_bot.layout`에서 그대로 import된다.
+- 라이브러리: XML은 Python 표준 `xml.etree.ElementTree`로 만들고(`drawio.py`), 들어오는 XML은 `defusedxml`로 읽는다(`drawio_spec.read_document`). 서버는 mxGraph·maxGraph 같은 JavaScript 라이브러리나 외부 배치 엔진을 쓰지 않는다. AWS 아이콘은 설치한 draw.io 배포물에 든 `aws4` 셰이프 라이브러리다(따로 내려받지 않음).
+- ELK layered(`elkjs`)는 평가했지만 채택하지 않았다. AZ를 나란한 열로 유지하지 못했고, CLI가 앱과 같은 배치를 내려면 Node 런타임이 필요했다. 측정과 판단: [LAYOUT_EVALUATION](../engineering/LAYOUT_EVALUATION.md).
 - 배치 결과(`layout_view`의 반환): `engine`, `version`, `view`, `counts`, `width`, `height`, `shapes`(역할·부모·상대 좌표), `edges`(`path` 전체 경로, `points` 중간점, `constraints` exit/entry), `absolute`(셀별 절대 좌표), `labels`(라벨 상자).
 
 ## 공통 머리말
@@ -34,7 +36,7 @@ VPC마다 위에서 아래로:
 - 거터 폭은 지나가는 경로 수에 맞춘다(`max(28, 16 + 8 * n)`). 행마다 들어오는 경로 수만큼 위 여백(lane)을 둔다.
 - VPC 밖 리전 리소스(참조·배치 미확인)는 Region 안 `references` 상자, `outside_vpc`인 것(고객 게이트웨이, DX 연결, `AvailabilityZone=all` IP 대상)은 AWS Cloud 오른쪽의 `onprem` 상자("Corporate data center")에 한 줄로 둔다.
 - CloudFront 배포는 Region 왼쪽, AWS Cloud 안의 **엣지 열**(`edge_column`, 캡션 "엣지 · CloudFront (리전 밖)")에 둔다. Region의 x는 `edge_offset`이 엣지 열과 경로 통로 폭만큼 민다.
-- 경로(`layout/routing.py`의 `route`): 모든 관계에 직교 경로를 명시한다. 단계는 `edge_spec`(종류 분류) → `gutter_slots` → `corridor_slots` → `entry_points` → `row_lanes` → `align_cloudfront` → `frame_entries` → 종류별 `EMIT` 함수. 대상 그룹은 자기 채널 줄로 줄기를 내리고(버스), 거터마다 출발 그룹별 세로 칸, 행마다 들어오는 관계별 lane을 쓴다. VPN·DX VIF는 AWS Cloud 오른쪽 통로를 거쳐 `onprem` 상자로, CloudFront는 Region 왼쪽 통로를 내려와 LB 행 위 lane으로 들어간다. 대상 그룹 경로 색은 `TG_STROKES` 다섯 가지를 순환한다.
+- 경로(`layout/routing.py`의 `route`): 모든 관계에 직교 경로를 명시한다. 단계는 `edge_spec`(종류 분류) → `gutter_slots` → `corridor_slots` → `entry_points` → `row_lanes` → `align_cloudfront` → `frame_entries` → 종류별 `EMIT` 함수. 대상 그룹은 자기 채널 줄로 줄기를 내리고(버스), 거터마다 출발 그룹별 세로 칸(`gutter_slots`, 8 px 간격), 행마다 들어오는 관계별 lane(`row_lanes`, 4 px 간격)을 쓴다. 같은 대상 그룹에 한 리소스가 포트 여러 개로 등록되면 선을 나누고 진입부에 `:443` 같은 포트 라벨을 단다(`target_route`). VPN·DX VIF는 AWS Cloud 오른쪽 통로를 거쳐 `onprem` 상자로, CloudFront는 Region 왼쪽 통로를 내려와 LB 행 위 lane으로 들어간다. 대상 그룹 경로 색은 `TG_STROKES` 다섯 가지를 순환한다.
 - 경로 필터가 있으면 경로 밖 리소스·틀을 `muted`로 표시한다(XML에서 `opacity=30;textOpacity=45;`).
 
 ## overview 배치 (`layout/overview.py`)
@@ -48,6 +50,7 @@ VPC마다 위에서 아래로:
 ## 라벨과 아이콘
 - `resource_label(node)`: 이름, 유형, 고가용성 역할 순. 종류별 함수는 `text.LABELERS`에 있고, 없는 종류(또는 `Type` 없는 LB, `Protocol` 없는 대상 그룹)는 이름만 쓴다. 예: RDS `primary`/`standby`/`Single-AZ`/`db_role`, ElastiCache `샤드 0001 · primary`, OpenSearch `data 2 · master 1`과 `standby`, Redshift `primary`/`secondary`, EC2 `GPU · EFA · EIP …`와 `Capacity Block`/`ODCR`/`PG …`, LB `AZ 2개 · EIP 2 · WAF`, DX 연결 `Direct Connect · 10Gbps`·위치·`VIF n`, TGW `라우팅 테이블 n`. 근거 값은 [[graph]]의 파생 필드.
 - 라벨은 아래(폭 140, 4줄) 또는 오른쪽(폭 200, 3줄)에 두고 `fit_label`·`fit_name`으로 자른다. 전체 이름은 `tooltip`.
+- 너비는 `text_width`가 Arial 기준으로 추정한다(U+2E80 이상 글자 1em, 그 밖 0.62em). `fit_name`은 숫자로 끝나는 이름(노드·샤드·복제본)의 앞과 끝을 남기고 가운데를 `…`로 줄여 `…-0001-002`처럼 구분되게 한다.
 - `icon_variant`: LB 유형, DB·캐시 엔진, EFS 클래스, FSx 유형, 가속 인스턴스(`ACCELERATED_ICON`, trn·inf), Bedrock·SageMaker 엔드포인트, VPC 안 IP 대상.
 - `drawio.resource_style`: 변형 → `RESOURCE_ICONS`(리소스 수준 아이콘) → `ICONS`(서비스 아이콘 타일) → 기본 둥근 사각형. 참조 노드는 `dashed=1;opacity=65;`, 강조는 굵은 글씨·노란 배경. WAF 보호 리소스에는 `badge` 자식 셀(`waf_badge`).
 - 그룹 스타일 `STYLES`는 draw.io `aws4` 라이브러리의 그룹(`group_aws_cloud_alt`, `group_region`, `group_vpc2`, `group_auto_scaling_group`, `group_corporate_data_center`, `group_account`)을 쓴다.
@@ -75,8 +78,12 @@ VPC마다 위에서 아래로:
 - 규모: 100개 리소스 5초 미만, 한 VPC 300 인스턴스·18 대상 그룹 5초 미만, 2,500개 리소스 계정 20초 미만·51페이지. 경로 필터: 대상 그룹 하나면 교차 0, LB 하나면 전체 교차의 1/10 이하(`test_route_filter_keeps_dense_views_readable`).
 - 엣지·DX: CloudFront는 `cloud` 부모로 Region 왼쪽, WAF 배지는 보호 대상의 자식, DX 연결은 `onprem` 상자, CloudFront 경로는 Region 경계를 가로지름(`test_edge_and_direct_connect_views_are_readable`).
 
+## 한계
+- 리소스가 100개 안팎이면 구조는 맞지만 선이 빽빽하다(경로 필터로 좁힌다). 큰 환경의 가독성은 보장하지 않는다.
+- 라벨 너비는 추정치라서 글꼴이 다른 환경에서는 조금 어긋날 수 있다.
+
 ## 바꿀 때 주의
-- 배치 규칙을 바꾸면 `VERSION`과 `docs/DRAWIO.md`를 함께 고치고, 샘플 그림을 다시 만든다([[samples]]).
+- 배치 규칙을 바꾸면 `VERSION`과 이 페이지를 함께 고치고, 샘플 그림을 다시 만든다([[samples]]).
 - 새 종류는 `EDGE_KINDS`·`SUBNET_KINDS`·`outside_vpc`·`unplaced_cards`의 `outside` 제외 목록·`GLANCE_KINDS` 중 어디에 속하는지 정해야 한다([[howto-add-collected-service]]).
 - 모듈을 나누거나 이름을 옮겨도 `layout/__init__.py`의 `__all__`(그리고 `tests/test_layout_package.py`)이 `diagram_bot.layout`에서 import하는 이름을 지킨다. `xml_align.py` 같은 호출자는 크기 상수를 그 경로로 가져온다. 리팩터링은 `tests/golden.json`을 다시 쓰지 않고 통과해야 한다.
 
