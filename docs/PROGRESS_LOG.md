@@ -2,6 +2,29 @@
 
 Last Updated: 2026-10-18
 
+## 2026-10-18 — Remaining work finished (goal: 잔여 작업 수행, 승인 없이 최대한 완성도 있게)
+
+- CI was red on every push since db76a70 (`strands` missing from its hand-written install list): it now installs `.[test]`,
+  Actions on Node 24; clean 3.11/3.13 venvs pass. LESSONS: green `make check` ≠ green CI.
+- Chat streaming: `POST /api/agent/chat/stream` (NDJSON text/tool/model/snapshot → done|error); the assistant shows tool
+  progress and opens each design step. Live Nova 2 Lite: 8 tools, 5 snapshots over 11 s.
+- Brownfield designs: `start_from_current` (open snapshot → last collection) adopts VPC tiers per AZ, NAT tables, LBs and
+  TGs; `add_subnet_tier`; standards are extendable in their own VPCs; `chat --from`; never writes routes into uncollected
+  tables. Live: three-tier + Redis, existing resources kept (29 tools).
+- CloudFormation export (`export-cfn`, API, download dialog): designs, samples and collected snapshots; Ref/GetAtt only,
+  parameters for AMIs/certs/roles/images, Secrets Manager passwords, TGW route tables; CloudFront/WAF rules/Direct Connect
+  and other inexpressible items in `Metadata.DiagramBot.Unsupported`. cfn-lint clean for every sample; moto stacks for two.
+- Collection: Elastic IPs, TGW route tables, CloudFront, WAFv2, Direct Connect (policy + role template); drawn at the edge /
+  data-center box / labels; rules SEC-ALB-WAF, SEC-CF-ORIGIN-OPEN, COST-EIP-IDLE, REL-TGW-BLACKHOLE (all low).
+- Samples (SAMPLE_VERSION 6): microservices 3 AZ, EKS /28 control-plane subnets + Aurora reader, central egress VPC;
+  three-tier CloudFront+WAF, hybrid Direct Connect (VPN backup), data-platform TGW routing domains; gpu-training moved to
+  us-east-2 (trn2 is not offered in ap-northeast-2, found by cfn-lint).
+- Route filter for dense views (`routes=`, UI `경로 필터`): 100-resource VPC crossings 376 → 0; focus/detail/overview
+  documents now tested for explicit routes clear of captions (fixed two caption crossings and a wrong empty-subnet note).
+- Project `.claude/settings.json` registers the overnight-harness marketplace and plugin (not yet tried in a cloud session).
+- Verified: `make check` 229 tests; verify_demo 35 checks, no page errors/external requests; all samples re-rendered and
+  three-tier/hybrid/environments PNGs reviewed. Work ran as three parallel agents in worktrees plus the main session.
+
 ## 2026-10-18 — AWS console-style UI, overview at a glance (owner: 전체 구성이 늘 같다; Gemini처럼 우측 채팅; 로그인→프로필; AWS 스타일)
 
 - Overview VPC cards now show services per tier (public / private / isolated) with icons and counts; isolated subnets count
@@ -40,61 +63,3 @@ Last Updated: 2026-10-18
 - Samples: `genai-rag`, `gpu-training`; `ai-platform` gains EFA, placement group, FSx. Designer: training groups get a
   dedicated /20, EFA and a placement group; `add_fsx_lustre`, `add_sagemaker_endpoint`. ARCHITECTURE.md §5.5–5.8.
 - Verified: `make check` 160 tests; verify_demo 29 checks; all 10 samples review low or clean; label crops reviewed.
-
-## 2026-10-18 — Overview becomes the network diagram (owner: 전체 구성이 의미 없어 보인다; goal: 잔여 작업 완료시까지)
-
-- The overview drew VPC cards only (no relations). It now draws the network joining them: VPC → Transit Gateway (via its
-  attachment), peering, VPN gateways, and VPN to customer gateways in a data center box; one lane per route, routes from
-  upper rows drop through the gap right of their card. Unconnected snapshots keep the plain card grid.
-- A snapshot with one VPC and no TGW/peering/VPN opens in the detail view.
-- Fixed: the review step's "hidden in this view" notice survived snapshot/view switches (seen in verify_demo screenshots);
-  notices now clear on a new snapshot or view.
-- Verified: `make check` 152 tests (overview readable, no shared segments, no route through a card, for all samples and
-  the peering/VGW design); `verify_demo.py` 28 checks incl. detail-first single VPC, TGW/CGW overview, no stale notice.
-
-## 2026-10-18 — Samples aligned with AWS best practice + AI/GPU (goal: 구현 및 검증 완료시까지 수행)
-
-- Plan docs/plans/2026-10-18-best-practice-samples.md executed with the recommended decisions (TGW hub, sample version,
-  Aurora pgvector, optional items out).
-- Samples: Redshift Multi-AZ subnet group (3 subnets, 4 nodes); data-platform TGW hub instead of peering+VGW; second
-  CGW/VPN in hybrid and data-platform; `ecr.api`/`logs`/SSM endpoints; practices name what cannot be drawn.
-- New `ai-platform` sample/standard: private VPC behind TGW, 11 interface endpoints (Bedrock), EKS system/g6e inference
-  (3 AZ)/p5 EFA training (1 AZ), self-referencing EFA SG, Aurora pgvector, EFS.
-- Review rules REL-GPU-TRAIN-AZ, REL-GPU-INFER-AZ, SEC-EFA-SG; single-AZ training is a low reminder. Icons for exact
-  accelerated families (GPU icons print P3/P4d/G4dn, so p5/g6e keep the instance icon + "GPU"), Bedrock/SageMaker endpoints.
-- Layout: VPC attachment row wraps at the AZ width (ai-platform was 3× wider than its AZs). Server regenerates stored
-  samples on a new `SAMPLE_VERSION` (verified on reports/session-20261018). Chat tool `add_gpu_node_group`.
-- `scripts/render_samples.py` regenerates examples/samples (PNG via the app, README sections; counts match the old README).
-- Verified: `make check` lint + 143 tests + CLI round trip; `verify_demo.py` 28 checks, no page errors/external requests;
-  `review --fail-on medium` exit 0 for all 8 samples; visual review of ai-platform, data-platform, hybrid, microservices.
-
-## 2026-10-18 — Visual review follow-ups (user request: 잔여 작업 우선순위 수행)
-
-- Detail views opened at 23–31 % at 1440×900 (fit whole diagram); the editor bridge now fits down to 60 % only,
-  then fits the width from the top-left. `verify_demo.py` asserts the start zoom.
-- Toasts moved to the top of the page (were over the canvas's data tier).
-- Registration routes get one colour per target group, so trunks sharing a gutter are told apart.
-- Truncated names end on a whole word before the ellipsis.
-- STATUS no longer lists finished manual checks as open; LESSONS records the bare-`pytest` AWS-env trap.
-- docs/ARCHITECTURE.md (owner request: 사례를 AWS Best Practice로): official sources per sample, verdicts, ranked
-  change list. Real gaps: Redshift Multi-AZ subnet group (2 of the required 3 subnets), analytics VPC cannot reach
-  on-premises over peering, single customer gateway, missing `ecr.api`/`ssmmessages` endpoints.
-- Verified: `make check` (lint + 119 tests + CLI round trip); `verify_demo.py` 27 checks, no page errors or external
-  requests; docs/images and examples/demo regenerated from that run.
-
-## 2026-10-17 — Chat design agent (user request: DevOps Agent 벤치마킹, Strands·Bedrock 채팅 설계)
-
-- Research: AWS DevOps Agent features mapped to Diagram Bot (docs/engineering/DEVOPS_AGENT_BENCHMARK.md).
-- `designer.py` (intent-level standard design steps on the sample builder; region-configurable `Sample`),
-  `agent.py` (Strands tools: design + read-only boto3 collection; ModelRouter GPT-6 Luna → Nova 2 Lite; sequential
-  tools; answering model reported), `/api/agent/*`, chat panel, `diagram-bot chat`, `--env-file`.
-- Bedrock: Nova 2 Lite / Claude tool use verified; GPT-6 Luna agreement accepted (user approved) but still denied.
-- Live workload check on a temporary CloudFormation stack (created/deleted with approval): 16/16 checks; chat tool
-  gained a VPC scope after the model missed an ALB when searching by VPC name.
-- Cross-account role path verified live with the repo template (temporary, deleted); terminated instances no longer
-  drawn or inventoried.
-- In-app IAM Identity Center sign-in (device code) verified live end to end; role-selection race fixed.
-- docs/DRAWIO.md (libraries, layout algorithm, routing, editor bridge, exports). Verified: `make check` 106 tests,
-  live chat in Chromium (design, advice, collection) and CLI chat.
-
-Older entries: docs/archive/PROGRESS_LOG-2026-10.md

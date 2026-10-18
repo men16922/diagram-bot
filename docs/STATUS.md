@@ -4,34 +4,27 @@ Last Updated: 2026-10-18
 
 ## Active Plan
 
-- 2026-10-18 samples aligned with AWS best practice (docs/ARCHITECTURE.md, plan docs/plans/2026-10-18-best-practice-samples.md):
-  10 samples incl. `ai-platform`, `genai-rag`, `gpu-training`; AI/ML collection (FSx, SageMaker endpoints, HyperPod, placement groups,
-  EFA/Capacity Block), AI/ML review pillar (17 rules), accelerated-instance/Bedrock/FSx icons, AI designer tools (27 tools),
-  multi-account combine, 11 samples; AWS console-style UI (sign-in profile, docked AI assistant), overview cards per tier.
-  Live 2026-10-18 (owner's account, us-east-1): 34/34 calls complete incl. the new FSx/SageMaker/placement-group calls (0 resources);
-  SSO via the new profile menu (owner approved the code): CloudOpsReadOnly preselected, `role @ account (SSO)`, collection 47 resources.
-- 2026-10-17 chat design agent (Strands + Bedrock): chat panel, `diagram-bot chat`, `/api/agent/*` (now 27 tools).
-  Benchmark: docs/engineering/DEVOPS_AGENT_BENCHMARK.md; draw.io internals: docs/DRAWIO.md.
-
-- v0.5.0 adds team mode (accounts, roles, TLS, audit log) and an AWS-emulator end-to-end test.
-- 2026-10-17 goal "엔터프라이즈 상용 제품 수준": v0.4.0 adds architecture review (findings + CLI gate),
-  snapshot change review (drift gate), cross-account read-only role and multi-region/multi-account
-  collection, parallel collection, scale tests, lint in the gate, CHANGELOG/SECURITY/OPERATIONS docs
-  and a CloudFormation read-only role template.
-
-- All manual verification is done (live keys, workload stack, cross-account role, SSO, visual review).
-  Follow-ups from the visual review are tracked in docs/NEXT_PLAN.md. No [auto] backlog is approved.
+- 2026-10-18 remaining work finished (PROGRESS_LOG top entry): CI green again (`.[test]`), chat streaming, brownfield designs
+  (`start_from_current`, `add_subnet_tier`; 29 chat tools), CloudFormation export (`export-cfn`), collection of Elastic IPs,
+  TGW route tables, CloudFront, WAFv2 and Direct Connect (4 new low rules), route filter for dense views, optional sample
+  items; SAMPLE_VERSION 6, gpu-training in us-east-2.
+- 2026-10-18 earlier: 11 samples aligned with AWS best practice (docs/ARCHITECTURE.md) incl. three AI/GPU; AI/ML collection
+  and review pillar; multi-account combine; AWS console-style UI with sign-in profile and docked assistant. Live (owner's
+  account, us-east-1): 34/34 calls complete; SSO via the profile menu collected 47 resources.
+- 2026-10-17: chat design agent (Strands + Bedrock), team mode (v0.5.0), review/diff gates (v0.4.0); benchmark in
+  docs/engineering/DEVOPS_AGENT_BENCHMARK.md, draw.io internals in docs/DRAWIO.md.
+- All manual verification is done. No [auto] backlog is approved.
 
 ## Current Baseline (v0.5.0)
 
 - Collection: direct SSO/SDK, read-only EC2/ELBv2/RDS/Auto Scaling/EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/
-  Lambda calls plus VPC peering and Site-to-Site VPN, incl. internet and
-  NAT gateways, route tables, VPC endpoints and Transit Gateway attachments; coverage rows name the
+  Lambda/FSx/SageMaker calls plus VPC peering, Site-to-Site VPN, Direct Connect, CloudFront, WAFv2, Elastic IPs, incl. internet and
+  NAT gateways, route tables, VPC endpoints and Transit Gateway attachments and route tables; coverage rows name the
   IAM action needed when denied or partial.
 - Diagrams: AWS Architecture Icons style (Cloud > Region > VPC > AZ > route-classified subnets),
   IGW/NAT, Auto Scaling and ECS service frames, VPN to customer gateways; labels carry each node's HA role
   (primary/standby/read replica, writer/reader, shard primary/replica, OpenSearch data/master/standby per AZ,
-  MSK broker IDs, Redshift primary/secondary). Samples in examples/samples (10 patterns incl. three AI/GPU; basis docs/ARCHITECTURE.md).
+  MSK broker IDs, Redshift primary/secondary). Samples in examples/samples (11 patterns incl. three AI/GPU and multi-account; basis docs/ARCHITECTURE.md).
 - Graph: relation IDs from source/relation/target + port/AZ qualifiers; independent of API
   array order and target health. Same instance on two ports = two relations. Legacy snapshots
   get IDs on read in their stored order, so saved `relationIndex` documents still resolve.
@@ -99,13 +92,15 @@ Last Updated: 2026-10-18
 ## Verification (2026-10-17, cloud container)
 
 - Gate, team-mode Chromium run, layout tests, 27 browser checks and evidence files: docs/archive/STATUS-verification-2026-10.md.
-  Current gate: `make check` = ruff + 167 pytest cases + CLI round trip; `verify_demo.py` 32 checks (incl. console shell, widths, SSO sign-in UI), `verify_team.py` ok (2026-10-18).
+  Current gate: `make check` = ruff + 229 pytest cases + CLI round trip; `verify_demo.py` 35 checks (incl. streamed chat, route
+  filter, CloudFormation download, edge/DX samples); `verify_team.py` ok (2026-10-18). CI (GitHub Actions) green from 077c6ee.
 
 ## Harness
 
 - overnight-harness v1.8.0 installed for Claude in this cloud container on 2026-10-17
   (`make overnight-where` resolves it; `harness-init --check` OK). Codex CLI is not present
-  here; the repo's default engine remains codex. Cloud containers need reinstalling per session.
+  here; the repo's default engine remains codex. Since 2026-10-18 `.claude/settings.json` registers the marketplace and
+  enables the plugin, so a trusted cloud session should install it itself (not yet observed in a cloud session).
 
 ## Open Limits
 
@@ -115,6 +110,9 @@ Last Updated: 2026-10-18
 - 100-resource views are structurally correct but dense; no large-environment claim.
 - Team mode provides local accounts and OIDC SSO, roles, TLS and audit; SAML only via an auth proxy; no built-in scheduler (use cron/CI with `review`/`diff` exit codes),
   listener rules, NACLs or Direct Connect. Licensed Apache-2.0; NOTICE holder "men16922 and Diagram Bot contributors" (both owner decisions, 2026-10-17).
-  EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN/FSx/SageMaker/HyperPod/placement-group calls are verified on stubs only;
+  EKS/ECS/MSK/ElastiCache/OpenSearch/EFS/Redshift/Lambda/VPN/FSx/SageMaker/HyperPod/placement-group and the new CloudFront/WAF/
+  Direct Connect calls are verified on stubs only (Elastic IPs and TGW route tables also on moto);
   ElastiCache Serverless, MSK Serverless, EKS Fargate profiles and Aurora Global Database are not drawn.
 - Browser verification needs a provisioned editor/Chromium and is separate from the offline gate.
+- CloudFormation drafts were never deployed to AWS (cfn-lint + moto only; moto skips EKS/ElastiCache/Aurora/FSx/MSK/OpenSearch).
+- Starlette warns that `TestClient` over `httpx` is deprecated (CI's newer Starlette); switching to `httpx2` is not done.

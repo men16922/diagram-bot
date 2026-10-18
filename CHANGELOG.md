@@ -56,6 +56,9 @@
   ALB WAF, hybrid에 Direct Connect 2개 위치·transit VIF·DX 게이트웨이(VPN은 백업), data-platform에 TGW 라우팅 테이블 2개(스포크·사내망).
 
 ### Changed
+- CloudFormation 내보내기가 새 수집 항목을 다룹니다: TGW 라우팅 테이블(연결·전파·정적/blackhole 경로)과 인스턴스 Elastic IP는 초안에 만들고,
+  CloudFront·WAF 규칙·Direct Connect·유휴 Elastic IP·VPN/DX 연결의 TGW 라우팅 연결은 `Unsupported`에 이유와 함께 남깁니다.
+- `gpu-training` 샘플을 us-east-2로 옮김(서울 리전에는 trn2가 없어 p5·trn2를 한 VPC에 둘 수 없음; cfn-lint 지역별 인스턴스 목록). `SAMPLE_VERSION` 6.
 - CI는 테스트 의존성을 `.[test]`에서 설치합니다(직접 적은 목록에 `strands-agents`가 빠져 2026-10-17 이후 실패). Actions를 Node 24 버전으로 올림.
 - 샘플: data-platform은 피어링·VGW 대신 Transit Gateway 허브(두 VPC + VPN)와 Redshift Multi-AZ 서브넷 그룹 3개·AZ당 2노드,
   hybrid·data-platform은 고객 게이트웨이 2개(VPN 2개), microservices·eks-platform은 `ecr.api`(microservices는 `logs`도),

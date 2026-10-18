@@ -1,6 +1,13 @@
 # Completed Summary
 
-Last Updated: 2026-10-17
+Last Updated: 2026-10-18
+
+## Remaining work, best-practice samples, AI/GPU, console UI — completed 2026-10-18
+
+- 11 samples on AWS best practice (docs/ARCHITECTURE.md) incl. AI/GPU and multi-account; AI/ML collection and review pillar;
+  network overview; console-style UI; chat streaming and brownfield designs (29 tools); CloudFormation export; Elastic IP,
+  TGW route table, CloudFront/WAF and Direct Connect collection; route filter; CI repaired.
+- Details: docs/PROGRESS_LOG.md (and its archive), CHANGELOG.md.
 
 ## Chat design agent and live verification — completed 2026-10-17
 

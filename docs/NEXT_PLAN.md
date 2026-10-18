@@ -39,20 +39,20 @@ Seed supply determines runtime: an empty queue stops normally instead of filling
   subnet group (MUST), data-platform peering+VGW → TGW hub, second CGW/VPN in hybrid, missing `ecr.api`/SSM endpoints.
 - [x] AI/GPU (docs/ARCHITECTURE.md §5): A1 `ai-platform`, A2 icons, A3 GPU review rules — done 2026-10-18.
 
+## Remaining Work Finished (owner goal 2026-10-18: 잔여 작업 수행, 승인 없이)
+
+- [x] CI fixed (`.[test]`); chat streaming; brownfield designs; CloudFormation export; collection of Elastic IPs,
+  TGW route tables, CloudFront/WAF, Direct Connect; optional sample items (ARCHITECTURE.md §4 #7); route filter for dense
+  views; focus routes tested (they already used gutters); overnight-harness via project settings. Details: PROGRESS_LOG.
+
 ## Candidate Follow-ups (not approved)
 
-- Live check of the AI/ML calls with real resources: owner declined on 2026-10-18 (read-only calls verified on an empty account;
-  non-empty response handling rests on Stubber tests). Revisit only if the owner asks.
-
-
-- Optional sample items from ARCHITECTURE.md §4 #7 (microservices 3 AZ, EKS /28 cluster subnets, egress VPC).
-- Collection scope for drawn best practices: CloudFront/WAF, Elastic IPs, TGW route tables, Direct Connect, multi-account view.
-
-- Design → IaC (CloudFormation/CDK) export; brownfield design starting from a collected snapshot; chat streaming.
-
-- Readability for dense views (≈100 resources): edge bundling or per-target-group filtering (route colours done).
-- Placement edges in focus view use draw.io auto-routing; route them through gutters.
-- A SessionStart hook to reinstall overnight-harness in cloud sessions automatically.
+- Live check of the AI/ML calls with real resources: owner declined on 2026-10-18. The new CloudFront/WAF/Direct Connect
+  calls are also stub-verified only; a live read-only collection on an account that has them would confirm the shapes.
+- Deploy one CloudFormation draft (e.g. three-tier) to a scratch account to prove it end to end (costs; owner decision).
+- Starlette `TestClient` deprecation: move tests to `httpx2` when Starlette drops `httpx` support.
+- Edge bundling for dense overviews (route filter covers detail views); CloudFront/WAF rule bodies (`GetWebACL`) if wanted.
+- Confirm the plugin auto-install on the next cloud session.
 
 ## Rules
 

@@ -1,4 +1,4 @@
-> ▶ NEXT SESSION: AWS console-style UI done (2026-10-18): top navigation with sign-in profile (SSO/profile → role @ account, collection in the profile menu), side navigation, docked AI assistant; overview VPC cards show services per tier. Earlier: multi-account view, AI/GPU strength, 11 samples. No [auto] backlog.
+> ▶ NEXT SESSION: remaining work finished (2026-10-18): CI green, chat streaming, brownfield designs, CloudFormation export, edge/DX/EIP/TGW-route-table collection, route filter, SAMPLE_VERSION 6. No [auto] backlog; candidates in NEXT_PLAN are owner decisions.
 
 # Diagram Bot — Agent Brief
 
@@ -10,8 +10,8 @@ Diagram Bot v0.5 (+ unreleased chat agent) is an AWS-only local application. Fas
 pinned draw.io 32.4.1; boto3 collects read-only AWS configuration using existing SDK/SSO credentials.
 The demo supports overview/detail/focus views, a deterministic layered layout, properties and
 relation evidence, native editing with revision history, draw.io/PNG exports and JSON/CSV inventory, architecture
-review/diff, team mode, and a chat design agent (Strands + Bedrock; tools draw standard designs, the model never
-invents resources). draw.io internals: docs/DRAWIO.md. Sample best-practice basis: docs/ARCHITECTURE.md. Product scope and future proposals are in docs/PLAN.md.
+review/diff, team mode, a chat design agent (Strands + Bedrock; tools draw standard or brownfield designs, the model
+never invents resources) and CloudFormation draft export. draw.io internals: docs/DRAWIO.md. Sample best-practice basis: docs/ARCHITECTURE.md. Product scope and future proposals are in docs/PLAN.md.
 
 ## Read Order
 
