@@ -87,11 +87,15 @@ async function refreshSnapshots(preferred) {
   $('snapshot-select').value=preferred||items[0]?.id;
   return $('snapshot-select').value;
 }
+// Loads can overlap (a chat step arriving while the user picks another snapshot); only the newest one applies its result.
+let snapshotSeq=0,viewSeq=0;
 async function loadSnapshot(id) {
+  const seq=++snapshotSeq;
   if(state.dirty)await saveDocument(false);
   clearNotice();
-  state.snapshot=await api(`/api/snapshots/${id}`);state.snapshotId=id;
-  state.review=await api(`/api/snapshots/${id}/findings`);renderReview();
+  const [snapshot,review]=await Promise.all([api(`/api/snapshots/${id}`),api(`/api/snapshots/${id}/findings`)]);
+  if(seq!==snapshotSeq)return;
+  state.snapshot=snapshot;state.snapshotId=id;state.review=review;renderReview();
   // The overview shows how VPCs connect; with one VPC and no TGW, peering or VPN it is a single card, so open its detail.
   const graphNodes=state.snapshot.graph.nodes,vpcs=graphNodes.filter(n=>n.kind==='vpc');
   const linked=graphNodes.some(n=>['transit_gateway','vpc_peering','vpn_gateway','customer_gateway','dx_gateway'].includes(n.kind));
@@ -100,7 +104,7 @@ async function loadSnapshot(id) {
   // A selection from the previous snapshot must not linger in the inspector.
   $('detail-body').replaceChildren(emptyDetail.cloneNode(true));
   renderSummary();await loadView();
-  if(state.mode==='changes')await renderChanges();
+  if(seq===snapshotSeq&&state.mode==='changes')await renderChanges();
 }
 function renderSummary() {
   const {metadata:m,graph}=state.snapshot;
@@ -142,14 +146,15 @@ function renderRouteFilter() {
   $('route-filter').value=state.routes||'';
 }
 async function loadView() {
-  state.loading=true;setControls();
+  const seq=++viewSeq;state.loading=true;setControls();
   try{
-    applyDocument(await api(documentUrl()));state.dirty=false;
+    const loaded=await api(documentUrl());if(seq!==viewSeq)return;
+    applyDocument(loaded);state.dirty=false;
     const title=state.view==='detail'?vpcNode(state.vpc)?.name:state.view==='focus'?node(state.focus)?.name:'AWS 전체 구성';
     $('environment-title').textContent=title||'AWS 구성도';$('crumb-view').textContent={overview:'전체 구성',detail:'상세 구성',focus:'선택 리소스'}[state.view];
     documentActive();if(state.selected&&node(state.selected))showResource(state.selected,false);
     if(state.ready)sendDocument();else{state.loading=false;setControls();}
-  }catch(error){state.loading=false;setControls();throw error;}
+  }catch(error){if(seq!==viewSeq)return;state.loading=false;setControls();throw error;}
 }
 function documentActive() {
   $('all-environments').classList.toggle('active',state.view==='overview');
