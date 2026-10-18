@@ -38,9 +38,14 @@ SYSTEM_PROMPT = """당신은 AWS 표준 인프라 아키텍처 설계 도우미�
   (add_gpu_node_group training=true), 학습 데이터·체크포인트는 같은 AZ의 FSx for Lustre(add_fsx_lustre), Bedrock·SageMaker는
   인터페이스 엔드포인트(bedrock-runtime 등)로 사설 호출, 자체 호스팅 모델은 VPC 안 SageMaker 엔드포인트 2대 이상.
   표준으로는 ai-platform(EKS GPU), genai-rag(Bedrock RAG), gpu-training(분산 학습)을 먼저 고려하세요.
+- "지금 구성에 ~를 추가", "현재 계정 기준으로 개선안"처럼 기존 구성에서 출발하는 요청은 start_from_current로 불러온 뒤
+  결과의 VPC·로드 밸런서 이름으로 add_* 도구를 씁니다. 표준 아키텍처를 불러온 뒤에도 같은 VPC 이름으로 요소를 더할 수 있습니다.
 - 설계를 마치면 review_design으로 검토하고, 중요한 결과와 개선안을 짧게 정리합니다.
 - 실제 계정은 aws_identity, collect_aws_resources, find_collected_resources, review_collected_resources로 읽기 전용 조회만 합니다.
   리소스를 만들거나 바꾸는 AWS 호출은 하지 않습니다(도구도 없습니다).
+- 도구를 쓰겠다고 말만 하고 끝내지 말고, 필요한 도구를 바로 호출한 뒤 결과를 말하세요.
+- 메시지 끝의 [현재 화면] 메모는 앱이 붙인 정보입니다. 사용자가 "이 구성", "지금 구성", "현재"를 말하면 그 스냅샷에서 start_from_current로 시작하고,
+  new_design으로 새로 그리지 마세요. 이미 그 스냅샷에서 시작한 설계를 이어 가는 중이면 다시 부르지 않습니다.
 - 도구가 오류를 돌려주면 이유를 읽고 고쳐서 다시 시도하거나 사용자에게 확인하세요.
 - 답변은 간결한 한국어로, 무엇을 그렸는지와 다음에 할 수 있는 일을 알려주세요."""
 
@@ -52,8 +57,9 @@ def available_models():
 class Workspace:
     """State shared by one conversation's tools: the current design, the last collection and where snapshots go."""
 
-    def __init__(self, save, session_factory=None, region=None, allow_collection=True, default_account=None):
-        self.save, self.allow_collection = save, allow_collection
+    def __init__(self, save, session_factory=None, region=None, allow_collection=True, default_account=None, load=None):
+        self.save, self.load, self.allow_collection = save, load, allow_collection
+        self.current_snapshot = None  # the snapshot open in the app when the user sent the message
         # Expected account for collections: AWS_ACCOUNT_ID (e.g. from --env-file) guards against the wrong account.
         self.default_account = default_account or (lambda: os.environ.get("AWS_ACCOUNT_ID"))
         self.session_factory = session_factory or (lambda region: boto3.Session(region_name=region))
@@ -130,6 +136,37 @@ class Workspace:
                              for f in findings[:20]]}
 
     # --- design ----------------------------------------------------------------------------------
+    def start_from_snapshot(self, snapshot_id=None):
+        """Brownfield design: explicit snapshot, else the one open in the app, else the last collection."""
+        identifier = snapshot_id or self.current_snapshot
+        if identifier and self.load:
+            try:
+                snapshot = self.load(identifier)
+            except Exception as exc:  # noqa: BLE001 - the server's 404 becomes a message the model can act on
+                raise ValueError(f"스냅샷을 찾을 수 없습니다: {identifier}") from exc
+        elif self.collected:
+            snapshot = self.collected
+        else:
+            raise ValueError("시작할 스냅샷이 없습니다. 앱에서 스냅샷을 열거나 collect_aws_resources로 먼저 수집하세요.")
+        return self.publish_design(self.design.start_from_snapshot(snapshot))
+
+    def context_note(self):
+        """What the user is looking at, appended to their message so "this configuration" has a referent."""
+        snapshot = None
+        if self.current_snapshot and self.load:
+            try:
+                snapshot = self.load(self.current_snapshot)
+            except Exception:  # noqa: BLE001 - a missing snapshot only means no note
+                snapshot = None
+        snapshot = snapshot or self.collected
+        if not snapshot:
+            return ""
+        meta = snapshot["metadata"]
+        kind = "설계안" if meta.get("design") else "수집한 구성"
+        name = meta.get("title") or f"{meta.get('account_id')} {meta.get('region')}"
+        started = " · 진행 중인 설계가 이 스냅샷에서 시작함" if self.design.base and self.design.base.get("title") == meta.get("title") else ""
+        return f"\n\n[현재 화면] {kind} '{name}' ({meta.get('region')}, VPC {len(snapshot['raw'].get('vpcs', []))}개){started}"
+
     def new_design(self, title, region=None):
         self.design.reset(title, region or self.region)
         return {"title": title, "region": self.design.region, "next": "add_vpc로 네트워크를 만드세요."}
@@ -180,6 +217,14 @@ def build_tools(workspace):
             return w.publish_design(d().apply_standard(name))
 
     @tool
+    def start_from_current(snapshot_id: str = "") -> dict:
+        """현재 구성(수집한 계정 또는 앱에서 열어 둔 스냅샷)을 설계의 출발점으로 불러옵니다(기존 설계는 지웁니다).
+        이후 add_* 도구에 결과의 VPC 이름을 쓰면 기존 VPC·서브넷·로드 밸런서에 요소를 더합니다. 실제 계정은 바뀌지 않습니다.
+        snapshot_id를 비우면 앱에서 보고 있는 스냅샷, 없으면 마지막 수집 결과를 씁니다."""
+        with w.lock:
+            return w.start_from_snapshot(snapshot_id or None)
+
+    @tool
     def new_design(title: str, region: str = "") -> dict:
         """빈 설계를 시작합니다(기존 설계는 지웁니다). region 예: ap-northeast-2."""
         with w.lock:
@@ -190,6 +235,12 @@ def build_tools(workspace):
         """VPC와 AZ별 계층 서브넷, IGW, NAT, 라우트 테이블을 만듭니다.
         tiers: public, web, app, data 중 선택(기본 public, app, data). nat: per_az(AZ별, 권장), single(비용 절감), none."""
         return change("add_vpc", name=name, cidr=cidr, azs=azs, tiers=tiers or ["public", "app", "data"], nat=nat)
+
+    @tool
+    def add_subnet_tier(vpc: str, tier: str) -> dict:
+        """VPC에 없는 계층(public, web, app, data)을 AZ마다 /24 서브넷으로 추가합니다. 기존 구성에서 시작한 설계에서
+        data 계층이 없어 DB를 넣을 수 없을 때 등에 씁니다. public은 IGW, web·app은 같은 AZ의 NAT 라우트, data는 격리."""
+        return change("add_subnet_tier", vpc=vpc, tier=tier)
 
     @tool
     def add_load_balancer(vpc: str, name: str, kind: str = "application", scheme: str = "internet-facing") -> dict:
@@ -295,7 +346,7 @@ def build_tools(workspace):
         return d().review()
 
     return [aws_identity, collect_aws_resources, find_collected_resources, review_collected_resources,
-            list_standard_architectures, apply_standard_architecture, new_design, add_vpc, add_load_balancer, add_ec2_service,
+            list_standard_architectures, apply_standard_architecture, start_from_current, new_design, add_vpc, add_subnet_tier, add_load_balancer, add_ec2_service,
             add_ecs_service, add_eks_cluster, add_gpu_node_group, add_fsx_lustre, add_sagemaker_endpoint, add_database, add_aurora, add_cache, add_kafka, add_opensearch, add_file_system,
             add_lambda, add_vpc_endpoints, connect_vpcs, add_vpn, describe_design, review_design]
 
@@ -372,7 +423,7 @@ class Chat:
             self.agent.callback_handler = progress_handler(on_event) if on_event else null_callback_handler
             self.workspace.on_publish = (lambda identifier: on_event({"type": "snapshot", "id": identifier})) if on_event else None
             try:
-                result = self.agent(message)
+                result = self.agent(message + self.workspace.context_note())
             finally:
                 self.emit = self.workspace.on_publish = None
                 self.agent.callback_handler = null_callback_handler

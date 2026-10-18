@@ -55,6 +55,7 @@ def main():
     talk.add_argument("--model", help="nova-2-lite(기본), gpt-6-luna, claude-sonnet-4.5 (다른 모델이 실패하면 nova-2-lite로 전환)")
     talk.add_argument("--output", default="reports/chat", help="설계·수집 결과 보고서 디렉터리")
     talk.add_argument("-m", "--message", action="append", default=[], help="대화형 대신 보낼 메시지 (여러 번 지정 가능)")
+    talk.add_argument("--from", dest="start", help="설계 출발점으로 쓸 스냅샷 JSON (수집 결과 등; 에이전트의 start_from_current)")
     serve = commands.add_parser("serve", parents=[env], help="draw.io 기반 로컬 시연 앱 실행")
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--data-dir", help="스냅샷과 편집본 저장 디렉터리")
@@ -160,7 +161,17 @@ def run_chat(args):
         print(f"  ↳ 구성도 {path.resolve()}", file=sys.stderr)
         return name
 
-    chat = Chat(Workspace(save), args.model or DEFAULT_MODEL)
+    workspace = Workspace(save)
+    if args.start:
+        snapshot = json.loads(Path(args.start).read_text(encoding="utf-8"))
+        snapshot["graph"] = build_graph(snapshot)
+        workspace.collected = snapshot
+    chat = Chat(workspace, args.model or DEFAULT_MODEL)
+
+    def progress(event):
+        if event["type"] == "tool" and event["status"] != "start":
+            print(f"  · {event['name']} {'완료' if event['status'] == 'success' else '오류'}", file=sys.stderr)
+
     messages = iter(args.message) if args.message else None
     print("Diagram Bot 채팅 · 표준 아키텍처 설계와 AWS 읽기 전용 조회 · 종료: exit", file=sys.stderr)
     while True:
@@ -172,7 +183,7 @@ def run_chat(args):
             return 0
         if not message:
             continue
-        result = chat.ask(message)
+        result = chat.ask(message, on_event=progress)
         note = " (대체 모델)" if result["fallback"] else ""
         print(f"\n[{result['model_label']}{note} · 도구 {len(result['tools_used'])}회]\n{result['reply']}")
 

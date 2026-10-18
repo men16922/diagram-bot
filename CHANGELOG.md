@@ -5,6 +5,10 @@
 ## [Unreleased]
 
 ### Added
+- **현재 구성에서 설계 시작(brownfield):** 채팅 도구 `start_from_current`(앱에서 연 스냅샷 → 마지막 수집 순)와 `add_subnet_tier`(도구 29개).
+  설계가 수집 스냅샷을 복사해 시작하고 기존 VPC(계층·AZ·NAT 라우트 테이블)·로드 밸런서·대상 그룹을 인식합니다. 결과 메타데이터 `based_on`.
+  표준 아키텍처도 같은 방식으로 불러와 기존 VPC에 단계를 더할 수 있습니다. `diagram-bot chat --from`, 채팅 요청에 열린 스냅샷 전달(`snapshot`).
+  실시간 Nova 2 Lite: three-tier에서 시작해 Redis 추가·검토(도구 3회, 기존 리소스 유지).
 - **채팅 응답 스트리밍:** `POST /api/agent/chat/stream`(NDJSON: `text`·`tool`·`model`·`snapshot`, 마지막 줄 `done` 또는 `error`).
   AI 어시스턴트가 도구 진행을 보여 주고 설계 단계마다 저장된 구성도를 바로 엽니다. 실시간 Nova 2 Lite 턴(도구 8회, 11초)에서 단계별 수신 확인.
 - **채팅으로 아키텍처 설계:** Strands Agents + Amazon Bedrock(Converse) 에이전트. 웹 앱 `채팅으로 설계` 패널, `diagram-bot chat`, `POST /api/agent/chat`.

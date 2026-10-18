@@ -470,7 +470,7 @@ $('chat-form').onsubmit=async event=>{
   const show=id=>{pending=id;if(!loading)loading=(async()=>{while(pending&&pending!==shown){const next=pending;shown=next;
     await refreshSnapshots(next);await loadSnapshot(next);}loading=null;})();};
   try{
-    const result=await streamApi('/api/agent/chat/stream',{message,model:$('chat-model').value},event=>{
+    const result=await streamApi('/api/agent/chat/stream',{message,model:$('chat-model').value,snapshot:state.snapshotId},event=>{
       if(event.type==='tool')status.textContent=event.status==='start'?`도구 실행 중: ${event.name}`:`도구 ${event.status==='error'?'오류':'완료'}: ${event.name}`;
       else if(event.type==='model'&&event.fallback)status.textContent=`${event.model_label}(대체 모델)로 응답하는 중…`;
       else if(event.type==='snapshot')show(event.id);

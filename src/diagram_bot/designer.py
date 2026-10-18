@@ -4,6 +4,7 @@ A design is written in the same API-shaped `raw` structure the collector produce
 graph, layout, review and export pipeline renders it exactly like a collected snapshot. Nothing here
 calls AWS; a design is a proposal, never a description of a real account.
 """
+import copy
 import hashlib
 import ipaddress
 import re
@@ -51,6 +52,7 @@ class Design:
         self.sample = Sample("design", title, [], region=region, account="000000000000")
         self.vpcs, self.steps, self.standard = {}, [], None
         self.target_groups, self.load_balancers = {}, {}
+        self.base = None  # the collected snapshot a brownfield design started from
 
     # --- state ---------------------------------------------------------------------------------
     def vpc(self, name):
@@ -63,8 +65,18 @@ class Design:
     def tier(self, vpc, tier):
         subnets = vpc["tiers"].get(tier)
         if not subnets:
-            raise DesignError(f"VPC '{vpc['name']}'에 '{tier}' 계층 서브넷이 없습니다. (계층: {', '.join(vpc['tiers'])})")
+            raise DesignError(f"VPC '{vpc['name']}'에 '{tier}' 계층 서브넷이 없습니다. (계층: {', '.join(vpc['tiers'])}) "
+                              "add_subnet_tier로 계층을 추가할 수 있습니다.")
         return subnets
+
+    def routing_tables(self, vpc):
+        """Tables that carry a new route: the private (NAT) tables, else the main table. A collected VPC whose
+        route tables were not read has neither, and a route is never written into a table that was not seen."""
+        tables = vpc["private_tables"] or [t for t in [vpc["main_table"]] if t]
+        if not tables:
+            raise DesignError(f"VPC '{vpc['name']}'의 라우트 테이블이 수집되지 않아 라우트를 추가할 수 없습니다 "
+                              "(ec2:DescribeRouteTables 권한으로 다시 수집하세요). 인터페이스 엔드포인트는 추가할 수 있습니다.")
+        return tables
 
     def record(self, step, **params):
         self.steps.append({"step": step, **{k: v for k, v in params.items() if v not in (None, "", [], ())}})
@@ -119,10 +131,45 @@ class Design:
         s.route_table(f"rtb-{key}-main", vpc_id, f"{key}-isolated", main=True)
         self.vpcs[key] = {"name": name, "key": key, "id": vpc_id, "cidr": cidr, "azs": letters, "tiers": layers,
                           "private_tables": [f"rtb-{key}-private-{az}" for az in letters] if "public" in layers and private else [],
-                          "sgs": set()}
+                          "main_table": f"rtb-{key}-main", "sgs": set()}
         self.record("add_vpc", name=name, cidr=cidr, azs=int(azs), tiers=tiers, nat=nat)
         return {"vpc": name, "subnets": {t: len(v) for t, v in layers.items()}, "azs": [f"{self.region}{a}" for a in letters],
                 "nat_gateways": 0 if nat == "none" or "public" not in layers else (len(letters) if nat == "per_az" else 1)}
+
+    def add_subnet_tier(self, vpc, tier):
+        """A missing tier, one /24 per AZ in free CIDR space (mostly for designs started from a collected VPC).
+        public routes to the VPC's internet gateway, web/app join the NAT route table of their AZ, data stays isolated."""
+        v, s = self.vpc(vpc), self.sample
+        if tier not in TIERS:
+            raise DesignError(f"계층은 {', '.join(TIERS)} 중에서 고르세요.")
+        if tier in v["tiers"]:
+            raise DesignError(f"VPC '{v['name']}'에 이미 '{tier}' 계층이 있습니다.")
+        used = [ipaddress.ip_network(x["CidrBlock"]) for x in s.raw["subnets"] if x["VpcId"] == v["id"]]
+        free = (b for b in ipaddress.ip_network(v["cidr"]).subnets(new_prefix=24) if not any(b.overlaps(u) for u in used))
+        created = []
+        for az in v["azs"]:
+            block = next(free, None)
+            if block is None:
+                raise DesignError(f"VPC {v['name']}에 /24 서브넷을 더 만들 여유 CIDR이 없습니다.")
+            created.append(s.subnet(f"subnet-{v['key']}-{tier}-{az}", v["id"], az, str(block), f"{v['key']}-{tier}-{az}", tier))
+        if tier == "public":
+            igw = next((g["InternetGatewayId"] for g in s.raw["internet_gateways"]
+                        if any(a.get("VpcId") == v["id"] for a in g.get("Attachments", []))), None) \
+                or s.internet_gateway(f"igw-{v['key']}", v["id"], f"{v['key']}-igw")
+            s.route_table(f"rtb-{v['key']}-public", v["id"], f"{v['key']}-public", created, gateway=igw)
+        elif tier in ("web", "app") and v["private_tables"]:
+            tables = {t["RouteTableId"]: t for t in s.raw["route_tables"]}
+            for subnet in created:
+                az = s.az_of(subnet)
+                table = next((t for t in v["private_tables"] if any(a.get("SubnetId") and s.az_of(a["SubnetId"]) == az
+                                                                    for a in tables[t]["Associations"])), v["private_tables"][0])
+                tables[table]["Associations"].append({"RouteTableAssociationId": f"rtbassoc-{subnet[7:]}", "SubnetId": subnet})
+        else:
+            s.route_table(f"rtb-{v['key']}-{tier}", v["id"], f"{v['key']}-{tier}", created)
+        v["tiers"][tier] = created
+        v["tiers"] = {t: v["tiers"][t] for t in TIERS if t in v["tiers"]}
+        self.record("add_subnet_tier", vpc=vpc, tier=tier)
+        return {"vpc": v["key"], "tier": tier, "subnets": len(created), "azs": [s.az_of(x) for x in created]}
 
     def security_group(self, vpc, name, ingress, egress=("0.0.0.0/0",)):
         key = f"sg-{vpc['key']}-{slug(name)}"
@@ -164,9 +211,10 @@ class Design:
             raise DesignError("AZ당 인스턴스 수는 1~10입니다.")
         sg = self.security_group(v, key, [(int(port), lb["sg"] or v["cidr"]) if lb else (int(port), v["cidr"])])
         instances = []
-        for i, subnet in enumerate(subnets):
+        for subnet in subnets:
             for n in range(int(per_az)):
-                instances.append(self.sample.instance(f"i-{key}-{v['azs'][i]}{n + 1}", subnet, f"{key}-{v['azs'][i]}{n + 1}",
+                az = self.sample.az_of(subnet)[-1]
+                instances.append(self.sample.instance(f"i-{key}-{az}{n + 1}", subnet, f"{key}-{az}{n + 1}",
                                                       instance_type, ip=self.sample.address(subnet, 10 + len(instances)), sg=sg))
         groups = []
         if lb:
@@ -199,9 +247,10 @@ class Design:
         key = slug(name)
         subnets = self.tier(v, tier)
         sg = self.security_group(v, f"{key}-nodes", [(443, v["cidr"])])
-        nodes = [self.sample.instance(f"i-{key}-node-{v['azs'][i]}{n + 1}", subnet, f"{key}-node-{v['azs'][i]}{n + 1}", node_type, sg=sg,
+        nodes = [self.sample.instance(f"i-{key}-node-{self.sample.az_of(subnet)[-1]}{n + 1}", subnet,
+                                      f"{key}-node-{self.sample.az_of(subnet)[-1]}{n + 1}", node_type, sg=sg,
                                       **{"eks:cluster-name": key, "eks:nodegroup-name": "general"})
-                 for i, subnet in enumerate(subnets) for n in range(int(nodes_per_az))]
+                 for subnet in subnets for n in range(int(nodes_per_az))]
         asg = f"eks-{key}-general"
         self.sample.auto_scaling_group(asg, nodes, subnets, minimum=len(nodes), maximum=len(nodes) * 4)
         self.sample.eks(key, v["id"], subnets, [("general", asg, node_type, {"minSize": len(nodes), "maxSize": len(nodes) * 4,
@@ -350,12 +399,12 @@ class Design:
 
     def add_vpc_endpoints(self, vpc, services=("s3", "ssm")):
         v = self.vpc(vpc)
+        services = [str(service).lower() for service in services]
+        # Without NAT the private subnets keep the main table, which then carries the endpoint route.
+        tables = self.routing_tables(v) if {"s3", "dynamodb"} & set(services) else None  # checked before anything is added
         added = []
         for service in services:
-            service = str(service).lower()
             if service in ("s3", "dynamodb"):
-                # Without NAT the private subnets keep the main table, which then carries the endpoint route.
-                tables = v["private_tables"] or [f"rtb-{v['key']}-main"]
                 self.sample.gateway_endpoint(f"vpce-{v['key']}-{service}", v["id"], service, tables)
             else:
                 tier = "app" if "app" in v["tiers"] else next(iter(v["tiers"]))
@@ -366,10 +415,11 @@ class Design:
 
     def connect_vpcs(self, a, b):
         va, vb = self.vpc(a), self.vpc(b)
+        self.routing_tables(va), self.routing_tables(vb)
         key = f"pcx-{va['key']}-{vb['key']}"
         self.sample.peering(key, va["id"], vb["id"], f"{va['key']}-to-{vb['key']}")
         for this, other in ((va, vb), (vb, va)):
-            for table in this["private_tables"] or [f"rtb-{this['key']}-main"]:
+            for table in self.routing_tables(this):
                 self.sample.route(table, other["cidr"], VpcPeeringConnectionId=key)
         self.record("connect_vpcs", a=a, b=b)
         return {"peering": key}
@@ -380,10 +430,11 @@ class Design:
             ipaddress.ip_address(customer_ip)
         except ValueError as exc:
             raise DesignError(f"고객 게이트웨이 IP 형식이 아닙니다: {customer_ip}") from exc
+        tables = self.routing_tables(v)
         vgw = f"vgw-{v['key']}"
         self.sample.vpn(f"vpn-{v['key']}-{slug(name)}", f"cgw-{slug(name)}", customer_ip, slug(name), vgw=vgw, vpc=v["id"],
                         vgw_name=f"{v['key']}-vgw")
-        for table in v["private_tables"] or [f"rtb-{v['key']}-main"]:
+        for table in tables:
             self.sample.route(table, "192.168.0.0/16", GatewayId=vgw)
         self.record("add_vpn", vpc=vpc, customer_ip=customer_ip, name=name)
         return {"vpn": f"vpn-{v['key']}-{slug(name)}", "tunnels": 2}
@@ -394,13 +445,88 @@ class Design:
         if name not in STANDARDS:
             raise DesignError(f"표준 아키텍처가 아닙니다: {name}. 사용 가능: {', '.join(STANDARDS)}")
         snapshot = SAMPLES[name]()
-        self.reset(snapshot["metadata"]["title"], snapshot["metadata"]["region"])
-        self.sample.raw = snapshot["raw"]
-        self.sample.practices = snapshot["metadata"].get("practices", [])
+        self.start_from(snapshot)
         self.standard = name
         self.record("apply_standard", name=name)
-        return {"standard": name, "title": self.title, "practices": self.sample.practices,
-                "note": "표준 아키텍처를 불러왔습니다. 이 위에 add_* 단계로 요소를 더하려면 새 VPC를 추가하세요."}
+        return {"standard": name, "title": self.title, "practices": self.sample.practices, "vpcs": self.vpc_summary(),
+                "note": "표준 아키텍처를 불러왔습니다. 위 VPC 이름으로 add_* 단계를 이어서 쓸 수 있습니다."}
+
+    def start_from_snapshot(self, snapshot, title=None):
+        """Brownfield: the design starts as a copy of a collected (or saved) snapshot; add_* steps extend its VPCs.
+        The account's own data is never changed: the result is a new design snapshot."""
+        if snapshot["metadata"].get("accounts"):
+            raise DesignError("여러 계정을 합친 스냅샷에서는 설계를 시작할 수 없습니다. 계정 하나의 스냅샷을 고르세요.")
+        source = snapshot["metadata"]
+        self.start_from(snapshot, title or f"{source.get('title') or source.get('account_id') or '현재 구성'} 기반 설계")
+        self.base = {k: source.get(k) for k in ("account_id", "region", "collected_at", "title") if source.get(k)}
+        self.record("start_from_snapshot", source=source.get("account_id") or source.get("title"), region=self.region)
+        return {"title": self.title, "region": self.region, "vpcs": self.vpc_summary(),
+                "load_balancers": sorted(self.load_balancers),
+                "note": "현재 구성을 설계의 출발점으로 불러왔습니다. 위 VPC 이름으로 add_* 단계를 쓰세요(실제 계정은 바뀌지 않습니다)."}
+
+    def start_from(self, snapshot, title=None):
+        metadata = snapshot["metadata"]
+        self.reset(title or metadata.get("title") or self.title, metadata.get("region") or self.region)
+        self.sample.account = metadata.get("account_id") or self.sample.account
+        raw = copy.deepcopy(snapshot["raw"])
+        self.sample.raw = {**{key: [] for key in self.sample.raw}, **raw}
+        self.sample.practices = metadata.get("practices", [])
+        self.adopt()
+
+    def adopt(self):
+        """Rebuild step state (VPCs with tiers per AZ, load balancers, target groups) from the raw data."""
+        raw = self.sample.raw
+        route_class = {n["resource_id"]: n.get("route_class") for n in build_graph(self.sample.snapshot())["nodes"] if n["kind"] == "subnet"}
+
+        def tag(item, key):
+            return next((t["Value"] for t in item.get("Tags", []) if t["Key"] == key), None)
+
+        def tier_of(subnet):
+            if route_class.get(subnet["SubnetId"]) == "public":
+                return "public"
+            if tag(subnet, "Tier") in TIERS:
+                return tag(subnet, "Tier")
+            name = (tag(subnet, "Name") or "").lower()
+            if "web" in name:
+                return "web"
+            if re.search(r"data|db|rds|database|cache|isolated", name) or route_class.get(subnet["SubnetId"]) == "isolated":
+                return "data"
+            return "app"
+
+        for vpc in raw["vpcs"]:
+            name = tag(vpc, "Name") or vpc["VpcId"]
+            key = slug(name) if re.search(r"[A-Za-z0-9]", name) else slug(vpc["VpcId"])  # e.g. a Korean Name tag
+            if key in self.vpcs:
+                key = slug(f"{name}-{vpc['VpcId'][-6:]}")
+            subnets = sorted((s for s in raw["subnets"] if s["VpcId"] == vpc["VpcId"]), key=lambda s: (s["AvailabilityZone"], s["SubnetId"]))
+            letters = "".join(sorted({s["AvailabilityZone"][-1] for s in subnets}))
+            layers = {}
+            for tier in TIERS:
+                chosen = {}
+                for subnet in subnets:
+                    if tier_of(subnet) == tier:
+                        chosen.setdefault(subnet["AvailabilityZone"], subnet["SubnetId"])
+                if chosen:
+                    layers[tier] = [chosen[az] for az in sorted(chosen)]
+            tables = [t for t in raw["route_tables"] if t.get("VpcId") == vpc["VpcId"]]
+            main = next((t["RouteTableId"] for t in tables if any(a.get("Main") for a in t.get("Associations", []))), None)
+            private = {sid for tier in ("web", "app") for sid in layers.get(tier, [])}
+            nat_tables = [t["RouteTableId"] for t in tables if any(r.get("NatGatewayId") for r in t.get("Routes", []))
+                          and any(a.get("SubnetId") in private for a in t.get("Associations", []))]
+            self.vpcs[key] = {"name": name, "key": key, "id": vpc["VpcId"], "cidr": vpc["CidrBlock"], "azs": letters, "tiers": layers,
+                              "private_tables": nat_tables, "main_table": main,
+                              "sgs": {g["GroupId"] for g in raw["security_groups"] if g.get("VpcId") == vpc["VpcId"]}}
+        by_id = {v["id"]: v["key"] for v in self.vpcs.values()}
+        for lb in raw["load_balancers"]:
+            if lb.get("VpcId") in by_id:
+                self.load_balancers[slug(lb["LoadBalancerName"])] = {"arn": lb["LoadBalancerArn"], "vpc": by_id[lb["VpcId"]],
+                                                                     "sg": (lb.get("SecurityGroups") or [None])[0], "kind": lb.get("Type", "application")}
+        for group in raw["target_groups"]:
+            self.target_groups[slug(group["TargetGroupName"])] = group["TargetGroupArn"]
+
+    def vpc_summary(self):
+        return [{"name": v["key"], "id": v["id"], "cidr": v["cidr"], "azs": len(v["azs"]), "tiers": {t: len(s) for t, s in v["tiers"].items()}}
+                for v in self.vpcs.values()]
 
     def graph(self):
         return build_graph(self.snapshot())
@@ -425,8 +551,9 @@ class Design:
         snapshot = self.sample.snapshot()
         snapshot["metadata"].update(
             design=True, sample=self.standard or "design", title=self.title, steps=list(self.steps),
-            practices=self.sample.practices,
-            limitations=["채팅으로 만든 표준 아키텍처 설계안이며 실제 계정 데이터가 아닙니다.",
+            practices=self.sample.practices, **({"based_on": dict(self.base)} if self.base else {}),
+            limitations=(["현재 구성 스냅샷에서 시작한 설계안입니다. 추가한 요소는 제안이며 실제 계정에는 없습니다."] if self.base else []) + [
+                         "채팅으로 만든 표준 아키텍처 설계안이며 실제 계정 데이터가 아닙니다.",
                          "보안 그룹 규칙은 계층 간 최소 허용으로 가정했습니다. 실제 배포 전 IaC로 검토하세요.",
                          "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."])
         return snapshot

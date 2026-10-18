@@ -119,6 +119,11 @@ diagram-bot chat --env-file .env -m "서울 리전에 3 AZ 3계층 웹 서비스
 - `.env`에는 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`을 넣고, 선택으로 `AWS_ACCOUNT_ID`(수집 계정 확인)를 넣습니다. `.env`는 Git 추적에서 제외되어 있습니다. 키가 있으면 셸의 `AWS_PROFILE`보다 우선합니다.
 - 모델은 Bedrock Converse로 호출합니다. 기본은 Amazon Nova 2 Lite입니다. OpenAI GPT-6 Luna와 Claude Sonnet 4.5도 고를 수 있고, 고른 모델을 쓸 수 없으면 Nova 2 Lite로 자동 전환합니다. 응답마다 실제로 답한 모델이 표시됩니다. 계정에서 Bedrock 모델 액세스가 필요합니다.
 - 도구: 표준 아키텍처 10종 불러오기(AI 플랫폼·RAG·분산 학습 포함), VPC(AZ·계층·NAT 전략), ALB/NLB, EC2 Auto Scaling, ECS Fargate, EKS·GPU 노드 그룹(학습: 전용 서브넷·EFA·배치 그룹), FSx for Lustre, SageMaker 엔드포인트, RDS/Aurora, Redis, MSK, OpenSearch, EFS, Lambda, VPC 엔드포인트, 피어링, VPN, 검토. 수집 도구는 읽기 전용입니다(STS 확인, 리전 수집, 리소스 찾기, 검토).
+- **현재 구성에서 시작(brownfield):** "지금 보고 있는 구성에 Redis를 추가해줘"처럼 요청하면 에이전트가 앱에서 열어 둔 스냅샷(또는 마지막 수집 결과)을
+  설계의 출발점으로 불러와(`start_from_current`) 기존 VPC·서브넷·로드 밸런서에 요소를 더합니다. 없는 계층은 `add_subnet_tier`로 빈 CIDR에 만듭니다.
+  결과는 `based_on`이 붙은 새 설계안이며 원본 스냅샷과 실제 계정은 바뀌지 않습니다. 터미널에서는 `diagram-bot chat --from snapshot.json`.
+  라우트 테이블이 수집되지 않은 VPC에는 라우트를 지어내지 않고, 게이트웨이 엔드포인트·피어링·VPN 단계가 이유를 알려 줍니다.
+- 표준 아키텍처를 불러온 뒤에도 그 VPC 이름으로 `add_*` 단계를 이어 쓸 수 있습니다.
 - 응답은 스트리밍됩니다(`POST /api/agent/chat/stream`, NDJSON). 도구가 도는 동안 진행 상황이 보이고, 설계 단계마다 저장된 구성도가 바로 캔버스에 열립니다.
   한 번에 결과만 받으려면 `POST /api/agent/chat`을 씁니다.
 - 설계안은 스냅샷으로 저장되어 구성도, 검토, `.drawio`/PNG 다운로드, 변경 비교에 그대로 쓰입니다. 화면에는 `설계안`으로 표시되며 실제 계정 데이터가 아닙니다.

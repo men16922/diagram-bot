@@ -89,6 +89,7 @@ class CombineRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     model: str | None = Field(default=None, max_length=64)
+    snapshot: str | None = Field(default=None, max_length=64)  # open in the app: the agent may start a design from it
 
 
 HISTORY = 20
@@ -419,11 +420,12 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
                     choice = sso_choice.get(user)
                     return sso.session(choice[0], user, choice[1], choice[2], region) if choice else boto3.Session(region_name=region)
                 try:
-                    workspace = Workspace(publish, session_factory=session_for, allow_collection=can_collect,
+                    workspace = Workspace(publish, session_factory=session_for, allow_collection=can_collect, load=get_snapshot,
                                           default_account=lambda: (sso_choice.get(user) or (None, None))[1] or os.environ.get("AWS_ACCOUNT_ID"))
                     current = chats[user] = {"chat": chat_factory(workspace, model), "model": model}
                 except ImportError as exc:
                     raise HTTPException(503, "채팅 에이전트를 쓰려면 pip install -e '.[agent]'로 strands-agents를 설치하세요.") from exc
+            current["chat"].workspace.current_snapshot = params.snapshot
         return current["chat"]
 
     def chat_error(exc):

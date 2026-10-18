@@ -348,3 +348,104 @@ def test_ai_designer_steps_place_lustre_and_sagemaker_by_the_lenses():
         d.add_sagemaker_endpoint("ml", "bad", "g5.xlarge")
     names = {t.tool_spec["name"] for t in build_tools(Workspace(lambda s: "x"))}
     assert {"add_fsx_lustre", "add_sagemaker_endpoint", "add_gpu_node_group"} <= names
+
+
+def test_a_standard_can_be_extended_in_its_own_vpcs():
+    d = Design()
+    result = d.apply_standard("three-tier")
+    vpc = result["vpcs"][0]
+    assert vpc["tiers"]["public"] == 3 and {"app", "data"} <= set(vpc["tiers"])
+    d.add_cache(vpc["name"], "sessions")
+    d.add_vpc_endpoints(vpc["name"], ["s3", "ecr.api"])
+    graph = d.graph()
+    nodes = {n["id"]: n for n in graph["nodes"]}
+    vpc_of = {e["source"]: nodes[e["target"]]["resource_id"] for e in graph["edges"] if e["relation"] == "in_vpc"}
+    caches = [n for n in graph["nodes"] if n["kind"] == "cache_node"]
+    assert caches and all(vpc_of.get(n["id"]) == vpc["id"] for n in caches)
+    # The S3 gateway endpoint uses the standard's own private route tables (one per AZ, each with a NAT route).
+    endpoint = next(e for e in d.sample.raw["vpc_endpoints"] if e["ServiceName"].endswith(".s3"))
+    tables = {t["RouteTableId"]: t for t in d.sample.raw["route_tables"]}
+    assert len(endpoint["RouteTableIds"]) == 3 and all(any(r.get("NatGatewayId") for r in tables[t]["Routes"]) for t in endpoint["RouteTableIds"])
+    assert d.review()["summary"]["high"] == 0
+
+
+def test_brownfield_design_extends_a_collected_snapshot_without_touching_it():
+    from diagram_bot.demo import demo_snapshot
+    collected = demo_snapshot()
+    before = json.dumps(collected, sort_keys=True, default=str)
+    d = Design()
+    result = d.start_from_snapshot(collected)
+    names = [v["name"] for v in result["vpcs"]]
+    assert len(names) == len(collected["raw"]["vpcs"]) and all(names)  # Korean Name tags fall back to the VPC ID
+    target = next(v for v in result["vpcs"] if "app" in v["tiers"])
+    with pytest.raises(DesignError, match="add_subnet_tier"):
+        d.add_database(target["name"], "orders-db")
+    added = d.add_subnet_tier(target["name"], "data")
+    assert added["subnets"] == target["azs"]
+    d.add_database(target["name"], "orders-db")
+    # The demo's partial collection has no route tables: no route is written into a table nobody saw.
+    with pytest.raises(DesignError, match="DescribeRouteTables"):
+        d.add_vpc_endpoints(target["name"], ["s3"])
+    d.add_vpc_endpoints(target["name"], ["ssm"])
+    snapshot = d.snapshot()
+    assert json.dumps(collected, sort_keys=True, default=str) == before
+    assert snapshot["metadata"]["design"] and snapshot["metadata"]["based_on"]["account_id"] == collected["metadata"]["account_id"]
+    assert snapshot["metadata"]["steps"][0]["step"] == "start_from_snapshot"
+    graph = build_graph(snapshot)
+    ids = {n["resource_id"] for n in graph["nodes"]}
+    assert {n["resource_id"] for n in build_graph(collected)["nodes"] if not n["reference_only"]} <= ids
+    assert any(n["kind"] == "db_instance" and n["name"] == "orders-db" for n in graph["nodes"])
+    layout_document(snapshot, "detail", target["id"])
+    with pytest.raises(DesignError, match="여러 계정"):
+        Design().start_from_snapshot({"metadata": {"accounts": ["1", "2"]}, "raw": {}})
+
+
+@pytest.mark.parametrize("name", [n for n in STANDARDS])
+def test_every_standard_adopts_its_vpcs_and_takes_another_step(name):
+    d = Design()
+    vpcs = d.apply_standard(name)["vpcs"]
+    assert vpcs and all(v["tiers"] for v in vpcs)
+    d.add_vpc_endpoints(vpcs[0]["name"], ["s3", "sts"])
+    graph = d.graph()
+    assert sum(n["kind"] == "vpc_endpoint" for n in graph["nodes"]) >= 2
+    layout_document(d.snapshot(), "detail", vpcs[0]["id"])
+
+
+def test_start_from_current_uses_the_open_snapshot_then_the_last_collection():
+    from diagram_bot.samples import SAMPLES
+    stored, saved = {"open": SAMPLES["hybrid"]()}, []
+    workspace = Workspace(lambda s: saved.append(s) or f"s{len(saved)}", load=lambda i: stored[i])
+    with pytest.raises(ValueError, match="시작할 스냅샷이 없습니다"):
+        workspace.start_from_snapshot()
+    workspace.current_snapshot = "open"
+    result = workspace.start_from_snapshot()
+    assert result["snapshot_id"] == "s1" and saved[0]["metadata"]["based_on"]["title"] == stored["open"]["metadata"]["title"]
+    with pytest.raises(ValueError, match="스냅샷을 찾을 수 없습니다: gone"):
+        workspace.start_from_snapshot("gone")
+    # The open snapshot is named in the message the model reads, so "this configuration" has a referent.
+    assert workspace.context_note().startswith("\n\n[현재 화면] 수집한 구성 '") and "진행 중인 설계가 이 스냅샷에서 시작함" in workspace.context_note()
+    workspace.current_snapshot = None
+    assert workspace.context_note() == ""
+    tools = {t.tool_spec["name"] for t in build_tools(workspace)}
+    assert {"start_from_current", "add_subnet_tier"} <= tools and len(tools) == 29
+
+
+def test_a_missing_tier_takes_free_space_and_the_right_routes():
+    d = Design()
+    d.add_vpc("edge", "10.60.0.0/20", 2, tiers=["public", "app"], nat="per_az")
+    d.add_subnet_tier("edge", "data")
+    d.add_vpc("plain", "10.61.0.0/20", 2, tiers=["app"], nat="none")
+    d.add_subnet_tier("plain", "public")
+    with pytest.raises(DesignError, match="이미"):
+        d.add_subnet_tier("plain", "public")
+    graph = d.graph()
+    classes = {n["resource_id"]: n["route_class"] for n in graph["nodes"] if n["kind"] == "subnet"}
+    assert classes["subnet-edge-data-a"] == classes["subnet-edge-data-b"] == "isolated"
+    assert classes["subnet-plain-public-a"] == "public" and classes["subnet-plain-app-a"] == "isolated"
+    cidrs = [s["CidrBlock"] for s in d.sample.raw["subnets"] if s["VpcId"] == "vpc-edge"]
+    assert len(set(cidrs)) == len(cidrs) == 6
+    # A web tier added later joins the NAT route table of its own AZ.
+    d.add_subnet_tier("edge", "web")
+    assert classes.get("subnet-edge-web-a") is None
+    tables = {t["RouteTableId"]: {a.get("SubnetId") for a in t["Associations"]} for t in d.sample.raw["route_tables"]}
+    assert "subnet-edge-web-a" in tables["rtb-edge-private-a"] and "subnet-edge-web-b" in tables["rtb-edge-private-b"]
