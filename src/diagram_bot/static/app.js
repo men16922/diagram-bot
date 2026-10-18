@@ -344,6 +344,7 @@ bind('sso-use',()=>{
   if(!$('sso-role').value)throw new Error('SSO 역할을 선택하세요. 이 계정에 할당된 역할이 없다면 Identity Center 관리자에게 요청하세요.');
   const option=$('sso-account').selectedOptions[0];
   state.identity={via:'sso',account:$('sso-account').value,role:$('sso-role').value,accountName:option?.textContent};
+  api(`/api/sso/login/${state.sso.id}/use`,{method:'POST',body:JSON.stringify({account_id:state.identity.account,role:state.identity.role})}).catch(error=>toast(error.message,true));
   $('aws-profile').value='';renderProfile();$('signin-dialog').close();toast(`SSO로 로그인했습니다 · ${state.identity.role} @ ${state.identity.account}`);
 });
 bind('use-profile',async()=>{
@@ -477,6 +478,28 @@ async function openChat() {
   $('chat-model').replaceChildren(...info.models.map(m=>new Option(m.label+(m.key===info.default?' (기본)':''),m.key)));$('chat-model').value=info.default;
   if(!info.ready)chatMessage('system',"채팅 에이전트가 설치되지 않았습니다. pip install -e '.[agent]' 후 다시 시작하세요.");
 }
+// Browser egress (serve --aws-egress browser): the server signs each AWS request it makes for this user and this page sends
+// it from the PC's address, then returns the response. The server never hands out keys: only per-request signatures.
+const AWS_API=/^https:\/\/[a-z0-9.-]+\.amazonaws\.com(\.cn)?\//;
+function base64(bytes){let text='';for(let i=0;i<bytes.length;i+=0x8000)text+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(text);}
+async function relayOne(r){
+  if(!AWS_API.test(r.url))return {status:0,error:'AWS API 주소가 아닙니다.'};
+  try{
+    const res=await fetch(r.url,{method:r.method,headers:r.headers,body:r.body?Uint8Array.from(atob(r.body),c=>c.charCodeAt(0)):undefined,
+      mode:'cors',credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer'});
+    const headers={};res.headers.forEach((value,name)=>{headers[name]=value;});
+    return {status:res.status,headers,body:base64(new Uint8Array(await res.arrayBuffer()))};
+  }catch(error){return {status:0,error:String(error)};}
+}
+async function relayLoop(){
+  for(;;){
+    try{
+      const {requests}=await api('/api/relay/next');
+      state.relayed=(state.relayed||0)+requests.length;
+      await Promise.all(requests.map(async r=>api(`/api/relay/${r.id}`,{method:'POST',body:JSON.stringify(await relayOne(r))}).catch(()=>{})));
+    }catch(error){await new Promise(resolve=>setTimeout(resolve,3000));}
+  }
+}
 async function streamApi(path, body, onEvent) {
   // NDJSON progress events; the last line is {type:'done', ...result} or {type:'error', detail}.
   const response=await fetch(path,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json','X-Diagram-Bot':state.token}});
@@ -521,7 +544,8 @@ for(const button of document.querySelectorAll('.chat-suggestion'))button.onclick
 window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefault();event.returnValue='';}});
 async function start() {
   const boot=await api('/api/bootstrap');state.token=boot.token;state.role=boot.user.role;
-  state.team=boot.team;
+  state.team=boot.team;state.egress=boot.egress;
+  if(boot.egress==='browser'){relayLoop();$('egress-note').hidden=false;}
   if(boot.team){const name=boot.user.name;$('user-avatar').textContent=name.slice(0,2).toUpperCase();$('user-avatar').title=`${name} · ${boot.user.role}`;
     $('user-role').textContent=`${name} · ${{viewer:'보기 전용',editor:'편집',admin:'관리자'}[boot.user.role]}`;$('user-role').hidden=false;$('logout-button').hidden=false;}
   bind('logout-button',async()=>{await api('/api/logout',{method:'POST'});location.href='/login';});

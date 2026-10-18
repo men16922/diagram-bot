@@ -1,4 +1,5 @@
 import json
+import time
 
 import pytest
 from botocore.exceptions import ClientError
@@ -117,18 +118,28 @@ def test_start_validation(url, region):
         SsoLogins(client=FakeIdentityCenter()).start(url, region, "alice")
 
 
-def test_sso_collection_through_the_api(tmp_path, monkeypatch):
+@pytest.mark.parametrize("egress", ["server", "browser"])
+def test_sso_collection_through_the_api(tmp_path, monkeypatch, egress):
+    """Identity Center sign-in and GetRoleCredentials stay on the server; with browser egress the role's session is relayed."""
     fake = FakeIdentityCenter()
     collected = {}
 
-    def fake_collect(region, profile=None, expected_account=None, session=None, role_arn=None, external_id=None):
+    def fake_collect(region, profile=None, expected_account=None, session=None, role_arn=None, external_id=None, prepare=None):
         collected.update(region=region, profile=profile, account=expected_account, key=session.get_credentials().access_key)
+        if prepare:
+            # The role's session is relayed: with no browser connected its first AWS call fails fast instead of leaving the server.
+            from diagram_bot.egress import RelayError
+            with pytest.raises(RelayError):
+                prepare(session).client("sts", region_name="us-east-1").get_caller_identity()
         from diagram_bot.demo import demo_snapshot
         return demo_snapshot()
     monkeypatch.setattr("diagram_bot.server.collect", fake_collect)
     logins = SsoLogins(client=fake)
-    with TestClient(create_app(tmp_path / "data", tmp_path / "no-editor", sso=logins)) as client:
+    with TestClient(create_app(tmp_path / "data", tmp_path / "no-editor", sso=logins, egress=egress,
+                               sso_start=("https://d-1234567890.awsapps.com/start", "us-east-1"))) as client:
         client.headers["X-Diagram-Bot"] = client.get("/api/bootstrap").json()["token"]
+        assert client.get("/api/sso/defaults").json()[0] == {"name": "회사 Identity Center", "start_url": "https://d-1234567890.awsapps.com/start",
+                                                             "region": "us-east-1"}
         assert client.post("/api/sso/login", json={"start_url": "ftp://x/start", "region": "us-east-1"}).status_code == 422
         started = client.post("/api/sso/login", json={"start_url": "https://d-1234567890.awsapps.com/start", "region": "us-east-1"}).json()
         assert started["user_code"] == "ABCD-EFGH"
@@ -140,16 +151,22 @@ def test_sso_collection_through_the_api(tmp_path, monkeypatch):
         assert client.get(f"/api/sso/login/{started['id']}/roles", params={"account_id": "111122223333"}).json()["roles"][0] == "CloudOpsReadOnly"
         job = client.post("/api/collections", json={"region": "ap-northeast-2", "expected_account": "111122223333",
                                                     "sso_login": started["id"], "sso_role": "CloudOpsReadOnly", "profile": "ignored"}).json()
-        for _ in range(50):
+        for _ in range(200):
             job = client.get(f"/api/collections/{job['id']}").json()
             if job["status"] not in ("queued", "running"):
                 break
-        assert job["status"] == "partial" and job.get("snapshot_id")
+            time.sleep(0.01)
+        assert job["status"] == "partial" and job.get("snapshot_id"), job
         assert collected == {"region": "ap-northeast-2", "profile": None, "account": "111122223333", "key": "ASIAEXAMPLE"}
+        # "이 역할로 로그인": the chat agent reads with this account and role from now on.
+        use = {"account_id": "111122223333", "role": "CloudOpsReadOnly"}
+        assert client.post("/api/sso/login/unknown/use", json=use).status_code == 422
+        assert client.post(f"/api/sso/login/{started['id']}/use", json=use).json() == {"account": "111122223333", "role": "CloudOpsReadOnly"}
         assert client.post(f"/api/sso/login/{started['id']}/logout").json() == {"logged_out": True}
         assert fake.logged_out == ["access-secret"]
         log = (tmp_path / "data" / "audit.log").read_text()
-        assert "sso login started" in log and "sso login authorized" in log and "sso:CloudOpsReadOnly" in log
+        assert "sso login started" in log and "sso login authorized" in log and "sso role selected" in log
+        assert ('"via": "sso:CloudOpsReadOnly/browser"' if egress == "browser" else '"via": "sso:CloudOpsReadOnly"') in log
         assert "access-secret" not in log and "client-secret" not in log
 
 

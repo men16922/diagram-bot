@@ -28,6 +28,7 @@ from .demo import demo_snapshot
 from .samples import SAMPLE_VERSION, SAMPLES
 from .drawio import carry_annotations, generate_document, validate_document
 from .editor import VERSION, editor_path
+from .egress import BrowserRelay, RelayError
 from .auth import SESSION_SECONDS, AuditLog, Authenticator, allowed
 from .cli import app_version
 from .diff import diff
@@ -56,6 +57,18 @@ class CollectionRequest(BaseModel):
     external_id: str | None = Field(default=None, min_length=2, max_length=1224, pattern=r"^[\w+=,.@:/-]+$")
     sso_login: str | None = Field(default=None, max_length=64, pattern=r"^[\w-]+$")
     sso_role: str | None = Field(default=None, max_length=64, pattern=r"^[\w+=,.@-]+$")
+
+
+class SsoUseRequest(BaseModel):
+    account_id: str = Field(pattern=r"^\d{12}$")
+    role: str = Field(max_length=64, pattern=r"^[\w+=,.@-]+$")
+
+
+class RelayAnswer(BaseModel):
+    status: int = Field(ge=0, le=599)
+    headers: dict[str, str] = Field(default_factory=dict)
+    body: str | None = Field(default=None, max_length=12 * 1024 * 1024)
+    error: str | None = Field(default=None, max_length=1000)
 
 
 class SsoStartRequest(BaseModel):
@@ -113,14 +126,24 @@ if(r.ok)location.href='/';else document.getElementById('e').textContent=(await r
 
 
 def default_chat(workspace, model):
-    from .agent import Chat
+    from functools import partial
+
+    from .agent import Chat, bedrock_model
+    if workspace.model_session:
+        # Browser egress: Bedrock is called with the user's session through the browser, without response streaming
+        # (the relay carries whole responses; the chat still streams tool progress).
+        return Chat(workspace, model, model_factory=partial(bedrock_model, session=workspace.model_session(), streaming=False))
     return Chat(workspace, model)
 
 
 def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=(), secure=False, oidc=None, chat_factory=default_chat,
-               sso=None):
+               sso=None, egress="server", sso_start=None, relay=None):
     """users: accounts for team mode (None = single local user). secure: served over TLS (Secure cookie, HSTS).
-    chat_factory(workspace, model) builds the design/collection chat agent (replaced in tests)."""
+    chat_factory(workspace, model) builds the design/collection chat agent (replaced in tests).
+    egress: "server" (the server calls AWS) or "browser" (the server signs, the user's browser sends; egress.py).
+    sso_start: (start URL, region) offered first in the sign-in dialog."""
+    if egress not in ("server", "browser"):
+        raise ValueError(f"egress는 server 또는 browser입니다: {egress}")
     directory = Path(directory or data_path())
     snapshots = directory / "snapshots"
     documents = directory / "documents"
@@ -136,6 +159,14 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
     sso = sso or SsoLogins()
     sso_choice = {}  # user -> (login id, account, role) of their last SSO collection; the chat agent collects with it
     audit = AuditLog(directory / "audit.log")
+    relay = (relay or BrowserRelay()) if egress == "browser" else None
+
+    def outbound(session, user):
+        """Every boto3 session the server uses for a user's AWS calls; with browser egress its requests leave from the browser."""
+        return relay.attach(session, user) if relay else session
+
+    def outbound_for(user):
+        return (lambda session: relay.attach(session, user)) if relay else None
 
     def save_snapshot(snapshot, identifier=None):
         if snapshot.get("schema_version") != 1:
@@ -195,7 +226,8 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
             if len(await request.body()) > 15 * 1024 * 1024:
                 return JSONResponse({"detail": "파일은 최대 15 MiB입니다."}, status_code=413)
         response = await call_next(request)
-        if mutation and path not in ("/api/login", "/api/logout"):
+        # Relay answers are one per AWS request; the collection or chat turn they serve is audited instead.
+        if mutation and path not in ("/api/login", "/api/logout") and not path.startswith("/api/relay/"):
             audit.write(request.state.user, f"{method} {path}", target=str(request.url.query) or None,
                         result=response.status_code, client=client)
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -348,7 +380,7 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         if auth and getattr(request.state, "role", None) != "admin":
             raise HTTPException(403, "AWS 자격 증명은 admin만 사용할 수 있습니다.")
         try:
-            caller = boto3.Session(profile_name=profile or None).client("sts").get_caller_identity()
+            caller = outbound(boto3.Session(profile_name=profile or None), request.state.user).client("sts").get_caller_identity()
         except Exception as exc:  # noqa: BLE001 - shown to the user as the reason sign-in failed
             raise HTTPException(422, f"AWS 자격 증명을 확인하지 못했습니다: {type(exc).__name__}: {exc}") from exc
         return {"account": caller["Account"], "arn": caller["Arn"], "profile": profile or None}
@@ -360,7 +392,7 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         except BotoCoreError:
             profiles = []
         return {"token": token, "editor_ready": (editor / "js/app.min.js").is_file(), "editor_version": VERSION, "profiles": profiles,
-                "version": app_version(), "team": bool(auth),
+                "version": app_version(), "team": bool(auth), "egress": egress,
                 "user": {"name": request.state.user, "role": getattr(request.state, "role", "admin")}}
 
     @app.get("/api/snapshots")
@@ -434,10 +466,13 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
                 def session_for(region):
                     # After an SSO collection the agent reads with the same Identity Center role; otherwise the SDK chain.
                     choice = sso_choice.get(user)
-                    return sso.session(choice[0], user, choice[1], choice[2], region) if choice else boto3.Session(region_name=region)
+                    session = sso.session(choice[0], user, choice[1], choice[2], region) if choice else boto3.Session(region_name=region)
+                    return outbound(session, user)
                 try:
                     workspace = Workspace(publish, session_factory=session_for, allow_collection=can_collect, load=get_snapshot,
                                           default_account=lambda: (sso_choice.get(user) or (None, None))[1] or os.environ.get("AWS_ACCOUNT_ID"))
+                    if relay:
+                        workspace.model_session = lambda: session_for("us-east-1")
                     current = chats[user] = {"chat": chat_factory(workspace, model), "model": model}
                 except ImportError as exc:
                     raise HTTPException(503, "채팅 에이전트를 쓰려면 pip install -e '.[agent]'로 strands-agents를 설치하세요.") from exc
@@ -445,6 +480,8 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
         return current["chat"]
 
     def chat_error(exc):
+        if isinstance(exc, RelayError):
+            return str(exc)
         if isinstance(exc, (BotoCoreError, ClientError)):
             code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
             return f"Bedrock 호출 실패({code}): 모델 액세스·리전·자격 증명을 확인하세요."
@@ -595,20 +632,21 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
                         raise ValueError("SSO 역할을 선택하세요.")
                     session = sso.session(params.sso_login, user, params.expected_account, params.sso_role, params.region)
                     sso_choice[user] = (params.sso_login, params.expected_account, params.sso_role)
+                # prepare: with browser egress every session of the collection (incl. an assumed role's) is relayed.
                 snapshot = collect(params.region, None if session else params.profile, params.expected_account, session=session,
-                                   role_arn=params.role_arn, external_id=params.external_id)
+                                   role_arn=params.role_arn, external_id=params.external_id, prepare=outbound_for(user))
                 jobs[identifier].update(status=snapshot["metadata"]["status"], snapshot_id=save_snapshot(snapshot))
             except (BotoCoreError, ClientError) as exc:
                 code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
                 jobs[identifier].update(status="failed", error=f"{code}: 기존 SSO 로그인·프로파일·권한을 확인하세요.")
-            except ValueError as exc:
+            except (ValueError, RelayError) as exc:
                 jobs[identifier].update(status="failed", error=str(exc))
             except Exception:
                 jobs[identifier].update(status="failed", error="수집을 완료하지 못했습니다. 마지막 스냅샷은 보존됩니다.")
             jobs[identifier]["finished_at"] = now()
             audit.write(user, "collection", target=f"{params.role_arn or params.expected_account}/{params.region}",
                         result=jobs[identifier]["status"], snapshot=jobs[identifier].get("snapshot_id"),
-                        via=f"sso:{params.sso_role}" if params.sso_login else "sdk")
+                        via=(f"sso:{params.sso_role}" if params.sso_login else "sdk") + ("/browser" if relay else ""))
 
         executor.submit(work)
         return jobs[identifier]
@@ -617,10 +655,10 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
 
     @app.get("/api/sso/defaults")
     def sso_start_defaults():
-        """Start URLs from ~/.aws/config sso-sessions/profiles, else discovered from the app's own credentials."""
+        """The configured start URL, then ~/.aws/config sso-sessions/profiles, else discovered from the app's own credentials."""
         if "rows" not in sso_defaults:
             import botocore.session
-            rows = []
+            rows = [{"name": "회사 Identity Center", "start_url": sso_start[0], "region": sso_start[1]}] if sso_start else []
             try:
                 config = botocore.session.Session().full_config
                 for name, item in config.get("sso_sessions", {}).items():
@@ -631,10 +669,40 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
                         rows.append({"name": name, "start_url": item["sso_start_url"], "region": item.get("sso_region", "us-east-1")})
             except BotoCoreError:
                 pass
-            if not rows and (found := discover_start_url()):
+            # Discovery calls sso-admin from the server, which browser egress assumes cannot reach AWS.
+            if not rows and not relay and (found := discover_start_url()):
                 rows.append({"name": "Identity Center", **found})
             sso_defaults["rows"] = rows
         return sso_defaults["rows"]
+
+    @app.get("/api/relay/next")
+    def relay_next(request: Request):
+        """Browser egress: AWS requests the server has signed for this user, for the browser to send (long-poll)."""
+        if not relay:
+            raise HTTPException(404, "브라우저 중계는 --aws-egress browser로 실행할 때만 씁니다.")
+        return {"requests": relay.next(request.state.user)}
+
+    @app.post("/api/relay/{identifier}")
+    def relay_answer(identifier: str, params: RelayAnswer, request: Request):
+        if not relay:
+            raise HTTPException(404, "브라우저 중계는 --aws-egress browser로 실행할 때만 씁니다.")
+        if not relay.answer(request.state.user, identifier, params.model_dump()):
+            raise HTTPException(404, "이미 끝났거나 다른 사용자의 요청입니다.")
+        return {"ok": True}
+
+    @app.post("/api/sso/login/{identifier}/use")
+    def sso_use(identifier: str, params: SsoUseRequest, request: Request):
+        """The account and role the user signed in with: the chat agent reads (and, with browser egress, calls Bedrock) with it."""
+        user = request.state.user
+        try:
+            sso.authorized_flow(identifier, user)
+        except SsoError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        with mutex:
+            sso_choice[user] = (identifier, params.account_id, params.role)
+            chats.pop(user, None)  # the next chat turn starts with the new identity
+        audit.write(user, "sso role selected", target=f"{params.role}@{params.account_id}")
+        return {"account": params.account_id, "role": params.role}
 
     @app.post("/api/sso/login")
     def sso_login(params: SsoStartRequest, request: Request):

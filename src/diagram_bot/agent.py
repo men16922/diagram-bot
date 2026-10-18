@@ -60,6 +60,7 @@ class Workspace:
     def __init__(self, save, session_factory=None, region=None, allow_collection=True, default_account=None, load=None):
         self.save, self.load, self.allow_collection = save, load, allow_collection
         self.current_snapshot = None  # the snapshot open in the app when the user sent the message
+        self.model_session = None  # browser egress: () -> the user's boto3 session for Bedrock (see server.default_chat)
         # Expected account for collections: AWS_ACCOUNT_ID (e.g. from --env-file) guards against the wrong account.
         self.default_account = default_account or (lambda: os.environ.get("AWS_ACCOUNT_ID"))
         self.session_factory = session_factory or (lambda region: boto3.Session(region_name=region))
@@ -351,7 +352,7 @@ def build_tools(workspace):
             add_lambda, add_vpc_endpoints, connect_vpcs, add_vpn, describe_design, review_design]
 
 
-def bedrock_model(key, session=None, record=None):
+def bedrock_model(key, session=None, record=None, streaming=True):
     """A Strands BedrockModel (Converse) that reports each call it serves, so the chat can say which model answered."""
     from strands.models.bedrock import BedrockModel
     if key not in MODELS:
@@ -365,7 +366,7 @@ def bedrock_model(key, session=None, record=None):
                 yield event
 
     return Recorded(model_id=MODELS[key][1], boto_session=session or boto3.Session(region_name="us-east-1"),
-                    temperature=0.2, max_tokens=4096)
+                    temperature=0.2, max_tokens=4096, streaming=streaming)
 
 
 def progress_handler(emit):

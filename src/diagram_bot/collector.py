@@ -141,14 +141,16 @@ def assume(session, role_arn, external_id, region, config):
                          aws_session_token=credentials["SessionToken"], region_name=region)
 
 
-def collect(region, profile=None, expected_account=None, session=None, role_arn=None, external_id=None, workers=8):
-    session = session or boto3.Session(profile_name=profile, region_name=region)
+def collect(region, profile=None, expected_account=None, session=None, role_arn=None, external_id=None, workers=8, prepare=None):
+    """prepare(session) is applied to every session the collection uses, incl. the assumed role's (browser egress)."""
+    prepare = prepare or (lambda s: s)
+    session = prepare(session or boto3.Session(profile_name=profile, region_name=region))
     # Adaptive retries back off client-side when an account is throttled during large collections.
     config = Config(retries={"mode": "adaptive", "total_max_attempts": 8}, connect_timeout=10, read_timeout=30,
                     max_pool_connections=16)
     started = now()
     if role_arn:
-        session = assume(session, role_arn, external_id, region, config)
+        session = prepare(assume(session, role_arn, external_id, region, config))
     identity = session.client("sts", region_name=region, config=config).get_caller_identity()
     account = identity["Account"]
     if expected_account and account != expected_account:

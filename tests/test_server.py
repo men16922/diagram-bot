@@ -136,7 +136,7 @@ def test_legacy_snapshot_and_detail_document_stay_usable(client, tmp_path):
 
 @pytest.mark.parametrize('fail', [False, True])
 def test_background_collection_result_and_failure(client, monkeypatch, fail):
-    def collect(region, profile, expected, session=None, role_arn=None, external_id=None):
+    def collect(region, profile, expected, session=None, role_arn=None, external_id=None, prepare=None):
         assert (region, profile, expected, session, role_arn, external_id) == ('ap-northeast-2', 'demo-sso', '111122223333', None, None, None)
         if fail:
             raise ValueError('Account mismatch')

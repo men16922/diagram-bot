@@ -1,6 +1,6 @@
 # Decisions
 
-Last Updated: 2026-10-17
+Last Updated: 2026-10-18
 
 - Product name is Diagram Bot; initial provider scope is AWS only.
 - Current refinement scope is docs/TOPOLOGY_PLAN.md: direct SSO/service APIs, no Resource
@@ -59,3 +59,9 @@ Last Updated: 2026-10-17
   remain separate evidence; an offline green result does not establish them.
 - Preserve plugin contract/prompt defaults. Initialization does not create new product backlog
   or run an unattended implementation/commit cycle.
+- Browser egress (2026-10-18, owner: 회사 구조와 동일하게): the company server cannot reach AWS (firewall) and Permission
+  Sets deny calls from outside the company's addresses, so `serve --aws-egress browser` keeps Identity Center (device code,
+  GetRoleCredentials; these endpoints answer no CORS) on the server, lets botocore build and sign every request, and hands
+  the prepared request to the user's browser at `before-send` (`egress.py`). Chosen over a generic "sign this request"
+  endpoint: the server signs only its own clients' requests, and the collector, chat tools and Bedrock run unchanged.
+  Bedrock uses Converse without response streaming in this mode. Server egress stays the default.

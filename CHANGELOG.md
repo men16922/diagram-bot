@@ -5,6 +5,10 @@
 ## [Unreleased]
 
 ### Added
+- **브라우저 egress (회사 인증 구조):** `serve --aws-egress browser [--sso-start-url … --sso-region …]`. Identity Center 로그인과
+  `GetRoleCredentials`는 서버, AWS API 요청은 서버의 boto3가 만들고 서명한 뒤 `before-send`에서 사용자 브라우저로 넘겨 PC IP에서 전송(`egress.py`,
+  `/api/relay/next`·`/api/relay/{id}`). 수집기·검토·채팅 도구 코드는 그대로이고, 채팅의 Bedrock은 비스트리밍 Converse. SSO `이 역할로 로그인`을 서버에 알려
+  (`/api/sso/login/{id}/use`) 채팅도 그 역할로 동작. 서버의 AWS 통신을 막은 실제 환경에서 수집 42/42·채팅(Bedrock) 확인, `scripts/verify_browser_egress.py`.
 - **현재 구성에서 설계 시작(brownfield):** 채팅 도구 `start_from_current`(앱에서 연 스냅샷 → 마지막 수집 순)와 `add_subnet_tier`(도구 29개).
   설계가 수집 스냅샷을 복사해 시작하고 기존 VPC(계층·AZ·NAT 라우트 테이블)·로드 밸런서·대상 그룹을 인식합니다. 결과 메타데이터 `based_on`.
   표준 아키텍처도 같은 방식으로 불러와 기존 VPC에 단계를 더할 수 있습니다. `diagram-bot chat --from`, 채팅 요청에 열린 스냅샷 전달(`snapshot`).

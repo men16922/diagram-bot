@@ -68,6 +68,11 @@ def main():
     serve.add_argument("--certfile", help="TLS 인증서 (PEM)")
     serve.add_argument("--keyfile", help="TLS 개인 키 (PEM)")
     serve.add_argument("--allowed-host", action="append", default=[], help="접속에 쓰는 호스트 이름 (여러 번 지정 가능)")
+    serve.add_argument("--aws-egress", choices=("server", "browser"), default=os.environ.get("DIAGRAM_BOT_AWS_EGRESS", "server"),
+                       help="AWS API 호출 경로: server(서버가 직접) 또는 browser(서버가 서명, 사용자 브라우저가 PC IP에서 전송; "
+                            "서버 방화벽·aws:SourceIp 조건이 있는 환경)")
+    serve.add_argument("--sso-start-url", default=os.environ.get("DIAGRAM_BOT_SSO_START_URL"), help="로그인 화면에 먼저 보일 IAM Identity Center 시작 URL")
+    serve.add_argument("--sso-region", default=os.environ.get("DIAGRAM_BOT_SSO_REGION", "us-east-1"), help="Identity Center 리전 (기본 us-east-1)")
     account = commands.add_parser("user", help="팀 모드 사용자 관리")
     account.add_argument("action", choices=("add", "remove", "list"))
     account.add_argument("name", nargs="?")
@@ -208,10 +213,11 @@ def run_server(parser, args):
     users = load_users(args.users) if args.users else None
     oidc = OidcProvider(load_config(args.oidc_config)) if args.oidc_config else None
     secure = bool(args.certfile)
-    app = create_app(args.data_dir, users=users, allowed_hosts=args.allowed_host, secure=secure, oidc=oidc)
+    app = create_app(args.data_dir, users=users, allowed_hosts=args.allowed_host, secure=secure, oidc=oidc, egress=args.aws_egress,
+                     sso_start=(args.sso_start_url, args.sso_region) if args.sso_start_url else None)
     shown = args.allowed_host[0] if args.allowed_host else args.host
     print(f"Diagram Bot: {'https' if secure else 'http'}://{shown}:{args.port}" + (f" · 팀 모드 사용자 {len(users)}명" if users else "")
-          + (" · SSO" if oidc else ""), flush=True)
+          + (" · SSO" if oidc else "") + (" · AWS 호출은 브라우저에서 (서버는 서명만)" if args.aws_egress == "browser" else ""), flush=True)
     uvicorn.run(app, host=args.host, port=args.port, ssl_certfile=args.certfile, ssl_keyfile=args.keyfile,
                 proxy_headers=False, server_header=False)
     return 0

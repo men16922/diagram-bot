@@ -125,6 +125,10 @@ class SsoLogins:
             names += [r["roleName"] for r in page.get("roleList", [])]
         return sorted(names)
 
+    def authorized_flow(self, identifier, owner):
+        with self.lock:
+            self.authorized(identifier, owner)
+
     def authorized(self, identifier, owner):
         flow = self.flow(identifier, owner)
         if flow["status"] != "authorized" or self.clock() >= flow["token_expires_at"]:

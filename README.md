@@ -63,6 +63,31 @@ diagram-bot serve
 
 화면 우측 상단 **로그인**(AWS 콘솔의 계정 메뉴와 같은 위치)에서 IAM Identity Center(SSO, device code)나 이 기기의 프로파일·기본 인증 체인으로 로그인하면 `역할 @ 계정`이 표시됩니다. 같은 메뉴의 **AWS 리소스 수집**에서 예상 계정 ID와 리전을 지정합니다. 로그인하지 않으면 boto3의 기본 인증 체인을 사용합니다. 기존 `AWS_CONFIG_FILE`·`AWS_PROFILE`·`credential_process`도 SDK가 처리합니다. STS의 실제 계정 ID와 예상 계정 ID가 다르면 리소스를 수집하지 않습니다. SSO 토큰과 자격 증명은 서버 메모리에만 두고 저장하지 않습니다.
 
+### 서버가 AWS에 나갈 수 없는 환경 (브라우저 egress)
+
+회사 서버의 방화벽이 AWS API를 막고, Permission Set이 회사 공인 IP 밖의 호출을 `aws:SourceIp`로 거부하는 환경을 위한 실행 방식입니다.
+
+```bash
+diagram-bot serve --aws-egress browser --sso-start-url https://d-1234567890.awsapps.com/start --sso-region us-east-1
+```
+
+```
+ 브라우저 (사용자 PC, 허용된 출구 IP)            서버 (방화벽 안)
+ ① SSO 로그인 화면 ─────────────────────────▶ device code 시작·토큰 교환, GetRoleCredentials (Identity Center)
+ ② 수집·채팅 요청 ──────────────────────────▶ boto3가 요청을 만들고 역할 자격 증명으로 SigV4 서명
+ ③ GET /api/relay/next  ◀────── 서명된 요청 ── before-send에서 전송 대신 브라우저에 넘김
+ ④ fetch → https://<서비스>.<리전>.amazonaws.com (CORS) — AWS 호출은 PC IP에서 나감
+ ⑤ POST /api/relay/{id} ── AWS 응답 ─────────▶ botocore가 해석·재시도·페이지 넘김 (수집기·검토·채팅 코드는 그대로)
+```
+
+- 서버는 **자기 boto3 클라이언트가 만든 요청만** 서명합니다(임의 요청 서명 API 없음). 브라우저는 요청별 서명만 받고 비밀 키는 받지 않습니다.
+- Identity Center 엔드포인트(sso-oidc, portal.sso)는 CORS를 허용하지 않아 로그인과 `GetRoleCredentials`는 서버에서 합니다(회사 샘플과 같은 구조).
+- 수집에 쓰는 서비스 18종(EC2·ELB·RDS·Auto Scaling·EKS·ECS·MSK·ElastiCache·OpenSearch·EFS·Redshift·Lambda·FSx·SageMaker·CloudFront·WAFv2·Direct Connect·STS)과
+  Bedrock Runtime은 서명된 브라우저 요청에 CORS로 응답합니다(2026-10-18 실제 Chromium으로 확인). 채팅의 Bedrock 호출은 이 모드에서 비스트리밍(Converse)입니다.
+- 브라우저가 앱을 열고 있지 않으면 AWS 호출은 즉시 `브라우저 중계가 연결되어 있지 않습니다`로 실패합니다.
+- 회사 네트워크에서 확인: 서버의 AWS 통신을 막고(`HTTPS_PROXY=http://127.0.0.1:9 NO_PROXY=127.0.0.1,localhost`) 앱을 띄운 뒤
+  `python scripts/verify_browser_egress.py --url http://127.0.0.1:8796` — 브라우저가 호출한 AWS 호스트와 수집·채팅 결과를 보고합니다.
+
 수집기는 `sts:GetCallerIdentity`와 [읽기 전용 정책 예시](readonly-policy.json)의 읽기 API(EC2·ELBv2·RDS·Auto Scaling·EKS·ECS·MSK·ElastiCache·OpenSearch·EFS·Redshift·Lambda·FSx·SageMaker·CloudFront·WAFv2·Direct Connect)만 호출합니다. 일부 권한이 없으면 해당 범위만 `조회 불가`로 표시하고 나머지는 그립니다. 정책을 자동 적용하지 않으며 키나 토큰을 앱·산출물에 저장하지 않습니다.
 
 | 범위 | API 근거 |
