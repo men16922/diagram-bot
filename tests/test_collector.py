@@ -1,3 +1,4 @@
+import json
 from contextlib import ExitStack
 
 import boto3
@@ -326,7 +327,7 @@ def test_detail_steps_run_on_a_stub_call():
 
 def test_assume_role_caps_session_to_read_only_and_checks_the_assumed_account(monkeypatch):
     base, assumed = Session(), Session()
-    monkeypatch.setattr("diagram_bot.collector.boto3.Session", lambda **kwargs: assumed)
+    monkeypatch.setattr("diagram_bot.sessions.boto3.Session", lambda **kwargs: assumed)
     role = "arn:aws:iam::444455556666:role/DiagramBotReadOnly"
     with Stubber(base.clients["sts"]) as stub, Stubber(assumed.clients["sts"]) as assumed_stub:
         stub.add_response("assume_role", {"Credentials": {"AccessKeyId": "AKIAEXAMPLE000000000", "SecretAccessKey": "s" * 40,
@@ -393,3 +394,21 @@ def test_cli_combine_writes_one_report_for_several_accounts(monkeypatch, tmp_pat
     report = json.loads((tmp_path / "out" / "snapshot.json").read_text(encoding="utf-8"))
     assert report["metadata"]["combined"] and len(report["parts"]) == 3
     assert "AWS 계정 · 111111111111" in (tmp_path / "out" / "topology.drawio").read_text(encoding="utf-8")
+
+
+def test_every_producer_builds_the_same_envelope_and_files_are_checked_on_load(tmp_path):
+    from diagram_bot.combine import combine_snapshots
+    from diagram_bot.demo import demo_snapshot
+    from diagram_bot.samples import SAMPLES
+    from diagram_bot.snapshot import SCHEMA_VERSION, load_snapshot
+    sample = SAMPLES["three-tier"]()
+    other = {**sample, "metadata": {**sample["metadata"], "account_id": "444455556666"}}
+    for snapshot in (demo_snapshot(), sample, combine_snapshots([sample, other])):
+        assert list(snapshot)[:4] == ["schema_version", "metadata", "coverage", "raw"] and snapshot["schema_version"] == SCHEMA_VERSION
+    path = tmp_path / "snapshot.json"
+    path.write_text(json.dumps(sample), encoding="utf-8")
+    assert load_snapshot(path) == sample
+    for wrong in ({**sample, "schema_version": 2}, [sample]):
+        path.write_text(json.dumps(wrong), encoding="utf-8")
+        with pytest.raises(ValueError, match="schema_version"):
+            load_snapshot(path)

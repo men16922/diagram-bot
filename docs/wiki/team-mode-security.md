@@ -1,9 +1,9 @@
 ---
 title: 팀 모드와 보안 경계
 summary: 앱 로그인(로컬 계정·OpenID Connect), 세션·역할, create_app 미들웨어(TrustedHost, 페이지 토큰, Origin, 본문 제한, 보안 헤더), 감사 로그, 비루프백 TLS 요구와 저장하지 않는 비밀.
-sources: [src/diagram_bot/auth.py, src/diagram_bot/oidc.py, src/diagram_bot/server.py, src/diagram_bot/routes/session.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/cli.py, SECURITY.md, docs/OPERATIONS.md, tests/test_team.py, tests/test_oidc.py, tests/test_server.py]
+sources: [src/diagram_bot/auth.py, src/diagram_bot/expiry.py, src/diagram_bot/oidc.py, src/diagram_bot/server.py, src/diagram_bot/routes/session.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/cli.py, SECURITY.md, docs/OPERATIONS.md, tests/test_team.py, tests/test_oidc.py, tests/test_server.py]
 related: [http-api, storage, web-app, chat-agent, browser-egress, aws-access-and-sso, cli]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 팀 모드와 보안 경계
 
@@ -24,8 +24,8 @@ updated: 2026-10-18
 - `save_user`는 임시 파일을 `0o600`으로 만든 뒤 교체한다. `remove_user`는 없는 이름이면 `ValueError`. CLI는 `diagram-bot user add|remove|list [이름] --file <경로> [--role] [--password-stdin]`(`cli.manage_user`, 비밀번호 12자 이상). 사용자 파일은 데이터 디렉터리와 별개다.
 - `hash_password`: PBKDF2-SHA256, 사용자별 16바이트 salt, `ITERATIONS = 600_000`, 형식 `pbkdf2_sha256$<반복>$<salt b64>$<digest b64>`. `verify_password`는 `hmac.compare_digest`.
 - `Authenticator.login`: 없는 이름도 `self.dummy` 해시로 한 번 검증해 응답 시간으로 이름 존재가 드러나지 않게 한다. 실패는 클라이언트 주소별로 기록한다.
-- 차단: `throttled(client)`는 `FAILURE_WINDOW = 15 * 60`초 안의 실패가 `FAILURE_LIMIT = 5`번 이상이면 참. `POST /api/login`이 429로 막고 감사에 `throttled`를 남긴다. 성공하면 그 주소의 실패 기록을 지운다.
-- 세션: `secrets.token_urlsafe(32)` 토큰 → `{name, role, expires}`, `SESSION_SECONDS = 8 * 3600`(단조 시계). `session(token)`이 만료된 항목을 지운다. `start_session(name, role)`은 OIDC처럼 밖에서 확인한 신원용.
+- 차단: `throttled(client, name)`은 `FAILURE_WINDOW = 15 * 60`초 안의 실패가 (주소, 이름)별로 `FAILURE_LIMIT = 5`번 이상이거나 주소 전체로 `CLIENT_FAILURE_LIMIT = 50`번 이상이면 참. 인증 프록시 뒤에서는 모든 사용자가 같은 주소이므로, 한 계정의 실패가 다른 사용자를 막지 않고 주소 상한은 여러 이름에 걸친 추측만 막는다. `POST /api/login`이 429로 막고 감사에 `throttled`를 남긴다. 성공하면 그 (주소, 이름)의 실패 기록을 지운다.
+- 세션: `secrets.token_urlsafe(32)` 토큰 → `{name, role, expires}`, `SESSION_SECONDS = 8 * 3600`(단조 시계, `Authenticator(users, clock=)`로 주입). `session(token)`이 만료된 항목을 지운다. 만료된 세션과 창(`FAILURE_WINDOW`)이 지난 실패 기록은 `session()`·`throttled()`가 불릴 때 `expiry.Purge`로 한꺼번에 지운다(분당 한 번, 타이머 스레드 없음). `start_session(name, role)`은 OIDC처럼 밖에서 확인한 신원용.
 
 ## 역할 (`auth.allowed`)
 - `GET`·`HEAD`와 `/api/logout`은 모든 역할 허용.

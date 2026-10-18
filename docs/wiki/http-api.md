@@ -3,7 +3,7 @@ title: HTTP API 레퍼런스
 summary: create_app이 조립하는 모든 HTTP 엔드포인트(페이지·정적 파일·session·snapshots·documents·agent·aws 라우터)의 요청 모델, 응답, 상태 코드, 역할, 감사 기록.
 sources: [src/diagram_bot/server.py, src/diagram_bot/routes/__init__.py, src/diagram_bot/routes/session.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/routes/documents.py, src/diagram_bot/routes/agent.py, src/diagram_bot/routes/aws.py, src/diagram_bot/auth.py, src/diagram_bot/egress.py, tests/test_server.py, tests/test_team.py, tests/test_agent.py]
 related: [team-mode-security, storage, web-app, chat-agent, browser-egress, aws-access-and-sso, views, cloudformation, porting-guide]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # HTTP API 레퍼런스
 
@@ -113,7 +113,7 @@ updated: 2026-10-18
 | `GET /api/sso/login/{id}/roles` | `account_id` 쿼리 | `{"roles": [...]}`. `SsoError` 409, AWS 오류 502 |
 | `POST /api/sso/login/{id}/use` | `SsoUseRequest{account_id: 12자리, role}` | `{account, role}`. 그 사용자의 채팅 대화를 버린다. 미승인 422 |
 | `POST /api/sso/login/{id}/logout` | — | `{"logged_out": ...}` |
-| `GET /api/relay/next` | — | `{"requests": [{id, url, method, headers, body}]}` (롱 폴링, 기본 20초) |
+| `GET /api/relay/next` | `tab` 쿼리(`^[\w-]*$`, ≤64) | `{"requests": [{id, url, method, headers, body}]}` (비동기 롱 폴링, 기본 20초; 열린 폴이 탭의 심장 박동) |
 | `POST /api/relay/{id}` | `RelayAnswer{status: 0–599, headers, body: ≤12 MiB base64?, error: ≤1000자?}` | `{"ok": true}`. 끝났거나 남의 요청이면 404 |
 
 - `CollectionRequest`: `profile`(≤128), `region`(패턴 `^[a-z]{2}(?:-[a-z0-9]+)+-\d+$`), `expected_account`(12자리, 필수), `role_arn`(IAM 역할 ARN 패턴), `external_id`(2–1224자), `sso_login`(`^[\w-]+$`), `sso_role`.

@@ -17,6 +17,7 @@ from .collector import now
 from .errors import InputError
 from .fileio import atomic_write
 from .graph import build_graph, upgrade_graph
+from .snapshot import SCHEMA_VERSION
 
 HISTORY = 20  # archived revisions kept per document
 
@@ -43,7 +44,7 @@ class Conflict(RuntimeError):
 
 
 def validate_snapshot(snapshot):
-    if snapshot.get("schema_version") != 1:
+    if snapshot.get("schema_version") != SCHEMA_VERSION:
         raise InputError("지원하지 않는 스냅샷 버전입니다.")
     metadata = snapshot["metadata"]
     for name in ("account_id", "region", "started_at", "finished_at", "status"):

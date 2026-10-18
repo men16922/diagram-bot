@@ -1,12 +1,13 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
-import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from .egress import RelayDisconnected
 from .errors import error_code
+from .sessions import credentials_session, sdk_session
+from .snapshot import make_snapshot
 
 
 def now():
@@ -152,8 +153,7 @@ def assume(session, role_arn, external_id, region, config):
     if external_id:
         params["ExternalId"] = external_id
     credentials = session.client("sts", region_name=region, config=config).assume_role(**params)["Credentials"]
-    return boto3.Session(aws_access_key_id=credentials["AccessKeyId"], aws_secret_access_key=credentials["SecretAccessKey"],
-                         aws_session_token=credentials["SessionToken"], region_name=region)
+    return credentials_session(credentials, region)
 
 
 def batches(items, size):
@@ -272,7 +272,7 @@ DETAILS = (target_health, eks, msk, opensearch, ecs, efs, sagemaker, transit_rou
 def collect(region, profile=None, expected_account=None, session=None, role_arn=None, external_id=None, workers=8, prepare=None):
     """prepare(session) is applied to every session the collection uses, incl. the assumed role's (browser egress)."""
     prepare = prepare or (lambda s: s)
-    session = prepare(session or boto3.Session(profile_name=profile, region_name=region))
+    session = prepare(session or sdk_session(region, profile))
     # Adaptive retries back off client-side when an account is throttled during large collections.
     config = Config(retries={"mode": "adaptive", "total_max_attempts": 8}, connect_timeout=10, read_timeout=30,
                     max_pool_connections=16)
@@ -329,10 +329,9 @@ def collect(region, profile=None, expected_account=None, session=None, role_arn=
         coverage.append({"service": "elbv2", "operation": "describe_target_health",
                          "parameters": {}, "status": "not_discovered",
                          "reason": "대상 그룹 조회가 불완전하여 미발견 그룹의 대상은 조회하지 못했습니다."})
-    return {"schema_version": 1, "metadata": {
+    return make_snapshot({
         "account_id": account, "region": region, "profile": profile, "role_arn": role_arn,
         "partition": partition,
         "started_at": started, "finished_at": now(), "demo": False,
         "status": "complete" if all(c["status"] == "complete" for c in coverage) else "partial",
-        "scope": SCOPE, "limitations": LIMITATIONS},
-        "coverage": coverage, "raw": raw}
+        "scope": SCOPE, "limitations": LIMITATIONS}, coverage, raw)

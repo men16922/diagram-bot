@@ -1,4 +1,5 @@
 from .collector import now
+from .snapshot import make_snapshot
 
 ARN = "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:"
 ALB = ARN + "loadbalancer/app/demo-alb/123"
@@ -80,16 +81,16 @@ def demo_snapshot():
         {"service": "ec2", "operation": "describe_security_groups", "status": "complete", "items": len(security_groups), "pages": 1}]
     coverage += [{"service": "elbv2", "operation": "describe_target_health", "parameters": {"TargetGroupArn": h["TargetGroupArn"]},
                   "status": "complete", "items": len(h["Descriptions"]), "pages": 1} for h in target_health]
-    return {"schema_version": 1, "metadata": {
+    return make_snapshot({
         "account_id": "111122223333", "region": "ap-northeast-2", "partition": "aws",
         "started_at": timestamp, "finished_at": timestamp, "status": "partial", "demo": True,
         "scope": ["VPC", "Subnet", "EC2", "ELBv2", "TargetGroup", "RegisteredTarget"],
         "limitations": ["실제 AWS 조회가 아닌 샘플 데이터입니다.",
                         "ENI·EBS는 참조만 표시하고 보안 그룹 규칙은 검토 결과에만 사용합니다.",
                         "설정 관계이며 실제 통신이나 보안 적합성을 의미하지 않습니다."]},
-        "coverage": coverage,
-        "raw": {"vpcs": vpcs,
+        coverage,
+        {"vpcs": vpcs,
                 "subnets": [{"SubnetId": s, "VpcId": v, "AvailabilityZone": az, "CidrBlock": cidr, "Tags": tags(name)}
                             for s, v, az, cidr, name in subnets],
                 "instances": instances, "load_balancers": load_balancers,
-                "target_groups": target_groups, "target_health": target_health, "security_groups": security_groups}}
+                "target_groups": target_groups, "target_health": target_health, "security_groups": security_groups})

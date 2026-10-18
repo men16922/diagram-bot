@@ -11,14 +11,15 @@ import time
 from datetime import UTC, datetime
 
 import boto3
-import botocore.session
-from botocore.credentials import DeferredRefreshableCredentials
 from botocore.exceptions import ClientError
 
 from .errors import error_code
+from .expiry import Purge
+from .sessions import credentials_session, sdk_session
 from .validation import ACCOUNT, REGION
 
 GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+FLOW_GRACE = 3600
 START_URL = re.compile(r"^https://[A-Za-z0-9.-]+(?::\d+)?/[^\s]*$")
 
 
@@ -32,8 +33,11 @@ class SsoLogins:
         self.clock = clock
         self.flows = {}
         self.lock = threading.Lock()
+        # A flow outlives its device code or token by FLOW_GRACE, so a late poll still reads "expired" before it goes.
+        self.purge = Purge(lambda f, now: now >= f.get("token_expires_at", f["expires_at"]) + FLOW_GRACE)
 
     def flow(self, identifier, owner):
+        self.purge(self.flows, self.clock())
         flow = self.flows.get(identifier)
         if not flow or flow["owner"] != owner:
             raise SsoError("SSO 로그인 세션을 찾을 수 없습니다. 다시 로그인하세요.")
@@ -55,6 +59,7 @@ class SsoLogins:
         identifier = secrets.token_urlsafe(16)
         now = self.clock()
         with self.lock:
+            self.purge(self.flows, now)
             # Abandoned flows of the same user are dropped so a user holds at most a few secrets in memory.
             for key in [k for k, f in self.flows.items() if f["owner"] == owner and f["status"] != "authorized"]:
                 self.flows.pop(key)
@@ -166,9 +171,7 @@ class SsoLogins:
 
     def session(self, identifier, owner, account_id, role_name, region):
         """A boto3 session with the role's short-lived credentials (fetched for each collection)."""
-        credentials = self.credentials(identifier, owner, account_id, role_name)
-        return boto3.Session(aws_access_key_id=credentials["access_key"], aws_secret_access_key=credentials["secret_key"],
-                             aws_session_token=credentials["token"], region_name=region)
+        return credentials_session(self.credentials(identifier, owner, account_id, role_name), region)
 
     def logout(self, identifier, owner):
         with self.lock:
@@ -184,17 +187,9 @@ class SsoLogins:
         return True
 
 
-def refreshing_session(fetch, region):
-    """A session whose credentials come from fetch() on first use and again before they expire (botocore refreshes),
-    for a client that outlives one role session, such as the chat's Bedrock model. Nothing is fetched here."""
-    core = botocore.session.Session()
-    core._credentials = DeferredRefreshableCredentials(fetch, "diagram-bot-sso")
-    return boto3.Session(botocore_session=core, region_name=region)
-
-
 def discover_start_url(session=None, region=None):
     """Identity Center start URL and home region from the current credentials, when they may list instances."""
-    session = session or boto3.Session()
+    session = session or sdk_session()
     region = region or session.region_name or "us-east-1"
     try:
         instances = session.client("sso-admin", region_name=region).list_instances().get("Instances", [])

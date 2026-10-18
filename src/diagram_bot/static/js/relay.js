@@ -25,13 +25,18 @@ export async function send(request) {
   }
 }
 
-// Long-poll /api/relay/next and answer every request, concurrently, for as long as the page is open.
+// This tab's id: the server hands a request to one tab and, if that tab goes away, gives a read to another open tab.
+const TAB = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join('');
+
+// Long-poll /api/relay/next and answer every request for as long as the page is open. Requests are answered in the
+// background and the next poll starts at once: an open poll is this tab's heartbeat, so a slow call (Bedrock) never
+// makes the tab look closed.
 export async function startRelay(api, {onRequests = () => {}} = {}) {
   for (;;) {
     try {
-      const {requests} = await api('/api/relay/next');
+      const {requests} = await api(`/api/relay/next?tab=${TAB}`);
       onRequests(requests.length);
-      await Promise.all(requests.map(async r => api(`/api/relay/${r.id}`, {method: 'POST', body: JSON.stringify(await send(r))}).catch(() => {})));
+      for (const r of requests) send(r).then(result => api(`/api/relay/${r.id}`, {method: 'POST', body: JSON.stringify(result)})).catch(() => {});
     } catch (error) {
       await new Promise(resolve => setTimeout(resolve, 3000));
     }

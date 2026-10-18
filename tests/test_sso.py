@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 
 from diagram_bot.server import create_app
-from diagram_bot.sso import GRANT, SsoError, SsoLogins
+from diagram_bot.sso import FLOW_GRACE, GRANT, SsoError, SsoLogins
 
 
 def error(code):
@@ -174,3 +174,20 @@ def test_only_admins_start_sso_sign_in():
     from diagram_bot.auth import allowed
     assert allowed("admin", "POST", "/api/sso/login")
     assert not allowed("editor", "POST", "/api/sso/login") and not allowed("viewer", "POST", "/api/sso/login/x/logout")
+
+
+def test_flows_past_their_expiry_leave_memory():
+    fake, clock = FakeIdentityCenter(), Clock()
+    logins = SsoLogins(client=fake, clock=clock)
+    abandoned = logins.start("https://d-1234567890.awsapps.com/start", "us-east-1", "alice")["id"]
+    fake.approved = True
+    signed_in = logins.start("https://d-1234567890.awsapps.com/start", "us-east-1", "bob")["id"]
+    assert logins.poll(signed_in, "bob")["status"] == "authorized"
+    clock.now += 600 + FLOW_GRACE - 1
+    assert logins.poll(abandoned, "alice")["status"] == "expired"  # a late poll still learns what happened
+    clock.now += 61  # purged at most once a minute
+    assert logins.poll(signed_in, "bob")["status"] == "expired"  # the token's 3600 s are over; the flow stays its grace
+    assert abandoned not in logins.flows and signed_in in logins.flows
+    clock.now += 3600
+    logins.start("https://d-1234567890.awsapps.com/start", "us-east-1", "carol")
+    assert signed_in not in logins.flows and len(logins.flows) == 1

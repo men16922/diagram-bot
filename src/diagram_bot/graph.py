@@ -80,7 +80,7 @@ def build_graph(snapshot):
         key = f"{account}/{scope}/{kind}/{resource_id}"
         if key not in nodes or not reference:
             attrs = attrs or {}
-            tags = {t["Key"]: t.get("Value", "") for t in attrs.get("Tags", [])}
+            tags = tag_map(attrs)
             nodes[key] = {"id": key, "resource_id": resource_id, "kind": kind,
                           "name": tags.get("Name") or attrs.get("DisplayName") or attrs.get("LoadBalancerName") or attrs.get("TargetGroupName")
                           or attrs.get("DBInstanceIdentifier") or attrs.get("AutoScalingGroupName") or attrs.get("FunctionName")
@@ -235,13 +235,7 @@ def databases(raw, nodes, node, link):
         key = node("db_instance", identifier, db, "DescribeDBInstances")
         group = db.get("DBSubnetGroup") or {}
         link(key, "vpc", group.get("VpcId"), "in_vpc", "DescribeDBInstances.DBSubnetGroup.VpcId")
-
-        def subnet_in(zone):
-            # The subnet group lists subnets per AZ; placement is only stated when one subnet matches.
-            matches = [s["SubnetIdentifier"] for s in group.get("Subnets", []) if (s.get("SubnetAvailabilityZone") or {}).get("Name") == zone]
-            return matches[0] if len(matches) == 1 else None
-
-        link(key, "subnet", subnet_in(db.get("AvailabilityZone")), "in_subnet",
+        link(key, "subnet", group_subnet(group, db.get("AvailabilityZone")), "in_subnet",
              "DescribeDBInstances.AvailabilityZone + DBSubnetGroup.Subnets[]", {"availability_zone": db.get("AvailabilityZone")})
         source = db.get("ReadReplicaSourceDBInstanceIdentifier")
         if source:
@@ -256,17 +250,17 @@ def databases(raw, nodes, node, link):
                            "DescribeDBInstances.SecondaryAvailabilityZone")
             link(standby, "db_instance", identifier, "standby_of", "DescribeDBInstances.MultiAZ + SecondaryAvailabilityZone")
             link(standby, "vpc", group.get("VpcId"), "in_vpc", "DescribeDBInstances.DBSubnetGroup.VpcId")
-            link(standby, "subnet", subnet_in(db["SecondaryAvailabilityZone"]), "in_subnet",
+            link(standby, "subnet", group_subnet(group, db["SecondaryAvailabilityZone"]), "in_subnet",
                  "DescribeDBInstances.SecondaryAvailabilityZone + DBSubnetGroup.Subnets[]",
                  {"availability_zone": db["SecondaryAvailabilityZone"]})
 
 
 def scaling_groups(raw, node, link):
     """Auto Scaling groups: VPC from their subnets, members and target groups."""
-    subnet_vpc = {s["SubnetId"]: s.get("VpcId") for s in raw.get("subnets", [])}
+    subnets = subnet_index(raw)
     for group in raw.get("auto_scaling_groups", []):
         key = node("auto_scaling_group", group["AutoScalingGroupName"], group, "DescribeAutoScalingGroups")
-        vpcs = {subnet_vpc.get(s) for s in (group.get("VPCZoneIdentifier") or "").split(",") if s} - {None}
+        vpcs = {subnets.get(s, {}).get("VpcId") for s in (group.get("VPCZoneIdentifier") or "").split(",") if s} - {None}
         if len(vpcs) == 1:
             link(key, "vpc", vpcs.pop(), "in_vpc", "DescribeAutoScalingGroups.VPCZoneIdentifier → DescribeSubnets.VpcId")
         for instance in group.get("Instances", []):
@@ -328,15 +322,15 @@ def caches(raw, node, link):
         subnet_group = groups.get(cache.get("CacheSubnetGroupName"), {})
         link(key, "vpc", subnet_group.get("VpcId"), "in_vpc", "DescribeCacheClusters.CacheSubnetGroupName → DescribeCacheSubnetGroups.VpcId")
         zone = cache.get("PreferredAvailabilityZone")
-        matches = [s["SubnetIdentifier"] for s in subnet_group.get("Subnets", []) if (s.get("SubnetAvailabilityZone") or {}).get("Name") == zone]
-        link(key, "subnet", matches[0] if len(matches) == 1 else None, "in_subnet",
+        link(key, "subnet", group_subnet(subnet_group, zone), "in_subnet",
              "DescribeCacheClusters.PreferredAvailabilityZone + DescribeCacheSubnetGroups.Subnets[]", {"availability_zone": zone})
         link(key, "cache_replication_group", cache.get("ReplicationGroupId"), "cache_member_of", "DescribeCacheClusters.ReplicationGroupId")
 
 
 def kafka(raw, node, link):
     """MSK clusters and one broker node per client subnet."""
-    subnet_vpc = {s["SubnetId"]: s.get("VpcId") for s in raw.get("subnets", [])}
+    index = subnet_index(raw)
+    vpc_of = lambda subnet: index.get(subnet, {}).get("VpcId")
     for cluster in raw.get("msk_clusters", []):
         provisioned = cluster.get("Provisioned") or {}
         brokers = provisioned.get("BrokerNodeGroupInfo") or {}
@@ -357,11 +351,11 @@ def kafka(raw, node, link):
                            "BrokerIds": sorted(ids or []), "Estimated": ids is None,
                            "KafkaVersion": (provisioned.get("CurrentBrokerSoftwareInfo") or {}).get("KafkaVersion")},
                           "ListNodes.BrokerNodeInfo.ClientSubnet" if ids is not None else "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
-            link(broker, "vpc", subnet_vpc.get(subnet), "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
+            link(broker, "vpc", vpc_of(subnet), "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
             link(broker, "subnet", subnet, "in_subnet", "ListClustersV2.Provisioned.BrokerNodeGroupInfo.ClientSubnets[]")
             link(broker, "msk_cluster", cluster["ClusterArn"], "broker_of", "ListClustersV2.ClusterArn")
-        if subnets and subnet_vpc.get(subnets[0]):
-            link(key, "vpc", subnet_vpc[subnets[0]], "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
+        if subnets and vpc_of(subnets[0]):
+            link(key, "vpc", vpc_of(subnets[0]), "in_vpc", "ClientSubnets[] → DescribeSubnets.VpcId")
 
 
 def lambdas(raw, node, link):
@@ -393,6 +387,18 @@ def kubernetes(raw, node, link):
 
 def subnet_index(raw):
     return {s["SubnetId"]: s for s in raw.get("subnets", [])}
+
+
+def tag_map(item):
+    """An AWS resource's Tags list as {key: value}."""
+    return {t["Key"]: t.get("Value", "") for t in item.get("Tags", [])}
+
+
+def group_subnet(group, zone):
+    """The subnet of an RDS, ElastiCache or Redshift subnet group in `zone`. The group lists subnets per AZ; placement
+    is only stated when exactly one subnet matches (docs/DECISIONS.md)."""
+    matches = [s["SubnetIdentifier"] for s in group.get("Subnets", []) if (s.get("SubnetAvailabilityZone") or {}).get("Name") == zone]
+    return matches[0] if len(matches) == 1 else None
 
 
 def ecs_tasks(raw, node, link):
@@ -487,7 +493,7 @@ def file_systems(raw, node, link):
         node("efs_file_system", system["FileSystemId"], system, "DescribeFileSystems")
     for target in raw.get("efs_mount_targets", []):
         system = systems.get(target.get("FileSystemId"), {})
-        tags = {t["Key"]: t.get("Value", "") for t in system.get("Tags", [])}
+        tags = tag_map(system)
         key = node("efs_mount_target", target["MountTargetId"],
                    {**target, "DisplayName": system.get("Name") or tags.get("Name") or target.get("FileSystemId"),
                     "OneZone": bool(system.get("AvailabilityZoneName")), "ThroughputMode": system.get("ThroughputMode"),
@@ -503,11 +509,6 @@ def warehouses(raw, node, link):
     groups = {g["ClusterSubnetGroupName"]: g for g in raw.get("redshift_subnet_groups", [])}
     for cluster in raw.get("redshift_clusters", []):
         group = groups.get(cluster.get("ClusterSubnetGroupName"), {})
-
-        def subnet_in(zone):
-            matches = [s["SubnetIdentifier"] for s in group.get("Subnets", []) if (s.get("SubnetAvailabilityZone") or {}).get("Name") == zone]
-            return matches[0] if len(matches) == 1 else None
-
         secondary = cluster.get("MultiAZSecondary") or {}
         multi = str(cluster.get("MultiAZ", "")).lower() == "enabled"
         for suffix, zone, role, nodes_in in (("", cluster.get("AvailabilityZone"), "primary" if multi else None, cluster.get("ClusterNodes", [])),
@@ -518,7 +519,7 @@ def warehouses(raw, node, link):
                      "DisplayName": cluster["ClusterIdentifier"]} if suffix else {**cluster, "Role": role, "NodesHere": len(nodes_in) or cluster.get("NumberOfNodes")}
             key = node("redshift_cluster", cluster["ClusterIdentifier"] + suffix, attrs, "DescribeClusters" + (".MultiAZSecondary" if suffix else ""))
             link(key, "vpc", cluster.get("VpcId"), "in_vpc", "DescribeClusters.VpcId")
-            link(key, "subnet", subnet_in(zone), "in_subnet", "DescribeClusters.AvailabilityZone + DescribeClusterSubnetGroups.Subnets[]",
+            link(key, "subnet", group_subnet(group, zone), "in_subnet", "DescribeClusters.AvailabilityZone + DescribeClusterSubnetGroups.Subnets[]",
                  {"availability_zone": zone}, {"availability_zone": zone})
             if suffix:
                 link(key, "redshift_cluster", cluster["ClusterIdentifier"], "standby_of", "DescribeClusters.MultiAZSecondary")

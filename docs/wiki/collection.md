@@ -1,9 +1,9 @@
 ---
 title: 읽기 전용 수집 (collector)
 summary: collector.collect의 호출 목록(OPERATIONS)과 IAM 권한, 2단계 병렬 수집, 페이지 처리, 부분·조회 불가 기록, 계정 확인, 역할 맡기(ReadOnlyAccess 세션 정책), prepare 훅, 전역 API, 읽기 전용 정책 파일과의 관계.
-sources: [src/diagram_bot/collector.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/aws_access.py, src/diagram_bot/routes/aws.py, src/diagram_bot/api.py, tests/test_collector.py, tests/test_aws_emulator.py]
+sources: [src/diagram_bot/collector.py, src/diagram_bot/sessions.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/aws_access.py, src/diagram_bot/routes/aws.py, src/diagram_bot/api.py, tests/test_collector.py, tests/test_aws_emulator.py]
 related: [snapshot-model, graph, aws-access-and-sso, browser-egress, howto-add-collected-service, cli]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 읽기 전용 수집 (collector)
 
@@ -17,7 +17,7 @@ updated: 2026-10-18
 - 결과 모양과 필드 뜻은 [[snapshot-model]].
 
 ## 순서
-1. `prepare(session or boto3.Session(profile_name=profile, region_name=region))`.
+1. `prepare(session or sdk_session(region, profile))` (`sessions.py`).
 2. `role_arn`이 있으면 `assume(...)`로 새 세션을 만들고 다시 `prepare`를 적용한다.
 3. `sts.get_caller_identity`로 계정을 확인한다. `expected_account`와 다르면 `ValueError("계정 불일치: 요청 …, 현재 인증 …")`를 던지고 **자원 호출을 하나도 하지 않는다**(`test_account_mismatch_stops_before_resource_calls`). 역할을 맡은 경우 맡은 뒤의 계정을 확인한다.
 4. `OPERATIONS`에 나오는 서비스와 `wafv2`의 클라이언트, 전역 WAF용 `wafv2/global` 클라이언트를 만든다.
@@ -102,7 +102,7 @@ updated: 2026-10-18
 ## 역할 맡기와 계정 확인 (`assume`)
 - `sts.assume_role(RoleArn, RoleSessionName="diagram-bot-readonly", DurationSeconds=3600, PolicyArns=[{"arn": "arn:{partition}:iam::aws:policy/ReadOnlyAccess"}])`, `external_id`가 있으면 `ExternalId`. partition은 역할 ARN에서 읽는다.
 - 세션 정책 때문에 역할 자체가 더 넓어도 이 세션은 읽기만 할 수 있다(`test_assume_role_caps_session_to_read_only_and_checks_the_assumed_account`).
-- 맡은 자격 증명으로 새 `boto3.Session`을 만들고 다시 `prepare`를 적용한다.
+- 맡은 자격 증명으로 새 세션(`sessions.credentials_session`)을 만들고 다시 `prepare`를 적용한다.
 
 ## prepare 훅 (브라우저 egress)
 - `prepare(session)`은 수집에 쓰는 **모든** 세션(처음 세션과 맡은 역할의 세션)에 적용된다. 기본값은 항등 함수.
