@@ -22,12 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:34:34.865924+00:00",
-    "finished_at": "2026-10-18T09:34:34.865924+00:00",
+    "started_at": "2026-10-18T14:24:42.815551+00:00",
+    "finished_at": "2026-10-18T14:24:42.815551+00:00",
     "status": "complete",
     "demo": true,
     "sample": "data-platform",
-    "sample_version": 6,
+    "sample_version": 7,
     "title": "데이터 플랫폼 (ECS · OpenSearch · RDS · ElastiCache · EFS · Redshift · DocumentDB)",
     "practices": [
       "ECS Fargate 서비스는 세 AZ 프라이빗 서브넷에 태스크를 분산하고 ALB가 태스크 IP를 대상으로 등록",
@@ -156,6 +156,13 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -176,6 +183,20 @@
       "items": 4
     },
     {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
       "service": "kafka",
       "operation": "list_clusters_v2",
       "status": "complete",
@@ -191,6 +212,104 @@
     },
     {
       "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "list_domain_names",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ecs",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_cluster_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 2
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
       "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
@@ -233,80 +352,10 @@
     },
     {
       "service": "efs",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 1
-    },
-    {
-      "service": "efs",
       "operation": "describe_mount_targets",
       "status": "complete",
       "pages": 1,
       "items": 3
-    },
-    {
-      "service": "redshift",
-      "operation": "describe_clusters",
-      "status": "complete",
-      "pages": 1,
-      "items": 1
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpc_peering_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_gateways",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 2
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_security_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_placement_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "fsx",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_endpoints",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_clusters",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
     },
     {
       "service": "elbv2",
@@ -614,43 +663,6 @@
         "HealthCheckPath": "/healthz",
         "LoadBalancerArns": [
           "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/data-api-alb/0000000000000001"
-        ]
-      }
-    ],
-    "target_health": [
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/data-api-tasks/0000000000000001",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "10.70.16.21",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2a"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.70.32.22",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2b"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.70.48.23",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2c"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
         ]
       }
     ],
@@ -1286,7 +1298,6 @@
       }
     ],
     "msk_clusters": [],
-    "msk_nodes": [],
     "lambda_functions": [],
     "eks_clusters": [],
     "opensearch_domains": [
@@ -1326,80 +1337,6 @@
         "NodeToNodeEncryptionOptions": {
           "Enabled": true
         }
-      }
-    ],
-    "opensearch_nodes": [
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-a-D0",
-        "NodeType": "Data",
-        "AvailabilityZone": "ap-northeast-2a",
-        "InstanceType": "r6g.large.search",
-        "NodeStatus": "Active"
-      },
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-a-D1",
-        "NodeType": "Data",
-        "AvailabilityZone": "ap-northeast-2a",
-        "InstanceType": "r6g.large.search",
-        "NodeStatus": "Active"
-      },
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-a-M0",
-        "NodeType": "Master",
-        "AvailabilityZone": "ap-northeast-2a",
-        "InstanceType": "m6g.large.search",
-        "NodeStatus": "Active"
-      },
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-b-D0",
-        "NodeType": "Data",
-        "AvailabilityZone": "ap-northeast-2b",
-        "InstanceType": "r6g.large.search",
-        "NodeStatus": "Active"
-      },
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-b-D1",
-        "NodeType": "Data",
-        "AvailabilityZone": "ap-northeast-2b",
-        "InstanceType": "r6g.large.search",
-        "NodeStatus": "Active"
-      },
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-b-M0",
-        "NodeType": "Master",
-        "AvailabilityZone": "ap-northeast-2b",
-        "InstanceType": "m6g.large.search",
-        "NodeStatus": "Active"
-      },
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-c-D0",
-        "NodeType": "Data",
-        "AvailabilityZone": "ap-northeast-2c",
-        "InstanceType": "r6g.large.search",
-        "NodeStatus": "StandBy"
-      },
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-c-D1",
-        "NodeType": "Data",
-        "AvailabilityZone": "ap-northeast-2c",
-        "InstanceType": "r6g.large.search",
-        "NodeStatus": "StandBy"
-      },
-      {
-        "DomainName": "logs-search",
-        "NodeId": "logs-search-c-M0",
-        "NodeType": "Master",
-        "AvailabilityZone": "ap-northeast-2c",
-        "InstanceType": "m6g.large.search",
-        "NodeStatus": "Active"
       }
     ],
     "ecs_services": [
@@ -1471,138 +1408,6 @@
         "availabilityZoneRebalancing": "ENABLED"
       }
     ],
-    "ecs_tasks": [
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/9ddd580a81e74b5587a11f40fe105dab",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
-        "group": "service:data-api",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2a",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-dp-app-a"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.70.16.21"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/08077fb4b6dd8b9bd5002fdb933ad094",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
-        "group": "service:data-api",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2b",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-dp-app-b"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.70.32.22"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/e4f267f0bbffc2bee7a643288abdf19b",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
-        "group": "service:data-api",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2c",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-dp-app-c"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.70.48.23"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/041c403259bc0aa5c4c200f0d0eda749",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
-        "group": "service:ingest-worker",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2a",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-dp-app-a"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.70.16.60"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/84702b39732b230dc8b69ab8ba734397",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
-        "group": "service:ingest-worker",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2b",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-dp-app-b"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.70.32.61"
-              }
-            ]
-          }
-        ]
-      }
-    ],
     "efs_file_systems": [
       {
         "FileSystemId": "fs-0dp0000000000007",
@@ -1618,35 +1423,6 @@
             "Value": "shared-assets"
           }
         ]
-      }
-    ],
-    "efs_mount_targets": [
-      {
-        "MountTargetId": "fsmt-0dp00000000000070",
-        "FileSystemId": "fs-0dp0000000000007",
-        "SubnetId": "subnet-dp-app-a",
-        "VpcId": "vpc-0a1b2c3d4e5f60007",
-        "AvailabilityZoneName": "ap-northeast-2a",
-        "LifeCycleState": "available",
-        "IpAddress": "10.70.16.200"
-      },
-      {
-        "MountTargetId": "fsmt-0dp00000000000071",
-        "FileSystemId": "fs-0dp0000000000007",
-        "SubnetId": "subnet-dp-app-b",
-        "VpcId": "vpc-0a1b2c3d4e5f60007",
-        "AvailabilityZoneName": "ap-northeast-2b",
-        "LifeCycleState": "available",
-        "IpAddress": "10.70.32.200"
-      },
-      {
-        "MountTargetId": "fsmt-0dp00000000000072",
-        "FileSystemId": "fs-0dp0000000000007",
-        "SubnetId": "subnet-dp-app-c",
-        "VpcId": "vpc-0a1b2c3d4e5f60007",
-        "AvailabilityZoneName": "ap-northeast-2c",
-        "LifeCycleState": "available",
-        "IpAddress": "10.70.48.200"
       }
     ],
     "redshift_clusters": [
@@ -1797,6 +1573,279 @@
     "fsx_file_systems": [],
     "sagemaker_endpoints": [],
     "sagemaker_clusters": [],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/data-api-tasks/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "10.70.16.21",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2a"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.70.32.22",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.70.48.23",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ],
+    "msk_nodes": [],
+    "opensearch_nodes": [
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-a-D0",
+        "NodeType": "Data",
+        "AvailabilityZone": "ap-northeast-2a",
+        "InstanceType": "r6g.large.search",
+        "NodeStatus": "Active"
+      },
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-a-D1",
+        "NodeType": "Data",
+        "AvailabilityZone": "ap-northeast-2a",
+        "InstanceType": "r6g.large.search",
+        "NodeStatus": "Active"
+      },
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-a-M0",
+        "NodeType": "Master",
+        "AvailabilityZone": "ap-northeast-2a",
+        "InstanceType": "m6g.large.search",
+        "NodeStatus": "Active"
+      },
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-b-D0",
+        "NodeType": "Data",
+        "AvailabilityZone": "ap-northeast-2b",
+        "InstanceType": "r6g.large.search",
+        "NodeStatus": "Active"
+      },
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-b-D1",
+        "NodeType": "Data",
+        "AvailabilityZone": "ap-northeast-2b",
+        "InstanceType": "r6g.large.search",
+        "NodeStatus": "Active"
+      },
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-b-M0",
+        "NodeType": "Master",
+        "AvailabilityZone": "ap-northeast-2b",
+        "InstanceType": "m6g.large.search",
+        "NodeStatus": "Active"
+      },
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-c-D0",
+        "NodeType": "Data",
+        "AvailabilityZone": "ap-northeast-2c",
+        "InstanceType": "r6g.large.search",
+        "NodeStatus": "StandBy"
+      },
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-c-D1",
+        "NodeType": "Data",
+        "AvailabilityZone": "ap-northeast-2c",
+        "InstanceType": "r6g.large.search",
+        "NodeStatus": "StandBy"
+      },
+      {
+        "DomainName": "logs-search",
+        "NodeId": "logs-search-c-M0",
+        "NodeType": "Master",
+        "AvailabilityZone": "ap-northeast-2c",
+        "InstanceType": "m6g.large.search",
+        "NodeStatus": "Active"
+      }
+    ],
+    "ecs_tasks": [
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/9ddd580a81e74b5587a11f40fe105dab",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
+        "group": "service:data-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2a",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-dp-app-a"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.70.16.21"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/08077fb4b6dd8b9bd5002fdb933ad094",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
+        "group": "service:data-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2b",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-dp-app-b"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.70.32.22"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/e4f267f0bbffc2bee7a643288abdf19b",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
+        "group": "service:data-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2c",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-dp-app-c"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.70.48.23"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/041c403259bc0aa5c4c200f0d0eda749",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
+        "group": "service:ingest-worker",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2a",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-dp-app-a"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.70.16.60"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/data-apps/84702b39732b230dc8b69ab8ba734397",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/data-apps",
+        "group": "service:ingest-worker",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2b",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-dp-app-b"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.70.32.61"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "efs_mount_targets": [
+      {
+        "MountTargetId": "fsmt-0dp00000000000070",
+        "FileSystemId": "fs-0dp0000000000007",
+        "SubnetId": "subnet-dp-app-a",
+        "VpcId": "vpc-0a1b2c3d4e5f60007",
+        "AvailabilityZoneName": "ap-northeast-2a",
+        "LifeCycleState": "available",
+        "IpAddress": "10.70.16.200"
+      },
+      {
+        "MountTargetId": "fsmt-0dp00000000000071",
+        "FileSystemId": "fs-0dp0000000000007",
+        "SubnetId": "subnet-dp-app-b",
+        "VpcId": "vpc-0a1b2c3d4e5f60007",
+        "AvailabilityZoneName": "ap-northeast-2b",
+        "LifeCycleState": "available",
+        "IpAddress": "10.70.32.200"
+      },
+      {
+        "MountTargetId": "fsmt-0dp00000000000072",
+        "FileSystemId": "fs-0dp0000000000007",
+        "SubnetId": "subnet-dp-app-c",
+        "VpcId": "vpc-0a1b2c3d4e5f60007",
+        "AvailabilityZoneName": "ap-northeast-2c",
+        "LifeCycleState": "available",
+        "IpAddress": "10.70.48.200"
+      }
+    ],
     "transit_gateway_route_tables": [
       {
         "TransitGatewayRouteTableId": "tgw-rtb-dp-spokes",

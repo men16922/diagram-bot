@@ -22,12 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:34:35.099089+00:00",
-    "finished_at": "2026-10-18T09:34:35.099089+00:00",
+    "started_at": "2026-10-18T14:24:43.202408+00:00",
+    "finished_at": "2026-10-18T14:24:43.202408+00:00",
     "status": "complete",
     "demo": true,
     "sample": "genai-rag",
-    "sample_version": 6,
+    "sample_version": 7,
     "title": "생성형 AI RAG 애플리케이션 (Bedrock · Aurora pgvector · 시맨틱 캐시)",
     "practices": [
       "채팅 API는 세 AZ의 ECS Fargate 태스크, 인터넷용 ALB는 퍼블릭 서브넷에만 (REL10-BP01, SEC05-BP01)",
@@ -155,6 +155,13 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -175,6 +182,20 @@
       "items": 2
     },
     {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
       "service": "kafka",
       "operation": "list_clusters_v2",
       "status": "complete",
@@ -190,6 +211,104 @@
     },
     {
       "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "list_domain_names",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_cluster_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 4
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "sagemaker",
       "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
@@ -232,77 +351,7 @@
     },
     {
       "service": "efs",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "efs",
       "operation": "describe_mount_targets",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "redshift",
-      "operation": "describe_clusters",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpc_peering_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_gateways",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_security_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 4
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_placement_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "fsx",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_endpoints",
-      "status": "complete",
-      "pages": 1,
-      "items": 1
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -537,43 +586,6 @@
         "HealthCheckPath": "/healthz",
         "LoadBalancerArns": [
           "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/rag-chat-alb/0000000000000001"
-        ]
-      }
-    ],
-    "target_health": [
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "10.110.16.21",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2a"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.110.32.22",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2b"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.110.48.23",
-              "Port": 8080,
-              "AvailabilityZone": "ap-northeast-2c"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
         ]
       }
     ],
@@ -1146,7 +1158,6 @@
       }
     ],
     "msk_clusters": [],
-    "msk_nodes": [],
     "lambda_functions": [
       {
         "FunctionName": "document-ingest",
@@ -1166,7 +1177,6 @@
     ],
     "eks_clusters": [],
     "opensearch_domains": [],
-    "opensearch_nodes": [],
     "ecs_services": [
       {
         "serviceArn": "arn:aws:ecs:ap-northeast-2:111122223333:service/rag/chat-api",
@@ -1236,140 +1246,7 @@
         "availabilityZoneRebalancing": "ENABLED"
       }
     ],
-    "ecs_tasks": [
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
-        "group": "service:chat-api",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2a",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-rag-app-a"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.110.16.21"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
-        "group": "service:chat-api",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2b",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-rag-app-b"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.110.32.22"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
-        "group": "service:chat-api",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2c",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-rag-app-c"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.110.48.23"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
-        "group": "service:ingest-worker",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2a",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-rag-app-a"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.110.16.60"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
-        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
-        "group": "service:ingest-worker",
-        "launchType": "FARGATE",
-        "lastStatus": "RUNNING",
-        "availabilityZone": "ap-northeast-2b",
-        "cpu": "512",
-        "memory": "1024",
-        "attachments": [
-          {
-            "type": "ElasticNetworkInterface",
-            "status": "ATTACHED",
-            "details": [
-              {
-                "name": "subnetId",
-                "value": "subnet-rag-app-b"
-              },
-              {
-                "name": "privateIPv4Address",
-                "value": "10.110.32.61"
-              }
-            ]
-          }
-        ]
-      }
-    ],
     "efs_file_systems": [],
-    "efs_mount_targets": [],
     "redshift_clusters": [],
     "redshift_subnet_groups": [],
     "vpc_peering_connections": [],
@@ -1528,7 +1405,179 @@
         ]
       }
     ],
-    "sagemaker_clusters": []
+    "sagemaker_clusters": [],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/chat-api-tasks/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "10.110.16.21",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2a"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.110.32.22",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.110.48.23",
+              "Port": 8080,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ],
+    "msk_nodes": [],
+    "opensearch_nodes": [],
+    "ecs_tasks": [
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/26b6072d0b83988a6f59e56d34481622",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:chat-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2a",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-a"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.16.21"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/375fbd8d94d17538de7766b684ed32e5",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:chat-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2b",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-b"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.32.22"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7784fe7739183b8e4f6fdad0638db937",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:chat-api",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2c",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-c"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.48.23"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/7bb071e55c2725717a5509cbeb61c95d",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:ingest-worker",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2a",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-a"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.16.60"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/rag/fd4632e8a22fe1af012eb213d1728931",
+        "clusterArn": "arn:aws:ecs:ap-northeast-2:111122223333:cluster/rag",
+        "group": "service:ingest-worker",
+        "launchType": "FARGATE",
+        "lastStatus": "RUNNING",
+        "availabilityZone": "ap-northeast-2b",
+        "cpu": "512",
+        "memory": "1024",
+        "attachments": [
+          {
+            "type": "ElasticNetworkInterface",
+            "status": "ATTACHED",
+            "details": [
+              {
+                "name": "subnetId",
+                "value": "subnet-rag-app-b"
+              },
+              {
+                "name": "privateIPv4Address",
+                "value": "10.110.32.61"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "efs_mount_targets": []
   },
   "graph": {
     "nodes": [

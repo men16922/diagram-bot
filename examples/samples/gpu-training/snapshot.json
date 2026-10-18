@@ -4,12 +4,12 @@
     "account_id": "111122223333",
     "region": "us-east-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:34:35.205922+00:00",
-    "finished_at": "2026-10-18T09:34:35.205922+00:00",
+    "started_at": "2026-10-18T14:24:43.337302+00:00",
+    "finished_at": "2026-10-18T14:24:43.337302+00:00",
     "status": "complete",
     "demo": true,
     "sample": "gpu-training",
-    "sample_version": 6,
+    "sample_version": 7,
     "title": "GPU 분산 학습 클러스터 (EFA · Capacity Block · FSx for Lustre · HyperPod)",
     "practices": [
       "리전은 us-east-2(오하이오): p5와 trn2를 같은 VPC에 두려면 두 유형을 모두 제공하는 리전이어야 함 (서울 리전에는 trn2가 없음)",
@@ -138,6 +138,13 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -153,6 +160,20 @@
     {
       "service": "elasticache",
       "operation": "describe_cache_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -179,36 +200,15 @@
       "items": 0
     },
     {
-      "service": "kafka",
-      "operation": "list_nodes",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
       "service": "opensearch",
-      "operation": "describe_domains",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "opensearch",
-      "operation": "describe_domain_nodes",
+      "operation": "list_domain_names",
       "status": "complete",
       "pages": 1,
       "items": 0
     },
     {
       "service": "ecs",
-      "operation": "describe_services",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ecs",
-      "operation": "describe_tasks",
+      "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -221,15 +221,15 @@
       "items": 0
     },
     {
-      "service": "efs",
-      "operation": "describe_mount_targets",
+      "service": "redshift",
+      "operation": "describe_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0
     },
     {
       "service": "redshift",
-      "operation": "describe_clusters",
+      "operation": "describe_cluster_subnet_groups",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -251,6 +251,13 @@
     {
       "service": "ec2",
       "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -289,6 +296,48 @@
       "status": "complete",
       "pages": 1,
       "items": 1
+    },
+    {
+      "service": "kafka",
+      "operation": "list_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domains",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "describe_domain_nodes",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_services",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "describe_tasks",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "efs",
+      "operation": "describe_mount_targets",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
     }
   ],
   "raw": {
@@ -409,7 +458,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.1.11",
+        "PrivateIpAddress": "10.120.10.10",
         "Placement": {
           "AvailabilityZone": "us-east-2a"
         },
@@ -449,7 +498,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.2.12",
+        "PrivateIpAddress": "10.120.10.11",
         "Placement": {
           "AvailabilityZone": "us-east-2a"
         },
@@ -489,7 +538,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.3.13",
+        "PrivateIpAddress": "10.120.11.10",
         "Placement": {
           "AvailabilityZone": "us-east-2b"
         },
@@ -529,7 +578,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.4.14",
+        "PrivateIpAddress": "10.120.32.10",
         "Placement": {
           "AvailabilityZone": "us-east-2a"
         },
@@ -570,7 +619,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.5.15",
+        "PrivateIpAddress": "10.120.32.11",
         "Placement": {
           "AvailabilityZone": "us-east-2a"
         },
@@ -611,7 +660,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.6.16",
+        "PrivateIpAddress": "10.120.32.12",
         "Placement": {
           "AvailabilityZone": "us-east-2a"
         },
@@ -652,7 +701,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.7.17",
+        "PrivateIpAddress": "10.120.32.13",
         "Placement": {
           "AvailabilityZone": "us-east-2a"
         },
@@ -693,7 +742,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.8.18",
+        "PrivateIpAddress": "10.120.32.14",
         "Placement": {
           "AvailabilityZone": "us-east-2a",
           "GroupName": "trn2-pg"
@@ -735,7 +784,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.9.19",
+        "PrivateIpAddress": "10.120.32.15",
         "Placement": {
           "AvailabilityZone": "us-east-2a",
           "GroupName": "trn2-pg"
@@ -772,7 +821,6 @@
     ],
     "load_balancers": [],
     "target_groups": [],
-    "target_health": [],
     "internet_gateways": [
       {
         "InternetGatewayId": "igw-trn",
@@ -1121,15 +1169,11 @@
     "replication_groups": [],
     "cache_subnet_groups": [],
     "msk_clusters": [],
-    "msk_nodes": [],
     "lambda_functions": [],
     "eks_clusters": [],
     "opensearch_domains": [],
-    "opensearch_nodes": [],
     "ecs_services": [],
-    "ecs_tasks": [],
     "efs_file_systems": [],
-    "efs_mount_targets": [],
     "redshift_clusters": [],
     "redshift_subnet_groups": [],
     "vpc_peering_connections": [],
@@ -1268,7 +1312,12 @@
           "SecurityGroupIds": []
         }
       }
-    ]
+    ],
+    "target_health": [],
+    "msk_nodes": [],
+    "opensearch_nodes": [],
+    "ecs_tasks": [],
+    "efs_mount_targets": []
   },
   "graph": {
     "nodes": [
@@ -1318,7 +1367,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.1.11",
+          "PrivateIpAddress": "10.120.10.10",
           "Placement": {
             "AvailabilityZone": "us-east-2a"
           },
@@ -1368,7 +1417,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.2.12",
+          "PrivateIpAddress": "10.120.10.11",
           "Placement": {
             "AvailabilityZone": "us-east-2a"
           },
@@ -1418,7 +1467,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.3.13",
+          "PrivateIpAddress": "10.120.11.10",
           "Placement": {
             "AvailabilityZone": "us-east-2b"
           },
@@ -1468,7 +1517,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.4.14",
+          "PrivateIpAddress": "10.120.32.10",
           "Placement": {
             "AvailabilityZone": "us-east-2a"
           },
@@ -1519,7 +1568,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.5.15",
+          "PrivateIpAddress": "10.120.32.11",
           "Placement": {
             "AvailabilityZone": "us-east-2a"
           },
@@ -1570,7 +1619,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.6.16",
+          "PrivateIpAddress": "10.120.32.12",
           "Placement": {
             "AvailabilityZone": "us-east-2a"
           },
@@ -1621,7 +1670,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.7.17",
+          "PrivateIpAddress": "10.120.32.13",
           "Placement": {
             "AvailabilityZone": "us-east-2a"
           },
@@ -1672,7 +1721,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.8.18",
+          "PrivateIpAddress": "10.120.32.14",
           "Placement": {
             "AvailabilityZone": "us-east-2a",
             "GroupName": "trn2-pg"
@@ -1724,7 +1773,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.9.19",
+          "PrivateIpAddress": "10.120.32.15",
           "Placement": {
             "AvailabilityZone": "us-east-2a",
             "GroupName": "trn2-pg"

@@ -22,12 +22,12 @@
     "account_id": "111122223333",
     "region": "ap-northeast-2",
     "partition": "aws",
-    "started_at": "2026-10-18T09:34:34.303586+00:00",
-    "finished_at": "2026-10-18T09:34:34.303586+00:00",
+    "started_at": "2026-10-18T14:24:43.596266+00:00",
+    "finished_at": "2026-10-18T14:24:43.596266+00:00",
     "status": "complete",
     "demo": true,
     "sample": "microservices",
-    "sample_version": 6,
+    "sample_version": 7,
     "title": "마이크로서비스 경로 기반 라우팅 (ALB 1 · 대상 그룹 4 · 3 AZ)",
     "practices": [
       "ALB 하나에서 경로별로 서비스 대상 그룹을 나눔 (리스너 규칙은 수집 범위 밖)",
@@ -154,6 +154,13 @@
     },
     {
       "service": "ec2",
+      "operation": "describe_transit_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
       "operation": "describe_transit_gateway_vpc_attachments",
       "status": "complete",
       "pages": 1,
@@ -174,6 +181,20 @@
       "items": 0
     },
     {
+      "service": "elasticache",
+      "operation": "describe_replication_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "elasticache",
+      "operation": "describe_cache_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
       "service": "kafka",
       "operation": "list_clusters_v2",
       "status": "complete",
@@ -189,6 +210,104 @@
     },
     {
       "service": "eks",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "opensearch",
+      "operation": "list_domain_names",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ecs",
+      "operation": "list_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 1
+    },
+    {
+      "service": "efs",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_clusters",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "redshift",
+      "operation": "describe_cluster_subnet_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpc_peering_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_vpn_connections",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_customer_gateways",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_security_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "ec2",
+      "operation": "describe_placement_groups",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "fsx",
+      "operation": "describe_file_systems",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
+      "operation": "list_endpoints",
+      "status": "complete",
+      "pages": 1,
+      "items": 0
+    },
+    {
+      "service": "sagemaker",
       "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
@@ -231,77 +350,7 @@
     },
     {
       "service": "efs",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "efs",
       "operation": "describe_mount_targets",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "redshift",
-      "operation": "describe_clusters",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpc_peering_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_gateways",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_vpn_connections",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_security_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "ec2",
-      "operation": "describe_placement_groups",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "fsx",
-      "operation": "describe_file_systems",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_endpoints",
-      "status": "complete",
-      "pages": 1,
-      "items": 0
-    },
-    {
-      "service": "sagemaker",
-      "operation": "list_clusters",
       "status": "complete",
       "pages": 1,
       "items": 0
@@ -537,7 +586,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.1.11",
+        "PrivateIpAddress": "10.20.8.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a"
         },
@@ -577,7 +626,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.2.12",
+        "PrivateIpAddress": "10.20.12.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2b"
         },
@@ -617,7 +666,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.3.13",
+        "PrivateIpAddress": "10.20.16.10",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2c"
         },
@@ -657,7 +706,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.4.14",
+        "PrivateIpAddress": "10.20.8.11",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2a"
         },
@@ -697,7 +746,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.5.15",
+        "PrivateIpAddress": "10.20.12.11",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2b"
         },
@@ -737,7 +786,7 @@
         "State": {
           "Name": "running"
         },
-        "PrivateIpAddress": "10.0.6.16",
+        "PrivateIpAddress": "10.20.16.11",
         "Placement": {
           "AvailabilityZone": "ap-northeast-2c"
         },
@@ -843,142 +892,6 @@
         "HealthCheckPath": "/payments/health",
         "LoadBalancerArns": [
           "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:loadbalancer/app/commerce-alb/0000000000000001"
-        ]
-      }
-    ],
-    "target_health": [
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "i-cataloga00000001",
-              "Port": 8080
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "i-catalogb00000001",
-              "Port": 8080
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "i-catalogc00000001",
-              "Port": 8080
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
-        ]
-      },
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "i-ordersa000000001",
-              "Port": 8081
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "i-ordersb000000001",
-              "Port": 8081
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "i-ordersc000000001",
-              "Port": 8081
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
-        ]
-      },
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/cart-svc-ecs/0000000000000003",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "10.20.8.41",
-              "Port": 9000,
-              "AvailabilityZone": "ap-northeast-2a"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.20.12.42",
-              "Port": 9000,
-              "AvailabilityZone": "ap-northeast-2b"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.20.16.43",
-              "Port": 9000,
-              "AvailabilityZone": "ap-northeast-2c"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
-        ]
-      },
-      {
-        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/payments-svc-ecs/0000000000000004",
-        "Descriptions": [
-          {
-            "Target": {
-              "Id": "10.20.8.88",
-              "Port": 9100,
-              "AvailabilityZone": "ap-northeast-2a"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.20.12.89",
-              "Port": 9100,
-              "AvailabilityZone": "ap-northeast-2b"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          },
-          {
-            "Target": {
-              "Id": "10.20.16.90",
-              "Port": 9100,
-              "AvailabilityZone": "ap-northeast-2c"
-            },
-            "TargetHealth": {
-              "State": "healthy"
-            }
-          }
         ]
       }
     ],
@@ -1380,11 +1293,9 @@
     "replication_groups": [],
     "cache_subnet_groups": [],
     "msk_clusters": [],
-    "msk_nodes": [],
     "lambda_functions": [],
     "eks_clusters": [],
     "opensearch_domains": [],
-    "opensearch_nodes": [],
     "ecs_services": [
       {
         "serviceArn": "arn:aws:ecs:ap-northeast-2:111122223333:service/commerce/cart-svc",
@@ -1461,6 +1372,156 @@
         "availabilityZoneRebalancing": "ENABLED"
       }
     ],
+    "efs_file_systems": [],
+    "redshift_clusters": [],
+    "redshift_subnet_groups": [],
+    "vpc_peering_connections": [],
+    "vpn_gateways": [],
+    "vpn_connections": [],
+    "customer_gateways": [],
+    "security_groups": [],
+    "placement_groups": [],
+    "fsx_file_systems": [],
+    "sagemaker_endpoints": [],
+    "sagemaker_clusters": [],
+    "target_health": [
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/catalog-svc/0000000000000001",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "i-cataloga00000001",
+              "Port": 8080
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-catalogb00000001",
+              "Port": 8080
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-catalogc00000001",
+              "Port": 8080
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/orders-svc/0000000000000002",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "i-ordersa000000001",
+              "Port": 8081
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-ordersb000000001",
+              "Port": 8081
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "i-ordersc000000001",
+              "Port": 8081
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/cart-svc-ecs/0000000000000003",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "10.20.8.41",
+              "Port": 9000,
+              "AvailabilityZone": "ap-northeast-2a"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.20.12.42",
+              "Port": 9000,
+              "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.20.16.43",
+              "Port": 9000,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      },
+      {
+        "TargetGroupArn": "arn:aws:elasticloadbalancing:ap-northeast-2:111122223333:targetgroup/payments-svc-ecs/0000000000000004",
+        "Descriptions": [
+          {
+            "Target": {
+              "Id": "10.20.8.88",
+              "Port": 9100,
+              "AvailabilityZone": "ap-northeast-2a"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.20.12.89",
+              "Port": 9100,
+              "AvailabilityZone": "ap-northeast-2b"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          },
+          {
+            "Target": {
+              "Id": "10.20.16.90",
+              "Port": 9100,
+              "AvailabilityZone": "ap-northeast-2c"
+            },
+            "TargetHealth": {
+              "State": "healthy"
+            }
+          }
+        ]
+      }
+    ],
+    "msk_nodes": [],
+    "opensearch_nodes": [],
     "ecs_tasks": [
       {
         "taskArn": "arn:aws:ecs:ap-northeast-2:111122223333:task/commerce/c7162c7202c2cc731a4caf33d039f705",
@@ -1619,19 +1680,7 @@
         ]
       }
     ],
-    "efs_file_systems": [],
-    "efs_mount_targets": [],
-    "redshift_clusters": [],
-    "redshift_subnet_groups": [],
-    "vpc_peering_connections": [],
-    "vpn_gateways": [],
-    "vpn_connections": [],
-    "customer_gateways": [],
-    "security_groups": [],
-    "placement_groups": [],
-    "fsx_file_systems": [],
-    "sagemaker_endpoints": [],
-    "sagemaker_clusters": []
+    "efs_mount_targets": []
   },
   "graph": {
     "nodes": [
@@ -1788,7 +1837,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.1.11",
+          "PrivateIpAddress": "10.20.8.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -1838,7 +1887,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.2.12",
+          "PrivateIpAddress": "10.20.12.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
@@ -1888,7 +1937,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.3.13",
+          "PrivateIpAddress": "10.20.16.10",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2c"
           },
@@ -1938,7 +1987,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.4.14",
+          "PrivateIpAddress": "10.20.8.11",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2a"
           },
@@ -1988,7 +2037,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.5.15",
+          "PrivateIpAddress": "10.20.12.11",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2b"
           },
@@ -2038,7 +2087,7 @@
           "State": {
             "Name": "running"
           },
-          "PrivateIpAddress": "10.0.6.16",
+          "PrivateIpAddress": "10.20.16.11",
           "Placement": {
             "AvailabilityZone": "ap-northeast-2c"
           },
