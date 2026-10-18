@@ -247,6 +247,7 @@ dialog::backdrop{background:rgba(35,47,62,.55)}
 .identity-box b{display:block;font-size:14px}
 .identity-box .text-button{padding:0;margin-top:4px}
 #collection-progress{font-size:13px;line-height:1.7;color:var(--muted)}
+.export-spec .field{margin-top:0}.spec-note{margin:-6px 0 14px;color:var(--warning)}
 .export-choices{display:flex;flex-direction:column;gap:10px}
 .export-card{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .export-card:hover{border-color:var(--link);background:#f2f8fd}

@@ -7,12 +7,14 @@ import {requestDocument, sendDocument} from './editor.js';
 import {documentActive, renderSummary} from './workspace.js';
 import {clearInspector, showResource} from './inspector.js';
 import {renderChanges, renderReview} from './review.js';
-function documentUrl(suffix='', reset=false) {
+// spec: an export preview in that preset or company standard (revision null, never saved).
+export function documentUrl(suffix='', reset=false, spec=null) {
   const query=new URLSearchParams({view:state.view,references:String(state.references)});
   if(state.view==='detail')query.set('vpc',state.vpc);
   if(state.view==='detail'&&state.routes)query.set('routes',state.routes);
   if(state.view==='focus')query.set('resource',state.focus);
   if(reset)query.set('reset','true');
+  if(spec)query.set('spec',spec);
   return `/api/snapshots/${state.snapshotId}/document${suffix}?${query}`;
 }
 export function snapshotLabel(item){const m=item.metadata;if(m.combined&&!m.sample)return `통합 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;if(m.design)return `설계 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;if(m.imported)return `가져옴 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;return m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.account_id} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;}

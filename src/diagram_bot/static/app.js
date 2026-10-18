@@ -53,7 +53,7 @@ $('import-file').onchange=async()=>{
 window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefault();event.returnValue='';}});
 async function start() {
   const boot=await api('/api/bootstrap');state.token=boot.token;state.role=boot.user.role;
-  state.team=boot.team;
+  state.team=boot.team;state.presets=boot.presets||[];
   if(boot.egress==='browser'){startRelay(api);$('egress-note').hidden=false;}
   if(boot.team){const name=boot.user.name;$('user-avatar').textContent=name.slice(0,2).toUpperCase();$('user-avatar').title=`${name} · ${boot.user.role}`;
     $('user-role').textContent=`${name} · ${{viewer:'보기 전용',editor:'편집',admin:'관리자'}[boot.user.role]}`;$('user-role').hidden=false;$('logout-button').hidden=false;}
