@@ -1,7 +1,7 @@
 ---
 title: 채팅 도구 추가하기
 summary: 설계 단계(Design 메서드)와 그 단계를 부르는 Strands 도구를 추가하는 절차. add_fsx_lustre·add_subnet_tier를 본보기로 DesignError 메시지, record(), @tool docstring, 도구 수 단언, SYSTEM_PROMPT, CloudFormation 범위, 테스트를 다룬다.
-sources: [src/diagram_bot/designer.py, src/diagram_bot/agent.py, src/diagram_bot/samples/, src/diagram_bot/iac.py, src/diagram_bot/graph.py, tests/test_agent.py, tests/test_iac.py]
+sources: [src/diagram_bot/designer.py, src/diagram_bot/agent.py, src/diagram_bot/samples/, src/diagram_bot/iac/, src/diagram_bot/graph.py, tests/test_agent.py, tests/test_iac.py]
 related: [chat-agent, http-api, storage, cloudformation, graph, snapshot-model, views]
 updated: 2026-10-18
 ---

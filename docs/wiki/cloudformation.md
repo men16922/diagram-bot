@@ -1,7 +1,7 @@
 ---
 title: CloudFormation 초안 내보내기
 summary: iac.py의 Template이 스냅샷 raw를 CloudFormation JSON 초안으로 바꾸는 단계 순서, Ref/GetAtt 규칙, 매개변수, DeletionPolicy, Metadata.DiagramBot의 Unsupported·Assumptions 전체 목록, export-cfn·API·테스트.
-sources: [src/diagram_bot/iac.py, src/diagram_bot/cli.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/api.py, tests/test_iac.py, tests/test_aws_emulator.py]
+sources: [src/diagram_bot/iac/, src/diagram_bot/cli.py, src/diagram_bot/routes/snapshots.py, src/diagram_bot/api.py, tests/test_iac.py, tests/test_aws_emulator.py]
 related: [multi-account, review-rules, cli, snapshot-model, http-api]
 updated: 2026-10-18
 ---

@@ -1,7 +1,7 @@
 ---
 title: 수집 서비스 추가 방법
 summary: 새 AWS 읽기 호출을 수집기부터 정책·그래프·라벨·보기·배치·검토·CloudFormation·샘플·테스트·문서까지 잇는 순서. Direct Connect와 Elastic IP를 추가한 방식을 기준으로 한다.
-sources: [src/diagram_bot/collector.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac.py, src/diagram_bot/diff.py, src/diagram_bot/samples/, tests/test_collector.py, tests/test_aws_emulator.py, tests/test_graph_report.py, tests/test_drawio.py, tests/test_findings.py, tests/test_iac.py, tests/fixtures.py]
+sources: [src/diagram_bot/collector.py, readonly-policy.json, deploy/readonly-role.cfn.json, src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, src/diagram_bot/views.py, src/diagram_bot/layout.py, src/diagram_bot/drawio.py, src/diagram_bot/findings.py, src/diagram_bot/iac/, src/diagram_bot/diff.py, src/diagram_bot/samples/, tests/test_collector.py, tests/test_aws_emulator.py, tests/test_graph_report.py, tests/test_drawio.py, tests/test_findings.py, tests/test_iac.py, tests/fixtures.py]
 related: [collection, graph, views, layout-and-drawio, samples, snapshot-model]
 updated: 2026-10-18
 ---
