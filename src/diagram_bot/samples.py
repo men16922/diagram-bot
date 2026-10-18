@@ -991,6 +991,20 @@ def multi_account():
     return combined
 
 
+# One line per sample for the chat agent's standard designs (designer.STANDARDS); keep in step with each sample's title.
+SUMMARIES = {
+    "three-tier": "3계층 웹 (ALB → 웹 ASG → 내부 ALB → 앱 ASG → RDS Multi-AZ, 3 AZ)",
+    "microservices": "마이크로서비스 (ALB 경로 라우팅, EC2 ASG + ECS Fargate, RDS Multi-AZ, 3 AZ)",
+    "nlb-alb": "고정 IP 진입 (NLB → ALB, 2 AZ)",
+    "environments": "운영·스테이징 VPC 분리 (공용 서비스 VPC, 중앙 egress VPC, Transit Gateway)",
+    "hybrid": "하이브리드 (Transit Gateway + Direct Connect, Site-to-Site VPN 백업)",
+    "eks-platform": "EKS 플랫폼 (EKS 전용 /28 클러스터 서브넷, Aurora 3 AZ, Redis, MSK, Lambda, 엔드포인트)",
+    "data-platform": "데이터 플랫폼 (ECS, OpenSearch, RDS, Redis, EFS, Redshift, DocumentDB, TGW 라우팅 도메인, 이중화 VPN)",
+    "ai-platform": "AI 플랫폼 (사설 EKS GPU 추론 3 AZ·EFA 학습 단일 AZ·배치 그룹, FSx for Lustre, Bedrock 엔드포인트, Aurora pgvector, EFS)",
+    "genai-rag": "생성형 AI RAG 앱 (ECS Fargate 3 AZ, Bedrock 엔드포인트, Aurora pgvector, 시맨틱 캐시, SageMaker 리랭커)",
+    "gpu-training": "GPU 분산 학습 클러스터 (p5 Capacity Block·trn2 배치 그룹, EFA, FSx for Lustre, HyperPod)",
+    "multi-account": "멀티 계정 랜딩 존 (Network 계정 TGW를 RAM 공유, 중앙 egress, 워크로드 계정 VPC)",
+}
 SAMPLES = {"three-tier": three_tier, "microservices": microservices, "nlb-alb": static_ip_front,
            "environments": environments, "hybrid": hybrid, "eks-platform": eks_platform, "data-platform": data_platform,
            "ai-platform": ai_platform, "genai-rag": genai_rag, "gpu-training": gpu_training, "multi-account": multi_account}

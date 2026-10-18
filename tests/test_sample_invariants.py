@@ -8,9 +8,9 @@ import pytest
 from fixtures import full_design
 
 from diagram_bot.collector import OPERATIONS
-from diagram_bot.designer import Design, DesignError
+from diagram_bot.designer import STANDARDS, Design, DesignError
 from diagram_bot.graph import build_graph
-from diagram_bot.samples import DETAILS, LISTINGS, OPTIONAL, SAMPLES, Sample
+from diagram_bot.samples import DETAILS, LISTINGS, OPTIONAL, SAMPLES, SUMMARIES, Sample
 
 
 def parts(snapshot):
@@ -80,6 +80,11 @@ def test_sample_raw_and_coverage_follow_the_collector_operations():
     calls = {(c["service"], c["operation"]) for c in SAMPLES["three-tier"]()["coverage"]}
     assert {(service, operation) for service, operation, _, name in OPERATIONS if name not in OPTIONAL} <= calls
     assert {(service, operation) for service, operation, _ in DETAILS} <= calls
+
+
+def test_every_sample_has_one_summary_and_single_account_ones_are_standards():
+    assert list(SUMMARIES) == list(SAMPLES)
+    assert set(STANDARDS) == set(SAMPLES) - {"multi-account"} and all(STANDARDS[k] == SUMMARIES[k] for k in STANDARDS)
 
 
 def test_snapshot_is_a_copy_and_counts_free_addresses_each_time():
