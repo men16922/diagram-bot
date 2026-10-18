@@ -143,6 +143,31 @@ def test_chat_draws_through_tools_and_falls_back_when_the_preferred_model_is_den
     assert {"load_balancer", "target_group", "ec2", "auto_scaling_group"} <= {n["kind"] for n in graph["nodes"]}
 
 
+def test_chat_streams_progress_while_it_draws():
+    """Text, tool start/finish, the model that answered and each saved snapshot arrive as the turn runs."""
+    saved = []
+    workspace = Workspace(lambda snapshot: saved.append(snapshot) or f"s{len(saved)}", region="us-east-1")
+    denied = ClientError({"Error": {"Code": "AccessDeniedException", "Message": "not available"}}, "ConverseStream")
+    scripted = Scripted([[("new_design", {"title": "웹"}), ("add_vpc", {"name": "web", "azs": 2})],
+                         [("add_vpc", {"name": "web"})], "VPC를 그렸습니다."])
+    models = {"gpt-6-luna": Scripted([], fail=denied), "nova-2-lite": scripted}
+    chat = Chat(workspace, "gpt-6-luna", "nova-2-lite", model_factory=lambda key, record=None: _recording(models[key], key, record))
+    events = []
+    result = chat.ask("VPC 그려줘", on_event=events.append)
+    tools = [(e["name"], e["status"]) for e in events if e["type"] == "tool"]
+    assert tools == [("new_design", "start"), ("add_vpc", "start"), ("new_design", "success"), ("add_vpc", "success"),
+                     ("add_vpc", "start"), ("add_vpc", "error")]
+    assert [e["id"] for e in events if e["type"] == "snapshot"] == result["snapshots"] == ["s1"]
+    # The snapshot is announced right after its tool ran, before the model's closing text.
+    kinds = [e["type"] for e in events]
+    assert kinds.index("snapshot") < kinds.index("text")
+    assert "".join(e["text"] for e in events if e["type"] == "text") == "VPC를 그렸습니다."
+    models_seen = [(e["model"], e["fallback"]) for e in events if e["type"] == "model"]
+    assert models_seen[0] == ("gpt-6-luna", False) and models_seen[-1] == ("nova-2-lite", True)
+    # A later turn without a listener streams nothing and leaves no hooks behind.
+    assert workspace.on_publish is None and chat.emit is None
+
+
 def _recording(model, key, record):
     original = model.stream
 
@@ -203,9 +228,18 @@ class FakeChat:
     def __init__(self, workspace, model):
         self.workspace, self.model = workspace, model
 
-    def ask(self, message):
+    def ask(self, message, on_event=None):
+        if message == "fail":
+            raise RuntimeError("model went away")
+        if on_event:
+            on_event({"type": "tool", "name": "add_vpc", "status": "start"})
+            self.workspace.on_publish = lambda identifier: on_event({"type": "snapshot", "id": identifier})
         self.workspace.design.add_vpc("demo", "10.50.0.0/16", 2)
         identifier = self.workspace.publish(self.workspace.design.snapshot())
+        self.workspace.on_publish = None
+        if on_event:
+            on_event({"type": "text", "text": f"{self.model}: "})
+            on_event({"type": "text", "text": message})
         return {"reply": f"{self.model}: {message}", "snapshots": [identifier], "tools_used": ["add_vpc"], "model": self.model,
                 "model_label": MODELS[self.model][0], "fallback": False, "usage": {}}
 
@@ -225,6 +259,26 @@ def test_chat_api_saves_designs_as_snapshots(tmp_path):
         assert client.post("/api/agent/reset").json() == {"reset": True}
         log = (tmp_path / "data" / "audit.log").read_text()
         assert "agent snapshot" in log and "/api/agent/chat" in log
+
+
+def test_chat_stream_api_sends_ndjson_progress_then_the_result(tmp_path):
+    with TestClient(create_app(tmp_path / "data", tmp_path / "no-editor", chat_factory=FakeChat)) as client:
+        client.headers["X-Diagram-Bot"] = client.get("/api/bootstrap").json()["token"]
+        assert client.post("/api/agent/chat/stream", json={"message": "hi"}, headers={"X-Diagram-Bot": "wrong"}).status_code == 403
+        assert client.post("/api/agent/chat/stream", json={"message": "hi", "model": "gpt-9"}).status_code == 422
+        response = client.post("/api/agent/chat/stream", json={"message": "VPC 그려줘"})
+        assert response.status_code == 200 and response.headers["content-type"].startswith("application/x-ndjson")
+        events = [json.loads(line) for line in response.text.splitlines()]
+        assert [e["type"] for e in events] == ["tool", "snapshot", "text", "text", "done"]
+        done = events[-1]
+        assert done["reply"] == "nova-2-lite: VPC 그려줘" and done["snapshots"] == [events[1]["id"]]
+        assert client.get(f"/api/snapshots/{events[1]['id']}").json()["metadata"]["design"] is True
+        # A failing turn ends the stream with an error line; the chat stays usable.
+        failed = [json.loads(line) for line in client.post("/api/agent/chat/stream", json={"message": "fail"}).text.splitlines()]
+        assert failed == [{"type": "error", "detail": "에이전트 응답 실패: RuntimeError: model went away"}]
+        assert client.post("/api/agent/chat", json={"message": "fail"}).status_code == 502
+        client.post("/api/agent/reset")
+        assert client.post("/api/agent/chat", json={"message": "again"}).json()["reply"] == "nova-2-lite: again"
 
 
 def test_env_file_loads_keys_and_drops_the_profile(tmp_path, monkeypatch):

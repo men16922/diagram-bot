@@ -4,6 +4,7 @@ import hashlib
 import html
 import json
 import os
+import queue
 import re
 import secrets
 import threading
@@ -17,7 +18,7 @@ from uuid import uuid4
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -397,8 +398,7 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
             ready = False
         return {"ready": ready, "models": available_models(), "default": DEFAULT_MODEL, "fallback": FALLBACK_MODEL}
 
-    @app.post("/api/agent/chat")
-    def agent_chat(params: ChatRequest, request: Request):
+    def chat_for(params, request):
         from .agent import DEFAULT_MODEL, MODELS, Workspace
         user = request.state.user
         model = params.model or DEFAULT_MODEL
@@ -424,13 +424,46 @@ def create_app(directory=None, editor_directory=None, users=None, allowed_hosts=
                     current = chats[user] = {"chat": chat_factory(workspace, model), "model": model}
                 except ImportError as exc:
                     raise HTTPException(503, "채팅 에이전트를 쓰려면 pip install -e '.[agent]'로 strands-agents를 설치하세요.") from exc
-        try:
-            return current["chat"].ask(params.message)
-        except (BotoCoreError, ClientError) as exc:
+        return current["chat"]
+
+    def chat_error(exc):
+        if isinstance(exc, (BotoCoreError, ClientError)):
             code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else type(exc).__name__
-            raise HTTPException(502, f"Bedrock 호출 실패({code}): 모델 액세스·리전·자격 증명을 확인하세요.") from exc
-        except Exception as exc:  # noqa: BLE001 - the model provider's own errors are surfaced to the user, the chat stays usable
-            raise HTTPException(502, f"에이전트 응답 실패: {type(exc).__name__}: {str(exc)[:300]}") from exc
+            return f"Bedrock 호출 실패({code}): 모델 액세스·리전·자격 증명을 확인하세요."
+        # The model provider's own errors are surfaced to the user, the chat stays usable.
+        return f"에이전트 응답 실패: {type(exc).__name__}: {str(exc)[:300]}"
+
+    @app.post("/api/agent/chat")
+    def agent_chat(params: ChatRequest, request: Request):
+        chat = chat_for(params, request)
+        try:
+            return chat.ask(params.message)
+        except Exception as exc:  # noqa: BLE001 - see chat_error
+            raise HTTPException(502, chat_error(exc)) from exc
+
+    @app.post("/api/agent/chat/stream")
+    def agent_chat_stream(params: ChatRequest, request: Request):
+        """The same turn as /api/agent/chat, as NDJSON progress events (text, tool, model, snapshot) while the agent works.
+        The last line is {"type": "done", ...the /api/agent/chat result} or {"type": "error", "detail": ...}."""
+        chat = chat_for(params, request)
+        events = queue.Queue()
+
+        def run():
+            try:
+                events.put({"type": "done", **chat.ask(params.message, on_event=events.put)})
+            except Exception as exc:  # noqa: BLE001 - see chat_error
+                events.put({"type": "error", "detail": chat_error(exc)})
+
+        threading.Thread(target=run, daemon=True).start()
+
+        def lines():
+            while True:
+                event = events.get()
+                yield json.dumps(event, ensure_ascii=False, default=str) + "\n"
+                if event["type"] in ("done", "error"):
+                    return
+
+        return StreamingResponse(lines(), media_type="application/x-ndjson", headers={"Cache-Control": "no-store"})
 
     @app.post("/api/agent/reset")
     def agent_reset(request: Request):

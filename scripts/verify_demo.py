@@ -433,6 +433,37 @@ def main():
         assert signed_out == [signed_out[0]] and signed_out[0].endswith('/api/sso/login/check/logout'), signed_out  # token discarded on the server
         page.unroute('**/api/sso/**')
         page.unroute('**/api/collections')
+
+        # 13. Streamed chat turn (NDJSON from a stand-in agent; live Bedrock turns are recorded in STATUS.md): progress shows
+        # while tools run, the saved design opens on the canvas, and the final reply carries the model and tool counts.
+        page.locator('#snapshot-select').select_option('demo')
+        ready()
+        stream = [{'type': 'model', 'model': 'nova-2-lite', 'model_label': 'Amazon Nova 2 Lite', 'fallback': False},
+                  {'type': 'tool', 'name': 'apply_standard_architecture', 'status': 'start'},
+                  {'type': 'snapshot', 'id': 'sample-three-tier'},
+                  {'type': 'tool', 'name': 'apply_standard_architecture', 'status': 'success'},
+                  {'type': 'text', 'text': '3계층 웹 서비스를 '}, {'type': 'text', 'text': '그렸습니다.'},
+                  {'type': 'done', 'reply': '## 결과\n- 3계층 웹 서비스를 그렸습니다.', 'snapshots': ['sample-three-tier'],
+                   'tools_used': ['apply_standard_architecture'], 'model': 'nova-2-lite', 'model_label': 'Amazon Nova 2 Lite',
+                   'fallback': False, 'usage': {}}]
+        page.route('**/api/agent/chat/stream', lambda route: route.fulfill(
+            content_type='application/x-ndjson', body=''.join(json.dumps(e, ensure_ascii=False) + '\n' for e in stream)))
+        page.locator('#chat-button').click()
+        page.locator('#chat-input').fill('3계층 웹 서비스를 그려줘')
+        page.locator('#chat-send').click()
+        expect(page.locator('.chat-message.assistant').last).to_contain_text('3계층 웹 서비스를 그렸습니다.')
+        expect(page.locator('.chat-message.assistant .chat-meta').last).to_have_text('Amazon Nova 2 Lite · 도구 1회 · 구성도 1회 갱신')
+        expect(page.locator('#snapshot-select')).to_have_value('sample-three-tier')
+        expect(page.locator('.chat-message.system', has_text='설계하는 중')).to_have_count(0)
+        expect(page.locator('#chat-send')).to_be_enabled()
+        page.unroute('**/api/agent/chat/stream')
+        page.route('**/api/agent/chat/stream', lambda route: route.fulfill(
+            content_type='application/x-ndjson', body=json.dumps({'type': 'error', 'detail': '검증용: 모델 오류'}, ensure_ascii=False) + '\n'))
+        page.locator('#chat-input').fill('다시')
+        page.locator('#chat-send').click()
+        expect(page.locator('.chat-message.system').last).to_have_text('검증용: 모델 오류')
+        page.unroute('**/api/agent/chat/stream')
+        page.locator('#chat-close').click()
         assert not errors, errors
         assert not external, external
         browser.close()
@@ -452,7 +483,8 @@ def main():
                          'multi-account: account frames, shared TGW, combine dialog',
                          'snapshot import', 'change review between snapshots',
                          'console shell: profile menu, sign-in dialog, docked assistant reflow, no overflow at 1280/980/640',
-                         'SSO sign-in via profile menu (stand-in Identity Center): role @ account, collection carries SSO role']}
+                         'SSO sign-in via profile menu (stand-in Identity Center): role @ account, collection carries SSO role',
+                         'streamed chat turn: progress, design opens on the canvas, reply meta, error line']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 

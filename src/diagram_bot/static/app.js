@@ -447,23 +447,45 @@ async function openChat() {
   $('chat-model').replaceChildren(...info.models.map(m=>new Option(m.label+(m.key===info.default?' (기본)':''),m.key)));$('chat-model').value=info.default;
   if(!info.ready)chatMessage('system',"채팅 에이전트가 설치되지 않았습니다. pip install -e '.[agent]' 후 다시 시작하세요.");
 }
+async function streamApi(path, body, onEvent) {
+  // NDJSON progress events; the last line is {type:'done', ...result} or {type:'error', detail}.
+  const response=await fetch(path,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json','X-Diagram-Bot':state.token}});
+  if(response.status===401){location.href='/login';throw new Error('로그인이 필요합니다.');}
+  if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(typeof data.detail==='string'?data.detail:'요청 값을 확인하세요.');}
+  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',last=null;
+  for(;;){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});
+    const lines=buffer.split('\n');buffer=lines.pop();
+    for(const line of lines)if(line.trim()){last=JSON.parse(line);onEvent(last);}
+    if(done)break;}
+  if(!last||last.type==='error')throw new Error(last?last.detail:'응답이 중간에 끊겼습니다.');
+  return last;
+}
 $('chat-form').onsubmit=async event=>{
   event.preventDefault();const message=$('chat-input').value.trim();if(!message||state.chatBusy)return;
   if(state.dirty)await saveDocument(false);
   state.chatBusy=true;$('chat-send').disabled=true;$('chat-input').value='';chatMessage('user',message);
-  const waiting=chatMessage('system','설계하는 중…');
+  const waiting=chatMessage('system','설계하는 중…'),status=waiting.querySelector('.chat-text');
+  let reply=null,text='',shown=null,pending=null,loading=null;
+  // Each design step the agent saves opens on the canvas as it arrives; only the newest waits while one loads.
+  const show=id=>{pending=id;if(!loading)loading=(async()=>{while(pending&&pending!==shown){const next=pending;shown=next;
+    await refreshSnapshots(next);await loadSnapshot(next);}loading=null;})();};
   try{
-    const result=await api('/api/agent/chat',{method:'POST',body:JSON.stringify({message,model:$('chat-model').value})});
-    waiting.remove();
+    const result=await streamApi('/api/agent/chat/stream',{message,model:$('chat-model').value},event=>{
+      if(event.type==='tool')status.textContent=event.status==='start'?`도구 실행 중: ${event.name}`:`도구 ${event.status==='error'?'오류':'완료'}: ${event.name}`;
+      else if(event.type==='model'&&event.fallback)status.textContent=`${event.model_label}(대체 모델)로 응답하는 중…`;
+      else if(event.type==='snapshot')show(event.id);
+      else if(event.type==='text'){text+=event.text;if(!reply){reply=chatMessage('assistant','');}
+        reply.querySelector('.chat-text').replaceWith(Object.assign(el('div',undefined,'chat-text'),{textContent:text}));$('chat-log').scrollTop=$('chat-log').scrollHeight;}
+    });
+    waiting.remove();reply?.remove();
     const meta=`${result.model_label}${result.fallback?' · 대체 모델(기본 모델 사용 불가)':''} · 도구 ${result.tools_used.length}회`+(result.snapshots.length?` · 구성도 ${result.snapshots.length}회 갱신`:'');
     chatMessage('assistant',result.reply||'(응답 없음)',meta);
-    const last=result.snapshots.at(-1);if(last){await refreshSnapshots(last);await loadSnapshot(last);}
-  }catch(error){waiting.remove();chatMessage('system',error.message);}
+    const last=result.snapshots.at(-1);if(last)show(last);if(loading)await loading;
+  }catch(error){waiting.remove();reply?.remove();if(text)chatMessage('assistant',text);chatMessage('system',error.message);}
   finally{state.chatBusy=false;$('chat-send').disabled=false;$('chat-input').focus();}
 };
 $('chat-input').onkeydown=event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('chat-form').requestSubmit();}};
 bind('chat-button',openChat);bind('chat-close',()=>setChat(false));
-$('chat-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('chat-form').requestSubmit();}});
 bind('chat-reset',async()=>{await api('/api/agent/reset',{method:'POST'});$('chat-log').replaceChildren();chatMessage('system','새 대화를 시작합니다.');});
 for(const button of document.querySelectorAll('.chat-suggestion'))button.onclick=()=>{$('chat-input').value=button.textContent;$('chat-input').focus();};
 window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefault();event.returnValue='';}});

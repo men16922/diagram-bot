@@ -61,11 +61,14 @@ class Workspace:
         self.design = Design(region=self.region)
         self.collected = None
         self.changes = []  # snapshot ids saved during the current turn
+        self.on_publish = None  # set while a streamed turn runs, so each saved snapshot can be shown at once
         self.lock = threading.Lock()
 
     def publish(self, snapshot):
         identifier = self.save(snapshot)
         self.changes.append(identifier)
+        if self.on_publish:
+            self.on_publish(identifier)
         return identifier
 
     def publish_design(self, result):
@@ -314,6 +317,27 @@ def bedrock_model(key, session=None, record=None):
                     temperature=0.2, max_tokens=4096)
 
 
+def progress_handler(emit):
+    """A Strands callback handler that turns agent events into chat progress: text deltas, tool start and finish."""
+    names = {}
+
+    def handle(**event):
+        if "data" in event:
+            emit({"type": "text", "text": event["data"]})
+        start = ((event.get("event") or {}).get("contentBlockStart") or {}).get("start", {}).get("toolUse")
+        if start:
+            names[start["toolUseId"]] = start["name"]
+            emit({"type": "tool", "name": start["name"], "status": "start"})
+        message = event.get("message")
+        if message and message.get("role") == "user":
+            for block in message.get("content", []):
+                if "toolResult" in block:
+                    result = block["toolResult"]
+                    emit({"type": "tool", "name": names.get(result["toolUseId"], ""), "status": result.get("status", "success")})
+
+    return handle
+
+
 class Chat:
     """One conversation: a Strands agent over a workspace. The preferred model falls back on failure (e.g. model access)."""
 
@@ -325,18 +349,33 @@ class Chat:
         self.model = model
         keys = [model] + ([fallback] if fallback and fallback != model else [])
         self.calls = []
-        self.models = {key: model_factory(key, record=self.calls.append) for key in keys}
+        self.emit = None
+        self.models = {key: model_factory(key, record=self.record) for key in keys}
         engine = self.models[model] if len(keys) == 1 else ModelRouter([self.models[k] for k in keys])
         # Drawing steps depend on each other (a service needs its load balancer), so tools run in the order requested.
         self.agent = Agent(model=engine, tools=build_tools(workspace), system_prompt=SYSTEM_PROMPT, callback_handler=None,
                            tool_executor=SequentialToolExecutor())
         self.lock = threading.Lock()
 
-    def ask(self, message):
+    def record(self, key):
+        self.calls.append(key)
+        if self.emit:
+            self.emit({"type": "model", "model": key, "model_label": MODELS[key][0], "fallback": key != self.model})
+
+    def ask(self, message, on_event=None):
+        """One turn. on_event, if given, receives progress events while the agent works (streamed to the browser)."""
+        from strands.handlers.callback_handler import null_callback_handler
         with self.lock:
             self.workspace.changes, self.calls[:] = [], []
             start = len(self.agent.messages)
-            result = self.agent(message)
+            self.emit = on_event
+            self.agent.callback_handler = progress_handler(on_event) if on_event else null_callback_handler
+            self.workspace.on_publish = (lambda identifier: on_event({"type": "snapshot", "id": identifier})) if on_event else None
+            try:
+                result = self.agent(message)
+            finally:
+                self.emit = self.workspace.on_publish = None
+                self.agent.callback_handler = null_callback_handler
             text = str(result).strip()
             used = [b["toolUse"]["name"] for m in self.agent.messages[start:] for b in m.get("content", []) if "toolUse" in b]
             # The last model call produced the reply; earlier entries show any fallback (e.g. no model access yet).

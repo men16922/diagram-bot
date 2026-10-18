@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Added
+- **채팅 응답 스트리밍:** `POST /api/agent/chat/stream`(NDJSON: `text`·`tool`·`model`·`snapshot`, 마지막 줄 `done` 또는 `error`).
+  AI 어시스턴트가 도구 진행을 보여 주고 설계 단계마다 저장된 구성도를 바로 엽니다. 실시간 Nova 2 Lite 턴(도구 8회, 11초)에서 단계별 수신 확인.
 - **채팅으로 아키텍처 설계:** Strands Agents + Amazon Bedrock(Converse) 에이전트. 웹 앱 `채팅으로 설계` 패널, `diagram-bot chat`, `POST /api/agent/chat`.
   도구 24개(표준 아키텍처 7종, VPC·LB·EC2·ECS·EKS·RDS·Aurora·Redis·MSK·OpenSearch·EFS·Lambda·엔드포인트·피어링·VPN, 검토)와
   boto3 읽기 전용 수집 도구(STS, 리전 수집, 리소스 찾기, 검토). 기본 Amazon Nova 2 Lite(GPT-6 Luna·Claude Sonnet 4.5 선택 가능, 실패 시 Nova로 자동 전환)이며 실제 답한 모델을 표시.
@@ -28,6 +30,7 @@
 - `scripts/render_samples.py`: examples/samples 산출물·PNG·README 재생성.
 
 ### Changed
+- CI는 테스트 의존성을 `.[test]`에서 설치합니다(직접 적은 목록에 `strands-agents`가 빠져 2026-10-17 이후 실패). Actions를 Node 24 버전으로 올림.
 - 샘플: data-platform은 피어링·VGW 대신 Transit Gateway 허브(두 VPC + VPN)와 Redshift Multi-AZ 서브넷 그룹 3개·AZ당 2노드,
   hybrid·data-platform은 고객 게이트웨이 2개(VPN 2개), microservices·eks-platform은 `ecr.api`(microservices는 `logs`도),
   three-tier는 `ssmmessages`·`ec2messages` 엔드포인트 추가.
