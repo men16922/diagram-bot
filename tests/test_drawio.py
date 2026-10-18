@@ -244,6 +244,19 @@ def test_empty_unknown_scope_and_xml_labels():
     assert "빈 환경이 아니라" in denied and ET.fromstring(denied).tag == "mxfile"
 
 
+def test_combined_overview_without_vpcs():
+    """Accounts where DescribeVpcs was denied, or that run only regional services, combine into an overview of cards."""
+    from diagram_bot.combine import combine_snapshots
+    from diagram_bot.samples import Sample
+    denied, lambdas = Sample("denied", "denied", []).snapshot(), Sample("lambdas", "lambdas", [])
+    denied["metadata"]["account_id"] = "444455556666"
+    denied["coverage"] = [{**c, "status": "unavailable"} if c["operation"] == "describe_vpcs" else c for c in denied["coverage"]]
+    lambdas.function("worker", None, [])
+    root = validate_document(generate_document(combine_snapshots([denied, lambdas.snapshot()]), view="overview"))
+    labels = [o.get("label", "") for o in root.findall(".//object")]
+    assert any("VPC 조회가 완료되지 않았습니다" in label for label in labels) and any("VPC 미연결 리전 서비스" in label for label in labels)
+
+
 FOCUSED = {"load_balancer", "target_group", "ecs_service", "auto_scaling_group", "customer_gateway", "vpn_gateway", "vpc_peering",
            "search_node", "db_instance", "cache_node", "redshift_cluster", "efs_mount_target", "ecs_task"}
 

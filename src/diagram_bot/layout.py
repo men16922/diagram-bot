@@ -546,7 +546,8 @@ def overview(canvas, snapshot, graph, nodes, vpc_of, subnet_of):
             draw_glance(canvas, shape, glances[shape["resource"]], heads[shape["resource"]])
         cloud["w"] = group["x"] + group["w"] + 20
         overview_edge(canvas, nodes, cloud, distributions, fronted, glances)
-    if not to_hub and not combined:
+    # A combined overview without VPCs has no card rows for network(): the plain grid shows its message and cards.
+    if not to_hub and not combined or not vpcs:
         for i, (label, resource, empty) in enumerate(cards):
             canvas.add(cell_id(resource or f"summary/{i}"), group["id"], 24 + (i % columns) * (card_w + gap),
                        VPC_HEADER + 18 + (i // columns) * (card_h + gap), card_w, card_h, "summary", label,
