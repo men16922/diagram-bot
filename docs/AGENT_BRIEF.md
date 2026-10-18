@@ -1,8 +1,8 @@
-> ▶ NEXT SESSION: company porting & draw.io spec/alignment done (2026-10-18): `drawio_spec.py` (custom company XML wrapper/styles + `spec_from_xml`), `xml_align.py` (`align_drawio_xml`, `import_drawio_xml`, `inspect_drawio_xml`), `--aws-egress browser`, modular `api.py`/routers, `docs/HUMAN_GUIDE.md` (human overview) + `docs/wiki/` (`llms.txt` agent wiki). No [auto] backlog.
+> ▶ NEXT SESSION: review + hardening done (2026-10-19): company draw.io XML feature fixed and raised two levels, codebase audit fixes, `layout/`·`iac/`·`samples/` packages and `js/` modules behind golden hashes (`tests/golden.json`: never re-pin for a refactor). No [auto] backlog.
 
 # Diagram Bot — Agent Brief
 
-Last Updated: 2026-10-18
+Last Updated: 2026-10-19
 
 ## Baseline
 

@@ -1,6 +1,24 @@
 # Progress Log
 
-Last Updated: 2026-10-18
+Last Updated: 2026-10-19
+
+## 2026-10-19 — Review of the company draw.io XML work, codebase hardening and refactor (goal: antigravity 최종 커밋 검수·피드백, 2단계 수준 상승, 소스 전반 점검·리팩토링)
+
+- Review of 6622915 (antigravity): gate green but 19 reproduced defects (security: request `spec` read server files; edge waypoints in the
+  wrong frame; adopt changed the server-wide default; 500s on hostile XML; first page only; label guessing invented EC2s). All fixed with
+  regression tests (`tests/test_xml_robustness.py`); level 2: every page and compressed pages, cell → resource map, one classification table,
+  quality guard (align never returns a worse page; a no-op on the bot's own output), grid index (3,200 shapes 13.7 s → 1.8 s).
+- Codebase audit (bugs with reproducers, duplication, god modules, test gaps) → fixes in graph (MSK partial), server (body cap before read),
+  auth (malformed hash, torn audit line, (client, name) throttle), store (corrupt file, cache race, atomic 0600 writes), SSO/chat
+  (refreshing Bedrock credentials, 409 on expired SSO, no AWS I/O under locks), egress (async long-poll, tab id, re-queue reads only),
+  collector (`RelayDisconnected` fails the job), designer (`@atomic`, duplicates, brownfield key collision), samples (IPs inside subnets,
+  `SAMPLE_VERSION` 7), IaC (derived logical IDs unique), findings (UDP false positive), layout (zero-VPC combined overview, seed-dependent
+  combined focus frame), frontend (stuck chat loading, stale loads, viewer exports, SSO use, error parsing).
+- Refactor behind golden hashes (`tests/golden.json`, stable across PYTHONHASHSEED): `layout/`, `iac/`, `samples/` packages; findings,
+  graph and collector split into named functions; `app.js` → 10 `js/` modules; shared `snapshot.py`, `sessions.py`, `errors.py`,
+  `fileio.py`, `validation.py`, `version.py`, `expiry.py`. Wiki pages, index, `llms.txt`, DECISIONS (XML feature scope) updated.
+- Verified: `make check` equivalent (ruff + 476 pytest + offline smoke), `scripts/verify_demo.py` 35/35 checks with no page errors,
+  `scripts/verify_team.py` 11/11. Not run: `verify_browser_egress.py` (live AWS, outside the offline gate).
 
 ## 2026-10-18 — Company draw.io spec, existing XML auto-alignment & import, two-tier porting docs (goal: 모듈화, 회사 drawio 규격/자동 정렬, 사람용 High-level + 코딩 에이전트용 토큰 최적화 문서)
 

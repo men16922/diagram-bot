@@ -1,9 +1,12 @@
 # Status
 
-Last Updated: 2026-10-18
+Last Updated: 2026-10-19
 
 ## Active Plan
 
+- 2026-10-19 review + hardening (PROGRESS_LOG top entry): the company XML feature fixed and raised (every page, cell map, one
+  classifier, quality guard, no server file reads, adopt scoped), codebase audit fixes, `layout/`·`iac/`·`samples/` packages and `js/` modules
+  behind golden hashes; 476 tests, verify_demo 35/35, verify_team 11/11.
 - 2026-10-18 company draw.io spec & XML alignment (`drawio_spec.py`, `xml_align.py`, `tests/test_xml_align.py`, `docs/wiki/drawio-format-and-alignment.md`, `docs/HUMAN_GUIDE.md`): custom company draw.io specs (`DrawioSpec`, `spec_from_xml`, `"clean"`/`"mxcell"` presets), rule-based in-place alignment & orthogonal routing of existing `drawio.xml` (`align_drawio_xml`), and `drawio.xml` → `Snapshot` import (`import_drawio_xml`), exposed via `api.py`, `/api/xml/align`, `/api/xml/import`, and CLI `align-xml`/`import-xml`.
 - 2026-10-18 company auth structure: `--aws-egress browser` (server signs, browser sends from the PC; docs/wiki/browser-egress.md),
   server split into store / aws_access / routes + `api.py` for porting (docs/wiki/porting-guide.md), LLM wiki docs/wiki + llms.txt.

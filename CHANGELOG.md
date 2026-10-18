@@ -5,6 +5,12 @@
 ## [Unreleased]
 
 ### Added
+- **사내 draw.io 규격과 기존 XML 정렬·가져오기:** `DrawioSpec`(프리셋 `clean`·`mxcell`, `spec_from_xml`), 기존 `drawio.xml`의 검사(`inspect_drawio_xml`)·제자리 정렬과
+  직교 배선(`align_drawio_xml`)·스냅샷 역변환(`import_drawio_xml`), 템플릿 채택(`/api/xml/adopt`), CLI `align-xml`·`import-xml`·`adopt-template`, 사내 표준 등록
+  (`designer.register_standard`, 채팅 `list_standard_architectures`에도 표시). 모든 페이지와 압축 페이지를 읽고, 가져오기는 draw.io 셀 id → 리소스 id 표를 돌려줍니다.
+  봇이 만든 다중 페이지 문서를 다시 가져오면 11개 샘플 모두 VPC·서브넷 개수가 같습니다. 분류는 한 표(`classify_cell`: 도형 우선, 라벨 단어는 약한 신호)이고
+  모르는 도형은 EC2가 아니라 주석입니다.
+- **출력 고정 테스트:** `tests/test_golden.py`·`tests/golden.json`이 모든 샘플과 규칙 변형의 구성도(전체·상세·포커스), CloudFormation, 검토 결과를 해시로 고정합니다.
 - **LLM 위키:** `docs/wiki/`(24개 페이지: 구조, 포팅 가이드, 데이터 모델, 수집, 그래프, 보기, 배치, 샘플, 검토 규칙 47개, 변경 비교, 계정 통합,
   CloudFormation, AWS 접근·SSO, 브라우저 egress, 팀 모드 보안, HTTP API, 웹 앱, 저장소, 채팅 에이전트, CLI, 작업 방법 3개, 용어), 작성 규칙(SCHEMA),
   변경 기록, 루트 `llms.txt`. `scripts/wiki_index.py`가 색인·`llms.txt`를 만들고, 테스트가 근거 파일·링크·색인 최신 여부와 화면 라벨 누락을 검사.
@@ -63,6 +69,15 @@
   ALB WAF, hybrid에 Direct Connect 2개 위치·transit VIF·DX 게이트웨이(VPN은 백업), data-platform에 TGW 라우팅 테이블 2개(스포크·사내망).
 
 ### Changed
+- **모듈 분리(출력 동일, 고정 테스트로 확인):** `layout.py` → `layout/`(base·text·overview·detail·routing·edge_column, 가장 긴 함수 259 → 50줄),
+  `iac.py` → `iac/`(Template 믹스인), `samples.py` → `samples/`(builder·catalog), `findings.review` → 신뢰성·보안 검토 함수, `graph.build_graph` → 서비스별 함수,
+  `collector` 2단계 상세 조회 → `DETAILS`, 프런트엔드 `app.js`(516줄) → `js/` 화면 모듈 10개.
+- **공통 모듈:** `snapshot.py`(봉투·로더), `sessions.py`(boto3 세션 생성), `errors.py`(`error_code`, `InputError` → 422), `fileio.py`(원자적 쓰기, 0600),
+  `validation.py`(리전·계정·역할 패턴), `version.py`, `expiry.py`(만료 항목 정리).
+- **브라우저 egress 중계:** `/api/relay/next`가 비동기 롱 폴이 되어 열린 탭이 작업 스레드를 붙잡지 않습니다. 탭마다 id를 보내고, 닫힌 탭이 가져간 읽기 요청은
+  다른 탭으로 다시 보내며 그 밖의 요청은 90초를 기다리지 않고 바로 실패합니다.
+- **로그인 제한:** 실패는 (주소, 이름)별 5회, 주소 전체는 50회. 인증 프록시 뒤에서 한 사람의 실패가 모두를 막지 않습니다.
+- **샘플:** `SAMPLE_VERSION` 7 — 인스턴스 IP를 자기 서브넷 CIDR 안의 빈 주소로 배정하고 coverage 행을 `collector.OPERATIONS`에서 도출합니다.
 - **포팅하기 좋게 서버 분리:** `store.py`(스냅샷·편집본 저장소), `aws_access.py`(로그인·egress 경로), `routes/`(session·snapshots·documents·agent·aws
   라우터, 다른 FastAPI 앱에 장착 가능), `server.py`는 조립만(760 → 약 130줄). 라이브러리 진입점 `api.py`. 프런트엔드는 ES 모듈(`js/http.js`, `js/relay.js`, `js/labels.js`).
 - 관계 표시 이름 누락 4개 보완(배치 그룹, SageMaker·HyperPod 서브넷, HyperPod 오케스트레이터).
@@ -91,6 +106,21 @@
 - `VPC 밖 리전 리소스` 상자는 VPC 왼쪽 통로 오른쪽에서 시작하고 제목을 두 줄로 나눠, 참조·TGW 연결선이 제목을 가로지르지 않고 옆에서 들어갑니다.
 
 ### Fixed
+- **사내 XML 기능(6622915) 검수 결과:** 요청의 `spec`으로 서버 파일을 읽던 문제(이제 프리셋·인라인 객체만, `DrawioSpec` 검증), 그룹 안 연결선의 경유점 좌표계,
+  편집자의 채택이 서버 전체 기본 규격을 바꾸던 문제(관리자의 `make_default`만), 잘못된·악의적 XML의 500(이제 422, CLI는 종료 코드 2), `cell_wrapper`·속성 이름 주입,
+  첫 페이지만 읽던 문제, 정렬이 봇 출력을 오히려 나쁘게 만들던 문제(입력보다 나빠지면 원본 유지), preserve 모드의 사용자 속성 손실, 감사 로그 중복,
+  `?spec=` 미리보기가 저장 가능한 리비전을 달고 오던 문제, 도형 3,200개 정렬 13.7초 → 1.8초.
+- **그래프·배치:** MSK `ListNodes` 부분 응답에 계정 전체 그래프가 실패하던 문제, VPC가 없는 계정끼리 통합한 전체 구성의 IndexError, 통합 스냅샷 포커스 틀의
+  계정이 해시 시드에 따라 바뀌던 문제, id 없는 셀이 있으면 재배치가 실패하던 문제.
+- **서버:** 인증 전 `/api/login`도 본문 전체를 읽은 뒤 15 MiB를 검사하던 문제(이제 `Content-Length`로 먼저 거부), 잘못된 비밀번호 해시의 500,
+  감사 로그의 끊긴 줄 하나로 `/api/audit`가 계속 500, 손상된 스냅샷 파일 하나로 목록 전체가 500, 스냅샷 캐시 경합, 비원자적 사용자 삭제.
+- **자격 증명:** 채팅의 Bedrock 세션이 역할 자격 증명 만료 후 계속 실패하던 문제(갱신 세션), 만료된 SSO 로그인의 500(이제 409), `SsoLogins`가 AWS 호출 중
+  전역 잠금을 쥐던 문제, 실패한 시작 URL 탐색이 영구 캐시되던 문제.
+- **수집:** 브라우저가 끊기면 남은 서비스를 모두 `조회 불가`로 채운 가짜 partial 스냅샷을 저장하던 문제(`RelayDisconnected`로 작업 실패), 작업 예외 로그 누락.
+- **설계·IaC·검토:** 실패한 설계 단계가 반쯤 만든 상태를 남기던 문제(`@atomic`), 이름 중복 허용, 긴 이름의 기존 VPC 두 개가 한 키로 겹치던 문제,
+  CloudFormation 파생 ID가 다른 리소스를 덮어쓰던 문제, `KafkaVersion` null·빈 `NodeGroups`, UDP·ICMP·ESP 규칙을 SSH·DB 포트 노출로 보고하던 오탐.
+- **웹 앱:** 채팅 단계 하나의 적재 실패로 이후 단계가 캔버스에 열리지 않던 문제, 겹친 스냅샷 적재의 뒤섞임, 뷰어 다운로드의 "undefined", SSO 역할 사용 실패를
+  성공으로 보이던 문제, JSON이 아닌 오류 응답의 "Unexpected token", 끝점이 없는 관계의 속성 패널 오류, `viewer.html` 종류 이름 9/45개.
 - 선택 리소스 보기에서 서브넷이 보기 밖일 뿐인 VPC에 `이 VPC에서 조회된 서브넷이 없습니다`라고 표시하던 문제.
 - 선택 리소스 보기의 모든 연결선(로드 밸런서 서브넷 배치 포함)이 명시 경로를 갖고 draw.io 자동 경로에 맡기지 않음을 모든 샘플·리소스 종류에 대해 테스트로 고정.
 - VPC에 연결되지 않은 Lambda 함수가 리소스 목록·CSV에서 빠지던 문제. 전체 구성에 `VPC 미연결 리전 서비스` 카드로 표시하고 상세 구성에는 그리지 않습니다.
