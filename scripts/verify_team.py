@@ -116,6 +116,16 @@ def main():
             expect(page.locator("#user-role")).to_contain_text("viewer1 · 보기 전용")
             expect(page.locator("#collection-button")).to_be_disabled()
             expect(page.locator("#import-button")).to_be_disabled()
+            # draw.io XML: a viewer sees the company standards but cannot import, align or adopt (the server refuses them too).
+            page.click("#xml-button")
+            expect(page.locator("#xml-dialog")).to_be_visible()
+            for control in ("#xml-import", "#xml-align", "#xml-adopt", "#adopt-default"):
+                expect(page.locator(control)).to_be_disabled()
+            expect(page.locator("#standards-empty")).to_be_visible()
+            page.click("#close-xml")
+            page.click("#profile-button")
+            expect(page.locator("#audit-button")).to_be_hidden()  # the audit log is an admin's
+            page.click("#profile-button")
             cookie = next(c for c in context.cookies() if c["name"] == "diagram_bot_session")
             assert cookie["httpOnly"] and cookie["secure"] and cookie["sameSite"] == "Strict", cookie
             status = page.evaluate("fetch('/api/snapshots', {method: 'POST', headers: {'Content-Type': 'application/json', "
@@ -129,6 +139,12 @@ def main():
             page.click("button")
             expect(page.locator("#user-role")).to_contain_text("admin1 · 관리자")
             expect(page.locator("#collection-button")).to_be_enabled()
+            page.click("#profile-button")
+            page.click("#audit-button")
+            expect(page.locator("#audit-dialog")).to_be_visible()
+            expect(page.locator("#audit-rows tr", has_text="viewer1").filter(has_text="failed").first).to_be_visible()
+            expect(page.locator("#audit-rows tr", has_text="admin1").filter(has_text="login").first).to_be_visible()
+            page.click('#audit-dialog [aria-label="닫기"]')
             page.click("#profile-button")  # sign-out lives in the profile menu (top right)
             page.click("#logout-button")
             expect(page).to_have_url(base + "/login")
@@ -140,8 +156,9 @@ def main():
             assert ("admin1", "login", "ok") in actions and ("architect@corp.example", "login", "ok") in actions, actions
             browser.close()
         print(json.dumps({"team_mode": "ok", "checks": ["non-loopback refused without credentials", "TLS", "login redirect",
-                                                        "failed login message", "viewer controls disabled", "cookie HttpOnly/Secure/Strict",
-                                                        "viewer mutation 403", "logout", "admin controls", "OIDC SSO sign-in (PKCE)",
+                                                        "failed login message", "viewer controls disabled",
+                                                        "viewer: draw.io XML import/align/adopt disabled, no audit menu", "cookie HttpOnly/Secure/Strict",
+                                                        "viewer mutation 403", "logout", "admin controls", "admin audit log dialog", "OIDC SSO sign-in (PKCE)",
                                                         "audit log"]}, ensure_ascii=False))
     finally:
         idp.shutdown()

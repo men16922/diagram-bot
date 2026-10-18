@@ -35,11 +35,12 @@ def main():
     parser.add_argument('--chromium', help='Optional preinstalled Chromium executable')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    errors, external = [], []
+    errors, external, puts = [], [], []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, executable_path=args.chromium)
         page = browser.new_page(viewport={'width': 1600, 'height': 1100}, device_scale_factor=1)
         page.on('pageerror', lambda error: errors.append(str(error)))
+        page.on('request', lambda req: puts.append(req.url) if req.method == 'PUT' else None)
         page.on('request', lambda req: external.append(req.url) if req.url.startswith(('http:', 'https:')) and urlparse(req.url).netloc != urlparse(args.url).netloc else None)
         ready = lambda: expect(page.locator('#save-button')).to_be_enabled(timeout=60000)
 
@@ -510,6 +511,84 @@ def main():
         expect(page.locator('.chat-message.system').last).to_have_text('검증용: 모델 오류')
         page.unroute('**/api/agent/chat/stream')
         page.locator('#chat-close').click()
+
+        # 14. draw.io XML dialog: import the bundled three-tier topology as a snapshot, adopt it as the company standard
+        # corp-web (server default), align it and download the result; export .drawio and PNG in the clean preset (a fresh
+        # rendering that differs from the edited export and saves no revision); then delete the standard.
+        state = lambda expression: page.evaluate(f'() => window.diagramBot.state.{expression}')
+        topology = Path(__file__).resolve().parent.parent / 'examples/samples/three-tier/topology.drawio'
+        page.locator('#xml-button').click()
+        expect(page.locator('#xml-dialog')).to_be_visible()
+        expect(page.locator('#standards-empty')).to_be_visible()
+        page.locator('#xml-file').set_input_files(topology)
+        page.locator('#xml-import').click()
+        page.wait_for_function('() => window.diagramBot.state.snapshot.metadata.imported === true && !window.diagramBot.state.xmlBusy')
+        expect(page.locator('#xml-result')).to_contain_text('페이지 2/2개')
+        expect(page.locator('#xml-result')).to_contain_text('미대응 도형 0개 · 합성 0개')
+        expect(page.locator('#xml-status')).to_contain_text('스냅샷으로 가져와 열었습니다')
+        imported = state('snapshotId')
+        assert any(s['id'] == imported and s['metadata']['imported'] for s in state('snapshots'))
+        assert page.locator('#snapshot-select').input_value() == imported
+        page.locator('#adopt-name').fill('corp-web')
+        page.locator('#adopt-title').fill('사내 웹 표준')
+        expect(page.locator('#adopt-default')).to_be_enabled()  # local mode is the admin
+        page.locator('#adopt-default').check()
+        page.locator('#xml-adopt').click()
+        expect(page.locator('#standards-rows li', has_text='사내 웹 표준')).to_contain_text('기본 규격')
+        expect(page.locator('#xml-status')).to_contain_text('apply_standard_architecture corp-web')
+        page.wait_for_function("() => window.diagramBot.state.snapshot.metadata.title === '사내 웹 표준' && !window.diagramBot.state.xmlBusy")
+        adopted = state('snapshotId')
+        assert adopted != imported and page.locator('#snapshot-select').input_value() == adopted
+        standards = page.evaluate("fetch('/api/standards').then(r => r.json())")
+        corp = next(s for s in standards if s['name'] == 'corp-web')
+        assert corp['company'] and corp['default'] and corp['spec'] and corp['snapshot_id'] == adopted, corp
+        page.locator('#xml-align').click()
+        expect(page.locator('#xml-download')).to_be_visible()
+        expect(page.locator('#xml-result')).to_contain_text('겹침')
+        expect(page.locator('#xml-status')).to_contain_text('입력을 그대로 두었습니다')  # Diagram Bot's own output is already clean
+        with page.expect_download() as event:
+            page.locator('#xml-download').click()
+        assert event.value.suggested_filename == 'topology-aligned.drawio', event.value.suggested_filename
+        event.value.save_as(args.output / 'topology-aligned.drawio')
+        aligned = ET.fromstring((args.output / 'topology-aligned.drawio').read_text(encoding='utf-8'))
+        assert len(aligned.findall('diagram')) == 2 and len(list(aligned.iter('mxCell'))) == len(list(ET.parse(topology).getroot().iter('mxCell')))
+        page.locator('#close-xml').click()
+        ready()
+        page.locator('#export-button').click()
+        expect(page.locator('#export-spec option[value="corp-web"]')).to_have_count(1)
+        expect(page.locator('#export-spec-note')).to_be_hidden()
+        with page.expect_download() as event:
+            page.locator('#download-drawio').click()
+        event.value.save_as(args.output / 'corp-web-edited.drawio')
+        edited = (args.output / 'corp-web-edited.drawio').read_text(encoding='utf-8')
+        revision, shown, saves = state('revision'), state('xml'), len(puts)
+        page.locator('#export-spec').select_option('clean')
+        expect(page.locator('#export-spec-note')).to_contain_text('수동 편집')
+        with page.expect_download() as event:
+            page.locator('#download-drawio').click()
+        assert event.value.suggested_filename.endswith('-spec-clean.drawio'), event.value.suggested_filename
+        event.value.save_as(args.output / 'corp-web-clean.drawio')
+        clean = (args.output / 'corp-web-clean.drawio').read_text(encoding='utf-8')
+        assert clean != edited and 'id="heading"' in edited and 'id="heading"' not in clean  # the clean preset has no banner
+        with page.expect_download(timeout=60000) as event:
+            page.locator('#download-png').click()
+        event.value.save_as(args.output / 'corp-web-clean.png')
+        with Image.open(args.output / 'corp-web-clean.png') as img:
+            assert img.format == 'PNG' and min(img.size) > 300
+        ready()
+        # No save of the preview: no PUT, same revision on screen and on the server, and the editor shows the edited document again.
+        assert len(puts) == saves and state('revision') == revision and state('xml') == shown, (puts, revision)
+        stored = page.evaluate(f"fetch('/api/snapshots/{adopted}/document?view=detail&vpc=vpc-0a1b2c3d4e5f60001&references=false').then(r => r.json())")
+        assert stored['revision'] == revision, stored['revision']
+        page.locator('#export-dialog [aria-label="닫기"]').click()
+        page.locator('#xml-button').click()
+        page.once('dialog', lambda dialog: dialog.accept())
+        page.locator('#standards-rows li', has_text='사내 웹 표준').get_by_role('button', name='삭제').click()
+        expect(page.locator('#standards-empty')).to_be_visible()
+        expect(page.locator('#xml-status')).to_contain_text('기본값으로 돌아갔습니다')
+        assert not [s for s in page.evaluate("fetch('/api/standards').then(r => r.json())") if s['company']]
+        assert page.evaluate(f"fetch('/api/snapshots/{adopted}/document?spec=corp-web').then(r => r.status)") == 422
+        page.locator('#close-xml').click()
         assert not errors, errors
         assert not external, external
         browser.close()
@@ -532,7 +611,12 @@ def main():
                          'snapshot import', 'change review between snapshots',
                          'console shell: profile menu, sign-in dialog, docked assistant reflow, no overflow at 1280/980/640',
                          'SSO sign-in via profile menu (stand-in Identity Center): role @ account, collection carries SSO role',
-                         'streamed chat turn: progress, design opens on the canvas, reply meta, error line']}
+                         'streamed chat turn: progress, design opens on the canvas, reply meta, error line',
+                         'draw.io XML dialog: import topology.drawio as a snapshot (import report) and open it',
+                         'adopt as company standard corp-web (server default): listed with the default badge, snapshot opened',
+                         'auto-align: before/after metrics, unchanged-input message, aligned .drawio download',
+                         'export in the clean preset: .drawio differs from the edited export, PNG, no PUT, revision unchanged, editor restored',
+                         'delete the company standard: list empty, spec name refused']}
     (args.output / 'verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
 
