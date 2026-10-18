@@ -1,6 +1,41 @@
 # Completed Summary
 
-Last Updated: 2026-10-18
+Last Updated: 2026-10-19
+
+## Finished checklists moved from NEXT_PLAN — completed 2026-10-17/18
+
+Moved here on 2026-10-19 so the rolling plan lists open work only.
+
+### Manual follow-up
+
+- [x] [manual] Validate AWS collection on one account/region — done 2026-10-17 with IAM user keys
+  (STATUS.md "Live AWS Verification").
+- [x] [manual] Live check with real workloads — done 2026-10-17 on a temporary CloudFormation stack
+  (VPC, ALB, ASG × 2 t3.micro, RDS), created and deleted with the user's approval (STATUS.md).
+- [x] [manual] Cross-account role collection — done 2026-10-17 with the repo's role template (temporary stack).
+- [x] [manual] SSO collection from the app — done 2026-10-17: device code approved (owner signed in, agent confirmed the
+  code and allowed access at the owner's request), account and CloudOpsReadOnly auto-selected, collection complete with
+  the same 47 resources / node IDs as the key-based collection; audited as `via: sso:CloudOpsReadOnly`.
+- [x] [manual] Visual review of docs/images/*.png and examples/demo/edited-topology.png — done 2026-10-17 by the agent
+  (model review of all 8 screenshots + the edited PNG). All four issues it found were fixed on 2026-10-18 (PROGRESS_LOG):
+  readable start zoom (was 23–31 % at 1440×900), toasts moved off the canvas, one colour per target group route,
+  word-boundary cuts for long names.
+
+- [x] Default chat model: Amazon Nova 2 Lite (owner's decision 2026-10-17). GPT-6 Luna stays selectable; it answers
+  once AWS enables OpenAI models for the account (support-case draft prepared, owner sends it if wanted).
+
+### Sample Best-Practice Alignment (owner request 2026-10-18)
+
+- [x] docs/ARCHITECTURE.md: AWS sources, per-sample verdicts and a ranked change list.
+- [x] Apply the change list (docs/ARCHITECTURE.md §4) — done 2026-10-18 (items 1–6; optional item 7 left out). Top: Redshift Multi-AZ
+  subnet group (MUST), data-platform peering+VGW → TGW hub, second CGW/VPN in hybrid, missing `ecr.api`/SSM endpoints.
+- [x] AI/GPU (docs/ARCHITECTURE.md §5): A1 `ai-platform`, A2 icons, A3 GPU review rules — done 2026-10-18.
+
+### Remaining Work Finished (owner goal 2026-10-18: 잔여 작업 수행, 승인 없이)
+
+- [x] CI fixed (`.[test]`); chat streaming; brownfield designs; CloudFormation export; collection of Elastic IPs,
+  TGW route tables, CloudFront/WAF, Direct Connect; optional sample items (ARCHITECTURE.md §4 #7); route filter for dense
+  views; focus routes tested (they already used gutters); overnight-harness via project settings. Details: PROGRESS_LOG.
 
 ## Remaining work, best-practice samples, AI/GPU, console UI — completed 2026-10-18
 
@@ -33,7 +68,8 @@ Last Updated: 2026-10-18
   CLI draw.io; `.drawio`/PNG parity verified after a native move and note.
 - P5: browser acceptance (23 checks), regenerated synthetic artifacts, docs.
 - Verification: 42 pytest cases, CLI round trip, Chromium acceptance, draw.io reopen render.
-  Live AWS SSO collection not verified.
+  Live AWS SSO collection not verified at the time (done later on 2026-10-17, see above).
+- Plan (archived): docs/archive/TOPOLOGY_PLAN.md.
 
 ## Diagram Bot v0.2 demo
 
@@ -43,6 +79,7 @@ Last Updated: 2026-10-18
 - Snapshot import/history and JSON/CSV export.
 - 24 pytest cases, browser acceptance flow and GitHub CI passed at `d27657e`.
 - Documentation and synthetic examples are linked from README.md and docs/DEMO.md.
+- Original product plan (archived): docs/archive/PLAN-2026-10-17.md.
 
 ## Harness setup — completed 2026-10-17
 
@@ -65,6 +102,7 @@ Last Updated: 2026-10-18
 - 8 samples (new ai-platform), GPU review rules, accelerated-instance/Bedrock icons, chat `add_gpu_node_group`,
   sample reseeding by version, wrapped attachment row, scripts/render_samples.py.
 - Evidence: `make check` 143 tests; verify_demo 28 checks; all samples pass `review --fail-on medium`.
+- Plan (archived): docs/archive/2026-10-18-best-practice-samples.md.
 
 ## Network overview and AI/GPU strength — completed 2026-10-18
 

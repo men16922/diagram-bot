@@ -148,7 +148,7 @@ Multi-VPC 백서(VPC peering, VPN).
 
 ## 4. 변경안
 
-**반영 현황 (2026-10-18):** 1–7 완료. 7(OPT)은 같은 날 후속으로 반영(`SAMPLE_VERSION` 4, 세 사례 모두 `review --fail-on medium` 종료 코드 0). 구현 기록: [docs/plans/2026-10-18-best-practice-samples.md](plans/2026-10-18-best-practice-samples.md).
+**반영 현황 (2026-10-18):** 1–7 완료. 7(OPT)은 같은 날 후속으로 반영(`SAMPLE_VERSION` 4, 세 사례 모두 `review --fail-on medium` 종료 코드 0). 구현 기록(보관): [docs/archive/2026-10-18-best-practice-samples.md](archive/2026-10-18-best-practice-samples.md).
 
 샘플 빌더가 이미 지원하는 요소만으로 반영할 수 있는 항목부터 정리한다. 각 항목의 완료 기준은
 `make check` 통과(가독성·경로 테스트 포함)와 `review`에서 새 high 발견이 없는 것.

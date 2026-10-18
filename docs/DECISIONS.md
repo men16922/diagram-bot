@@ -3,11 +3,11 @@
 Last Updated: 2026-10-19
 
 - Product name is Diagram Bot; initial provider scope is AWS only.
-- Current refinement scope is docs/TOPOLOGY_PLAN.md: direct SSO/service APIs, no Resource
-  Explorer or DevOps Agent dependency. Public DevOps Agent views are a UI reference only.
+- Collection uses direct SSO/service APIs, no Resource Explorer or DevOps Agent dependency (topology plan, finished and
+  archived: docs/archive/TOPOLOGY_PLAN.md). Public DevOps Agent views are a UI reference only.
 - Reuse FastAPI/buildless JavaScript/local storage; evaluate ELK without requiring Node at
   runtime. Keep existing CLI behavior and record which layout engine produced each document.
-- Demo completeness is the current quality target; docs/PLAN.md contains deferred product work.
+- Demo completeness is the current quality target; the original product plan is archived (docs/archive/PLAN-2026-10-17.md).
 - Graph relationships come from AWS IDs/ARNs and explicit API fields, not LLM inference.
 - Chat design agent (2026-10-17, user request): Strands Agents on Bedrock Converse; the model only picks tools,
   `designer.py` decides CIDRs, AZ spread, routes, SGs and HA placement. Default Nova 2 Lite (owner's decision 2026-10-17

@@ -46,7 +46,7 @@ The plugin may use its own read-only reviewer on a future authorized run.
 
 - docs/AGENT_BRIEF.md → STATUS.md → NEXT_PLAN.md → PROGRESS_LOG.md.
 - Brief ≤60 lines; status/plan/log ≤120; lessons ≤40. Archive under docs/archive if needed.
-- Product proposal: docs/PLAN.md. Demo instructions: docs/DEMO.md. Neither substitutes for
+- Original product plan (archived): docs/archive/PLAN-2026-10-17.md. Demo instructions: docs/DEMO.md. Neither substitutes for
   explicit [auto] work authorization in the rolling plan.
 - docs/LESSONS.md starts empty for facts learned during actual loop work.
 
