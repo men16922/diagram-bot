@@ -548,3 +548,23 @@ def test_import_reports_unmapped_shapes_instead_of_inventing_resources():
     assert [i["Tags"][0]["Value"] for i in snapshot["raw"]["instances"]] == ["web-1"]
     assert snapshot["metadata"]["import"]["unmapped"] == [{"page": "p1", "id": "s3", "label": "logs", "kind": None}]
     assert not snapshot["raw"]["nat_gateways"]  # no NAT gateway is invented for private subnets
+
+
+# --- k. one source for styles, icons, unwrapping and grid geometry -------------------------------------------------
+
+def test_single_sources_for_styles_icons_and_geometry():
+    from diagram_bot import drawio, drawio_spec, layout
+    assert not hasattr(drawio, "STYLES") and not hasattr(drawio, "EDGE")
+    assert drawio.ICONS is drawio_spec.ICONS and drawio.RESOURCE_ICONS is drawio_spec.RESOURCE_ICONS
+    assert "icon_size" not in DrawioSpec.__dataclass_fields__
+    legacy = {**api.DEFAULT_SPEC.to_dict(), "icon_size": 40, "slot_w": 150.0, "row_h": 144.0}
+    assert DrawioSpec.from_dict(legacy) == api.DEFAULT_SPEC  # older spec files still load
+    # Aligned resources sit on the renderer's slot and row pitch.
+    cells = [v("vpc", "vpc-x (10.0.0.0/16)", VPC, 0, 0, 900, 900), v("s", "app-subnet", PRIV, 20, 50, 400, 300, "vpc")]
+    cells += [v(f"i{k}", f"web-{k}", EC2, k * 7, k * 9, 40, 40, "s") for k in range(4)]
+    root = fromstring(api.align_xml(mx(cells)))
+    geos = {c.get("id"): c.find("mxGeometry") for c in root.iter("mxCell") if c.get("id", "").startswith("i")}
+    xs = sorted({float(g.get("x")) for g in geos.values()})
+    ys = sorted({float(g.get("y")) for g in geos.values()})
+    assert all(float(g.get("width")) == layout.ICON for g in geos.values())
+    assert all(round(b - a) == layout.SLOT for a, b in zip(xs, xs[1:])) and all(round(b - a) == layout.ROW for a, b in zip(ys, ys[1:]))

@@ -397,8 +397,9 @@ KIND_NAME = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
 COLOR = re.compile(r"^(#[0-9A-Fa-f]{3,8}|none)$")
 FONT = re.compile(r"^[\w .,'-]{1,64}$")
 SPEC_TEXT = re.compile(r"^[^\x00-\x1f;=<>]{0,120}$")
-NUMBERS = {"margin_x": (0, 2000), "margin_y": (0, 2000), "font_size": (4, 96), "grid_size": (1, 100), "icon_size": (8, 256),
-           "slot_w": (40, 1000), "row_h": (40, 1000)}
+NUMBERS = {"margin_x": (0, 2000), "margin_y": (0, 2000), "font_size": (4, 96), "grid_size": (1, 100)}
+# Fields of older spec files that never reached the renderer (icon and slot sizes come from layout.py); ignored on load.
+LEGACY_KEYS = {"icon_size", "slot_w", "row_h"}
 
 
 def _check(ok, message):
@@ -437,9 +438,6 @@ class DrawioSpec:
     font_color: str = "#232F3E"
     background: str = "#ffffff"
     grid_size: int = 10
-    icon_size: int = 52
-    slot_w: float = 150.0
-    row_h: float = 144.0
     edge_style: str = DEFAULT_EDGE_STYLE
     edge_end_arrow: str = "none"          # ARROWS
     edge_end_fill: bool = True
@@ -528,6 +526,7 @@ class DrawioSpec:
         if isinstance(data, cls):
             return data
         _check(isinstance(data, dict), "spec는 프리셋 이름 또는 JSON 객체여야 합니다.")
+        data = {k: v for k, v in data.items() if k not in LEGACY_KEYS}
         unknown = set(data) - set(cls.__dataclass_fields__) - {"base"}
         _check(not unknown, f"알 수 없는 키: {', '.join(sorted(map(str, unknown)))}")
         base = PRESETS.get(data.get("base", "default"))

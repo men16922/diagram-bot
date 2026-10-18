@@ -27,6 +27,7 @@ from .drawio_spec import (AZ_CODE, REGION_CODE, classify_cell, format_style, ite
                           read_document, resolve_spec, set_default_spec, spec_from_xml)
 from .errors import InputError
 from .graph import build_graph
+from .layout import AZ_HEADER, ICON, LANE_TOP, ROW, SLOT, SUBNET_HEADER, VPC_HEADER
 from .samples import Sample
 
 __all__ = ["adopt_company_xml", "align_drawio_xml", "align_report", "import_drawio_xml", "inspect_drawio_xml"]
@@ -376,8 +377,9 @@ def _align_page_in_place(graph_root, *, reparent=True, route_edges=True, grid_si
     for v in vertices.values():
         children_of.setdefault(v["parent"], []).append(v)
 
-    SLOT_W, ROW_H, ICON_SIZE = 150.0, 144.0, 52.0
-    SUBNET_HDR, AZ_HDR, VPC_HDR, OUTER_HDR = 46.0, 36.0, 42.0, 40.0
+    # The renderer's grid (layout.py): slot width, icon size, row pitch and container headers.
+    SLOT_W, ROW_H, ICON_SIZE = float(SLOT), float(ROW), float(ICON)
+    SUBNET_HDR, AZ_HDR, VPC_HDR, OUTER_HDR = float(SUBNET_HEADER), float(AZ_HEADER), float(VPC_HEADER), 40.0
 
     def layout_leaf_container(cont, header_h=SUBNET_HDR, min_w=190.0, min_h=120.0):
         kids = children_of.get(cont["id"], [])
@@ -396,9 +398,9 @@ def _align_page_in_place(graph_root, *, reparent=True, route_edges=True, grid_si
                     r["w"] = ICON_SIZE
                     r["h"] = ICON_SIZE
                 r["x"] = round(20.0 + col * SLOT_W + (SLOT_W - r["w"]) / 2.0, 1)
-                r["y"] = round(header_h + 24.0 + row * ROW_H, 1)
+                r["y"] = round(header_h + LANE_TOP + row * ROW_H, 1)
             cont["w"] = _snap(max(min_w, cols * SLOT_W + 40.0), grid_size)
-            cont["h"] = _snap(max(min_h, header_h + rows * ROW_H + 24.0), grid_size)
+            cont["h"] = _snap(max(min_h, header_h + rows * ROW_H + 8.0), grid_size)
         else:
             for c in cap_kids:
                 c["x"] = 20.0
@@ -786,12 +788,11 @@ def _apply_spec_to_page(graph_root, vertices, edges, cfg):
     # Wrapper tags (`object` / `UserObject` / `mxCell`). A wrapper carrying custom attributes (tooltip, link, placeholders,
     # resourceId...) is never downgraded to a bare mxCell: draw.io would drop them. It is kept and counted instead.
     kept = 0
-    for idx, el in enumerate(list(graph_root)):
-        inner = el if el.tag == "mxCell" else el.find("mxCell")
-        if inner is None or (el.tag == "mxCell" and el.get("id") in ("0", "1")) or el.tag == cfg.cell_wrapper:
+    position = {id(el): i for i, el in enumerate(graph_root)}
+    for el, inner, cid, label in list(iter_cells(graph_root)):
+        if (el.tag == "mxCell" and cid in ("0", "1")) or el.tag == cfg.cell_wrapper:
             continue
-        cid = el.get("id") or inner.get("id") or ""
-        label = el.get("label") or el.get("value") or inner.get("value") or ""
+        idx, cid = position[id(el)], cid or ""
         if cfg.cell_wrapper == "mxCell":
             if set(el.attrib) - {"id", "label"}:
                 kept += 1
