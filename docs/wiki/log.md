@@ -9,6 +9,7 @@ updated: 2026-10-19
 
 > 페이지 단위의 변경만 한 줄씩 남긴다. 형식: `날짜 — 무엇을 (왜)`.
 
+- 2026-10-19 — [[porting-guide]] 실측 반영: Level 2·3 목록 누락(`fileio.py`·`validation.py`·`routes/standards.py`), Level 1 추가분, pip 열, Level 0 예시가 `api.py` 없이 동작하게, 미들웨어 `auth.allowed` 경로 접두사 주의, 5절을 docs/porting 키트(Luna·Sol, 150K 세션)로 대체.
 - 2026-10-19 — 옛 구조 문구 정리: [[chat-agent]]·[[graph]]·[[howto-add-collected-service]]·[[porting-guide]](`static/app.js` 하나 → `js/` 모듈, `DocumentStore`는 `read`·`replace`, `StandardStore` 추가) (문서 정리).
 - 2026-10-19 — `docs/DRAWIO.md` 흡수 후 삭제: [[layout-and-drawio]](사용 라이브러리, ELK 미채택 이유, 거터·lane 간격과 포트 라벨, `text_width`·`fit_name` 규칙, 한계), [[web-app]](편집기 외부 요청 0건과 그 검증) (주제마다 한 곳: 위키가 코드 근거 문서).
 - 2026-10-19 — draw.io XML 기능을 화면으로: [[web-app]](draw.io XML·감사 로그 대화상자, 다운로드 `규격` 선택, `js/xml.js`), [[http-api]](standards 라우터, bootstrap `presets`, `?spec=` 사내 표준 이름), [[drawio-format-and-alignment]](채택 표준 저장·삭제, 화면 진입점), [[team-mode-security]](`/api/standards` admin, 화면의 역할 규칙·감사 로그 메뉴), [[storage]](`StandardStore`, `standards/<이름>.json`) (사용자 요청: API·CLI에만 있던 기능을 화면에).

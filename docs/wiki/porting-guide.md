@@ -34,35 +34,42 @@ updated: 2026-10-19
 
 ## 3. 원하는 만큼만 가져가는 5단계(Level 0~4) 포팅 레시피
 
-코딩 에이전트(GPT-6 Luna, Claude 5.5 Haiku 등)는 사용자가 지정한 **단 하나의 Level**에 해당하는 파일만 복사한다.
+- 실행 키트: [docs/porting/README.md](../porting/README.md) — 카드 T0–T6·RULES·ORCHESTRATOR(GPT-6 Luna·GPT-6.1 Sol).
+- 복사: `python scripts/port_copy.py --level N --dest <회사>/diagram_bot` — import를 따라 목록을 계산(아래 표는 요약, 정확한 목록은 `--dry-run`).
+- 검증: `python -m diagram_bot.port_check --level N` (오프라인, AWS·네트워크 없음). 패키지 이름 `diagram_bot`은 유지한다(`report.py`가 패키지 자원을 이름으로 찾는다).
 
 | 단계 | 목적 | 복사할 파일 (`src/diagram_bot/` 기준) | 필요한 pip 패키지 | 진입점 함수 / 클래스 |
 | --- | --- | --- | --- | --- |
-| **Level 0. 기존 `drawio.xml` 자동 정렬 + 회사 규격(`DrawioSpec`)** | 회사 기존 XML 생성기는 그대로 두고, 결과 XML의 겹침·컨테이너 크기·AZ 서브넷 정렬·직교 배선만 자동 교정하거나 회사 XML 포맷 추출 | `drawio_spec.py`, `errors.py`, `xml_align.py`, `drawio.py`, `layout/`, `views.py`, `graph.py`, `snapshot.py`, `designer.py`, `findings.py`, `combine.py`, `samples/`, `collector.py`, `sessions.py`, `egress.py` (`xml_align`의 실제 import 범위; 이식 후 `python -c "import sys, diagram_bot.xml_align; print(sorted(m for m in sys.modules if m.startswith('diagram_bot')))"`로 확인) | `defusedxml`, `boto3`(import만) | `xml_align.align_drawio_xml`, `xml_align.inspect_drawio_xml`, `xml_align.import_drawio_xml`, `drawio_spec.spec_from_xml` |
-| **Level 1. 다이어그램·설계·검토·CFN 코어 엔진** | 표준 아키텍처 생성 + 코드/도구 기반 설계(`Design`) + 회사 규격 XML 출력 + 주석 보존 + 47개 검토 규칙 + CloudFormation 내보내기 | Level 0 + `designer.py`, `findings.py`, `iac/`, `diff.py`, `combine.py` | `defusedxml`, `boto3`(import만) | `designer.Design`, `drawio.generate_document(..., spec=...)`, `drawio.carry_annotations`, `findings.review`, `iac.template` |
-| **Level 2. AWS 수집 + 브라우저 Egress + 통합 퍼사드** | Level 1 + 실제 계정 읽기 전용 수집 + 서버 서명·브라우저 전송(`--aws-egress browser`) + `api.py` 단일 진입점 | Level 1 + `collector.py`, `sessions.py`, `egress.py`, `aws_access.py`, `sso.py`, `expiry.py`, `store.py`, `api.py` + 프런트 `static/js/relay.js` | `defusedxml`, `boto3` | `api.collect_snapshot`, `api.render`, `api.align_xml`, `api.import_xml`, `egress.BrowserRelay`, 프런트 `startRelay(api)` |
-| **Level 3. FastAPI 라우터 장착** | Level 2 + 회사 FastAPI 앱에 `/diagram/*` 엔드포인트(`/api/xml/align`, `/api/xml/import` 포함)와 리비전 저장소 장착 | Level 2 + `auth.py`, `routes/__init__.py`, `routes/snapshots.py`, `routes/documents.py`, `routes/aws.py` | + `fastapi`, `pydantic` | `routes.Context`, `snapshots.router(ctx)`, `documents.router(ctx)`, `aws.router(ctx)` |
+| **Level 0. 기존 `drawio.xml` 자동 정렬 + 회사 규격(`DrawioSpec`)** | 회사 기존 XML 생성기는 그대로 두고, 결과 XML의 겹침·컨테이너 크기·AZ 서브넷 정렬·직교 배선만 자동 교정하거나 회사 XML 포맷 추출 | `drawio_spec.py`, `errors.py`, `xml_align.py`, `drawio.py`, `layout/`, `views.py`, `graph.py`, `snapshot.py`, `designer.py`, `findings.py`, `combine.py`, `samples/`, `collector.py`, `sessions.py`, `egress.py` (`xml_align`의 import 범위) | `defusedxml`, `boto3`(import 시점에 로드) | `xml_align.align_drawio_xml`, `xml_align.inspect_drawio_xml`, `xml_align.import_drawio_xml`, `drawio_spec.spec_from_xml` |
+| **Level 1. 다이어그램·설계·검토·CFN 코어 엔진** | 표준 아키텍처 생성 + 코드/도구 기반 설계(`Design`) + 회사 규격 XML 출력 + 주석 보존 + 47개 검토 규칙 + CloudFormation 내보내기 | Level 0 + `iac/`, `diff.py` | `defusedxml`, `boto3` | `designer.Design`, `drawio.generate_document(..., spec=...)`, `drawio.carry_annotations`, `findings.review`, `iac.template` |
+| **Level 2. AWS 수집 + 브라우저 Egress + 통합 퍼사드** | Level 1 + 실제 계정 읽기 전용 수집 + 서버 서명·브라우저 전송(`--aws-egress browser`) + `api.py` 단일 진입점 | Level 1 + `collector.py`, `sessions.py`, `egress.py`, `aws_access.py`, `sso.py`, `expiry.py`, `store.py`, `fileio.py`, `validation.py`, `api.py` + 프런트 `static/js/relay.js` | `defusedxml`, `boto3` | `api.collect_snapshot`, `api.render`, `api.align_xml`, `api.import_xml`, `egress.BrowserRelay`, 프런트 `startRelay(api)` |
+| **Level 3. FastAPI 라우터 장착** | Level 2 + 회사 FastAPI 앱에 `/diagram/*` 엔드포인트(`/api/xml/align`, `/api/xml/import` 포함)와 리비전 저장소 장착 | Level 2 + `auth.py`, `routes/__init__.py`, `routes/snapshots.py`, `routes/documents.py`, `routes/standards.py`, `routes/aws.py` | + `fastapi`(`pydantic` 포함). `uvicorn` 불필요, `httpx2`는 port_check L3 검사용 | `routes.Context`, `snapshots.router(ctx)`, `documents.router(ctx)`, `aws.router(ctx)` |
 | **Level 4. AI 채팅 설계 에이전트 + 웹 UI 연동** | Level 3 + Strands/Bedrock 29개 도구 에이전트(표준·브라운필드·하위 모델 지원) + React 연동 모듈 | Level 3 + `agent.py`, `routes/agent.py` + 프런트 `static/js/http.js`, `static/js/labels.js`, `static/editor-bridge.js` | + `strands-agents` | `agent.Workspace`, `agent.Chat`, `routes.agent.router(ctx)` |
 
 ### 코드 예시 1 (Level 0) — 회사 기존 `drawio.xml` 자동 정렬 + 규격 추출
+`api.py`는 Level 2부터 복사되므로 Level 0은 모듈을 직접 부른다(`api.align_xml` 등은 같은 함수의 별칭).
 ```python
-from diagram_bot import api
+from diagram_bot.designer import Design
+from diagram_bot.drawio import generate_document
+from diagram_bot.drawio_spec import spec_from_xml
+from diagram_bot.xml_align import align_report, import_drawio_xml, inspect_drawio_xml
 
-# 1) 회사에서 만든 기존 drawio.xml의 겹침·컨테이너 경계·AZ 서브넷 계층·직교 화살표를 정렬 (셀 ID·라벨·사용자 속성 유지)
-before_report = api.inspect_xml(company_xml)           # {'clean': False, 'overlaps': [('a', 'b')], 'out_of_bounds': [...], 'pages': [...], ...}
-result = api.align_report(company_xml)                 # {'xml': ..., 'pages': [{'name', 'status': 'aligned'|'clean'|'reverted', ...}]}
-after_report = api.inspect_xml(result["xml"])          # 문제 목록은 개수가 아니라 셀 ID 쌍·목록
+# 1) 기존 drawio.xml 정렬 (셀 ID·라벨·사용자 속성 유지). 입력보다 나빠지는 페이지는 'reverted'로 원본 유지
+before_report = inspect_drawio_xml(company_xml)        # {'clean': False, 'overlaps': [('a', 'b')], 'out_of_bounds': [...], 'pages': [...], ...}
+result = align_report(company_xml)                     # {'xml': ..., 'pages': [{'name', 'status': 'aligned'|'clean'|'reverted', ...}]}
+after_report = inspect_drawio_xml(result["xml"])       # 문제 목록은 개수가 아니라 셀 ID 쌍·목록
 
-# 2) 회사 샘플 XML에서 회사 draw.io 규격(래퍼·폰트·컨테이너색·격리 서브넷색·화살표) 자동 추출
-company_spec = api.spec_from_xml(company_xml)
+# 2) 회사 샘플 XML에서 회사 draw.io 규격(래퍼·폰트·컨테이너색·격리 서브넷색·화살표) 추출
+company_spec = spec_from_xml(company_xml)
 
-# 3) 회사 기존 XML을 Snapshot으로 역변환해 브라운필드 설계·검토·CloudFormation 템플릿 생성
-snapshot = api.import_xml(company_xml, title="사내 표준 아키텍처")
-design = api.Design()
+# 3) 회사 XML → Snapshot → 브라운필드 설계 → 회사 규격으로 다시 그리기
+snapshot = import_drawio_xml(company_xml, title="사내 표준 아키텍처")
+design = Design()
 design.start_from_snapshot(snapshot)
-design.add_subnet_tier(vpc="corp-prod-vpc", tier="data")
+if "data" not in design.vpcs["corp-prod-vpc"]["tiers"]:  # data 계층이 없는 템플릿일 때만
+    design.add_subnet_tier(vpc="corp-prod-vpc", tier="data")
 design.add_cache(vpc="corp-prod-vpc", name="session-redis")
-new_xml = api.render(design.snapshot(), view="detail", vpc="vpc-corp-prod-vpc", spec=company_spec)
+new_xml = generate_document(design.snapshot(), vpc_id="vpc-corp-prod-vpc", view="detail", spec=company_spec)
 ```
 
 ### 코드 예시 2 (Level 1) — `drawio.xml` 직접 조작을 `Design` + `generate_document`로 대체
@@ -75,11 +82,12 @@ from diagram_bot.iac import template as export_cfn
 # 1) 표준 아키텍처 불러오기 + 코드 레벨에서 리소스 추가 (좌표 계산 불필요)
 d = Design(title="사내 표준 3계층 + 캐시", region="ap-northeast-2")
 d.apply_standard("three-tier")                         # 표준 템플릿 로드 (AWS raw 형식)
-d.add_cache(vpc="main", name="session-redis")          # 원하는 리소스 추가 -> AZ별 서브넷·SG 자동 연결
+vpc = d.vpc_summary()[0]                                # {"name": "prod-web", "id": "vpc-...", ...}
+d.add_cache(vpc=vpc["name"], name="session-redis")    # 원하는 리소스 추가 -> AZ별 서브넷·SG 자동 연결
 snapshot = d.snapshot()
 
 # 2) 회사 규격("clean", "mxcell", 또는 DrawioSpec)으로 결정적 배치 XML 생성
-xml_detail = generate_document(snapshot, view="detail", vpc="vpc-main", routes="all", spec="clean")
+xml_detail = generate_document(snapshot, vpc_id=vpc["id"], view="detail", spec="clean")
 
 # 3) 사용자가 draw.io에서 수동으로 추가한 메모·도형을 유지하며 재배치할 때
 merged_xml = carry_annotations(saved_user_xml, xml_detail)
@@ -106,6 +114,7 @@ for module in (snapshots, documents, agent, aws):
     app.include_router(module.router(context), prefix="/diagram")
 ```
 - **필수 전제:** 회사 인증 미들웨어가 `request.state.user`(문자열 ID, 팀 모드면 `request.state.role`도)를 채워야 한다.
+- **권한 검사는 라우터가 아니라 미들웨어:** 회사 미들웨어가 변경 요청마다 `auth.allowed(role, method, path)`를 불러 거부 시 403을 내야 한다. `path`는 마운트 접두사(`/diagram`)를 뗀 값이다. 접두사가 붙은 채면 관리자 전용 경로(`/api/collections`, `/api/sso`, `/api/standards`)를 알아보지 못해 편집자가 수집을 시작할 수 있다. 라우터 자체는 `make_default`만 막는다.
 - 이 앱의 보안 미들웨어(페이지 토큰 `X-Diagram-Bot`, Origin 확인, 15 MiB 제한)는 `server.create_app`에 있다([[team-mode-security]]).
 
 **B. 라이브러리 퍼사드만 호출 (`api.py` — 회사 기존 API 라우터 유지)**
@@ -125,13 +134,15 @@ result = api.review_snapshot(snapshot); draft = api.cloudformation(snapshot)
    - **Vite 프록시**: `server: { proxy: { '/api': 'http://127.0.0.1:8765', '/editor': 'http://127.0.0.1:8765' } }`
    - **React로 새로 짤 화면**: `static/app.js`와 `static/js/` 화면 모듈의 상태·컴포넌트([[web-app]]).
 
-## 5. 하위 모델(GPT-6 Luna / Claude 5.5 Haiku) 코딩 에이전트 실행 규칙
+## 5. 코딩 에이전트 실행 규칙 (GPT-6 Luna · GPT-6.1 Sol)
 
-1. **컨텍스트 절약**: 전체 코드베이스를 읽지 말고 `llms.txt` → 이 문서(`docs/wiki/porting-guide.md`) → 필요한 주제의 위키 1~2개만 읽는다.
-2. **파일 단위 복사**: 위 3절의 Level 0~4 표에 적힌 파일만 대상 저장소에 복사한다.
-3. **레이아웃 불변식 보호**: `layout/` 패키지의 좌표 수식을 임의로 수정하지 않는다. 회사 포맷 변경은 반드시 `drawio_spec.DrawioSpec`(`spec_from_xml` 또는 프리셋)으로 처리하고, 기존 XML 정렬은 `xml_align.align_drawio_xml`을 호출한다.
-4. **요청 데이터 경계**: HTTP로 받은 `spec`은 `drawio_spec.request_spec`(프리셋·객체만), XML은 `read_document`를 거친다. 파일 경로는 서버 설정·CLI에서만 받는다.
-5. **즉시 검증**: 복사·연결 직후 `pytest tests/test_api.py tests/test_xml_align.py tests/test_xml_robustness.py tests/test_drawio.py -q`로 무결성을 확인한다.
+- 에이전트별 규칙·멈춤 조건·보고 형식은 [docs/porting/RULES.md](../porting/RULES.md)가 기준이다. 요약:
+  1. 카드가 지정한 파일만 읽는다. 복사한 모듈 본문·전체 repo는 읽지 않는다(Level 0만 약 17만 토큰).
+  2. 파일은 `scripts/port_copy.py`로 복사한다. 코드를 다시 쓰지 않는다.
+  3. `layout/` 좌표 수식은 바꾸지 않는다. 회사 포맷은 `DrawioSpec`, 기존 XML 정렬은 `align_drawio_xml`.
+  4. 요청 데이터 경계: HTTP `spec`은 `request_spec`(프리셋·객체·채택된 표준 이름), XML은 `read_document`. 파일 경로는 서버 설정·CLI에서만.
+  5. 검증은 `python -m diagram_bot.port_check --level N` + 회사 테스트(출력은 꼬리만).
+  6. 세션 문맥 150K 상한(272K 할증 회피), 카드마다 새 세션.
 
 ## 바꿀 때 주의
 - 라우터는 `request.state.user`가 없으면 동작하지 않는다(SSO·중계·채팅이 사용자 단위).

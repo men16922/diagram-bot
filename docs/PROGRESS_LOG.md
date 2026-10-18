@@ -2,12 +2,16 @@
 
 Last Updated: 2026-10-19
 
+## 2026-10-19 — Porting kit for GPT-6 Luna / GPT-6.1 Sol (goal: 서브에이전트로 카드별 작업, $100·세션 150K)
+
+- `scripts/port_copy.py --level N` (import closure copy + MANIFEST), `python -m diagram_bot.port_check --level N` (offline), docs/porting
+  (README, RULES, ORCHESTRATOR on Sol, cards T0–T6). Copy test runs port_check on each isolated copy; fixed 7 porting-guide mismatches.
+
 ## 2026-10-19 — Screen for draw.io XML, company standards, spec export and audit log (goal: API·CLI만이 아니라 실제 화면에서)
 
 - Tools › draw.io XML dialog: import as a snapshot (import report; badge "XML 가져옴 · 라벨 추정"), auto-align (before/after metrics,
   aligned download), adopt as a company standard (admin/local may make it the server default) and the standards list (open, admin delete).
-- Adopted default standards persist in `<data-dir>/standards/` (`StandardStore`) and come back at startup with the default spec;
-  `GET /api/standards`, `DELETE /api/standards/{name}` (admin); `?spec=<company name>` is a lookup, never a path.
+- Adopted default standards persist in `<data-dir>/standards/`; `GET /api/standards`, `DELETE /api/standards/{name}` (admin).
 - Download dialog › 규격: preset or company spec export (fresh rendering, never saved). Profile menu › 감사 로그 for team-mode admins.
 - Also: imported isolated subnets stay the data tier. Verified: gate 483 tests; verify_demo 40/40, verify_team 13/13 (viewer XML disabled).
 
@@ -105,15 +109,3 @@ Last Updated: 2026-10-19
 - Live (owner's account, us-east-1, `.env` keys, read-only): 34/34 calls complete, incl. DescribePlacementGroups,
   fsx DescribeFileSystems, sagemaker ListEndpoints/ListClusters (0 resources, so non-empty shapes rest on Stubber tests).
 - Verified: `make check` 166 tests; verify_demo 30 checks (multi-account frames, shared TGW, combine dialog).
-
-## 2026-10-18 — AI/GPU as a strength (owner: AI·GPU 쪽이 너무 약하다, 강점이 되어야 한다)
-
-- Collection: FSx, SageMaker real-time endpoints (config instance type, model VpcConfig) and HyperPod clusters, placement
-  groups; EFA interfaces, Capacity Block/ODCR and placement group read from DescribeInstances. Policy + CFN role updated.
-- Drawing: FSx (type icons) and HyperPod in their subnet, SageMaker endpoints in the VPC row (else regional card); EC2
-  labels/inspector show GPU · EFA and capacity · PG on separate lines so a 140 px label never cuts them.
-- Review: new AI/ML pillar, 13 more rules with lens BP IDs (internet-open Jupyter/Ray/MLflow/vLLM, public GPU, P5 subnet
-  IP headroom, Spot EFA, placement, Lustre AZ/scratch, Bedrock/SageMaker endpoint DNS/AZ, SageMaker VPC/AZ, HyperPod public).
-- Samples: `genai-rag`, `gpu-training`; `ai-platform` gains EFA, placement group, FSx. Designer: training groups get a
-  dedicated /20, EFA and a placement group; `add_fsx_lustre`, `add_sagemaker_endpoint`. ARCHITECTURE.md §5.5–5.8.
-- Verified: `make check` 160 tests; verify_demo 29 checks; all 10 samples review low or clean; label crops reviewed.
