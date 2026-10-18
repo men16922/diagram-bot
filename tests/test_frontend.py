@@ -44,6 +44,26 @@ def test_literal_element_ids_exist_in_app_html():
         assert used <= ids, f"{module.name}: {sorted(used - ids)}"
 
 
+def test_every_module_is_reached_from_the_entry_module():
+    reached, queue = set(), [STATIC / "app.js"]
+    while queue:
+        module = queue.pop()
+        if module not in reached:
+            reached.add(module)
+            queue += [(module.parent / source).resolve() for _, source in IMPORT.findall(module.read_text(encoding="utf-8"))]
+    assert set(MODULES) - reached == set()
+
+
+def test_dialogs_close_and_role_gated_controls_are_set():
+    html = (STATIC / "app.html").read_text(encoding="utf-8")
+    for dialog in re.findall(r"<dialog id=\"([\w-]+)\">(.*?)</dialog>", html, re.S):
+        assert 'aria-label="닫기"' in dialog[1], dialog[0]
+    # The server refuses these to a viewer (auth.allowed) and the default checkbox to anyone but an admin; the screen agrees.
+    controls = re.search(r"export function setControls\(\) \{(.*?)\n\}", (STATIC / "js/ui.js").read_text(encoding="utf-8"), re.S).group(1)
+    for name in ("xml-import", "xml-align", "xml-adopt", "adopt-default"):
+        assert f"'{name}'" in controls, name
+
+
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
 def test_modules_are_served(tmp_path, module):
     with TestClient(create_app(tmp_path / "data", tmp_path / "no-editor")) as client:

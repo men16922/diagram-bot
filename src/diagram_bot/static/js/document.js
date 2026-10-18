@@ -15,7 +15,7 @@ function documentUrl(suffix='', reset=false) {
   if(reset)query.set('reset','true');
   return `/api/snapshots/${state.snapshotId}/document${suffix}?${query}`;
 }
-export function snapshotLabel(item){const m=item.metadata;if(m.combined&&!m.sample)return `통합 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;if(m.design)return `설계 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;return m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.account_id} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;}
+export function snapshotLabel(item){const m=item.metadata;if(m.combined&&!m.sample)return `통합 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;if(m.design)return `설계 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;if(m.imported)return `가져옴 · ${m.title} · ${m.finished_at.slice(5,16).replace('T',' ')}`;return m.title?`샘플 · ${m.title}`:`${m.demo?'샘플':'AWS'} · ${m.account_id} · ${m.region} · ${m.finished_at.slice(5,16).replace('T',' ')}`;}
 export async function refreshSnapshots(preferred) {
   const items=await api('/api/snapshots');state.snapshots=items;$('snapshot-select').replaceChildren();
   for(const item of items)$('snapshot-select').append(new Option(snapshotLabel(item),item.id));

@@ -1,6 +1,7 @@
 // Entry module of app.html: wires the shell (views, tabs, toolbar, import, combine) and starts the app. The screen logic
 // lives in js/: state, ui, editor (draw.io protocol), document (load/save flow), workspace, inspector, review, exports,
-// signin and chat; exports.js and chat.js are imported for the handlers they bind.
+// signin, chat and xml (draw.io XML import, alignment and company standards); exports.js, chat.js and xml.js are imported for
+// the handlers they bind.
 import {startRelay} from './js/relay.js';
 import {api, state} from './js/state.js';
 import {$, bind, clearNotice, el, guard, setControls, toast} from './js/ui.js';
@@ -11,6 +12,7 @@ import {renderChanges} from './js/review.js';
 import {renderProfile} from './js/signin.js';
 import './js/exports.js';
 import './js/chat.js';
+import './js/xml.js';
 window.diagramBot = {state};  // for browser checks (scripts/verify_demo.py) and debugging
 bind('all-environments',()=>switchView('overview'));
 bind('view-overview',()=>switchView('overview'));

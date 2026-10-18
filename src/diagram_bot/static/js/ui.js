@@ -14,6 +14,9 @@ export function setControls() {
   for(const id of ['snapshot-select','references','route-filter','import-button'])$(id).disabled=state.busy||(state.ready&&state.loading);
   // Team mode roles: viewers read only, editors edit and import, admins also collect from AWS.
   if(state.role==='viewer')for(const id of ['save-button','note-button','reset-button','restore-button','import-button','combine-button'])$(id).disabled=true;
+  // draw.io XML: import, align and adopt are edits (editor and admin); only an admin makes a template the server default.
+  for(const id of ['xml-import','xml-align','xml-adopt'])$(id).disabled=state.role==='viewer'||state.xmlBusy;
+  $('adopt-default').disabled=state.role!=='admin'||state.xmlBusy;if(state.role!=='admin')$('adopt-default').checked=false;
   $('collection-button').disabled=state.role!=='admin';$('signin-button').disabled=state.role!=='admin';$('chat-button').disabled=state.role==='viewer';
   const locked=state.busy||(state.ready&&state.loading);
   $('view-overview').disabled=locked;$('view-detail').disabled=locked||!state.vpc;$('view-focus').disabled=locked||!state.selected;

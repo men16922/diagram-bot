@@ -6,4 +6,6 @@ export const routeClasses = {public:'퍼블릭 · 0.0.0.0/0 → IGW',nat:'프라
 export const statuses = {complete:'조회 완료',partial:'부분 조회',unavailable:'조회 불가',not_discovered:'미발견 범위'};
 export const viewNames = {overview:'전체 구성',detail:'상세 구성',focus:'선택 리소스'};
 export const severityNames = {high:'높음',medium:'중간',low:'낮음'};
+// Alignment quality metrics (POST /api/xml/align before/after) in the order the dialog lists them.
+export const alignMetricNames = {overlaps:'겹침',out_of_bounds:'범위 이탈',edge_collisions:'선-아이콘 충돌',unaligned_tiers:'계층 행 어긋남',unrouted_edges:'경로 없는 선'};
 export const pillarNames = {reliability:'안정성',security:'보안',operations:'운영',ai:'AI/ML',cost:'비용'};
