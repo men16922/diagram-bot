@@ -3,7 +3,7 @@ title: 관계 그래프 (graph)
 summary: raw API 데이터에서 노드·관계를 만드는 결정적 조인 규칙 — 노드 종류 45개와 관계 43개, 관계 ID 규칙, 참조 전용 노드, 서브넷 경로 분류, 고가용성 역할, 계정 통합 병합, 옛 그래프 업그레이드.
 sources: [src/diagram_bot/graph.py, src/diagram_bot/static/js/labels.js, tests/test_graph_report.py]
 related: [snapshot-model, collection, views, layout-and-drawio, howto-add-collected-service]
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 # 관계 그래프 (graph)
 
@@ -65,7 +65,7 @@ updated: 2026-10-18
 - 종료된 인스턴스(`State.Name == "terminated"`)는 노드를 만들지 않는다.
 - 대상 유형 `instance`→`ec2`, `alb`→`load_balancer`, 그 밖은 `registered_target`(ID `"{TG ARN}#{Id}:{Port}:{AZ}"`). IP 대상은 ECS 서비스가 그 대상 그룹을 이름으로 가리키고 태스크 IP가 같을 때만 `ecs_task`로 잇는다. IP가 같은 EC2와 합치지 않는다(`test_ip_target_is_not_guessed_to_be_ec2`).
 - IP 대상의 서브넷 배치(`place_ip_target`): 대상 그룹 VPC 안에서 CIDR이 IP를 포함하고 AZ가 맞는 서브넷이 **정확히 하나**일 때만. `AvailabilityZone == "all"`이면 VPC 밖 주소라 배치하지 않는다.
-- RDS·ElastiCache·Redshift의 서브넷: 서브넷 그룹에서 해당 AZ의 서브넷이 하나일 때만 `in_subnet`.
+- RDS·ElastiCache·Redshift의 서브넷: 서브넷 그룹에서 해당 AZ의 서브넷이 하나일 때만 `in_subnet`. 세 곳 모두 `group_subnet(group, zone)` 하나를 쓴다(태그 사전은 `tag_map`, 서브넷 ID → 서브넷은 `subnet_index`).
 - MSK 브로커는 `ListNodes`의 `ClientSubnet`, 없으면 클라이언트 서브넷에 균등 분배하고 `Estimated: True`. `ListNodes`가 일부 서브넷만 알려 주면(부분 응답, 브로커 교체 중) 빠진 서브넷은 브로커 0개, `Estimated: True`로 그린다. OpenSearch 노드도 `DescribeDomainNodes`가 없으면 같은 방식.
 - VPC Lambda만 `in_vpc`; `VpcConfig.VpcId`가 없으면 노드만 있고 그림에는 안 들어간다.
 - 피어링은 한쪽 VPC가 수집되어 있을 때만 만들고, 양쪽 다 있으면 두 번째에 `peer_vpc`.

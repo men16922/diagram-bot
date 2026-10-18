@@ -389,3 +389,12 @@ def test_edge_elastic_ips_routing_domains_and_direct_connect_join_on_api_fields(
     merged = build_graph(combine_snapshots([snapshot, other]))
     assert sum(n["kind"] == "cloudfront_distribution" for n in merged["nodes"]) == 2
     assert sum(n["kind"] == "dx_gateway" for n in merged["nodes"]) == 1
+
+
+def test_a_subnet_group_places_a_node_only_when_one_subnet_is_in_its_zone():
+    from diagram_bot.graph import group_subnet, tag_map
+    entry = lambda subnet, zone: {"SubnetIdentifier": subnet, "SubnetAvailabilityZone": {"Name": zone}}
+    group = {"Subnets": [entry("subnet-a", "az-1"), entry("subnet-b", "az-2"), entry("subnet-c", "az-2")]}
+    assert group_subnet(group, "az-1") == "subnet-a"
+    assert group_subnet(group, "az-2") is None and group_subnet(group, "az-3") is None and group_subnet({}, "az-1") is None
+    assert tag_map({"Tags": [{"Key": "Name", "Value": "web"}, {"Key": "empty"}]}) == {"Name": "web", "empty": ""} and tag_map({}) == {}
