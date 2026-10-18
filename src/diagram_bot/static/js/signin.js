@@ -47,6 +47,16 @@ bind('profile-signout',async()=>{
   closeProfile();const flow=state.sso;ssoStop();state.identity=null;$('aws-account').value='';ssoView('form');renderProfile();
   if(flow)await api(`/api/sso/login/${flow.id}/logout`,{method:'POST'}).catch(error=>toast(`SSO 토큰 폐기에 실패했습니다: ${error.message}`,true));
   toast('AWS 자격 증명에서 로그아웃했습니다.');});
+// Audit log (team mode, admin): GET /api/audit, newest first.
+bind('audit-button',async()=>{closeProfile();
+  const entries=await api('/api/audit?limit=200');
+  $('audit-rows').replaceChildren(...entries.map(entry=>{
+    const row=el('tr'),result=String(entry.result??''),failed=/^(denied|failed|throttled|[45]\d\d)$/.test(result);
+    const cell=el('td');cell.append(el('span',result,failed?'badge warn':'badge sample'));
+    row.append(el('td',entry.time?new Date(entry.time).toLocaleString('ko-KR'):''),el('td',entry.user??'—'),el('td',entry.action),
+      el('td',[entry.target,entry.snapshot&&`snapshot ${entry.snapshot}`,entry.client].filter(Boolean).join(' · ')),cell);
+    return row;}));
+  $('audit-empty').hidden=entries.length>0;$('audit-dialog').showModal();});
 bind('collection-button',()=>{closeProfile();
   const text=identityText(),box=$('collection-identity');box.replaceChildren(el('b',state.identity?text.title:'기본 SDK 인증 체인 (로그인하지 않음)'),el('span',state.identity?text.detail:'이 기기의 환경 변수·기본 프로파일을 씁니다.'));
   const change=el('button','로그인 변경','text-button');change.type='button';change.onclick=()=>{$('collection-dialog').close();$('signin-button').click();};box.append(el('br'),change);

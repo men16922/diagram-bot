@@ -62,6 +62,9 @@ def test_dialogs_close_and_role_gated_controls_are_set():
     controls = re.search(r"export function setControls\(\) \{(.*?)\n\}", (STATIC / "js/ui.js").read_text(encoding="utf-8"), re.S).group(1)
     for name in ("xml-import", "xml-align", "xml-adopt", "adopt-default"):
         assert f"'{name}'" in controls, name
+    # The audit log is an admin's, in team mode only (GET /api/audit): the menu item starts hidden and app.js reveals it.
+    assert re.search(r'id="audit-button"[^>]*\bhidden\b', html)
+    assert "$('audit-button').hidden=boot.user.role!=='admin'" in (STATIC / "app.js").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)

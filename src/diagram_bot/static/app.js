@@ -56,7 +56,8 @@ async function start() {
   state.team=boot.team;state.presets=boot.presets||[];
   if(boot.egress==='browser'){startRelay(api);$('egress-note').hidden=false;}
   if(boot.team){const name=boot.user.name;$('user-avatar').textContent=name.slice(0,2).toUpperCase();$('user-avatar').title=`${name} · ${boot.user.role}`;
-    $('user-role').textContent=`${name} · ${{viewer:'보기 전용',editor:'편집',admin:'관리자'}[boot.user.role]}`;$('user-role').hidden=false;$('logout-button').hidden=false;}
+    $('user-role').textContent=`${name} · ${{viewer:'보기 전용',editor:'편집',admin:'관리자'}[boot.user.role]}`;$('user-role').hidden=false;$('logout-button').hidden=false;
+    $('audit-button').hidden=boot.user.role!=='admin';}  // team mode only: the local workspace has one user
   bind('logout-button',async()=>{await api('/api/logout',{method:'POST'});location.href='/login';});
   for(const profile of boot.profiles)$('aws-profile').append(new Option(profile,profile));
   renderProfile();

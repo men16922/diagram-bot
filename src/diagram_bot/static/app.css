@@ -279,6 +279,12 @@ dialog::backdrop{background:rgba(35,47,62,.55)}
 .standards-rows li{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px}
 .standards-rows li>div{flex:1;min-width:0;overflow-wrap:anywhere}.standards-rows small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
 .standards-rows .badge{margin-left:6px}
+#audit-dialog{width:920px}
+.audit-table{max-height:60vh;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.audit-table table{width:100%;border-collapse:collapse;font-size:12px}
+.audit-table th{position:sticky;top:0;background:#f9f9fa;text-align:left;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line-strong)}
+.audit-table td{padding:7px 10px;border-bottom:1px solid var(--line);overflow-wrap:anywhere;vertical-align:top}
+.audit-table td:first-child{white-space:nowrap}.audit-table .badge{font-size:11px}
 
 /* Notification (flashbar-like) */
 #toast{position:fixed;top:calc(var(--header-h) + 12px);left:50%;transform:translateX(-50%);background:#0972d3;color:#fff;border-radius:12px;padding:11px 20px;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,7,22,.25);z-index:50;max-width:70vw;line-height:1.6}
