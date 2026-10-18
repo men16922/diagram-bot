@@ -17,7 +17,10 @@ port_copy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(port_copy)
 # -I drops PYTHONPATH, the script directory and user site; the venv's editable-install .pth still adds a src directory,
 # so every sys.path entry holding a diagram_bot package is removed before the copy goes first.
-ISOLATED = ("import os, runpy, sys; sys.path[:] = [p for p in sys.path if not os.path.isdir(os.path.join(p, 'diagram_bot'))]; "
+# The copy goes first; a source checkout on the path is dropped, but site-packages stays (CI installs the wheel there,
+# next to defusedxml and botocore). The module check below proves every diagram_bot module came from the copy.
+ISOLATED = ("import os, runpy, sys; sys.path[:] = [p for p in sys.path if os.path.basename(p) in ('site-packages', 'dist-packages') "
+            "or not os.path.isdir(os.path.join(p, 'diagram_bot'))]; "
             "sys.path.insert(0, sys.argv[1]); sys.argv = ['port_check', '--level', sys.argv[2], '--json']; "
             "runpy.run_module('diagram_bot.port_check', run_name='__main__', alter_sys=True)")
 
@@ -182,3 +185,11 @@ def test_card_section_references_exist():
             headings = [h[3:] for h in (ROOT / path).read_text().splitlines() if h.startswith("## ")]
             for ref in re.findall(r"§(.+?)(?=, §| \(~|$)", rest):
                 assert any(h.startswith(ref) for h in headings), f"{card.name}: {path} §{ref}"
+
+
+def test_copy_works_without_git(tmp_path, monkeypatch):
+    # A zip download has no git: the manifest says "unknown" instead of the copy failing.
+    monkeypatch.setattr(port_copy.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("git")))
+    assert port_copy.source_commit() == ("unknown", False)
+    assert copy(0, tmp_path / "diagram_bot") == 0
+    assert json.loads((tmp_path / "diagram_bot" / "MANIFEST.json").read_text())["commit"] == "unknown"

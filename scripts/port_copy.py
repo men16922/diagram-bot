@@ -119,8 +119,14 @@ def sha256(path):
 
 
 def source_commit():
-    git = lambda *args: subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True).stdout.strip()
-    return git("rev-parse", "HEAD") or "unknown", bool(git("status", "--porcelain", "--", "src/diagram_bot"))
+    """(commit, dirty); "unknown" when there is no git or no checkout (a zip download)."""
+    def git(*args):
+        try:
+            return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True).stdout.strip()
+        except OSError:
+            return ""
+    commit = git("rev-parse", "HEAD") or "unknown"
+    return commit, commit != "unknown" and bool(git("status", "--porcelain", "--", "src/diagram_bot"))
 
 
 def main(argv=None):
