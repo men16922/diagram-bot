@@ -277,11 +277,13 @@ function download(name, content, type) {
   const url=URL.createObjectURL(new Blob([content],{type}));const link=el('a');link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function filename(extension) {const scope=state.view==='detail'?state.vpc+(state.routes?`-routes-${node(state.routes)?.name}`:''):state.view==='focus'?`focus-${node(state.focus)?.resource_id.split('/').pop()}`:'overview';return `diagram-bot-${state.snapshot.metadata.account_id}-${scope}-v${state.revision}.${extension}`;}
+// Editors save first so the file matches the stored revision; viewers cannot save and export what the editor shows.
+const exportXml=()=>state.role==='viewer'?requestDocument():saveDocument(false);
 async function downloadDiagram() {
-  const xml=await saveDocument(false);download(filename('drawio'),xml,'application/xml');toast('편집 가능한 draw.io 파일을 다운로드했습니다.');
+  const xml=await exportXml();download(filename('drawio'),xml,'application/xml');toast('편집 가능한 draw.io 파일을 다운로드했습니다.');
 }
 async function downloadPng() {
-  const xml=await saveDocument(false);state.busy=true;setControls();$('download-png').disabled=true;
+  const xml=await exportXml();state.busy=true;setControls();$('download-png').disabled=true;
   try{
     const uri=await new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>{pngWaiter=null;reject(new Error('PNG 생성 시간이 초과됐습니다. 해상도를 낮춰 다시 시도하세요.'));},45000);
