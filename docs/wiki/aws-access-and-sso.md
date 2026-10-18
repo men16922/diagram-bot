@@ -1,7 +1,7 @@
 ---
 title: AWS 접근과 Identity Center 로그인
 summary: 사용자별 AWS 세션을 만드는 한 곳(aws_access.AwsAccess) — Identity Center device code 로그인, 역할 자격 증명, 프로파일·SDK 체인, AssumeRole, egress 경로 선택.
-sources: [src/diagram_bot/aws_access.py, src/diagram_bot/sessions.py, src/diagram_bot/sso.py, src/diagram_bot/routes/aws.py, src/diagram_bot/collector.py, tests/test_sso.py, tests/test_credentials.py]
+sources: [src/diagram_bot/aws_access.py, src/diagram_bot/sessions.py, src/diagram_bot/sso.py, src/diagram_bot/expiry.py, src/diagram_bot/routes/aws.py, src/diagram_bot/collector.py, tests/test_sso.py, tests/test_credentials.py]
 related: [browser-egress, collection, http-api, team-mode-security, porting-guide]
 updated: 2026-10-19
 ---
@@ -29,6 +29,7 @@ updated: 2026-10-19
 
 - `SsoLogins.lock` 안에서는 AWS를 부르지 않는다. `poll`은 잠금 안에서 flow 상태를 복사하고, 잠금 밖에서 CreateToken·ListAccounts를 부른 뒤, 다시 잠금 안에서 결과를 반영한다(동시에 온 두 번째 poll은 교환을 반복하거나 되돌리지 않는다). Identity Center 응답 하나가 느려도 다른 사용자의 poll·역할 조회·세션이 멈추지 않는다.
 - flow는 시작한 앱 사용자(`owner`)에게 묶인다. 다른 사용자는 조회·사용할 수 없다(`SsoLogins.flow`).
+- 새 로그인을 시작하면 그 사용자의 승인 전 flow를 버린다. 기한(승인 전 device code의 `expires_at`, 승인 뒤 토큰의 `token_expires_at`)이 `FLOW_GRACE`(1시간) 넘게 지난 flow는 `start`·`flow`가 불릴 때 `expiry.Purge`로 지운다(늦은 poll은 그동안 `expired`를 받는다).
 - 시작 URL 기본값: `serve --sso-start-url/--sso-region`(회사 설정) → `~/.aws/config`의 sso-session·프로파일 → 서버 자격 증명으로 `sso-admin.list_instances` 발견
   (브라우저 egress에서는 발견 생략). `AwsAccess.start_urls`, `GET /api/sso/defaults`.
 - Identity Center 엔드포인트(`oidc.<region>`, `portal.sso.<region>`)는 CORS를 허용하지 않으므로, 브라우저 egress에서도 이 흐름은 **서버**에서 돈다.

@@ -43,7 +43,7 @@ updated: 2026-10-19
 | 저장소 | `store.py` | `SnapshotStore`, `DocumentStore`(리비전·이력) | **DB·S3로 교체** ([[storage]]) |
 | AWS 접근 | `aws_access.py`, `sessions.py`, `sso.py`, `egress.py` | Identity Center 로그인, 역할 세션, 서버/브라우저 egress | **회사 인증으로 교체** ([[aws-access-and-sso]]) |
 | HTTP | `routes/*.py`, `server.py` | 도메인별 `APIRouter`, 미들웨어·조립 | **회사 FastAPI에 라우터 장착** ([[http-api]]) |
-| 팀 모드 | `auth.py`, `oidc.py` | 앱 계정·역할·OIDC·감사 로그 | 회사 SSO 미들웨어 ([[team-mode-security]]) |
+| 팀 모드 | `auth.py`, `oidc.py`, `expiry.py` | 앱 계정·역할·OIDC·감사 로그 | 회사 SSO 미들웨어 ([[team-mode-security]]) |
 | 프런트엔드 | `static/app.js`, `static/js/*.js`, `editor-bridge.js` | 콘솔형 화면, API 클라이언트, 브라우저 중계, draw.io 연동 | **React 컴포넌트로 이식** ([[web-app]]) |
 | 실행 | `cli.py`, `editor.py` | 명령줄, draw.io 편집기 설치 | — |
 

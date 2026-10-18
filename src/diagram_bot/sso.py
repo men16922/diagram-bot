@@ -14,10 +14,12 @@ import boto3
 from botocore.exceptions import ClientError
 
 from .errors import error_code
+from .expiry import Purge
 from .sessions import credentials_session, sdk_session
 from .validation import ACCOUNT, REGION
 
 GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+FLOW_GRACE = 3600
 START_URL = re.compile(r"^https://[A-Za-z0-9.-]+(?::\d+)?/[^\s]*$")
 
 
@@ -31,8 +33,11 @@ class SsoLogins:
         self.clock = clock
         self.flows = {}
         self.lock = threading.Lock()
+        # A flow outlives its device code or token by FLOW_GRACE, so a late poll still reads "expired" before it goes.
+        self.purge = Purge(lambda f, now: now >= f.get("token_expires_at", f["expires_at"]) + FLOW_GRACE)
 
     def flow(self, identifier, owner):
+        self.purge(self.flows, self.clock())
         flow = self.flows.get(identifier)
         if not flow or flow["owner"] != owner:
             raise SsoError("SSO 로그인 세션을 찾을 수 없습니다. 다시 로그인하세요.")
@@ -54,6 +59,7 @@ class SsoLogins:
         identifier = secrets.token_urlsafe(16)
         now = self.clock()
         with self.lock:
+            self.purge(self.flows, now)
             # Abandoned flows of the same user are dropped so a user holds at most a few secrets in memory.
             for key in [k for k, f in self.flows.items() if f["owner"] == owner and f["status"] != "authorized"]:
                 self.flows.pop(key)
